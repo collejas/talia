@@ -551,7 +551,11 @@ export default async function SettingsVariablesPage() {
                 </TabsContent>
                 <TabsContent value="mail" className="pt-4">
                   <div className="space-y-6">
-                    <TenantEmailServicePanel data={emailServiceResp.ok ? emailServiceResp.data : null} />
+                    <TenantEmailServicePanel
+                      data={emailServiceResp.ok ? emailServiceResp.data : null}
+                      createDomainAction={tenantActionsLib.createTenantEmailDomainAction}
+                      verifyDomainAction={tenantActionsLib.verifyTenantEmailDomainAction}
+                    />
                   </div>
                   <TenantMailSettings
                     tenantId={tenantId}

@@ -14,7 +14,13 @@ import httpx
 from app.core.config import settings
 
 from .errors import PostmarkRequestError
-from .schemas import MessageKind, PostmarkBatchResult, PostmarkMessage, PostmarkSendResult
+from .schemas import (
+    MessageKind,
+    PostmarkBatchResult,
+    PostmarkDomainResult,
+    PostmarkMessage,
+    PostmarkSendResult,
+)
 
 _MAX_BATCH_SIZE = 500
 
@@ -26,12 +32,14 @@ class PostmarkClient:
         self,
         *,
         base_url: str | None = None,
+        account_token: str | None = None,
         transactional_token: str | None = None,
         broadcast_token: str | None = None,
         timeout: float | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.base_url = (base_url or settings.postmark_base_url).rstrip("/")
+        self._account_token = account_token or settings.postmark_account_token
         self._tokens = {
             "transactional": transactional_token or settings.postmark_server_token_transactional,
             "broadcast": broadcast_token or settings.postmark_server_token_broadcast,
@@ -74,6 +82,18 @@ class PostmarkClient:
             raise PostmarkRequestError("invalid_batch_response", status_code=response.status_code)
         return PostmarkBatchResult(items=[self._parse_result(item) for item in data])
 
+    async def create_domain(self, domain_name: str) -> PostmarkDomainResult:
+        """Crea un dominio en la cuenta central y normaliza sus DNS."""
+        response = await self._account_request("POST", "/domains", payload={"Name": domain_name})
+        return self._parse_domain(response.json())
+
+    async def verify_domain(self, external_domain_id: int) -> PostmarkDomainResult:
+        """Solicita la verificación de DKIM y Return-Path del dominio."""
+        await self._account_request("POST", f"/domains/{external_domain_id}/verifyDkim")
+        await self._account_request("POST", f"/domains/{external_domain_id}/verifyReturnPath")
+        response = await self._account_request("GET", f"/domains/{external_domain_id}")
+        return self._parse_domain(response.json())
+
     async def _post(
         self,
         path: str,
@@ -102,6 +122,35 @@ class PostmarkClient:
                 "provider_rejected_request",
                 status_code=response.status_code,
             )
+        return response
+
+    async def _account_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: dict[str, object] | None = None,
+    ) -> httpx.Response:
+        token = self._account_token
+        if not token:
+            raise PostmarkRequestError("account_token_missing")
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Postmark-Account-Token": token,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, transport=self.transport) as client:
+                response = await client.request(
+                    method,
+                    f"{self.base_url}{path}",
+                    headers=headers,
+                    json=payload,
+                )
+        except (httpx.TimeoutException, httpx.NetworkError) as exc:
+            raise PostmarkRequestError("provider_unreachable") from exc
+        if response.status_code < 200 or response.status_code >= 300:
+            raise PostmarkRequestError("provider_rejected_request", status_code=response.status_code)
         return response
 
     @staticmethod
@@ -141,6 +190,34 @@ class PostmarkClient:
             error_code=int(error_code) if isinstance(error_code, (int, str)) and str(error_code).isdigit() else None,
             error_message=str(error_message) if error_message else None,
         )
+
+    @staticmethod
+    def _parse_domain(value: object) -> PostmarkDomainResult:
+        if not isinstance(value, dict):
+            raise PostmarkRequestError("invalid_provider_response")
+        try:
+            external_id = int(value["ID"])
+            domain_name = str(value["Name"]).strip().lower()
+        except (KeyError, TypeError, ValueError) as exc:
+            raise PostmarkRequestError("invalid_provider_domain_response") from exc
+        return PostmarkDomainResult(
+            external_domain_id=external_id,
+            domain_name=domain_name,
+            dkim_host=_first_text(value, "DKIMPendingHost", "DKIMHost"),
+            dkim_record_value=_first_text(value, "DKIMPendingTextValue", "DKIMTextValue"),
+            return_path_domain=_first_text(value, "ReturnPathDomain"),
+            return_path_cname_target=_first_text(value, "ReturnPathCNAME", "ReturnPathCname"),
+            dkim_verified=bool(value.get("DKIMVerified")),
+            return_path_verified=bool(value.get("ReturnPathVerified")),
+        )
+
+
+def _first_text(value: dict[str, object], *keys: str) -> str | None:
+    for key in keys:
+        item = value.get(key)
+        if item is not None and str(item).strip():
+            return str(item).strip()
+    return None
 
 
 __all__ = ["PostmarkClient"]

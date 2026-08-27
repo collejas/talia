@@ -466,5 +466,5 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 
 ### Pendientes
 
-- Completar alta/verificación de dominios y configuración DNS desde la consola maestra.
+- Completar acciones de bloqueo, eliminación y selección del remitente predeterminado.
 - Conectar worker, webhooks y métricas reales antes de habilitar envíos.

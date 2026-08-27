@@ -17,6 +17,9 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se agregó lectura administrativa protegida para consultar el correo de un tenant desde `settings/tenants/{tenantId}`.
 - Se materializó la cuota inicial comercial de 10,000 mensajes mensuales por tenant en las tablas propias `tenant_email_plans` y `tenant_email_usage_periods`.
 - Se agregó una RPC administrativa atómica y la auditoría `tenant_email_quota_changes` para ajustar la cuota actual por tenant.
+- Se agregó el alta y verificación de dominios mediante Account API, con normalización de DKIM y Return-Path en columnas propias.
+- Se agregaron rutas tenant y administrativas para registrar dominios y solicitar verificación sin exponer credenciales.
+- El panel de `settings/variables` y el detalle de `settings/tenants/{tenantId}` muestran el formulario, los DNS y el estado de verificación.
 
 ### Decisiones
 
@@ -41,7 +44,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 - Completar el servicio de negocio de cola/envío y conectar un worker aislado.
 - Crear webhooks autenticados y procesar eventos de entrega, rebote, queja y supresión.
-- Agregar la operación administrativa para asignar planes, dominios y cuota por tenant.
+- Completar acciones de bloqueo, eliminación y selección del remitente predeterminado.
 - Configurar tokens y recursos reales de la cuenta de correo solo durante el piloto.
 
 ## [No publicado]

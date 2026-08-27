@@ -11,6 +11,21 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 MessageKind = Literal["transactional", "broadcast"]
 
 
+class PostmarkDomainResult(BaseModel):
+    """Datos de dominio normalizados para persistencia interna."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    external_domain_id: int
+    domain_name: str
+    dkim_host: str | None = None
+    dkim_record_value: str | None = None
+    return_path_domain: str | None = None
+    return_path_cname_target: str | None = None
+    dkim_verified: bool = False
+    return_path_verified: bool = False
+
+
 class PostmarkMessage(BaseModel):
     """Mensaje ya validado por Talia antes de enviarse al proveedor."""
 

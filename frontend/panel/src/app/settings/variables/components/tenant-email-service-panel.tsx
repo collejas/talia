@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useActionState, useState } from "react"
 import { Check, Copy, Globe2, Mail, ShieldCheck } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -42,7 +42,18 @@ export type TenantEmailServiceData = {
   } | null
 }
 
-type Props = { data: TenantEmailServiceData | null }
+export type EmailServiceActionState = { status: "idle" | "success" | "error"; message?: string }
+export type EmailServiceAction = (
+  previousState: EmailServiceActionState,
+  formData: FormData,
+) => Promise<EmailServiceActionState>
+
+type Props = {
+  data: TenantEmailServiceData | null
+  createDomainAction?: EmailServiceAction
+  verifyDomainAction?: EmailServiceAction
+  actionTenantId?: string
+}
 
 const migrationLabels: Record<string, string> = {
   pending: "Pendiente",
@@ -83,7 +94,41 @@ function CopyValue({ value }: { value: string }) {
   )
 }
 
-export function TenantEmailServicePanel({ data }: Props) {
+function DomainCreateForm({ action, tenantId }: { action: EmailServiceAction; tenantId?: string }) {
+  const [state, formAction] = useActionState(action, { status: "idle" } satisfies EmailServiceActionState)
+  return (
+    <form action={formAction} className="grid gap-3 sm:grid-cols-[minmax(0,24rem)_auto] sm:items-end">
+      {tenantId ? <input type="hidden" name="tenant_id" value={tenantId} /> : null}
+      <div className="space-y-2">
+        <label htmlFor="email-domain" className="text-sm font-medium">Dominio de envío</label>
+        <input
+          id="email-domain"
+          name="email_domain"
+          className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          placeholder="correo.ejemplo.com"
+          maxLength={253}
+          required
+        />
+      </div>
+      <Button type="submit" variant="outline">Registrar dominio</Button>
+      {state.message ? <p className={state.status === "error" ? "text-sm text-destructive sm:col-span-2" : "text-sm text-emerald-600 sm:col-span-2"}>{state.message}</p> : null}
+    </form>
+  )
+}
+
+function DomainVerifyForm({ domainId, action, tenantId }: { domainId: string; action: EmailServiceAction; tenantId?: string }) {
+  const [state, formAction] = useActionState(action, { status: "idle" } satisfies EmailServiceActionState)
+  return (
+    <form action={formAction} className="flex flex-wrap items-center gap-2">
+      {tenantId ? <input type="hidden" name="tenant_id" value={tenantId} /> : null}
+      <input type="hidden" name="email_domain_id" value={domainId} />
+      <Button type="submit" size="sm" variant="outline">Verificar DNS</Button>
+      {state.message ? <span className={state.status === "error" ? "text-xs text-destructive" : "text-xs text-emerald-600"}>{state.message}</span> : null}
+    </form>
+  )
+}
+
+export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, actionTenantId }: Props) {
   const status = data?.migration_status ?? "pending"
   const plan = data?.plan
   const usage = data?.usage
@@ -113,6 +158,13 @@ export function TenantEmailServicePanel({ data }: Props) {
               </div>
             ) : null}
 
+            {createDomainAction ? (
+              <section className="space-y-3 rounded-lg border border-dashed p-4">
+                <div><h3 className="font-medium">Registrar un dominio</h3><p className="text-sm text-muted-foreground">Después de registrarlo, publica los registros DNS que aparecerán abajo.</p></div>
+                <DomainCreateForm action={createDomainAction} tenantId={actionTenantId} />
+              </section>
+            ) : null}
+
             <section className="space-y-3">
               <div className="flex items-center gap-2"><Globe2 className="size-4 text-muted-foreground" /><h3 className="font-medium">Dominios de envío</h3></div>
               {data.domains.length === 0 ? (
@@ -128,7 +180,10 @@ export function TenantEmailServicePanel({ data }: Props) {
                       </p>
                       {domain.reply_to_email ? <p className="text-sm text-muted-foreground">Responder a: {domain.reply_to_email}</p> : null}
                     </div>
-                    <Badge variant={domain.status === "verified" ? "secondary" : "outline"}>{label(domain.status, statusLabels)}</Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={domain.status === "verified" ? "secondary" : "outline"}>{label(domain.status, statusLabels)}</Badge>
+                      {verifyDomainAction && domain.status !== "verified" ? <DomainVerifyForm domainId={domain.id} action={verifyDomainAction} tenantId={actionTenantId} /> : null}
+                    </div>
                   </div>
                   {domain.dns_records.length ? (
                     <div className="overflow-x-auto rounded-md border">

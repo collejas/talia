@@ -8,7 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { callCrmApi } from "@/lib/api/crm"
-import { activateTenantContextAndRedirectAction } from "./actions"
+import {
+  activateTenantContextAndRedirectAction,
+  createAdminTenantEmailDomainAction,
+  verifyAdminTenantEmailDomainAction,
+} from "./actions"
 import { fetchTenantCloseLeadPolicy } from "@/app/settings/close-lead/actions"
 import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-panel"
 import {
@@ -542,7 +546,14 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             </TabsContent>
             <TabsContent value="mail" className="pt-4">
               {emailServiceResp ? (
-                <div className="mb-6"><TenantEmailServicePanel data={emailServiceResp.ok ? emailServiceResp.data : null} /></div>
+                <div className="mb-6">
+                  <TenantEmailServicePanel
+                    data={emailServiceResp.ok ? emailServiceResp.data : null}
+                    actionTenantId={tenantId}
+                    createDomainAction={createAdminTenantEmailDomainAction}
+                    verifyDomainAction={verifyAdminTenantEmailDomainAction}
+                  />
+                </div>
               ) : null}
               <TenantMailSettings
                 tenantId={tenantId}

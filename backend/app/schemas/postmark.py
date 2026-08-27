@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EmailDnsRecord(BaseModel):
@@ -77,3 +77,9 @@ class TenantEmailQuotaResponse(BaseModel):
     new_period_limit: int
     period_start: datetime
     period_end: datetime
+
+
+class TenantEmailDomainCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    domain: str = Field(min_length=3, max_length=253)

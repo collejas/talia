@@ -1195,3 +1195,38 @@ export async function deleteTenantRouteAction(_: CrudActionState, formData: Form
     return failure(error, "No se pudo eliminar la ruta.")
   }
 }
+
+export async function createTenantEmailDomainAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const domain = getText(formData, "email_domain")
+    if (!domain) throw new Error("Indica el dominio de envío.")
+    const response = await callCrmApi<{ id: string }>("/tenant/me/email-service/domains", {
+      method: "POST",
+      organizacionId: null,
+      withUserToken: true,
+      body: { domain },
+    })
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath("/settings/variables")
+    return success("Dominio registrado. Publica los DNS indicados para continuar.")
+  } catch (error) {
+    return failure(error, "No se pudo registrar el dominio.")
+  }
+}
+
+export async function verifyTenantEmailDomainAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const domainId = getText(formData, "email_domain_id")
+    if (!domainId) throw new Error("Falta el dominio a verificar.")
+    const response = await callCrmApi<{ id: string }>(`/tenant/me/email-service/domains/${domainId}/verify`, {
+      method: "POST",
+      organizacionId: null,
+      withUserToken: true,
+    })
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath("/settings/variables")
+    return success("Verificación de dominio solicitada.")
+  } catch (error) {
+    return failure(error, "No se pudo verificar el dominio.")
+  }
+}

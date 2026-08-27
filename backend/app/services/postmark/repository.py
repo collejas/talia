@@ -39,7 +39,7 @@ class PostmarkRepository:
         return await self._get_one(
             "/rest/v1/tenant_email_domains",
             params={
-                "select": "id,organizacion_id,domain_name,status,verified_at,default_from_email,default_from_name,reply_to_email",
+                "select": "id,organizacion_id,domain_name,external_domain_id,status,verified_at,default_from_email,default_from_name,reply_to_email",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "status": "eq.verified",
                 "limit": "1",
@@ -95,6 +95,65 @@ class PostmarkRepository:
             },
         )
         return row is not None
+
+    async def ensure_migration(self, *, organizacion_id: UUID) -> dict[str, Any]:
+        data = await self._rest_post(
+            "/rest/v1/tenant_email_migrations",
+            payload={"organizacion_id": str(organizacion_id), "status": "pending", "feature_enabled": False},
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("migration_invalid_response")
+        return data[0]
+
+    async def find_domain(self, *, domain_name: str) -> dict[str, Any] | None:
+        return await self._get_one(
+            "/rest/v1/tenant_email_domains",
+            params={
+                "select": "id,organizacion_id,domain_name,status,external_domain_id",
+                "domain_name": f"eq.{domain_name}",
+                "status": "not.eq.removed",
+                "limit": "1",
+            },
+        )
+
+    async def get_domain(self, *, organizacion_id: UUID, domain_id: UUID) -> dict[str, Any] | None:
+        return await self._get_one(
+            "/rest/v1/tenant_email_domains",
+            params={
+                "select": "id,organizacion_id,domain_name,external_domain_id,status,dkim_host,dkim_record_value,return_path_domain,return_path_cname_target,dkim_verified_at,return_path_verified_at,verified_at,default_from_email,default_from_name,reply_to_email",
+                "id": f"eq.{domain_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            },
+        )
+
+    async def create_domain(self, *, organizacion_id: UUID, domain: dict[str, Any]) -> dict[str, Any]:
+        payload = {"organizacion_id": str(organizacion_id), **domain}
+        data = await self._rest_post(
+            "/rest/v1/tenant_email_domains",
+            payload=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("domain_create_invalid_response")
+        return data[0]
+
+    async def update_domain_verification(
+        self,
+        *,
+        organizacion_id: UUID,
+        domain_id: UUID,
+        fields: dict[str, Any],
+    ) -> dict[str, Any]:
+        data = await self._rest_patch(
+            "/rest/v1/tenant_email_domains",
+            params={"id": f"eq.{domain_id}", "organizacion_id": f"eq.{organizacion_id}"},
+            payload=fields,
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("domain_update_invalid_response")
+        return data[0]
 
     async def queue_message(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         """Encola y reserva cuota mediante la RPC atómica propia de Postmark."""
@@ -172,6 +231,40 @@ class PostmarkRepository:
         if not isinstance(data, list):
             raise PostmarkRepositoryError("database_invalid_response")
         return [row for row in data if isinstance(row, dict)]
+
+    async def _rest_post(self, path: str, *, payload: dict[str, Any], prefer: str) -> Any:
+        headers = {
+            "apikey": self._service_role,
+            "Authorization": f"Bearer {self._service_role}",
+            "Content-Type": "application/json",
+            "Prefer": prefer,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(f"{self._base_url}{path}", json=payload, headers=headers)
+        except httpx.RequestError as exc:
+            raise PostmarkRepositoryError("database_unreachable") from exc
+        if response.status_code >= 400:
+            raise PostmarkRepositoryError("database_write_failed")
+        return response.json()
+
+    async def _rest_patch(self, path: str, *, params: dict[str, str], payload: dict[str, Any]) -> Any:
+        headers = {
+            "apikey": self._service_role,
+            "Authorization": f"Bearer {self._service_role}",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.patch(
+                    f"{self._base_url}{path}", params=params, json=payload, headers=headers
+                )
+        except httpx.RequestError as exc:
+            raise PostmarkRepositoryError("database_unreachable") from exc
+        if response.status_code >= 400:
+            raise PostmarkRepositoryError("database_write_failed")
+        return response.json()
 
     async def _rpc(self, function_name: str, payload: dict[str, Any]) -> Any:
         headers = {

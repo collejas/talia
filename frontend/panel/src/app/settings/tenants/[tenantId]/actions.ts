@@ -205,6 +205,42 @@ export async function updateTenantEmailQuotaAction(
   }
 }
 
+export async function createAdminTenantEmailDomainAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const domain = getText(formData, "email_domain")
+    if (!domain) throw new Error("Indica el dominio de envío.")
+    const response = await callCrmApi<{ id: string }>(`/admin/tenants/${tenantId}/email-service/domains`, {
+      method: "POST",
+      organizacionId: null,
+      withUserToken: true,
+      body: { domain },
+    })
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Dominio registrado. Publica los DNS indicados para continuar.")
+  } catch (error) {
+    return failure(error, "No se pudo registrar el dominio.")
+  }
+}
+
+export async function verifyAdminTenantEmailDomainAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const domainId = getText(formData, "email_domain_id")
+    if (!domainId) throw new Error("Falta el dominio a verificar.")
+    const response = await callCrmApi<{ id: string }>(
+      `/admin/tenants/${tenantId}/email-service/domains/${domainId}/verify`,
+      { method: "POST", organizacionId: null, withUserToken: true },
+    )
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Verificación de dominio solicitada.")
+  } catch (error) {
+    return failure(error, "No se pudo verificar el dominio.")
+  }
+}
+
 function removeWhatsProspLegacyTemplates(config: Record<string, unknown>): Record<string, unknown> {
   const whatsapp = isRecord(config.whatsapp) ? { ...config.whatsapp } : {}
   const templates = isRecord(whatsapp.templates) ? { ...whatsapp.templates } : {}

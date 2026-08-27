@@ -85,3 +85,44 @@ def test_batch_rejects_more_than_provider_limit():
         import asyncio
 
         asyncio.run(client.send_batch([_message()] * 501, message_kind="transactional"))
+
+
+@pytest.mark.asyncio
+async def test_create_domain_uses_account_token_and_normalizes_dns():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["token"] = request.headers["X-Postmark-Account-Token"]
+        captured["path"] = request.url.path
+        return httpx.Response(
+            200,
+            json={
+                "ID": 123,
+                "Name": "Example.COM",
+                "DKIMPendingHost": "pm._domainkey.example.com",
+                "DKIMPendingTextValue": "v=DKIM1; k=rsa; p=key",
+                "ReturnPathDomain": "pm-bounces.example.com",
+                "ReturnPathCNAME": "pm.mtasv.net",
+                "DKIMVerified": False,
+                "ReturnPathVerified": False,
+            },
+        )
+
+    client = PostmarkClient(
+        base_url="https://mail.test",
+        account_token="account-secret",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await client.create_domain("example.com")
+
+    assert result.external_domain_id == 123
+    assert result.domain_name == "example.com"
+    assert captured == {"token": "account-secret", "path": "/domains"}
+
+
+@pytest.mark.asyncio
+async def test_account_request_requires_account_token():
+    client = PostmarkClient(base_url="https://mail.test", transport=httpx.MockTransport(lambda _: None))
+
+    with pytest.raises(PostmarkRequestError, match="account_token_missing"):
+        await client.create_domain("example.com")
