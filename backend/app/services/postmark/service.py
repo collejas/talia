@@ -7,7 +7,7 @@ from uuid import UUID
 
 from app.core.config import settings
 from app.integrations.postmark.client import PostmarkClient
-from app.integrations.postmark.errors import PostmarkError
+from app.integrations.postmark.errors import PostmarkError, PostmarkRequestError
 from app.integrations.postmark.schemas import MessageKind, PostmarkMessage
 
 from .repository import PostmarkRepository
@@ -106,11 +106,25 @@ class PostmarkService:
         stream_name = str(attempt.get("stream_name") or "").strip()
         if not stream_name:
             raise PostmarkError("message_stream_missing")
-        result = await client.send_message(
-            message,
-            message_kind=kind,
-            message_stream=stream_name,
-        )
+        try:
+            result = await client.send_message(
+                message,
+                message_kind=kind,
+                message_stream=stream_name,
+            )
+        except PostmarkRequestError as exc:
+            await self.repository.finish_attempt(
+                payload={
+                    "p_organizacion_id": str(organizacion_id),
+                    "p_message_id": str(message_id),
+                    "p_attempt_id": str(attempt["attempt_id"]),
+                    "p_accepted": False,
+                    "p_external_message_id": None,
+                    "p_error_code": str(exc.provider_code or exc.status_code or exc.code),
+                    "p_error_message": exc.provider_message or exc.code,
+                }
+            )
+            raise
         finish = await self.repository.finish_attempt(
             payload={
                 "p_organizacion_id": str(organizacion_id),

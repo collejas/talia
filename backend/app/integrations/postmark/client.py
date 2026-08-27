@@ -152,9 +152,12 @@ class PostmarkClient:
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise PostmarkRequestError("provider_unreachable") from exc
         if response.status_code < 200 or response.status_code >= 300:
+            provider_code, provider_message = self._provider_error(response)
             raise PostmarkRequestError(
                 "provider_rejected_request",
                 status_code=response.status_code,
+                provider_code=provider_code,
+                provider_message=provider_message,
             )
         return response
 
@@ -186,8 +189,30 @@ class PostmarkClient:
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise PostmarkRequestError("provider_unreachable") from exc
         if response.status_code < 200 or response.status_code >= 300:
-            raise PostmarkRequestError("provider_rejected_request", status_code=response.status_code)
+            provider_code, provider_message = self._provider_error(response)
+            raise PostmarkRequestError(
+                "provider_rejected_request",
+                status_code=response.status_code,
+                provider_code=provider_code,
+                provider_message=provider_message,
+            )
         return response
+
+    @staticmethod
+    def _provider_error(response: httpx.Response) -> tuple[int | None, str | None]:
+        try:
+            payload = response.json()
+        except ValueError:
+            return None, None
+        if not isinstance(payload, dict):
+            return None, None
+        raw_code = payload.get("ErrorCode")
+        try:
+            code = int(raw_code) if raw_code is not None else None
+        except (TypeError, ValueError):
+            code = None
+        message = payload.get("Message")
+        return code, str(message) if message else None
 
     @staticmethod
     def _message_payload(

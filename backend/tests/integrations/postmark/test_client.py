@@ -103,6 +103,29 @@ async def test_send_requires_token_without_making_request():
         await client.send_message(_message(), message_kind="transactional")
 
 
+@pytest.mark.asyncio
+async def test_send_exposes_provider_error_details_without_exposing_token():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            422,
+            json={"ErrorCode": 412, "Message": "Account pending approval"},
+        )
+
+    client = PostmarkClient(
+        base_url="https://mail.test",
+        server_token="server-secret",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(PostmarkRequestError) as error:
+        await client.send_message(_message(), message_kind="transactional")
+
+    assert error.value.status_code == 422
+    assert error.value.provider_code == 412
+    assert error.value.provider_message == "Account pending approval"
+    assert "server-secret" not in str(error.value)
+
+
 def test_batch_rejects_more_than_provider_limit():
     client = PostmarkClient(server_token="secret")
 
