@@ -6,6 +6,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 ### Cambios
 
+- Se corrigió el alta idempotente de dominios para que un tenant con migración Postmark ya inicializada no provoque un error 500 al registrar su primer dominio.
 - Se agregó la reclamación concurrente de mensajes Postmark con `FOR UPDATE SKIP LOCKED`, estado explícito `processing` y recuperación de reclamaciones obsoletas.
 - Se conectó el worker aislado de Postmark al ciclo de vida de FastAPI, limitado a tenants con la migración Postmark habilitada.
 - El worker conserva y utiliza el `stream_name` persistido al encolar; un cambio posterior de configuración no puede desviar un mensaje a otro stream.

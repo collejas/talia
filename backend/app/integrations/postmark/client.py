@@ -100,6 +100,28 @@ class PostmarkClient:
         response = await self._account_request("POST", "/domains", payload={"Name": domain_name})
         return self._parse_domain(response.json())
 
+    async def list_domains(self) -> list[PostmarkDomainResult]:
+        """Lista los dominios de la cuenta y obtiene sus datos DNS completos."""
+        response = await self._account_request(
+            "GET",
+            "/domains",
+            params={"Count": 100, "Offset": 0},
+        )
+        payload = response.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("Domains"), list):
+            raise PostmarkRequestError("invalid_provider_domain_list_response")
+        domains: list[PostmarkDomainResult] = []
+        for item in payload["Domains"]:
+            if not isinstance(item, dict) or item.get("ID") is None:
+                raise PostmarkRequestError("invalid_provider_domain_list_response")
+            domains.append(await self.get_domain(int(item["ID"])))
+        return domains
+
+    async def get_domain(self, external_domain_id: int) -> PostmarkDomainResult:
+        """Obtiene un dominio de cuenta con sus registros DNS actuales."""
+        response = await self._account_request("GET", f"/domains/{external_domain_id}")
+        return self._parse_domain(response.json())
+
     async def verify_domain(self, external_domain_id: int) -> PostmarkDomainResult:
         """Solicita la verificación de DKIM y Return-Path del dominio."""
         await self._account_request("PUT", f"/domains/{external_domain_id}/verifyDkim")
@@ -142,6 +164,7 @@ class PostmarkClient:
         path: str,
         *,
         payload: dict[str, object] | None = None,
+        params: dict[str, object] | None = None,
     ) -> httpx.Response:
         token = self._account_token
         if not token:
@@ -158,6 +181,7 @@ class PostmarkClient:
                     f"{self.base_url}{path}",
                     headers=headers,
                     json=payload,
+                    params=params,
                 )
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise PostmarkRequestError("provider_unreachable") from exc

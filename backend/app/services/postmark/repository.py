@@ -101,6 +101,7 @@ class PostmarkRepository:
             "/rest/v1/tenant_email_migrations",
             payload={"organizacion_id": str(organizacion_id), "status": "pending", "feature_enabled": False},
             prefer="resolution=merge-duplicates,return=representation",
+            params={"on_conflict": "organizacion_id"},
         )
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise PostmarkRepositoryError("migration_invalid_response")
@@ -267,7 +268,14 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("database_invalid_response")
         return [row for row in data if isinstance(row, dict)]
 
-    async def _rest_post(self, path: str, *, payload: dict[str, Any], prefer: str) -> Any:
+    async def _rest_post(
+        self,
+        path: str,
+        *,
+        payload: dict[str, Any],
+        prefer: str,
+        params: dict[str, str] | None = None,
+    ) -> Any:
         headers = {
             "apikey": self._service_role,
             "Authorization": f"Bearer {self._service_role}",
@@ -276,7 +284,12 @@ class PostmarkRepository:
         }
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(f"{self._base_url}{path}", json=payload, headers=headers)
+                response = await client.post(
+                    f"{self._base_url}{path}",
+                    params=params,
+                    json=payload,
+                    headers=headers,
+                )
         except httpx.RequestError as exc:
             raise PostmarkRepositoryError("database_unreachable") from exc
         if response.status_code >= 400:

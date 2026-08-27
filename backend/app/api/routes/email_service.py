@@ -66,20 +66,34 @@ async def _create_domain(
     await repository.ensure_migration(organizacion_id=organizacion_id)
     client = PostmarkClient()
     try:
-        provider_domain = await client.create_domain(domain_name)
+        provider_domain = next(
+            (
+                item
+                for item in await client.list_domains()
+                if item.domain_name == domain_name
+            ),
+            None,
+        )
+        if provider_domain is None:
+            provider_domain = await client.create_domain(domain_name)
     except PostmarkRequestError as exc:
         raise HTTPException(status_code=502, detail="sending_domain_provider_failed") from exc
+    now = datetime.now(timezone.utc)
+    both_verified = provider_domain.dkim_verified and provider_domain.return_path_verified
     try:
         row = await repository.create_domain(
             organizacion_id=organizacion_id,
             domain={
                 "domain_name": provider_domain.domain_name,
                 "external_domain_id": provider_domain.external_domain_id,
-                "status": "pending_dns",
+                "status": "verified" if both_verified else "pending_dns",
                 "dkim_host": provider_domain.dkim_host,
                 "dkim_record_value": provider_domain.dkim_record_value,
                 "return_path_domain": provider_domain.return_path_domain,
                 "return_path_cname_target": provider_domain.return_path_cname_target,
+                "dkim_verified_at": now.isoformat() if provider_domain.dkim_verified else None,
+                "return_path_verified_at": now.isoformat() if provider_domain.return_path_verified else None,
+                "verified_at": now.isoformat() if both_verified else None,
             },
         )
     except PostmarkRepositoryError as exc:
