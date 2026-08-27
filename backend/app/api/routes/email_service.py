@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -20,6 +21,7 @@ from app.schemas.postmark import (
     TenantEmailQuotaResponse,
     TenantEmailQuotaUpdate,
     TenantEmailDomainCreate,
+    TenantEmailSenderUpdate,
 )
 from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
 
@@ -156,6 +158,65 @@ async def _verify_domain(
     )
 
 
+def _validate_email_address(value: str, *, error_code: str) -> str:
+    normalized = value.strip().lower()
+    if normalized.count("@") != 1:
+        raise HTTPException(status_code=422, detail=error_code)
+    local, domain = normalized.rsplit("@", 1)
+    if not local or not _DOMAIN_PATTERN.fullmatch(domain):
+        raise HTTPException(status_code=422, detail=error_code)
+    return normalized
+
+
+def _parse_domain_id(value: str) -> UUID:
+    try:
+        return UUID(value)
+    except (ValueError, AttributeError) as exc:
+        raise HTTPException(status_code=422, detail="sending_domain_invalid") from exc
+
+
+async def _update_sender(
+    organizacion_id: UUID,
+    domain_id: UUID,
+    payload: TenantEmailSenderUpdate,
+    repository: PostmarkRepository,
+) -> TenantEmailDomain:
+    row = await repository.get_domain(organizacion_id=organizacion_id, domain_id=domain_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="sending_domain_not_found")
+    if row.get("status") != "verified":
+        raise HTTPException(status_code=409, detail="sending_domain_not_verified")
+    domain_name = str(row.get("domain_name") or "").lower()
+    sender_email = _validate_email_address(payload.sender_email, error_code="sender_email_invalid")
+    if sender_email.rsplit("@", 1)[1] != domain_name:
+        raise HTTPException(status_code=422, detail="sender_email_domain_mismatch")
+    reply_to_email = None
+    if payload.reply_to_email:
+        reply_to_email = _validate_email_address(payload.reply_to_email, error_code="reply_to_email_invalid")
+    try:
+        updated = await repository.update_domain_sender(
+            organizacion_id=organizacion_id,
+            domain_id=domain_id,
+            fields={
+                "default_from_email": sender_email,
+                "default_from_name": payload.sender_name.strip() if payload.sender_name else None,
+                "reply_to_email": reply_to_email,
+            },
+        )
+    except PostmarkRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="sender_save_failed") from exc
+    return TenantEmailDomain(
+        id=updated["id"],
+        domain=str(updated.get("domain_name") or domain_name),
+        status=str(updated.get("status") or "verified"),
+        verified_at=updated.get("verified_at"),
+        from_email=updated.get("default_from_email"),
+        from_name=updated.get("default_from_name"),
+        reply_to_email=updated.get("reply_to_email"),
+        dns_records=_dns_records(updated),
+    )
+
+
 async def _read_email_service(
     organizacion_id: UUID,
     repository: PostmarkRepository,
@@ -253,6 +314,18 @@ async def verify_tenant_email_domain(
     return await _verify_domain(context.organizacion_id, domain_id, repository)
 
 
+@router.patch("/domains/{domain_id}/sender", response_model=TenantEmailDomain)
+async def update_tenant_email_sender(
+    domain_id: str,
+    payload: TenantEmailSenderUpdate,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    repository: PostmarkRepository = Depends(get_postmark_repository),
+) -> TenantEmailDomain:
+    await require_permission(user_token, "settings.manage")
+    return await _update_sender(context.organizacion_id, _parse_domain_id(domain_id), payload, repository)
+
+
 @admin_router.get("/{organizacion_id}/email-service", response_model=TenantEmailServiceResponse)
 async def get_admin_tenant_email_service(
     organizacion_id: UUID,
@@ -311,6 +384,17 @@ async def verify_admin_tenant_email_domain(
     repository: PostmarkRepository = Depends(get_postmark_repository),
 ) -> TenantEmailDomain:
     return await _verify_domain(organizacion_id, domain_id, repository)
+
+
+@admin_router.patch("/{organizacion_id}/email-service/domains/{domain_id}/sender", response_model=TenantEmailDomain)
+async def update_admin_tenant_email_sender(
+    organizacion_id: UUID,
+    domain_id: str,
+    payload: TenantEmailSenderUpdate,
+    _: UUID = Depends(require_master_tenant_owner),
+    repository: PostmarkRepository = Depends(get_postmark_repository),
+) -> TenantEmailDomain:
+    return await _update_sender(organizacion_id, _parse_domain_id(domain_id), payload, repository)
 
 
 __all__ = ["router", "admin_router"]

@@ -52,6 +52,7 @@ type Props = {
   data: TenantEmailServiceData | null
   createDomainAction?: EmailServiceAction
   verifyDomainAction?: EmailServiceAction
+  updateSenderAction?: EmailServiceAction
   actionTenantId?: string
 }
 
@@ -128,7 +129,65 @@ function DomainVerifyForm({ domainId, action, tenantId }: { domainId: string; ac
   )
 }
 
-export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, actionTenantId }: Props) {
+function SenderForm({
+  domain,
+  action,
+  tenantId,
+}: {
+  domain: TenantEmailServiceData["domains"][number]
+  action: EmailServiceAction
+  tenantId?: string
+}) {
+  const [state, formAction] = useActionState(action, { status: "idle" } satisfies EmailServiceActionState)
+  return (
+    <form action={formAction} className="grid gap-3 rounded-md border bg-muted/20 p-4 sm:grid-cols-2">
+      {tenantId ? <input type="hidden" name="tenant_id" value={tenantId} /> : null}
+      <input type="hidden" name="email_domain_id" value={domain.id} />
+      <div className="space-y-2">
+        <label htmlFor={`sender-email-${domain.id}`} className="text-sm font-medium">Correo remitente</label>
+        <input
+          id={`sender-email-${domain.id}`}
+          name="sender_email"
+          type="email"
+          defaultValue={domain.from_email ?? ""}
+          placeholder={`nombre@${domain.domain}`}
+          className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          required
+        />
+        <p className="text-xs text-muted-foreground">Es la dirección que verá la persona que reciba tus correos.</p>
+      </div>
+      <div className="space-y-2">
+        <label htmlFor={`sender-name-${domain.id}`} className="text-sm font-medium">Nombre que aparecerá</label>
+        <input
+          id={`sender-name-${domain.id}`}
+          name="sender_name"
+          defaultValue={domain.from_name ?? ""}
+          placeholder="Nombre de tu empresa"
+          maxLength={200}
+          className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        />
+      </div>
+      <div className="space-y-2 sm:col-span-2">
+        <label htmlFor={`reply-to-${domain.id}`} className="text-sm font-medium">Correo para recibir respuestas <span className="font-normal text-muted-foreground">(opcional)</span></label>
+        <input
+          id={`reply-to-${domain.id}`}
+          name="reply_to_email"
+          type="email"
+          defaultValue={domain.reply_to_email ?? ""}
+          placeholder="respuestas@talia.mx"
+          className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        />
+        <p className="text-xs text-muted-foreground">Si alguien responde al correo, la respuesta llegará a esta dirección.</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+        <Button type="submit" size="sm">Guardar remitente</Button>
+        {state.message ? <p className={state.status === "error" ? "text-sm text-destructive" : "text-sm text-emerald-600"}>{state.message}</p> : null}
+      </div>
+    </form>
+  )
+}
+
+export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, updateSenderAction, actionTenantId }: Props) {
   const status = data?.migration_status ?? "pending"
   const plan = data?.plan
   const usage = data?.usage
@@ -185,6 +244,15 @@ export function TenantEmailServicePanel({ data, createDomainAction, verifyDomain
                       {verifyDomainAction && domain.status !== "verified" ? <DomainVerifyForm domainId={domain.id} action={verifyDomainAction} tenantId={actionTenantId} /> : null}
                     </div>
                   </div>
+                  {updateSenderAction && domain.status === "verified" ? (
+                    <section className="space-y-3">
+                      <div>
+                        <h3 className="font-medium">Remitente de los correos</h3>
+                        <p className="text-sm text-muted-foreground">Define el correo y el nombre que aparecerán al enviar desde este dominio.</p>
+                      </div>
+                      <SenderForm domain={domain} action={updateSenderAction} tenantId={actionTenantId} />
+                    </section>
+                  ) : null}
                   {domain.dns_records.length ? (
                     <div className="overflow-x-auto rounded-md border">
                       <Table>

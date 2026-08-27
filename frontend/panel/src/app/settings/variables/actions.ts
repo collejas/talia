@@ -1230,3 +1230,24 @@ export async function verifyTenantEmailDomainAction(_: CrudActionState, formData
     return failure(error, "No se pudo verificar el dominio.")
   }
 }
+
+export async function updateTenantEmailSenderAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const domainId = getText(formData, "email_domain_id")
+    const senderEmail = getText(formData, "sender_email")
+    const senderName = getText(formData, "sender_name")
+    const replyToEmail = getText(formData, "reply_to_email")
+    if (!domainId || !senderEmail) throw new Error("Indica el correo que aparecerá como remitente.")
+    const response = await callCrmApi<{ id: string }>(`/tenant/me/email-service/domains/${domainId}/sender`, {
+      method: "PATCH",
+      organizacionId: null,
+      withUserToken: true,
+      body: { sender_email: senderEmail, sender_name: senderName || null, reply_to_email: replyToEmail || null },
+    })
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath("/settings/variables")
+    return success("Remitente guardado correctamente.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar el remitente.")
+  }
+}

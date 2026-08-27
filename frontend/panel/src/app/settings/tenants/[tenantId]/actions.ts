@@ -241,6 +241,31 @@ export async function verifyAdminTenantEmailDomainAction(_: CrudActionState, for
   }
 }
 
+export async function updateAdminTenantEmailSenderAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const domainId = getText(formData, "email_domain_id")
+    const senderEmail = getText(formData, "sender_email")
+    const senderName = getText(formData, "sender_name")
+    const replyToEmail = getText(formData, "reply_to_email")
+    if (!domainId || !senderEmail) throw new Error("Indica el correo que aparecerá como remitente.")
+    const response = await callCrmApi<{ id: string }>(
+      `/admin/tenants/${tenantId}/email-service/domains/${domainId}/sender`,
+      {
+        method: "PATCH",
+        organizacionId: null,
+        withUserToken: true,
+        body: { sender_email: senderEmail, sender_name: senderName || null, reply_to_email: replyToEmail || null },
+      },
+    )
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Remitente guardado correctamente.")
+  } catch (error) {
+    return failure(error, "No se pudo guardar el remitente.")
+  }
+}
+
 function removeWhatsProspLegacyTemplates(config: Record<string, unknown>): Record<string, unknown> {
   const whatsapp = isRecord(config.whatsapp) ? { ...config.whatsapp } : {}
   const templates = isRecord(whatsapp.templates) ? { ...whatsapp.templates } : {}

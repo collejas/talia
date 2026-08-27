@@ -83,3 +83,11 @@ class TenantEmailDomainCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     domain: str = Field(min_length=3, max_length=253)
+
+
+class TenantEmailSenderUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sender_email: str = Field(min_length=3, max_length=320)
+    sender_name: str | None = Field(default=None, max_length=200)
+    reply_to_email: str | None = Field(default=None, max_length=320)

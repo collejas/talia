@@ -156,6 +156,22 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("domain_update_invalid_response")
         return data[0]
 
+    async def update_domain_sender(
+        self,
+        *,
+        organizacion_id: UUID,
+        domain_id: UUID,
+        fields: dict[str, Any],
+    ) -> dict[str, Any]:
+        data = await self._rest_patch(
+            "/rest/v1/tenant_email_domains",
+            params={"id": f"eq.{domain_id}", "organizacion_id": f"eq.{organizacion_id}"},
+            payload=fields,
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("sender_update_invalid_response")
+        return data[0]
+
     async def queue_message(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         """Encola y reserva cuota mediante la RPC atómica propia de Postmark."""
         data = await self._rpc("tenant_email_queue_message", payload)
