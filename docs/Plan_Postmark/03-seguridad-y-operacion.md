@@ -13,7 +13,10 @@ La ocultación no sustituye autorización: los permisos, ownership y validacione
 ## Secretos
 
 - Guardar tokens Postmark únicamente en secretos del backend/deploy.
-- Separar Account API Token de Server API Tokens.
+- Separar el Account API Token del tenant Postmark de los Server API Tokens de cada servidor.
+- El Account API Token se obtiene en `Account -> API Tokens` y solo está disponible para el Account Owner/Account Admin; se usa con `X-Postmark-Account-Token` para operaciones de cuenta como dominios.
+- El Server API Token se obtiene en `Servers -> [servidor] -> API Tokens -> Server API tokens`; se usa con `X-Postmark-Server-Token` para enviar mensajes de ese servidor.
+- La pantalla `settings/variables` de Talia no debe pedir estas credenciales: se configuran en secretos del backend por el administrador de plataforma. El tenant solo administra su dominio y sus DNS desde la vista autorizada.
 - No exponer tokens en Next.js, respuestas, logs, errores ni panel.
 - No guardar tokens dentro de `metadata`, plantillas o registros de envío.
 - Rotar tokens y documentar el procedimiento de sustitución.

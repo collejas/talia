@@ -6,6 +6,8 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 ### Cambios
 
+- Se precisó la documentación de credenciales: Account API Token para dominios desde `Account -> API Tokens` y Server API Tokens por servidor para envíos; no se capturan en la vista del tenant.
+- Se corrigió el adaptador para usar `PUT /domains/{id}/verifyDkim` y `PUT /domains/{id}/verifyReturnPath`, y para leer `ReturnPathDomainCNAMEValue` según el contrato oficial actual.
 - Se agregó el adaptador aislado `backend/app/integrations/postmark/` para llamadas HTTP al servicio de correo.
 - Se agregaron contratos internos para mensajes y resultados individuales o batch.
 - Se agregaron variables de configuración exclusivas del backend para tokens transaccional y broadcast, sin valores por defecto sensibles.

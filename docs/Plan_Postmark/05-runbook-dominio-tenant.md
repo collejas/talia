@@ -9,7 +9,7 @@ Permitir que un tenant envíe desde `usuario@su-dominio.com` usando Postmark, si
 - El usuario tiene permiso de administración del tenant.
 - El dominio pertenece al tenant y puede modificar su DNS.
 - La cuenta Postmark tiene plan y permisos suficientes.
-- El backend tiene acceso al Account API Token sin exponerlo.
+- El backend tiene acceso al Account API Token sin exponerlo. Se obtiene en Postmark desde `Account -> API Tokens`; no es el token visible en `Servers -> [servidor] -> API Tokens -> Server API tokens`.
 
 ## Procedimiento
 
@@ -20,7 +20,7 @@ Permitir que un tenant envíe desde `usuario@su-dominio.com` usando Postmark, si
 5. Talia guarda `postmark_domain_id`, estado `pending_dns` y los datos DNS.
 6. Panel muestra el TXT DKIM y el CNAME Return-Path.
 7. Tenant publica los registros en su proveedor DNS.
-8. Backend verifica DKIM y Return-Path mediante API.
+8. Backend solicita la verificación de DKIM y Return-Path mediante `PUT` en Domains API.
 9. Talia marca `verified` solo cuando los controles requeridos estén completos.
 10. Usuario registra o selecciona `From` y `Reply-To` dentro del dominio.
 11. Backend envía prueba transaccional a un destinatario autorizado.
@@ -59,4 +59,3 @@ Postmark devuelve valores concretos por dominio. No se deben hardcodear.
 - Un dominio no verificado no puede enviar.
 - El envío de prueba produce `provider_message_id` y evento de entrega.
 - El webhook actualiza solo el envío correspondiente.
-

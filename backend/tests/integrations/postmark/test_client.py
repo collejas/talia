@@ -126,3 +126,37 @@ async def test_account_request_requires_account_token():
 
     with pytest.raises(PostmarkRequestError, match="account_token_missing"):
         await client.create_domain("example.com")
+
+
+@pytest.mark.asyncio
+async def test_verify_domain_uses_documented_put_methods_and_cname_field():
+    requests = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        return httpx.Response(
+            200,
+            json={
+                "ID": 123,
+                "Name": "example.com",
+                "DKIMVerified": True,
+                "ReturnPathDomainVerified": True,
+                "ReturnPathDomainCNAMEValue": "pm.mtasv.net",
+            },
+        )
+
+    client = PostmarkClient(
+        base_url="https://mail.test",
+        account_token="account-secret",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await client.verify_domain(123)
+
+    assert requests == [
+        ("PUT", "/domains/123/verifyDkim"),
+        ("PUT", "/domains/123/verifyReturnPath"),
+        ("GET", "/domains/123"),
+    ]
+    assert result.dkim_verified is True
+    assert result.return_path_verified is True
+    assert result.return_path_cname_target == "pm.mtasv.net"

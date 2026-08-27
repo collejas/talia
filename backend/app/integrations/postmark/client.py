@@ -89,8 +89,8 @@ class PostmarkClient:
 
     async def verify_domain(self, external_domain_id: int) -> PostmarkDomainResult:
         """Solicita la verificación de DKIM y Return-Path del dominio."""
-        await self._account_request("POST", f"/domains/{external_domain_id}/verifyDkim")
-        await self._account_request("POST", f"/domains/{external_domain_id}/verifyReturnPath")
+        await self._account_request("PUT", f"/domains/{external_domain_id}/verifyDkim")
+        await self._account_request("PUT", f"/domains/{external_domain_id}/verifyReturnPath")
         response = await self._account_request("GET", f"/domains/{external_domain_id}")
         return self._parse_domain(response.json())
 
@@ -206,9 +206,16 @@ class PostmarkClient:
             dkim_host=_first_text(value, "DKIMPendingHost", "DKIMHost"),
             dkim_record_value=_first_text(value, "DKIMPendingTextValue", "DKIMTextValue"),
             return_path_domain=_first_text(value, "ReturnPathDomain"),
-            return_path_cname_target=_first_text(value, "ReturnPathCNAME", "ReturnPathCname"),
+            return_path_cname_target=_first_text(
+                value,
+                "ReturnPathDomainCNAMEValue",
+                "ReturnPathCNAME",
+                "ReturnPathCname",
+            ),
             dkim_verified=bool(value.get("DKIMVerified")),
-            return_path_verified=bool(value.get("ReturnPathVerified")),
+            return_path_verified=bool(
+                value.get("ReturnPathDomainVerified", value.get("ReturnPathVerified"))
+            ),
         )
 
 
