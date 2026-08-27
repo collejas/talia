@@ -4236,6 +4236,7 @@ class ContactoTemplatePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     canal: Literal["correo", "whatsapp", "llamada"]
+    email_message_kind: Literal["transactional", "broadcast"] | None = None
     nombre: str = Field(..., min_length=3, max_length=160)
     slug: str = Field(..., min_length=3, max_length=160)
     descripcion: str | None = Field(default=None, max_length=400)
@@ -4254,6 +4255,7 @@ class ContactoTemplateUpdatePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     canal: Literal["correo", "whatsapp", "llamada"] | None = None
+    email_message_kind: Literal["transactional", "broadcast"] | None = None
     nombre: str | None = Field(default=None, min_length=3, max_length=160)
     slug: str | None = Field(default=None, min_length=3, max_length=160)
     descripcion: str | None = Field(default=None, max_length=400)
@@ -34981,6 +34983,10 @@ async def crear_template_prospeccion_contacto_legacy(
     organizacion_id: UUID = Depends(require_organizacion_id),
     payload: ContactoTemplatePayload,
 ) -> dict[str, Any]:
+    if payload.canal == "correo" and payload.email_message_kind is None:
+        raise HTTPException(status_code=422, detail="email_message_kind_required")
+    if payload.canal != "correo" and payload.email_message_kind is not None:
+        raise HTTPException(status_code=422, detail="email_message_kind_only_for_email")
     if payload.campana_id:
         campana = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=payload.campana_id)
         if not campana:
@@ -35039,6 +35045,13 @@ async def actualizar_template_prospeccion_contacto_legacy(
     current_campana_id = _clean_text(current_metadata.get("campana_id"))
     effective_campana_id = str(raw_data["campana_id"]) if "campana_id" in raw_data and raw_data.get("campana_id") else current_campana_id
     effective_canal = _clean_text(raw_data.get("canal") or current.get("canal")).lower()
+    effective_email_kind = raw_data.get("email_message_kind", current.get("email_message_kind"))
+    if effective_canal == "correo" and effective_email_kind not in {"transactional", "broadcast"}:
+        raise HTTPException(status_code=422, detail="email_message_kind_required")
+    if effective_canal != "correo" and effective_email_kind is not None:
+        raise HTTPException(status_code=422, detail="email_message_kind_only_for_email")
+    if effective_canal != "correo":
+        raw_data["email_message_kind"] = None
     if effective_campana_id:
         try:
             campana_uuid = UUID(effective_campana_id)
@@ -35062,7 +35075,7 @@ async def actualizar_template_prospeccion_contacto_legacy(
         raw_data["metadata"] = metadata_patch
     body = _build_contact_template_payload(
         raw_data,
-        allow_null_keys={"descripcion", "asunto", "cuerpo_texto", "cuerpo_html"},
+        allow_null_keys={"descripcion", "asunto", "cuerpo_texto", "cuerpo_html", "email_message_kind"},
     )
     try:
         template = await repo.update_contact_template(

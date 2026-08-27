@@ -8,6 +8,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 - Se precisó la documentación de credenciales: Account API Token para dominios desde `Account -> API Tokens` y Server API Tokens por servidor para envíos; no se capturan en la vista del tenant.
 - Se corrigió la configuración para usar un único `POSTMARK_SERVER_TOKEN` por servidor y seleccionar `MessageStream` mediante `POSTMARK_TRANSACTIONAL_STREAM` o `POSTMARK_BROADCAST_STREAM`.
+- Se agregó al constructor existente de `prospeccion/campanas` la selección explícita del tipo de correo; se persiste en `email_message_kind` y no dentro de `metadata`.
 - Se corrigió el adaptador para usar `PUT /domains/{id}/verifyDkim` y `PUT /domains/{id}/verifyReturnPath`, y para leer `ReturnPathDomainCNAMEValue` según el contrato oficial actual.
 - Se agregó el adaptador aislado `backend/app/integrations/postmark/` para llamadas HTTP al servicio de correo.
 - Se agregaron contratos internos para mensajes y resultados individuales o batch.

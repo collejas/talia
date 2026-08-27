@@ -262,6 +262,7 @@ export function CampanasMetricsClient() {
     slug: "",
     descripcion: "",
     asunto: "",
+    emailMessageKind: "broadcast" as "transactional" | "broadcast",
     cuerpoTexto: "",
     cuerpoHtml: "",
     metaTemplateName: "",
@@ -517,6 +518,7 @@ export function CampanasMetricsClient() {
       slug: "",
       descripcion: "",
       asunto: "",
+      emailMessageKind: "broadcast",
       cuerpoTexto: "",
       cuerpoHtml: "",
       metaTemplateName: "",
@@ -1255,6 +1257,7 @@ ${secondCellHtml}
       slug: template.slug ?? "",
       descripcion: template.descripcion ?? "",
       asunto: template.asunto ?? "",
+      emailMessageKind: template.email_message_kind === "transactional" ? "transactional" : "broadcast",
       cuerpoTexto: template.cuerpo_texto ?? "",
       cuerpoHtml: template.cuerpo_html ?? "",
       metaTemplateName: template.template_name ?? getTemplateMetaValue(metadata, ["meta_template_name", "template_name"]),
@@ -1311,6 +1314,7 @@ ${secondCellHtml}
         slug: buildSafeTemplateSlug(`${baseSlug}-copia`, template.canal, `${baseName} copia`),
         descripcion: template.descripcion ?? "",
         asunto: template.asunto ?? "",
+        emailMessageKind: template.email_message_kind === "transactional" ? "transactional" : "broadcast",
         cuerpoTexto: template.cuerpo_texto ?? "",
         cuerpoHtml: template.cuerpo_html ?? "",
         metaTemplateName: template.template_name ?? getTemplateMetaValue(metadata, ["meta_template_name", "template_name"]),
@@ -1451,6 +1455,7 @@ ${secondCellHtml}
           slug,
           descripcion: templateForm.descripcion.trim() || null,
           asunto: templateForm.asunto.trim() || null,
+          email_message_kind: templateForm.canal === "correo" ? templateForm.emailMessageKind : null,
           cuerpo_texto: templateForm.cuerpoTexto || null,
           cuerpo_html: templateForm.cuerpoHtml || null,
           metadata,
@@ -1464,6 +1469,7 @@ ${secondCellHtml}
           slug,
           descripcion: templateForm.descripcion.trim() || null,
           asunto: templateForm.asunto.trim() || null,
+          email_message_kind: templateForm.canal === "correo" ? templateForm.emailMessageKind : null,
           cuerpo_texto: templateForm.cuerpoTexto || null,
           cuerpo_html: templateForm.cuerpoHtml || null,
           metadata,
@@ -2330,6 +2336,29 @@ ${secondCellHtml}
                               }}
                               placeholder="Hola {{nombre}}, tenemos una propuesta para ti"
                             />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Tipo de correo</Label>
+                            <Select
+                              value={templateForm.emailMessageKind}
+                              onValueChange={(value) =>
+                                setTemplateForm((prev) => ({
+                                  ...prev,
+                                  emailMessageKind: value as "transactional" | "broadcast",
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="transactional">Transactional · avisos operativos</SelectItem>
+                                <SelectItem value="broadcast">Broadcasts · campañas comerciales</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                              Define el Message Stream que usará Postmark.
+                            </p>
                           </div>
                           <div className="space-y-1">
                             <Label>Mensaje en texto</Label>

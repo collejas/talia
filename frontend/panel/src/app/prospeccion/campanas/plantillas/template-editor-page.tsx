@@ -31,6 +31,7 @@ import {
 type Props = { templateId?: string; initialCampaignId?: string }
 type Channel = "correo" | "whatsapp"
 type EmailFormat = "html" | "texto"
+type EmailMessageKind = "transactional" | "broadcast"
 type LogoAsset = { id: string; nombre: string; file_url: string }
 
 const IMAGE_SLOTS: Array<{ key: ContactoTemplateImagenVariable; label: string }> = [
@@ -68,6 +69,7 @@ type FormState = {
   cuerpoTexto: string
   cuerpoHtml: string
   emailFormat: EmailFormat
+  emailMessageKind: EmailMessageKind
   metaTemplateName: string
   metaTemplateLanguage: string
   metaCategory: "marketing" | "utility" | "authentication"
@@ -88,6 +90,7 @@ const emptyForm = (campaign?: CrmCampaign): FormState => ({
   cuerpoTexto: "",
   cuerpoHtml: "",
   emailFormat: "html",
+  emailMessageKind: "broadcast",
   metaTemplateName: "",
   metaTemplateLanguage: "es_MX",
   metaCategory: "marketing",
@@ -120,6 +123,7 @@ function formFromTemplate(template: ContactoTemplate, campaignId: string): FormS
     cuerpoTexto: template.cuerpo_texto ?? "",
     cuerpoHtml: template.cuerpo_html ?? "",
     emailFormat: template.cuerpo_html?.trim() ? "html" : "texto",
+    emailMessageKind: template.email_message_kind === "transactional" ? "transactional" : "broadcast",
     metaTemplateName: template.template_name ?? "",
     metaTemplateLanguage: template.language_code ?? "es_MX",
     metaCategory: template.meta_category ?? "marketing",
@@ -531,6 +535,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
         slug: slugify(name, form.canal),
         descripcion: form.descripcion.trim() || null,
         asunto: form.canal === "correo" ? form.asunto.trim() || null : null,
+        email_message_kind: form.canal === "correo" ? form.emailMessageKind : null,
         cuerpo_texto:
           form.canal === "whatsapp" ||
           (form.canal === "correo" && form.emailFormat === "texto")
@@ -756,6 +761,27 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                       onChange={(event) => setForm((previous) => ({ ...previous, asunto: event.target.value }))}
                       placeholder="Una idea para {{empresa}}"
                     />
+                  </div>
+                  <div className="max-w-sm space-y-2">
+                    <Label>Tipo de correo</Label>
+                    <Select
+                      value={form.emailMessageKind}
+                      onValueChange={(value) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          emailMessageKind: value as EmailMessageKind,
+                        }))
+                      }
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="transactional">Transactional · avisos operativos</SelectItem>
+                        <SelectItem value="broadcast">Broadcasts · campañas comerciales</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Esta selección define el Message Stream de Postmark para los envíos.
+                    </p>
                   </div>
                   <div className="max-w-sm space-y-2">
                     <Label>Formato del correo</Label>
