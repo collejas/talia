@@ -986,6 +986,13 @@ async def _run_envio_correo(
     subject_template = _clean_text(payload.get("subject"))
     body_template = payload.get("body")
     body_html_template = payload.get("body_html")
+    email_message_kind = _clean_text(payload.get("email_message_kind")).lower()
+    if email_message_kind not in {"transactional", "broadcast"}:
+        return ContactEnvioResult(
+            estado="error",
+            detalle={"reason": "email_message_kind_required"},
+            error="email_message_kind_required",
+        )
     if not subject_template or not body_template:
         return ContactEnvioResult(
             estado="error",
@@ -1114,6 +1121,7 @@ async def _run_envio_correo(
         estado="enviado",
         detalle={
             "email": email_value,
+            "email_message_kind": email_message_kind,
             "tracking_url": tracking_url,
             "booking_url": booking_url,
             "email_provider": email_result.provider,

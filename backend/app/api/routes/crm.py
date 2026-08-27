@@ -10089,6 +10089,11 @@ def _resolve_contact_channels(
                 entry["metadata"] = entry_metadata
 
             if canal == "correo":
+                email_message_kind = _clean_text(
+                    template_row.get("email_message_kind") if template_row else None
+                ).lower()
+                if email_message_kind not in {"transactional", "broadcast"}:
+                    raise HTTPException(status_code=400, detail="email_message_kind_required")
                 subject = _clean_text(canal_config.subject)
                 if not subject and template_row:
                     subject = _clean_text(template_row.get("asunto"))
@@ -10102,6 +10107,7 @@ def _resolve_contact_channels(
                     raise HTTPException(status_code=400, detail="correo_payload_incompleto")
                 entry["subject"] = subject
                 entry["body"] = body
+                entry["email_message_kind"] = email_message_kind
                 if body_html:
                     entry["body_html"] = body_html
             elif canal == "whatsapp":
@@ -10142,6 +10148,7 @@ def _resolve_contact_channels(
         canales["correo"] = {
             "subject": asunto,
             "body": cuerpo,
+            "email_message_kind": "broadcast",
         }
     whatsapp_msg = _clean_text(payload.whatsapp_mensaje)
     if whatsapp_msg:
