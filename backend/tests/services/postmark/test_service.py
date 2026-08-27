@@ -46,6 +46,7 @@ async def test_validate_send_requires_own_verified_domain():
     )
 
     assert context.domain_name == "geoactiv.mx"
+    assert context.stream_name == "outbound"
 
     with pytest.raises(PostmarkError, match="sender_domain_not_authorized"):
         await service.validate_send(
@@ -113,3 +114,34 @@ async def test_deliver_queued_message_finishes_provider_attempt():
     )
 
     assert result == {"provider_accepted": True, "state": "submitted"}
+
+
+@pytest.mark.asyncio
+async def test_queue_message_reserves_with_stream_selected_by_kind():
+    class QueueRepository(FakeRepository):
+        def __init__(self):
+            super().__init__()
+            self.payload = None
+
+        async def queue_message(self, *, payload):
+            self.payload = payload
+            return {
+                "message_id": str(uuid4()),
+                "usage_period_id": str(uuid4()),
+                "created": True,
+                "message_status": "queued",
+            }
+
+    repository = QueueRepository()
+    result = await PostmarkService(repository=repository).queue_message(
+        organizacion_id=UUID("00000000-0000-0000-0000-000000000001"),
+        message=message(tag="campana-prueba"),
+        message_kind="broadcast",
+        idempotency_key="campaign-1-recipient-1",
+    )
+
+    assert repository.payload["p_message_kind"] == "broadcast"
+    assert repository.payload["p_stream_name"] == "broadcasts"
+    assert repository.payload["p_idempotency_key"] == "campaign-1-recipient-1"
+    assert result["message_status"] == "queued"
+    assert result["stream_name"] == "broadcasts"
