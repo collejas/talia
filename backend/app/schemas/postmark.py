@@ -60,3 +60,20 @@ class TenantEmailServiceResponse(BaseModel):
     domains: list[TenantEmailDomain]
     plan: TenantEmailPlan | None = None
     usage: TenantEmailUsage | None = None
+
+
+class TenantEmailQuotaUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    period_limit: int
+    reason: str
+
+
+class TenantEmailQuotaResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool = True
+    previous_period_limit: int | None = None
+    new_period_limit: int
+    period_start: datetime
+    period_end: datetime

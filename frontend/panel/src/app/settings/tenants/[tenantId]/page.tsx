@@ -19,6 +19,7 @@ import {
   TenantProspeccionLimitsCard,
   type TenantProspeccionLimits,
 } from "./tenant-prospeccion-limits-card"
+import { TenantEmailQuotaCard } from "./tenant-email-quota-card"
 
 import {
   TenantCalendarSettings,
@@ -388,6 +389,13 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               <TenantCommercialStateForm tenantId={tenantId} info={tenantInfo} plans={commercialPlans} />
             </CardContent>
           </Card>
+        ) : null}
+
+        {isPlatformAdmin && emailServiceResp?.ok ? (
+          <TenantEmailQuotaCard
+            tenantId={tenantId}
+            initialLimit={emailServiceResp.data.plan?.period_limit ?? null}
+          />
         ) : null}
 
         <Card>

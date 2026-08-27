@@ -461,9 +461,10 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - Se materializó una cuota operativa mensual de 10,000 en `tenant_email_plans` y su periodo correspondiente en `tenant_email_usage_periods` para las 9 organizaciones existentes.
 - La cuota comercial y la operación técnica del correo permanecen separadas: el plan comercial define lo incluido y las tablas `tenant_email_*` controlan reserva, consumo, entrega y fallos.
 - La administración del correo queda visible en `settings/tenants/{tenantId}` para el owner maestro y en `settings/variables` para el tenant actual.
+- Se agregó `PATCH /admin/tenants/{organizacion_id}/email-service/quota`, protegido por el owner del tenant maestro, para ajustar la cuota del periodo actual.
+- Se agregó `tenant_email_quota_changes` para auditar cuota anterior, cuota nueva, motivo, tenant, actor y fecha.
 
 ### Pendientes
 
-- Crear el formulario administrativo para editar la cuota asignada por tenant con auditoría y validación backend.
 - Completar alta/verificación de dominios y configuración DNS desde la consola maestra.
 - Conectar worker, webhooks y métricas reales antes de habilitar envíos.

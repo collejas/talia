@@ -16,6 +16,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se agregó el panel de tenant para consultar estado, dominios, registros DNS y cuota sin exponer tokens ni identificadores del proveedor.
 - Se agregó lectura administrativa protegida para consultar el correo de un tenant desde `settings/tenants/{tenantId}`.
 - Se materializó la cuota inicial comercial de 10,000 mensajes mensuales por tenant en las tablas propias `tenant_email_plans` y `tenant_email_usage_periods`.
+- Se agregó una RPC administrativa atómica y la auditoría `tenant_email_quota_changes` para ajustar la cuota actual por tenant.
 
 ### Decisiones
 

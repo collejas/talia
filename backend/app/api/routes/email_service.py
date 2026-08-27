@@ -12,6 +12,8 @@ from app.schemas.postmark import (
     TenantEmailPlan,
     TenantEmailServiceResponse,
     TenantEmailUsage,
+    TenantEmailQuotaResponse,
+    TenantEmailQuotaUpdate,
 )
 from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
 
@@ -122,6 +124,36 @@ async def get_admin_tenant_email_service(
 ) -> TenantEmailServiceResponse:
     """Permite al owner maestro revisar el correo de un tenant específico."""
     return await _read_email_service(organizacion_id, repository)
+
+
+@admin_router.patch("/{organizacion_id}/email-service/quota", response_model=TenantEmailQuotaResponse)
+async def set_admin_tenant_email_quota(
+    organizacion_id: UUID,
+    payload: TenantEmailQuotaUpdate,
+    actor_id: UUID = Depends(require_master_tenant_owner),
+    repository: PostmarkRepository = Depends(get_postmark_repository),
+) -> TenantEmailQuotaResponse:
+    """Actualiza la cuota del periodo actual con auditoría explícita."""
+    if payload.period_limit < 0 or payload.period_limit > 100_000_000:
+        raise HTTPException(status_code=422, detail="email_quota_invalid")
+    reason = payload.reason.strip()
+    if len(reason) < 3 or len(reason) > 500:
+        raise HTTPException(status_code=422, detail="email_quota_reason_invalid")
+    try:
+        row = await repository.set_quota(
+            organizacion_id=organizacion_id,
+            period_limit=payload.period_limit,
+            changed_by=actor_id,
+            reason=reason,
+        )
+    except PostmarkRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="email_quota_update_failed") from exc
+    return TenantEmailQuotaResponse(
+        previous_period_limit=row.get("previous_period_limit"),
+        new_period_limit=int(row["new_period_limit"]),
+        period_start=row["period_start"],
+        period_end=row["period_end"],
+    )
 
 
 __all__ = ["router", "admin_router"]

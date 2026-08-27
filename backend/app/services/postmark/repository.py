@@ -118,6 +118,27 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("attempt_finish_invalid_response")
         return data[0]
 
+    async def set_quota(
+        self,
+        *,
+        organizacion_id: UUID,
+        period_limit: int,
+        changed_by: UUID,
+        reason: str,
+    ) -> dict[str, Any]:
+        data = await self._rpc(
+            "tenant_email_admin_set_quota",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_period_limit": period_limit,
+                "p_changed_by": str(changed_by),
+                "p_reason": reason,
+            },
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("quota_invalid_response")
+        return data[0]
+
     async def _get_one(self, path: str, *, params: dict[str, str]) -> dict[str, Any] | None:
         headers = {
             "apikey": self._service_role,

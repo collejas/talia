@@ -171,6 +171,40 @@ export async function updateTenantProspeccionLimitsAction(
   }
 }
 
+export async function updateTenantEmailQuotaAction(
+  _: CrudActionState,
+  formData: FormData,
+): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const rawLimit = getText(formData, "email_period_limit")
+    const periodLimit = Number(rawLimit)
+    const reason = getText(formData, "email_quota_reason")
+    if (!Number.isInteger(periodLimit) || periodLimit < 0 || periodLimit > 100_000_000) {
+      throw new Error("La cuota debe ser un entero entre 0 y 100,000,000.")
+    }
+    if (reason.length < 3 || reason.length > 500) {
+      throw new Error("Indica un motivo de entre 3 y 500 caracteres.")
+    }
+
+    const response = await callCrmApi<{ ok: boolean }>(
+      `/admin/tenants/${tenantId}/email-service/quota`,
+      {
+        method: "PATCH",
+        organizacionId: null,
+        withUserToken: true,
+        body: { period_limit: periodLimit, reason },
+      },
+    )
+    if (!response.ok) throw new Error(response.error)
+
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Cuota de correo actualizada.")
+  } catch (error) {
+    return failure(error, "No se pudo actualizar la cuota de correo.")
+  }
+}
+
 function removeWhatsProspLegacyTemplates(config: Record<string, unknown>): Record<string, unknown> {
   const whatsapp = isRecord(config.whatsapp) ? { ...config.whatsapp } : {}
   const templates = isRecord(whatsapp.templates) ? { ...whatsapp.templates } : {}
