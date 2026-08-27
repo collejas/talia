@@ -452,3 +452,18 @@ Si un cambio toca varias capas, registra cada una por separado en la misma fecha
 - El backend ahora exige y valida el correo y nombre del contacto principal antes de crear el tenant provisional.
 - Los botones anual y mensual seleccionan su intervalo dinámico y llevan al mismo flujo seguro de Stripe.
 - La configuración pública quedó habilitada en el source mediante `showPublicBilling: true`; el espejo `/var/www/talia-landing` requiere despliegue para reflejarlo.
+## 2026-08-27
+
+### Cuota inicial de correo por tenant
+
+- Se estableció que cada tenant inicia con 10,000 correos incluidos por mes.
+- La inclusión se registró como entitlement explícito `limit.email.messages_month` en los planes comerciales activos.
+- Se materializó una cuota operativa mensual de 10,000 en `tenant_email_plans` y su periodo correspondiente en `tenant_email_usage_periods` para las 9 organizaciones existentes.
+- La cuota comercial y la operación técnica del correo permanecen separadas: el plan comercial define lo incluido y las tablas `tenant_email_*` controlan reserva, consumo, entrega y fallos.
+- La administración del correo queda visible en `settings/tenants/{tenantId}` para el owner maestro y en `settings/variables` para el tenant actual.
+
+### Pendientes
+
+- Crear el formulario administrativo para editar la cuota asignada por tenant con auditoría y validación backend.
+- Completar alta/verificación de dominios y configuración DNS desde la consola maestra.
+- Conectar worker, webhooks y métricas reales antes de habilitar envíos.

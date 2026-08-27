@@ -14,6 +14,8 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se agregó una migración de intentos de entrega para reclamar, cerrar y contabilizar mensajes Postmark de forma idempotente.
 - Se agregó el endpoint tenant-scoped `GET /tenant/me/email-service` con autorización `settings.view`.
 - Se agregó el panel de tenant para consultar estado, dominios, registros DNS y cuota sin exponer tokens ni identificadores del proveedor.
+- Se agregó lectura administrativa protegida para consultar el correo de un tenant desde `settings/tenants/{tenantId}`.
+- Se materializó la cuota inicial comercial de 10,000 mensajes mensuales por tenant en las tablas propias `tenant_email_plans` y `tenant_email_usage_periods`.
 
 ### Decisiones
 

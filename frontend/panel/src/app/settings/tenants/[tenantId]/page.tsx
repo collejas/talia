@@ -12,6 +12,10 @@ import { activateTenantContextAndRedirectAction } from "./actions"
 import { fetchTenantCloseLeadPolicy } from "@/app/settings/close-lead/actions"
 import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-panel"
 import {
+  TenantEmailServicePanel,
+  type TenantEmailServiceData,
+} from "../../variables/components/tenant-email-service-panel"
+import {
   TenantProspeccionLimitsCard,
   type TenantProspeccionLimits,
 } from "./tenant-prospeccion-limits-card"
@@ -152,6 +156,12 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
     withUserToken: true,
   })
   const isPlatformAdmin = Boolean(platformAdminResp.ok && platformAdminResp.data?.is_platform_admin)
+  const emailServiceResp = isPlatformAdmin
+    ? await callCrmApi<TenantEmailServiceData>(`/admin/tenants/${tenantId}/email-service`, {
+        organizacionId: null,
+        withUserToken: true,
+      })
+    : null
   const prospeccionResp = isPlatformAdmin
     ? await callCrmApi<TenantProspeccionLimits>(`/admin/tenants/${tenantId}/prospeccion-limits`, {
         organizacionId: null,
@@ -170,6 +180,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   if (!plansResp.ok) errors.push(plansResp.error)
   if (!infoResp.ok) errors.push(infoResp.error)
   if (prospeccionResp && !prospeccionResp.ok) errors.push(prospeccionResp.error)
+  if (emailServiceResp && !emailServiceResp.ok) errors.push(emailServiceResp.error)
 
   const secrets = secretsResp.ok ? secretsResp.data.items : []
   const routes = routesResp.ok ? routesResp.data.items : []
@@ -522,6 +533,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               <TenantCalendarSettings tenantId={tenantId} initialValues={calendarInitialValues} />
             </TabsContent>
             <TabsContent value="mail" className="pt-4">
+              {emailServiceResp ? (
+                <div className="mb-6"><TenantEmailServicePanel data={emailServiceResp.ok ? emailServiceResp.data : null} /></div>
+              ) : null}
               <TenantMailSettings
                 tenantId={tenantId}
                 initialValues={mailInitialValues}

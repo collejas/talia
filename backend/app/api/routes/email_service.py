@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.routes.admin import require_user_token
+from app.api.routes.admin import require_master_tenant_owner, require_user_token
 from app.api.routes.tenant import TenantContext, require_permission, require_tenant_context
 from app.schemas.postmark import (
     EmailDnsRecord,
@@ -16,6 +16,7 @@ from app.schemas.postmark import (
 from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
 
 router = APIRouter(prefix="/tenant/me/email-service", tags=["email-service"])
+admin_router = APIRouter(prefix="/admin/tenants", tags=["email-service-admin"])
 
 
 def get_postmark_repository() -> PostmarkRepository:
@@ -38,18 +39,15 @@ def _dns_records(row: dict[str, object]) -> list[EmailDnsRecord]:
     return records
 
 
-@router.get("", response_model=TenantEmailServiceResponse)
-async def get_tenant_email_service(
-    context: TenantContext = Depends(require_tenant_context),
-    user_token: str = Depends(require_user_token),
-    repository: PostmarkRepository = Depends(get_postmark_repository),
+async def _read_email_service(
+    organizacion_id: UUID,
+    repository: PostmarkRepository,
 ) -> TenantEmailServiceResponse:
-    await require_permission(user_token, "settings.view")
     try:
-        migration = await repository.get_migration(organizacion_id=context.organizacion_id)
-        domains = await repository.list_domains(organizacion_id=context.organizacion_id)
-        plan = await repository.get_active_plan(organizacion_id=context.organizacion_id)
-        usage = await repository.get_current_usage(organizacion_id=context.organizacion_id)
+        migration = await repository.get_migration(organizacion_id=organizacion_id)
+        domains = await repository.list_domains(organizacion_id=organizacion_id)
+        plan = await repository.get_active_plan(organizacion_id=organizacion_id)
+        usage = await repository.get_current_usage(organizacion_id=organizacion_id)
     except PostmarkRepositoryError as exc:
         raise HTTPException(status_code=502, detail="email_service_read_failed") from exc
 
@@ -104,3 +102,26 @@ async def get_tenant_email_service(
         plan=plan_item,
         usage=usage_item,
     )
+
+
+@router.get("", response_model=TenantEmailServiceResponse)
+async def get_tenant_email_service(
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    repository: PostmarkRepository = Depends(get_postmark_repository),
+) -> TenantEmailServiceResponse:
+    await require_permission(user_token, "settings.view")
+    return await _read_email_service(context.organizacion_id, repository)
+
+
+@admin_router.get("/{organizacion_id}/email-service", response_model=TenantEmailServiceResponse)
+async def get_admin_tenant_email_service(
+    organizacion_id: UUID,
+    _: UUID = Depends(require_master_tenant_owner),
+    repository: PostmarkRepository = Depends(get_postmark_repository),
+) -> TenantEmailServiceResponse:
+    """Permite al owner maestro revisar el correo de un tenant específico."""
+    return await _read_email_service(organizacion_id, repository)
+
+
+__all__ = ["router", "admin_router"]
