@@ -54,12 +54,16 @@ class PostmarkClient:
         message: PostmarkMessage,
         *,
         message_kind: MessageKind,
+        message_stream: str | None = None,
     ) -> PostmarkSendResult:
         """Envía un único destinatario y normaliza la respuesta."""
         response = await self._post(
             "/email",
             message_kind=message_kind,
-            payload=self._message_payload(message, message_stream=self._stream_for(message_kind)),
+            payload=self._message_payload(
+                message,
+                message_stream=self._stream_for(message_kind, message_stream),
+            ),
         )
         return self._parse_result(response.json())
 
@@ -68,6 +72,7 @@ class PostmarkClient:
         messages: list[PostmarkMessage],
         *,
         message_kind: MessageKind,
+        message_stream: str | None = None,
     ) -> PostmarkBatchResult:
         """Envía hasta 500 mensajes y conserva el resultado de cada elemento."""
         if not messages:
@@ -78,7 +83,10 @@ class PostmarkClient:
             "/email/batch",
             message_kind=message_kind,
             payload=[
-                self._message_payload(message, message_stream=self._stream_for(message_kind))
+                self._message_payload(
+                    message,
+                    message_stream=self._stream_for(message_kind, message_stream),
+                )
                 for message in messages
             ],
         )
@@ -181,8 +189,8 @@ class PostmarkClient:
             payload["Tag"] = message.tag
         return payload
 
-    def _stream_for(self, message_kind: MessageKind) -> str:
-        stream = self._streams[message_kind].strip()
+    def _stream_for(self, message_kind: MessageKind, message_stream: str | None = None) -> str:
+        stream = (message_stream or self._streams[message_kind]).strip()
         if not stream:
             raise PostmarkRequestError("message_stream_missing")
         return stream

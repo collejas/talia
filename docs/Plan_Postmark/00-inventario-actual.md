@@ -122,6 +122,7 @@ La nueva configuración global mínima será:
 
 - `POSTMARK_ACCOUNT_TOKEN`, solo backend y tareas administrativas de dominios/servers.
 - `POSTMARK_SERVER_TOKEN`, solo backend; es el token del servidor Postmark.
+- `POSTMARK_WORKER_ENABLED`, solo backend; debe permanecer en `false` hasta habilitar el piloto del tenant maestro.
 - `POSTMARK_TRANSACTIONAL_STREAM`, solo backend; por defecto `outbound`.
 - `POSTMARK_BROADCAST_STREAM`, solo backend; por defecto `broadcasts`.
 - IDs de streams y configuración de webhooks.

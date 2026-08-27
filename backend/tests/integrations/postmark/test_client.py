@@ -71,6 +71,31 @@ async def test_send_batch_keeps_individual_provider_failures():
 
 
 @pytest.mark.asyncio
+async def test_send_can_use_stream_persisted_by_queue():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["stream"] = request.read().decode()
+        return httpx.Response(
+            200,
+            json={"ErrorCode": 0, "MessageID": "11111111-1111-1111-1111-111111111111", "Message": "OK"},
+        )
+
+    client = PostmarkClient(
+        base_url="https://mail.test",
+        server_token="server-secret",
+        transport=httpx.MockTransport(handler),
+    )
+    await client.send_message(
+        _message(),
+        message_kind="transactional",
+        message_stream="outbound-pilot",
+    )
+
+    assert '"MessageStream": "outbound-pilot"' in captured["stream"]
+
+
+@pytest.mark.asyncio
 async def test_send_requires_token_without_making_request():
     client = PostmarkClient(base_url="https://mail.test", transport=httpx.MockTransport(lambda _: None))
 

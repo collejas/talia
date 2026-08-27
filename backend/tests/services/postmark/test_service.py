@@ -91,6 +91,7 @@ async def test_deliver_queued_message_finishes_provider_attempt():
                 "subject": "Aviso",
                 "text_body": "Contenido",
                 "message_kind": "transactional",
+                "stream_name": "outbound",
                 "tag": None,
             }
 
@@ -99,9 +100,10 @@ async def test_deliver_queued_message_finishes_provider_attempt():
             return {"message_status": "submitted"}
 
     class DeliveryClient:
-        async def send_message(self, message, *, message_kind):
+        async def send_message(self, message, *, message_kind, message_stream):
             assert message.to_email == "client@example.com"
             assert message_kind == "transactional"
+            assert message_stream == "outbound"
             return PostmarkSendResult(
                 accepted=True,
                 provider_message_id=UUID("11111111-1111-1111-1111-111111111111"),

@@ -33,6 +33,7 @@ from app.core.config import resolve_log_path, settings
 from app.core.logging import configure_logging, get_logger, resolve_log_level
 from app.core.middleware import RequestLoggingMiddleware
 from app.services.prospeccion_contact_sender import contact_sender
+from app.services.postmark import postmark_worker
 from app.services.prospeccion_email_inbound_reader import email_inbound_reader
 from app.services.deleted_busquedas_purge_jobs import deleted_busquedas_purge_runner
 from app.services.high_demand_mode import high_demand_mode_runner
@@ -72,6 +73,8 @@ async def app_lifespan(_: FastAPI):
 
     await maybe_sync_role_permissions_on_start()
     await contact_sender.start()
+    if settings.postmark_worker_enabled:
+        await postmark_worker.start()
     await email_inbound_reader.start()
     await whatsapp_followup_runner.start()
     await webchat_followup_runner.start()
@@ -86,7 +89,7 @@ async def app_lifespan(_: FastAPI):
     try:
         yield
     finally:
-        shutdown_coroutines = (
+        shutdown_coroutines = [
             _shutdown_with_timeout(
                 name="activity_reminder_jobs_runner",
                 coro=activity_reminder_jobs_runner.shutdown(),
@@ -135,7 +138,15 @@ async def app_lifespan(_: FastAPI):
                 name="contact_sender",
                 coro=contact_sender.shutdown(),
             ),
-        )
+        ]
+        if settings.postmark_worker_enabled:
+            shutdown_coroutines.insert(
+                1,
+                _shutdown_with_timeout(
+                    name="postmark_worker",
+                    coro=postmark_worker.shutdown(),
+                ),
+            )
         await asyncio.gather(*shutdown_coroutines)
 
 

@@ -2,6 +2,30 @@
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-08-27]
+
+### Cambios
+
+- Se agregó la reclamación concurrente de mensajes Postmark con `FOR UPDATE SKIP LOCKED`, estado explícito `processing` y recuperación de reclamaciones obsoletas.
+- Se conectó el worker aislado de Postmark al ciclo de vida de FastAPI, limitado a tenants con la migración Postmark habilitada.
+- El worker conserva y utiliza el `stream_name` persistido al encolar; un cambio posterior de configuración no puede desviar un mensaje a otro stream.
+- Se agregó `POSTMARK_WORKER_ENABLED`, desactivado por defecto, para impedir actividad del worker antes de configurar el piloto del tenant maestro.
+
+### Validaciones
+
+- La migración `postmark_queue_claim` fue aplicada y verificada en Supabase.
+- La función de reclamación está restringida a `service_role`.
+- La cola Postmark no contiene mensajes de prueba.
+- El tenant maestro continúa `pending` y con `feature_enabled = false`.
+- Pruebas de integración y servicio Postmark: 13 aprobadas; compilación del backend y `git diff --check`: aprobados.
+
+### Pendientes
+
+- Configurar de forma segura los tokens de cuenta/servidor y habilitar el worker únicamente durante el piloto.
+- Registrar y verificar el primer dominio remitente del tenant maestro.
+- Crear webhooks autenticados y procesar entrega, rebote, queja y supresión.
+- Implementar reintentos/backoff y la política final de bloqueo, eliminación y remitente predeterminado.
+
 ## [2026-08-26]
 
 ### Cambios
@@ -10,6 +34,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se corrigió la configuración para usar un único `POSTMARK_SERVER_TOKEN` por servidor y seleccionar `MessageStream` mediante `POSTMARK_TRANSACTIONAL_STREAM` o `POSTMARK_BROADCAST_STREAM`.
 - Se agregó al constructor existente de `prospeccion/campanas` la selección explícita del tipo de correo; se persiste en `email_message_kind` y no dentro de `metadata`.
 - Se agregó al servicio Postmark la preparación de mensajes en cola con validación de tenant, dominio verificado, plan, supresión, cuota e idempotencia; el `stream_name` se deriva del tipo de mensaje.
+- Se agregó un worker Postmark aislado con reclamación segura por tenant y recuperación de mensajes en estado `processing` obsoleto; solo procesa migraciones Postmark habilitadas.
 - Se corrigió el adaptador para usar `PUT /domains/{id}/verifyDkim` y `PUT /domains/{id}/verifyReturnPath`, y para leer `ReturnPathDomainCNAMEValue` según el contrato oficial actual.
 - Se agregó el adaptador aislado `backend/app/integrations/postmark/` para llamadas HTTP al servicio de correo.
 - Se agregaron contratos internos para mensajes y resultados individuales o batch.
@@ -45,12 +70,9 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - `20260826_230000_postmark_delivery_attempts` fue aplicada y verificada en Supabase; las RPC quedaron protegidas y no se crearon registros de prueba.
 - `20260826_235000_reconcile_postmark_core` fue aplicada y verificada en Supabase; confirmó las 11 tablas originales, `FORCE RLS` y el único registro pendiente del tenant maestro sin reejecutar el DDL inicial.
 
-### Pendientes
+### Estado
 
-- Completar el servicio de negocio de cola/envío y conectar un worker aislado.
-- Crear webhooks autenticados y procesar eventos de entrega, rebote, queja y supresión.
-- Completar acciones de bloqueo, eliminación y selección del remitente predeterminado.
-- Configurar tokens y recursos reales de la cuenta de correo solo durante el piloto.
+La cola y el worker aislado fueron completados posteriormente; los pendientes actuales se mantienen en la entrada del 2026-08-27.
 
 ## [No publicado]
 

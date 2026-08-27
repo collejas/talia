@@ -162,6 +162,41 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("queue_invalid_response")
         return data[0]
 
+    async def claim_messages(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        data = await self._rpc(
+            "tenant_email_claim_messages",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_limit": limit,
+                "p_stale_after_seconds": 600,
+            },
+        )
+        if not isinstance(data, list):
+            raise PostmarkRepositoryError("claim_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_enabled_organizations(self) -> list[UUID]:
+        data = await self._get_many(
+            "/rest/v1/tenant_email_migrations",
+            params={
+                "select": "organizacion_id",
+                "feature_enabled": "eq.true",
+                "status": "in.(active,validated,migrated)",
+            },
+        )
+        result: list[UUID] = []
+        for row in data:
+            try:
+                result.append(UUID(str(row["organizacion_id"])))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return result
+
     async def start_attempt(self, *, organizacion_id: UUID, message_id: UUID) -> dict[str, Any]:
         data = await self._rpc(
             "tenant_email_start_attempt",

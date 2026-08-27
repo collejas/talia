@@ -209,6 +209,14 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("POSTMARK_SERVER_TOKEN", "TALIA_POSTMARK_SERVER_TOKEN"),
     )
+    postmark_worker_enabled: bool = Field(
+        default=False,
+        description="Habilita el worker exclusivo de entrega de Postmark.",
+        validation_alias=AliasChoices(
+            "POSTMARK_WORKER_ENABLED",
+            "TALIA_POSTMARK_WORKER_ENABLED",
+        ),
+    )
     postmark_transactional_stream: str = Field(
         default="outbound",
         validation_alias=AliasChoices(

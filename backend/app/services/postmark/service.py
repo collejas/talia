@@ -103,7 +103,14 @@ class PostmarkService:
         kind = attempt.get("message_kind")
         if kind not in {"transactional", "broadcast"}:
             raise PostmarkError("email_message_kind_invalid")
-        result = await client.send_message(message, message_kind=kind)
+        stream_name = str(attempt.get("stream_name") or "").strip()
+        if not stream_name:
+            raise PostmarkError("message_stream_missing")
+        result = await client.send_message(
+            message,
+            message_kind=kind,
+            message_stream=stream_name,
+        )
         finish = await self.repository.finish_attempt(
             payload={
                 "p_organizacion_id": str(organizacion_id),
