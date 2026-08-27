@@ -205,18 +205,22 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("POSTMARK_ACCOUNT_TOKEN", "TALIA_POSTMARK_ACCOUNT_TOKEN"),
     )
-    postmark_server_token_transactional: str | None = Field(
+    postmark_server_token: str | None = Field(
         default=None,
+        validation_alias=AliasChoices("POSTMARK_SERVER_TOKEN", "TALIA_POSTMARK_SERVER_TOKEN"),
+    )
+    postmark_transactional_stream: str = Field(
+        default="outbound",
         validation_alias=AliasChoices(
-            "POSTMARK_SERVER_TOKEN_TRANSACTIONAL",
-            "TALIA_POSTMARK_SERVER_TOKEN_TRANSACTIONAL",
+            "POSTMARK_TRANSACTIONAL_STREAM",
+            "TALIA_POSTMARK_TRANSACTIONAL_STREAM",
         ),
     )
-    postmark_server_token_broadcast: str | None = Field(
-        default=None,
+    postmark_broadcast_stream: str = Field(
+        default="broadcasts",
         validation_alias=AliasChoices(
-            "POSTMARK_SERVER_TOKEN_BROADCAST",
-            "TALIA_POSTMARK_SERVER_TOKEN_BROADCAST",
+            "POSTMARK_BROADCAST_STREAM",
+            "TALIA_POSTMARK_BROADCAST_STREAM",
         ),
     )
     postmark_timeout_seconds: float = Field(

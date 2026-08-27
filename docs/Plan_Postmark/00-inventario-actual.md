@@ -121,8 +121,9 @@ La configuración actual incluye:
 La nueva configuración global mínima será:
 
 - `POSTMARK_ACCOUNT_TOKEN`, solo backend y tareas administrativas de dominios/servers.
-- `POSTMARK_SERVER_TOKEN_TRANSACTIONAL`, solo backend.
-- `POSTMARK_SERVER_TOKEN_BROADCAST`, solo backend.
+- `POSTMARK_SERVER_TOKEN`, solo backend; es el token del servidor Postmark.
+- `POSTMARK_TRANSACTIONAL_STREAM`, solo backend; por defecto `outbound`.
+- `POSTMARK_BROADCAST_STREAM`, solo backend; por defecto `broadcasts`.
 - IDs de streams y configuración de webhooks.
 
 La configuración de cada tenant deberá persistir como columnas explícitas: dominio, estado, dominio DKIM, Return-Path, remitente, Reply-To y fecha de verificación. No se debe esconder esta información estructural en `metadata` o `config` JSONB.

@@ -33,16 +33,18 @@ class PostmarkClient:
         *,
         base_url: str | None = None,
         account_token: str | None = None,
-        transactional_token: str | None = None,
-        broadcast_token: str | None = None,
+        server_token: str | None = None,
+        transactional_stream: str | None = None,
+        broadcast_stream: str | None = None,
         timeout: float | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.base_url = (base_url or settings.postmark_base_url).rstrip("/")
         self._account_token = account_token or settings.postmark_account_token
-        self._tokens = {
-            "transactional": transactional_token or settings.postmark_server_token_transactional,
-            "broadcast": broadcast_token or settings.postmark_server_token_broadcast,
+        self._server_token = server_token or settings.postmark_server_token
+        self._streams = {
+            "transactional": transactional_stream or settings.postmark_transactional_stream,
+            "broadcast": broadcast_stream or settings.postmark_broadcast_stream,
         }
         self.timeout = timeout or settings.postmark_timeout_seconds
         self.transport = transport
@@ -57,7 +59,7 @@ class PostmarkClient:
         response = await self._post(
             "/email",
             message_kind=message_kind,
-            payload=self._message_payload(message),
+            payload=self._message_payload(message, message_stream=self._stream_for(message_kind)),
         )
         return self._parse_result(response.json())
 
@@ -75,7 +77,10 @@ class PostmarkClient:
         response = await self._post(
             "/email/batch",
             message_kind=message_kind,
-            payload=[self._message_payload(message) for message in messages],
+            payload=[
+                self._message_payload(message, message_stream=self._stream_for(message_kind))
+                for message in messages
+            ],
         )
         data = response.json()
         if not isinstance(data, list) or len(data) != len(messages):
@@ -101,13 +106,12 @@ class PostmarkClient:
         message_kind: MessageKind,
         payload: dict[str, object] | list[dict[str, object]],
     ) -> httpx.Response:
-        token = self._tokens[message_kind]
-        if not token:
+        if not self._server_token:
             raise PostmarkRequestError("server_token_missing")
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "X-Postmark-Server-Token": token,
+            "X-Postmark-Server-Token": self._server_token,
         }
         try:
             async with httpx.AsyncClient(
@@ -154,11 +158,16 @@ class PostmarkClient:
         return response
 
     @staticmethod
-    def _message_payload(message: PostmarkMessage) -> dict[str, object]:
+    def _message_payload(
+        message: PostmarkMessage,
+        *,
+        message_stream: str,
+    ) -> dict[str, object]:
         payload: dict[str, object] = {
             "From": message.from_email,
             "To": message.to_email,
             "Subject": message.subject,
+            "MessageStream": message_stream,
         }
         if message.from_name:
             payload["From"] = f"{message.from_name} <{message.from_email}>"
@@ -171,6 +180,12 @@ class PostmarkClient:
         if message.tag:
             payload["Tag"] = message.tag
         return payload
+
+    def _stream_for(self, message_kind: MessageKind) -> str:
+        stream = self._streams[message_kind].strip()
+        if not stream:
+            raise PostmarkRequestError("message_stream_missing")
+        return stream
 
     @staticmethod
     def _parse_result(value: object) -> PostmarkSendResult:

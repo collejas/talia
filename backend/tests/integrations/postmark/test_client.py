@@ -18,7 +18,7 @@ def _message() -> PostmarkMessage:
 
 
 @pytest.mark.asyncio
-async def test_send_message_uses_stream_token_and_normalizes_result():
+async def test_send_message_uses_server_token_and_transactional_stream():
     captured = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -32,7 +32,7 @@ async def test_send_message_uses_stream_token_and_normalizes_result():
 
     client = PostmarkClient(
         base_url="https://mail.test",
-        transactional_token="transactional-secret",
+        server_token="server-secret",
         transport=httpx.MockTransport(handler),
     )
     result = await client.send_message(_message(), message_kind="transactional")
@@ -40,10 +40,10 @@ async def test_send_message_uses_stream_token_and_normalizes_result():
     assert result.accepted is True
     assert result.provider_message_id == UUID("11111111-1111-1111-1111-111111111111")
     assert captured["url"] == "https://mail.test/email"
-    assert captured["token"] == "transactional-secret"
+    assert captured["token"] == "server-secret"
     assert captured["json"] == (
         b'{"From": "Talia <sender@example.com>", "To": "recipient@example.com", '
-        b'"Subject": "Hola", "TextBody": "Texto"}'
+        b'"Subject": "Hola", "MessageStream": "outbound", "TextBody": "Texto"}'
     )
 
 
@@ -60,7 +60,8 @@ async def test_send_batch_keeps_individual_provider_failures():
 
     client = PostmarkClient(
         base_url="https://mail.test",
-        broadcast_token="broadcast-secret",
+        server_token="server-secret",
+        broadcast_stream="broadcasts",
         transport=httpx.MockTransport(handler),
     )
     result = await client.send_batch([_message(), _message()], message_kind="broadcast")
@@ -78,7 +79,7 @@ async def test_send_requires_token_without_making_request():
 
 
 def test_batch_rejects_more_than_provider_limit():
-    client = PostmarkClient(transactional_token="secret")
+    client = PostmarkClient(server_token="secret")
 
     with pytest.raises(PostmarkRequestError, match="batch_size_exceeded"):
         # La validación ocurre antes de hacer cualquier petición externa.

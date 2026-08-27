@@ -210,6 +210,7 @@ Permisos recomendados:
 - `settings.manage` para configuración del propio tenant.
 - permiso de plataforma para administrar dominios de cualquier tenant.
 - solo backend para tokens Account/Server de Postmark.
+- usar un único Server API Token por servidor y seleccionar el stream mediante `MessageStream`: `outbound` para transaccional y `broadcasts` para comercial.
 
 ## Fase 5: migración de plantillas
 
