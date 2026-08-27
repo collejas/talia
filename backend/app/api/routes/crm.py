@@ -10089,6 +10089,12 @@ def _resolve_contact_channels(
                 entry["metadata"] = entry_metadata
 
             if canal == "correo":
+                email_message_kind = _clean_text(
+                    template_row.get("email_message_kind") if template_row else None
+                )
+                if email_message_kind in {"transactional", "broadcast"}:
+                    entry["email_message_kind"] = email_message_kind
+                    entry_metadata.setdefault("email_message_kind", email_message_kind)
                 subject = _clean_text(canal_config.subject)
                 if not subject and template_row:
                     subject = _clean_text(template_row.get("asunto"))

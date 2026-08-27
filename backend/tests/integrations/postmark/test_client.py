@@ -5,6 +5,7 @@ from uuid import UUID
 from app.integrations.postmark.client import PostmarkClient
 from app.integrations.postmark.errors import PostmarkRequestError
 from app.integrations.postmark.schemas import PostmarkMessage
+from app.core.config import settings
 
 
 def _message() -> PostmarkMessage:
@@ -96,7 +97,8 @@ async def test_send_can_use_stream_persisted_by_queue():
 
 
 @pytest.mark.asyncio
-async def test_send_requires_token_without_making_request():
+async def test_send_requires_token_without_making_request(monkeypatch):
+    monkeypatch.setattr(settings, "postmark_server_token", "")
     client = PostmarkClient(base_url="https://mail.test", transport=httpx.MockTransport(lambda _: None))
 
     with pytest.raises(PostmarkRequestError, match="server_token_missing"):
@@ -170,7 +172,8 @@ async def test_create_domain_uses_account_token_and_normalizes_dns():
 
 
 @pytest.mark.asyncio
-async def test_account_request_requires_account_token():
+async def test_account_request_requires_account_token(monkeypatch):
+    monkeypatch.setattr(settings, "postmark_account_token", "")
     client = PostmarkClient(base_url="https://mail.test", transport=httpx.MockTransport(lambda _: None))
 
     with pytest.raises(PostmarkRequestError, match="account_token_missing"):

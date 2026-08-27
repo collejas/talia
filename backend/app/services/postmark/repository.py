@@ -346,7 +346,17 @@ class PostmarkRepository:
         except httpx.RequestError as exc:
             raise PostmarkRepositoryError("database_unreachable") from exc
         if response.status_code >= 400:
-            raise PostmarkRepositoryError("queue_failed")
+            detail = None
+            try:
+                payload = response.json()
+                if isinstance(payload, dict):
+                    detail = payload.get("message") or payload.get("hint") or payload.get("details")
+            except ValueError:
+                detail = None
+            safe_detail = str(detail).strip()[:300] if detail else None
+            raise PostmarkRepositoryError(
+                f"queue_failed:{response.status_code}:{safe_detail}" if safe_detail else f"queue_failed:{response.status_code}"
+            )
         return response.json()
 
 

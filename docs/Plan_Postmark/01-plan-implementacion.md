@@ -71,7 +71,7 @@ La creación de la infraestructura seguirá como guía operativa el [Postmark Ma
 3. Inventariar tenants activos, dominios remitentes, remitentes, plantillas, campañas programadas y envíos pendientes.
 4. Definir streams centrales:
    - `outbound` o equivalente para transaccional.
-   - `broadcasts` o equivalente para prospección/campañas permitidas.
+   - `broadcast` o el identificador equivalente configurado en Postmark para prospección/campañas permitidas.
    - `inbound` para respuestas entrantes, obligatorio en la arquitectura nueva.
 5. Aplicar la política de cuotas definida en [decisiones operativas](./06-decisiones-operativas-y-criterios.md).
 6. Fijar como tenant piloto `00000000-0000-0000-0000-000000000001` y definir una ventana de reversión.
@@ -210,7 +210,7 @@ Permisos recomendados:
 - `settings.manage` para configuración del propio tenant.
 - permiso de plataforma para administrar dominios de cualquier tenant.
 - solo backend para tokens Account/Server de Postmark.
-- usar un único Server API Token por servidor y seleccionar el stream mediante `MessageStream`: `outbound` para transaccional y `broadcasts` para comercial.
+- usar un único Server API Token por servidor y seleccionar el stream mediante `MessageStream`: `outbound` para transaccional y `broadcast` para comercial.
 
 ## Fase 5: migración de plantillas
 

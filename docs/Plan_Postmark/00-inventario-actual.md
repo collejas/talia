@@ -124,7 +124,7 @@ La nueva configuración global mínima será:
 - `POSTMARK_SERVER_TOKEN`, solo backend; es el token del servidor Postmark.
 - `POSTMARK_WORKER_ENABLED`, solo backend; debe permanecer en `false` hasta habilitar el piloto del tenant maestro.
 - `POSTMARK_TRANSACTIONAL_STREAM`, solo backend; por defecto `outbound`.
-- `POSTMARK_BROADCAST_STREAM`, solo backend; por defecto `broadcasts`.
+- `POSTMARK_BROADCAST_STREAM`, solo backend; por defecto `broadcast`.
 - IDs de streams y configuración de webhooks.
 
 La configuración de cada tenant deberá persistir como columnas explícitas: dominio, estado, dominio DKIM, Return-Path, remitente, Reply-To y fecha de verificación. No se debe esconder esta información estructural en `metadata` o `config` JSONB.

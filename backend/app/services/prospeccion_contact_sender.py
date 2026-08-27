@@ -21,6 +21,10 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.high_demand_mode import high_demand_controller
 from app.services import EmailSendError, send_email_detailed, storage, tenant_runtime
 from app.services.metrics import metrics
+from app.services.postmark import PostmarkService
+from app.services.postmark.repository import PostmarkRepository
+from app.integrations.postmark.errors import PostmarkError
+from app.integrations.postmark.schemas import PostmarkMessage
 from app.services.phone_utils import normalize_phone
 from app.services.prospeccion_progress import progress_hub
 from app.services.storage import StorageError
@@ -1071,6 +1075,16 @@ async def _run_envio_correo(
             detalle={"reason": "correo_payload_incompleto"},
             error="correo_payload_incompleto",
         )
+    if organizacion_id and await _postmark_enabled_for_tenant(organizacion_id=organizacion_id):
+        return await _queue_postmark_prospeccion_email(
+            envio=envio,
+            payload=effective_payload,
+            subject=subject,
+            body=body,
+            body_html=body_html,
+            organizacion_id=organizacion_id,
+        )
+
     mail_settings = None
     brevo_settings = None
     if organizacion_id:
@@ -1122,6 +1136,118 @@ async def _run_envio_correo(
         },
         mensaje_id=email_result.provider_message_id,
         mensaje_id_interno=email_result.local_message_id,
+    )
+
+
+async def _postmark_enabled_for_tenant(*, organizacion_id: UUID) -> bool:
+    """Resuelve el corte por tenant sin consultar ni modificar la configuración Brevo."""
+
+    migration = await PostmarkRepository().get_migration(organizacion_id=organizacion_id)
+    return bool(
+        migration
+        and migration.get("feature_enabled") is True
+        and migration.get("status") in {"active", "validated", "migrated"}
+    )
+
+
+async def _queue_postmark_prospeccion_email(
+    *,
+    envio: dict[str, Any],
+    payload: dict[str, Any],
+    subject: str,
+    body: str,
+    body_html: str | None,
+    organizacion_id: UUID,
+) -> ContactEnvioResult:
+    """Encola prospección en Postmark sin pasar por el servicio de correo legado."""
+
+    repository = PostmarkRepository()
+    domain = await repository.get_verified_domain(organizacion_id=organizacion_id)
+    if not domain:
+        return ContactEnvioResult(
+            estado="error",
+            detalle={"reason": "dominio_remitente_no_verificado"},
+            error="dominio_remitente_no_verificado",
+        )
+
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    message_kind = _clean_text(payload.get("email_message_kind") or metadata.get("email_message_kind"))
+    if message_kind not in {"transactional", "broadcast"}:
+        return ContactEnvioResult(
+            estado="error",
+            detalle={"reason": "tipo_correo_no_configurado"},
+            error="tipo_correo_no_configurado",
+        )
+
+    from_email = _clean_text(domain.get("default_from_email"))
+    if not from_email:
+        return ContactEnvioResult(
+            estado="error",
+            detalle={"reason": "correo_remitente_no_configurado"},
+            error="correo_remitente_no_configurado",
+        )
+    from_name = _clean_text(domain.get("default_from_name"))
+    reply_to = _clean_text(domain.get("reply_to_email"))
+    tag = _clean_text(
+        metadata.get("postmark_tag")
+        or metadata.get("template_slug")
+        or metadata.get("campana_id")
+        or "prospeccion"
+    )
+    try:
+        message = PostmarkMessage(
+            from_email=from_email,
+            from_name=from_name,
+            reply_to=reply_to,
+            to_email=str(envio["email"]),
+            subject=subject,
+            html_body=body_html,
+            text_body=body,
+            tag=tag,
+        )
+        queued = await PostmarkService(repository=repository).queue_message(
+            organizacion_id=organizacion_id,
+            message=message,
+            message_kind=message_kind,
+            idempotency_key=f"prospeccion-envio:{envio['id']}",
+            # El constructor de prospección y las plantillas Postmark son
+            # catálogos distintos. En esta etapa Talia ya renderiza y guarda
+            # el contenido completo; no se debe enviar el UUID del catálogo
+            # local como FK de tenant_email_templates.
+            template_id=None,
+        )
+    except (PostmarkError, KeyError, TypeError, ValueError) as exc:
+        log_event(
+            logger,
+            "prospeccion.postmark_queue_failed",
+            organizacion_id=str(organizacion_id),
+            envio_id=str(envio.get("id")),
+            error=str(exc),
+        )
+        return ContactEnvioResult(
+            estado="error",
+            detalle={"email": str(envio.get("email") or ""), "reason": str(exc)},
+            error=str(exc),
+            retryable=False,
+        )
+
+    return ContactEnvioResult(
+        estado="enviado",
+        detalle={
+            "email": str(envio["email"]),
+            "email_provider": "postmark",
+            "delivery_state": "queued",
+            "message_kind": message_kind,
+            "message_stream": queued.get("stream_name"),
+            "postmark_message_id": queued.get("message_id"),
+            "tracking_url": _build_email_tracking_url(
+                context=_build_placeholder_context(envio, payload, metadata),
+                payload=payload,
+                envio_id=envio.get("id"),
+                prospecto_id=envio.get("prospecto_id"),
+            ),
+        },
+        mensaje_id_interno=str(queued["message_id"]),
     )
 
 
@@ -1450,6 +1576,27 @@ class ProspeccionContactSender:
                         "prospeccion.sender_envio_failed",
                         extra={"envio_id": envio.get("id"), "error": str(exc)},
                     )
+                    try:
+                        await repo.worker_complete_envio(
+                            envio_id=UUID(str(envio["id"])),
+                            payload={
+                                "estado": "error",
+                                "error": "envio_procesamiento_fallido",
+                                "detalle": {
+                                    "reason": "envio_procesamiento_fallido",
+                                    "error_type": type(exc).__name__,
+                                },
+                                "procesado_en": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                        batch_id = envio.get("batch_id")
+                        if batch_id:
+                            await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id)))
+                    except Exception as recovery_exc:  # pragma: no cover - último resguardo
+                        logger.exception(
+                            "prospeccion.sender_envio_recovery_failed",
+                            extra={"envio_id": envio.get("id"), "error": str(recovery_exc)},
+                        )
                     return None
 
         for envio in envios:

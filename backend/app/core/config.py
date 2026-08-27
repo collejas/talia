@@ -225,7 +225,7 @@ class Settings(BaseSettings):
         ),
     )
     postmark_broadcast_stream: str = Field(
-        default="broadcasts",
+        default="broadcast",
         validation_alias=AliasChoices(
             "POSTMARK_BROADCAST_STREAM",
             "TALIA_POSTMARK_BROADCAST_STREAM",

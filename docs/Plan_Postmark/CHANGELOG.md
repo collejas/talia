@@ -11,21 +11,26 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se conectó el worker aislado de Postmark al ciclo de vida de FastAPI, limitado a tenants con la migración Postmark habilitada.
 - El worker conserva y utiliza el `stream_name` persistido al encolar; un cambio posterior de configuración no puede desviar un mensaje a otro stream.
 - Se agregó `POSTMARK_WORKER_ENABLED`, desactivado por defecto, para impedir actividad del worker antes de configurar el piloto del tenant maestro.
+- Se conectó el envío de correo de prospección al corte por tenant: tenants Postmark activos encolan en Postmark y los no migrados conservan temporalmente su proveedor anterior.
+- La rama Postmark de prospección usa el remitente verificado del tenant, la plantilla seleccionada y su tipo `transactional` o `broadcast`, con una clave de idempotencia por envío.
+- No existe fallback automático entre Postmark y el proveedor anterior dentro del mismo tenant.
 
 ### Validaciones
 
 - La migración `postmark_queue_claim` fue aplicada y verificada en Supabase.
 - La función de reclamación está restringida a `service_role`.
-- La cola Postmark no contiene mensajes de prueba.
-- El tenant maestro continúa `pending` y con `feature_enabled = false`.
-- Pruebas de integración y servicio Postmark: 13 aprobadas; compilación del backend y `git diff --check`: aprobados.
+- Se validó el piloto real del tenant maestro: `administracion@talia.mx` fue aceptado y recibido; un destinatario `@geoactiv.mx` fue rechazado por la restricción de aprobación de Postmark.
+- El rechazo del piloto fue conciliado como fallido y la cuota fue liberada.
+- Pruebas Postmark y sender de prospección: 28 aprobadas; compilación del backend y `git diff --check`: aprobados.
 
 ### Pendientes
 
 - Configurar de forma segura los tokens de cuenta/servidor y habilitar el worker únicamente durante el piloto.
 - Registrar y verificar el primer dominio remitente del tenant maestro.
 - Crear webhooks autenticados y procesar entrega, rebote, queja y supresión.
-- Implementar reintentos/backoff y la política final de bloqueo, eliminación y remitente predeterminado.
+- Solicitar la aprobación de la cuenta Postmark para permitir destinatarios de dominios externos.
+- Implementar y verificar webhooks de entrega, rebote, queja y supresión antes de retirar el proveedor anterior.
+- Ejecutar una campaña controlada desde `prospeccion/prospectos` con el tenant maestro.
 
 ## [2026-08-26]
 
@@ -33,6 +38,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 - Se precisó la documentación de credenciales: Account API Token para dominios desde `Account -> API Tokens` y Server API Tokens por servidor para envíos; no se capturan en la vista del tenant.
 - Se corrigió la configuración para usar un único `POSTMARK_SERVER_TOKEN` por servidor y seleccionar `MessageStream` mediante `POSTMARK_TRANSACTIONAL_STREAM` o `POSTMARK_BROADCAST_STREAM`.
+- Se corrigió el identificador del stream de Broadcast a `broadcast`, que es el stream existente en el servidor Postmark piloto.
 - Se agregó al constructor existente de `prospeccion/campanas` la selección explícita del tipo de correo; se persiste en `email_message_kind` y no dentro de `metadata`.
 - Se agregó al servicio Postmark la preparación de mensajes en cola con validación de tenant, dominio verificado, plan, supresión, cuota e idempotencia; el `stream_name` se deriva del tipo de mensaje.
 - Se agregó un worker Postmark aislado con reclamación segura por tenant y recuperación de mensajes en estado `processing` obsoleto; solo procesa migraciones Postmark habilitadas.
