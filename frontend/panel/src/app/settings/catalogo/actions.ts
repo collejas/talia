@@ -423,6 +423,29 @@ export async function saveCatalogItemPriceLists(
   })
 }
 
+export async function updateCatalogItemPriceListCell(
+  itemId: string,
+  listaPrecioId: string,
+  precio: number,
+  moneda: string,
+): Promise<CatalogItemPriceListValue> {
+  const response = await callCrmApi<Record<string, unknown>>(
+    `/crm/catalog/items/${itemId}/price-lists/${listaPrecioId}`,
+    { method: "PATCH", body: { precio, moneda } },
+  )
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudo actualizar el precio.")
+  }
+  if (!response.data) {
+    throw new Error("No se pudo actualizar el precio.")
+  }
+  return {
+    listaPrecioId,
+    precio: Number(response.data.precio),
+    moneda: String(response.data.moneda ?? moneda).toUpperCase(),
+  }
+}
+
 export async function createCatalogItem(input: CatalogItemInput): Promise<CatalogItem> {
   if (!input.nombre?.trim()) {
     throw new Error("El nombre es obligatorio.");

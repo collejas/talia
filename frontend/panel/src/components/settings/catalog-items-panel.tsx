@@ -39,6 +39,7 @@ import {
   fetchCatalogItemPriceLists,
   fetchCatalogItemPriceListsBatch,
   saveCatalogItemPriceLists,
+  updateCatalogItemPriceListCell,
   fetchCatalogItems,
   updateCatalogItem,
 } from "@/app/settings/catalogo/actions"
@@ -70,6 +71,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { usePermissions } from "@/hooks/use-permissions"
 import {
   MediaEditor,
   buildMetadataWithMedia,
@@ -684,6 +686,9 @@ export function CatalogItemsPanel({
   }) {
   const [items, setItems] = useState<CatalogItem[]>(() => sortItems(initialItems))
   const [catalogPriceListValues, setCatalogPriceListValues] = useState<CatalogItemPriceListBatch>(initialPriceListValues)
+  const [editablePriceLists, setEditablePriceLists] = useState<Set<string>>(() => new Set())
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({})
+  const [savingPriceCell, setSavingPriceCell] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [includeInactive, setIncludeInactive] = useState(true)
   const [sortState, setSortState] = useState<CatalogSortState>(null)
@@ -694,6 +699,10 @@ export function CatalogItemsPanel({
   const [descriptionLimitMessage, setDescriptionLimitMessage] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<"save" | "delete" | "refresh" | "toggle" | null>(null)
   const [isPending, startTransition] = useTransition()
+  const { context: permissionContext } = usePermissions()
+  const canEditInlinePrices =
+    permissionContext.es_admin ||
+    permissionContext.roles.some((role) => ["admin", "admin_operativo"].includes(role.trim().toLowerCase()))
   const [filterLinea, setFilterLinea] = useState("")
   const [filterFamilia, setFilterFamilia] = useState("")
   const [filterModelo, setFilterModelo] = useState("")
@@ -1251,6 +1260,46 @@ const handleDelete = useCallback(
     })
   }, [includeInactive])
 
+  const togglePriceListEditing = useCallback((listaPrecioId: string, enabled: boolean) => {
+    setEditablePriceLists((current) => {
+      const next = new Set(current)
+      if (enabled) next.add(listaPrecioId)
+      else next.delete(listaPrecioId)
+      return next
+    })
+  }, [])
+
+  const handleInlinePriceBlur = useCallback(
+    (item: CatalogItem, priceList: CatalogPriceList) => {
+      const key = `${item.id}:${priceList.id}`
+      const raw = priceDrafts[key] ?? (catalogPriceListValues[item.id]?.[priceList.id]?.precio?.toString() ?? "")
+      if (!raw.trim()) {
+        setFeedback({ type: "error", message: "Captura un precio válido antes de guardar." })
+        return
+      }
+      const precio = parseCurrencyInput(raw)
+      if (!Number.isFinite(precio) || precio < 0) {
+        setFeedback({ type: "error", message: "El precio debe ser un número mayor o igual a cero." })
+        return
+      }
+      setSavingPriceCell(key)
+      updateCatalogItemPriceListCell(item.id, priceList.id, precio, priceList.moneda)
+        .then((value) => {
+          setCatalogPriceListValues((current) => ({
+            ...current,
+            [item.id]: { ...(current[item.id] ?? {}), [priceList.id]: value },
+          }))
+          setPriceDrafts((current) => ({ ...current, [key]: String(value.precio) }))
+          setFeedback({ type: "success", message: `Precio actualizado en ${priceList.nombre}.` })
+        })
+        .catch((error) => {
+          setFeedback({ type: "error", message: error instanceof Error ? error.message : "No se pudo actualizar el precio." })
+        })
+        .finally(() => setSavingPriceCell(null))
+    },
+    [catalogPriceListValues, priceDrafts],
+  )
+
   const handleColumnDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event
     if (!over) {
@@ -1492,9 +1541,18 @@ const handleDelete = useCallback(
                   </SortableContext>
                   {priceLists.map((priceList) => (
                     <TableHead key={`price-list-header-${priceList.id}`} className="w-[140px]">
-                      <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        {priceList.nombre}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {canEditInlinePrices ? (
+                          <Checkbox
+                            aria-label={`Editar precios de ${priceList.nombre}`}
+                            checked={editablePriceLists.has(priceList.id)}
+                            onCheckedChange={(checked) => togglePriceListEditing(priceList.id, Boolean(checked))}
+                          />
+                        ) : null}
+                        <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {priceList.nombre}
+                        </span>
+                      </div>
                     </TableHead>
                   ))}
                   <TableHead className="w-[120px] text-right">Acciones</TableHead>
@@ -1533,7 +1591,32 @@ const handleDelete = useCallback(
                           key={`${item.id}-price-list-${priceList.id}`}
                           className="w-[140px] overflow-hidden"
                         >
-                          {renderCatalogPriceListCell(item, priceList, catalogPriceListValues)}
+                          {editablePriceLists.has(priceList.id) ? (
+                            <Input
+                              aria-label={`${priceList.nombre} para ${item.nombre}`}
+                              type="text"
+                              inputMode="decimal"
+                              value={priceDrafts[`${item.id}:${priceList.id}`] ?? (catalogPriceListValues[item.id]?.[priceList.id]?.precio?.toString() ?? "")}
+                              onChange={(event) => setPriceDrafts((current) => ({ ...current, [`${item.id}:${priceList.id}`]: event.target.value }))}
+                              onBlur={() => handleInlinePriceBlur(item, priceList)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault()
+                                  event.currentTarget.blur()
+                                }
+                                if (event.key === "Escape") {
+                                  setPriceDrafts((current) => {
+                                    const next = { ...current }
+                                    delete next[`${item.id}:${priceList.id}`]
+                                    return next
+                                  })
+                                  event.currentTarget.blur()
+                                }
+                              }}
+                              disabled={savingPriceCell === `${item.id}:${priceList.id}`}
+                              className="h-8 min-w-[110px]"
+                            />
+                          ) : renderCatalogPriceListCell(item, priceList, catalogPriceListValues)}
                         </TableCell>
                       ))}
                       <TableCell className="w-[120px] text-right">

@@ -11276,6 +11276,36 @@ def require_inbox_admin_delete_access():
     return _dependency
 
 
+def require_catalog_price_admin():
+    """Permite edición inline de precios solo a administradores del catálogo."""
+
+    async def _dependency(user_token: str = Depends(require_user_token)) -> str:
+        if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
+            return user_token
+        repo = CRMRepository(user_token=user_token)
+        try:
+            context = await repo.get_permission_context()
+        except CRMRepositoryError as exc:
+            if _is_jwt_expired_repo_error(exc):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required") from exc
+            raise HTTPException(status_code=502, detail="permission_context_unavailable") from exc
+        roles = context.get("roles") if isinstance(context, dict) else []
+        normalized_roles = {
+            str(role).strip().lower()
+            for role in roles
+            if isinstance(roles, list) and str(role).strip()
+        }
+        if not (
+            _coerce_bool(context.get("es_admin")) is True
+            or "admin" in normalized_roles
+            or "admin_operativo" in normalized_roles
+        ):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="catalog_price_edit_forbidden")
+        return user_token
+
+    return _dependency
+
+
 def require_owner_only():
     async def _dependency(user_token: str = Depends(require_user_token)) -> str:
         if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
@@ -14536,6 +14566,16 @@ class CRMItemPriceListValue(BaseModel):
     precio: float = Field(..., ge=0)
     moneda: str = Field(default="MXN", min_length=3, max_length=3)
     activo: bool = True
+
+    @field_validator("moneda")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class CRMItemPriceListCellUpdate(BaseModel):
+    precio: float = Field(..., ge=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
 
     @field_validator("moneda")
     @classmethod
@@ -19961,6 +20001,53 @@ async def _replace_discount_limits(
         (value.rol_id, value.usuario_id, value.empleado_usuario_id)
         for value in payload.values
     ]
+
+
+@router.patch(
+    "/catalog/items/{item_id}/price-lists/{lista_precio_id}",
+    response_model=CRMItemPriceListValueRead,
+)
+async def update_item_price_list_cell(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_catalog_price_admin()),
+    item_id: UUID,
+    lista_precio_id: UUID,
+    payload: CRMItemPriceListCellUpdate,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMItemPriceListValueRead:
+    try:
+        item = await repo.get_catalog_item(organizacion_id=organizacion_id, item_id=item_id)
+        price_list = await repo.get_price_list(organizacion_id=organizacion_id, lista_precio_id=lista_precio_id)
+        if not item:
+            raise HTTPException(status_code=404, detail="catalog_item_not_found")
+        if not price_list:
+            raise HTTPException(status_code=404, detail="price_list_not_found")
+        if not price_list.get("activo"):
+            raise HTTPException(status_code=409, detail="price_list_inactive")
+        row = await repo.upsert_item_price_lists(
+            organizacion_id=organizacion_id,
+            item_id=item_id,
+            values=[{
+                "lista_precio_id": str(lista_precio_id),
+                "precio": payload.precio,
+                "moneda": payload.moneda,
+                "activo": True,
+                "creado_por_usuario_id": str(usuario_id) if usuario_id else None,
+                "actualizado_por_usuario_id": str(usuario_id) if usuario_id else None,
+            }],
+        )
+        if not row:
+            raise CRMRepositoryError("price_list_cell_update_failed")
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="price_list_cell_update_failed") from exc
+    return CRMItemPriceListValueRead(
+        **row[0],
+        lista_precio_nombre=price_list.get("nombre"),
+    )
     if len(subjects) != len(set(subjects)):
         raise HTTPException(status_code=409, detail="discount_limit_subject_duplicated")
     try:
