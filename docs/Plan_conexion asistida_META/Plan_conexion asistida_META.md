@@ -617,7 +617,7 @@ La migración debe aplicarse antes de habilitar el panel en producción. El toke
 - Formalizar `META_TOKEN` como secreto global del backend después de rotar las credenciales expuestas.
 - Definir y probar `v25.0` como versión única de Graph API.
 - No persistir el PIN en Talia: recibirlo de forma temporal, enviarlo a Meta durante `/register` y descartarlo después.
-- Aplicar la migración `20260828_120000_whatsapp_meta_assisted_connections.sql` en Supabase.
+- [x] Aplicar la migración `20260828_120000_whatsapp_meta_assisted_connections.sql` en Supabase.
 - Mantener documentada la configuración actual del webhook compartido y la resolución por `phone_number_id`.
 - Retirar los secretos de tenant de la UI y conservar compatibilidad durante la migración.
 - Rotar credenciales expuestas en archivos `.env` del repositorio.

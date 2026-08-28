@@ -81,7 +81,8 @@ Este archivo registra las decisiones, evidencias, cambios, validaciones y despli
 - [x] Agregada migración `whatsapp_meta_connections` para guardar WABA, Phone Number ID, estado, timestamps y errores sanitizados.
 - [x] Agregado panel en `settings/variables > WhatsApp` con Business ID `1358726956043196` e instrucciones del onboarding.
 - [x] Mantención del flujo productivo: el webhook compartido, los secretos existentes y el envío actual no se reemplazan; la configuración del tenant solo sincroniza el Phone Number ID después de validar.
-- [ ] Aplicar migración en Supabase, definir variables globales en el entorno productivo y desplegar backend/panel.
+- [x] Migración aplicada exitosamente en Supabase; la tabla tiene FK tenant, unicidad de WABA/número y RLS habilitado.
+- [ ] Definir variables globales en el entorno productivo y desplegar backend/panel.
 - [ ] Probar con un tenant nuevo y ejecutar regresión de los tenants existentes.
 
 ## Próximos cambios previstos
