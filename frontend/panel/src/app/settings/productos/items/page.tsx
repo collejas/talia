@@ -3,8 +3,7 @@ import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { CatalogItemsPanel } from "@/components/settings/catalog-items-panel"
-import { fetchCatalogItems } from "@/app/settings/catalogo/actions"
-import { fetchCatalogPriceLists } from "@/app/settings/catalogo/actions"
+import { fetchCatalogItemPriceListsBatch, fetchCatalogItems, fetchCatalogPriceLists } from "@/app/settings/catalogo/actions"
 import {
   fetchFamiliasDeProductos,
   fetchLineasDeNegocio,
@@ -21,6 +20,7 @@ export default async function SettingsProductosItemsPage() {
     fetchUnidadesMedida({ includeInactive: true }),
     fetchCatalogPriceLists(),
   ])
+  const priceListValues = await fetchCatalogItemPriceListsBatch(items.map((item) => item.id))
   return (
     <AppViewLayout title="Settings · Productos y servicios">
       <div className="space-y-6 px-4 py-6 lg:px-6">
@@ -60,6 +60,7 @@ export default async function SettingsProductosItemsPage() {
           modelos={modelos}
           unidadesMedida={unidadesMedida}
           priceLists={priceLists}
+          initialPriceListValues={priceListValues}
         />
       </div>
     </AppViewLayout>

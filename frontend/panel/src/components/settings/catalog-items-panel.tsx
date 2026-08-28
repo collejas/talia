@@ -32,10 +32,12 @@ import {
 import {
   type CatalogItem,
   type CatalogItemInput,
+  type CatalogItemPriceListBatch,
   type CatalogPriceList,
   createCatalogItem,
   deleteCatalogItem,
   fetchCatalogItemPriceLists,
+  fetchCatalogItemPriceListsBatch,
   saveCatalogItemPriceLists,
   fetchCatalogItems,
   updateCatalogItem,
@@ -470,6 +472,22 @@ function renderCatalogColumnCell(item: CatalogItem, columnId: CatalogColumnId): 
   }
 }
 
+function renderCatalogPriceListCell(
+  item: CatalogItem,
+  priceList: CatalogPriceList,
+  values: CatalogItemPriceListBatch,
+): ReactNode {
+  const value = values[item.id]?.[priceList.id]
+  return value ? (
+    <div className="overflow-hidden">
+      <div className="truncate font-semibold">{formatCurrency(value.precio, value.moneda || priceList.moneda)}</div>
+      <div className="truncate text-xs text-muted-foreground">{value.moneda || priceList.moneda}</div>
+    </div>
+  ) : (
+    <span className="text-muted-foreground">—</span>
+  )
+}
+
 function CatalogSortIndicator({ direction }: { direction: false | CatalogSortDirection }) {
   if (direction === "asc") {
     return <IconChevronUp className="size-3" aria-hidden />
@@ -654,6 +672,7 @@ export function CatalogItemsPanel({
   modelos,
   unidadesMedida,
   priceLists,
+  initialPriceListValues,
 }: {
   initialItems: CatalogItem[]
   lineas: LineaOption[]
@@ -661,8 +680,10 @@ export function CatalogItemsPanel({
   modelos: ModeloOption[]
   unidadesMedida: UnidadMedidaOption[]
   priceLists: CatalogPriceList[]
+  initialPriceListValues: CatalogItemPriceListBatch
   }) {
   const [items, setItems] = useState<CatalogItem[]>(() => sortItems(initialItems))
+  const [catalogPriceListValues, setCatalogPriceListValues] = useState<CatalogItemPriceListBatch>(initialPriceListValues)
   const [search, setSearch] = useState("")
   const [includeInactive, setIncludeInactive] = useState(true)
   const [sortState, setSortState] = useState<CatalogSortState>(null)
@@ -1213,8 +1234,9 @@ const handleDelete = useCallback(
     setPendingAction("refresh")
     startTransition(() => {
       fetchCatalogItems({ includeInactive })
-        .then((rows) => {
+        .then(async (rows) => {
           setItems(sortItems(rows))
+          setCatalogPriceListValues(await fetchCatalogItemPriceListsBatch(rows.map((item) => item.id)))
           setFeedback({ type: "success", message: "Catálogo actualizado." })
         })
         .catch((error) => {
@@ -1436,14 +1458,15 @@ const handleDelete = useCallback(
                 </SelectContent>
               </Select>
             </div>
-          </div>
+        </div>
         <div className="rounded-lg border">
-          <DndContext
-            collisionDetection={closestCenter}
-            onDragEnd={handleColumnDragEnd}
-            sensors={sensors}
-          >
-            <Table className="table-fixed">
+          <div className="overflow-x-auto">
+            <DndContext
+              collisionDetection={closestCenter}
+              onDragEnd={handleColumnDragEnd}
+              sensors={sensors}
+            >
+              <Table className="table-fixed min-w-max">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12 px-3">
@@ -1467,13 +1490,20 @@ const handleDelete = useCallback(
                       />
                     ))}
                   </SortableContext>
+                  {priceLists.map((priceList) => (
+                    <TableHead key={`price-list-header-${priceList.id}`} className="w-[140px]">
+                      <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {priceList.nombre}
+                      </span>
+                    </TableHead>
+                  ))}
                   <TableHead className="w-[120px] text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visibleItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    <TableCell colSpan={7 + priceLists.length} className="text-center text-muted-foreground">
                       No encontramos elementos que coincidan con tu búsqueda.
                     </TableCell>
                   </TableRow>
@@ -1496,6 +1526,14 @@ const handleDelete = useCallback(
                           )}
                         >
                           {renderCatalogColumnCell(item, column.id)}
+                        </TableCell>
+                      ))}
+                      {priceLists.map((priceList) => (
+                        <TableCell
+                          key={`${item.id}-price-list-${priceList.id}`}
+                          className="w-[140px] overflow-hidden"
+                        >
+                          {renderCatalogPriceListCell(item, priceList, catalogPriceListValues)}
                         </TableCell>
                       ))}
                       <TableCell className="w-[120px] text-right">
@@ -1523,8 +1561,9 @@ const handleDelete = useCallback(
                   ))
                 )}
               </TableBody>
-            </Table>
-          </DndContext>
+              </Table>
+            </DndContext>
+          </div>
         </div>
       </CardContent>
 

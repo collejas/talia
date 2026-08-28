@@ -139,6 +139,8 @@ export type CatalogItemPriceListValue = {
   moneda: string
 }
 
+export type CatalogItemPriceListBatch = Record<string, Record<string, CatalogItemPriceListValue>>
+
 function normalizeNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value
@@ -371,6 +373,28 @@ export async function fetchCatalogItemPriceLists(itemId: string): Promise<Catalo
     if (!listaPrecioId || !Number.isFinite(precio)) return []
     return [{ listaPrecioId, precio, moneda: String(row.moneda ?? DEFAULT_MONEDA).toUpperCase() }]
   })
+}
+
+export async function fetchCatalogItemPriceListsBatch(itemIds: string[]): Promise<CatalogItemPriceListBatch> {
+  const normalizedIds = [...new Set(itemIds.map((itemId) => itemId.trim()).filter(Boolean))]
+  if (!normalizedIds.length) return {}
+  const response = await callCrmApi<Record<string, unknown>[]>("/crm/catalog/items/price-lists", {
+    searchParams: { item_ids: normalizedIds.join(",") },
+  })
+  if (!response.ok || !Array.isArray(response.data)) return {}
+  return response.data.reduce<CatalogItemPriceListBatch>((result, row) => {
+    const itemId = String(row.catalog_item_id ?? "")
+    const listaPrecioId = String(row.lista_precio_id ?? "")
+    const precio = Number(row.precio)
+    if (!itemId || !listaPrecioId || !Number.isFinite(precio)) return result
+    result[itemId] ??= {}
+    result[itemId][listaPrecioId] = {
+      listaPrecioId,
+      precio,
+      moneda: String(row.moneda ?? DEFAULT_MONEDA).toUpperCase(),
+    }
+    return result
+  }, {})
 }
 
 export async function saveCatalogItemPriceLists(

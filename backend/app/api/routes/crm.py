@@ -20076,6 +20076,48 @@ async def replace_base_price_discount_limits(
 
 
 @router.get(
+    "/catalog/items/price-lists",
+    response_model=list[CRMItemPriceListValueRead],
+)
+async def list_items_price_lists(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_any_permission(["settings.view", "propuesta.view"])),
+    item_ids: str = Query(default="", max_length=20_000),
+    include_inactive: bool = Query(default=False),
+) -> list[CRMItemPriceListValueRead]:
+    raw_item_ids = [value.strip() for value in item_ids.split(",") if value.strip()]
+    if len(raw_item_ids) > 500:
+        raise HTTPException(status_code=400, detail="too_many_catalog_items")
+    try:
+        parsed_item_ids = [UUID(value) for value in raw_item_ids]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid_catalog_item_id") from exc
+    if not parsed_item_ids:
+        return []
+    try:
+        values, lists = await asyncio.gather(
+            repo.list_item_price_lists_for_items(
+                organizacion_id=organizacion_id,
+                item_ids=parsed_item_ids,
+                include_inactive=include_inactive,
+            ),
+            repo.list_price_lists(organizacion_id=organizacion_id, include_inactive=True),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="items_price_lists_unavailable") from exc
+    list_names = {str(row.get("id")): row.get("nombre") for row in lists}
+    return [
+        CRMItemPriceListValueRead(
+            **row,
+            lista_precio_nombre=list_names.get(str(row.get("lista_precio_id"))),
+        )
+        for row in values
+    ]
+
+
+@router.get(
     "/catalog/items/{item_id}/price-lists",
     response_model=list[CRMItemPriceListValueRead],
 )

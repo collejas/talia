@@ -13179,6 +13179,33 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar precios del item: {data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_item_price_lists_for_items(
+        self,
+        *,
+        organizacion_id: UUID,
+        item_ids: list[UUID],
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        if not item_ids:
+            return []
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "catalog_item_id": f"in.({','.join(str(item_id) for item_id in item_ids)})",
+            "order": "catalog_item_id.asc,lista_precio_id.asc",
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/catalog_item_lista_precios",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar precios de items: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def upsert_item_price_lists(
         self,
         *,
