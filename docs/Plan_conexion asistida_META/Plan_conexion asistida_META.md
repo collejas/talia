@@ -16,6 +16,24 @@ La primera versión será una conexión asistida, no un onboarding completamente
 
 El cliente seguirá necesitando autorizar los activos en Meta. Talia automatizará las operaciones que actualmente se ejecutan manualmente con `curl`.
 
+### Regla obligatoria de compatibilidad con producción
+
+La conexión asistida debe implementarse como un flujo paralelo y no debe alterar automáticamente las conexiones de WhatsApp Meta que ya están funcionando.
+
+Durante la primera versión:
+
+- Los tenants existentes conservarán su `Phone Number ID`.
+- Los tenants existentes conservarán sus secretos operativos actuales mientras se valida la nueva arquitectura.
+- El envío normal de mensajes continuará utilizando el token configurado para cada tenant.
+- El webhook compartido y la resolución por `Phone Number ID` no se cambiarán.
+- La versión `v25.0` podrá utilizarse para las operaciones nuevas sin modificar automáticamente la versión de Graph API de los tenants actuales.
+- El nuevo token global se utilizará inicialmente para validar activos y ejecutar el onboarding, no para reemplazar de inmediato los tokens de envío existentes.
+- No se ejecutará `/register` automáticamente sobre un número que ya esté registrado.
+- La suscripción se ejecutará únicamente sobre la WABA seleccionada por el tenant y se verificará después.
+- No se cambiará automáticamente `whatsapp.provider` ni ninguna plantilla existente.
+
+La migración o unificación posterior de tokens por tenant hacia el token global será una fase independiente, con pruebas, aprobación y rollback propios.
+
 ### Datos que captura el cliente en Talia
 
 - `WABA_ID`: identificador de la WhatsApp Business Account del cliente.
@@ -134,6 +152,21 @@ https://talia.mx/api/whatsapp/meta/a2f79c76-340a-4fe7-b05a-6ff4dd532325/webhook
 Esto no representa una falla exclusiva de Rentauto. Es la URL común configurada para la aplicación de Talia. Los mensajes se entregan al tenant correcto porque Talia resuelve la organización mediante el `Phone Number ID` incluido en el payload de Meta.
 
 La URL compartida puede mantenerse mientras el flujo productivo continúe funcionando. Como mejora futura, se puede evaluar un endpoint global más explícito, por ejemplo `/api/whatsapp/meta/webhook`, sin cambiarlo durante la primera versión de la conexión asistida.
+
+## 3.3. Compatibilidad y rollback
+
+La implementación debe poder desplegarse sin modificar datos ni credenciales de los tenants productivos existentes.
+
+Si una operación nueva falla, el tenant debe permanecer con su configuración anterior y no debe marcarse como `conectado`.
+
+El rollback de la primera versión debe consistir en:
+
+1. Deshabilitar los botones o endpoints nuevos de conexión asistida.
+2. Mantener activos el webhook, envío y procesamiento actuales.
+3. No eliminar `phone_number_id`, secretos ni configuración existente.
+4. Revertir únicamente el estado de onboarding incompleto del tenant nuevo.
+
+La prueba de aceptación debe demostrar que, después de habilitar el nuevo flujo, un tenant productivo existente puede seguir recibiendo y enviando mensajes sin cambios funcionales.
 
 Las operaciones manuales actuales son equivalentes a:
 
@@ -556,6 +589,11 @@ La funcionalidad podrá considerarse lista cuando:
 11. Los reintentos y los casos ya registrados sean seguros.
 12. Se pruebe el flujo con un tenant de prueba y un tenant real autorizado.
 13. Se confirme un mensaje entrante y uno saliente después de la conexión.
+14. Las conexiones existentes no cambien su token, Phone Number ID, webhook, proveedor ni plantillas.
+15. El token global se use inicialmente solo para las operaciones de onboarding y administración de la conexión.
+16. `/register` no se ejecute automáticamente sobre números ya registrados.
+17. Un error durante el onboarding no deje al tenant productivo en un estado parcialmente conectado.
+18. El flujo pueda deshabilitarse sin interrumpir el envío ni la recepción de tenants existentes.
 
 ## 17. Pendientes antes de implementar
 
@@ -570,3 +608,5 @@ La funcionalidad podrá considerarse lista cuando:
 - Retirar los secretos de tenant de la UI y conservar compatibilidad durante la migración.
 - Rotar credenciales expuestas en archivos `.env` del repositorio.
 - Implementar pruebas de permisos, tenant isolation, errores de Meta, idempotencia y reintentos.
+- Ejecutar pruebas de no regresión con al menos un tenant existente antes y después del despliegue.
+- Definir el mecanismo de feature flag o desactivación del onboarding asistido.
