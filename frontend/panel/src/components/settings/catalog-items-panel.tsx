@@ -45,6 +45,14 @@ import { getActiveTimeZone } from "@/lib/timezone"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -68,6 +76,9 @@ import {
 } from "@/components/settings/productos/media-editor"
 
 type StatusBanner = { type: "success" | "error"; message: string } | null
+
+const DESCRIPCION_CORTA_MAX = 400
+const DESCRIPCION_LARGA_MAX = 4000
 
 type LineaOption = {
   id: string
@@ -659,6 +670,7 @@ export function CatalogItemsPanel({
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<CatalogItem | null>(null)
   const [feedback, setFeedback] = useState<StatusBanner>(null)
+  const [descriptionLimitMessage, setDescriptionLimitMessage] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<"save" | "delete" | "refresh" | "toggle" | null>(null)
   const [isPending, startTransition] = useTransition()
   const [filterLinea, setFilterLinea] = useState("")
@@ -695,6 +707,8 @@ export function CatalogItemsPanel({
   const activoCompraWatch = useWatch({ control: form.control, name: "activoCompra" }) as boolean | undefined
   const requiereLoteWatch = useWatch({ control: form.control, name: "requiereLote" }) as boolean | undefined
   const requiereSerieWatch = useWatch({ control: form.control, name: "requiereSerie" }) as boolean | undefined
+  const descripcionCortaWatch = useWatch({ control: form.control, name: "descripcionCorta" }) ?? ""
+  const descripcionLargaWatch = useWatch({ control: form.control, name: "descripcionLarga" }) ?? ""
 
   useEffect(() => {
     setMounted(true)
@@ -1012,6 +1026,25 @@ export function CatalogItemsPanel({
       return
     }
     setFeedback(null)
+    const shortDescriptionChanged = values.descripcionCorta !== (editing?.descripcionCorta ?? "")
+    const longDescriptionChanged = values.descripcionLarga !== (editing?.descripcionLarga ?? "")
+    const exceededFields = [
+      values.descripcionCorta.length > DESCRIPCION_CORTA_MAX
+        ? `descripción corta (${DESCRIPCION_CORTA_MAX})`
+        : null,
+      values.descripcionLarga.length > DESCRIPCION_LARGA_MAX
+        ? `descripción larga (${DESCRIPCION_LARGA_MAX.toLocaleString("es-MX")})`
+        : null,
+    ].filter((field): field is string => Boolean(field))
+    if (
+      (values.descripcionCorta.length > DESCRIPCION_CORTA_MAX && shortDescriptionChanged) ||
+      (values.descripcionLarga.length > DESCRIPCION_LARGA_MAX && longDescriptionChanged)
+    ) {
+      setDescriptionLimitMessage(
+        `No se puede guardar porque ${exceededFields.join(" y ")} supera el límite permitido. Reduce el texto y vuelve a intentarlo.`,
+      )
+      return
+    }
     setPendingAction("save")
     startTransition(() => {
       const metadataPayload = buildMetadataWithMedia(metadataSeed, mediaItems)
@@ -1021,10 +1054,17 @@ export function CatalogItemsPanel({
       // el PATCH: guardar un precio no debe quedar bloqueado por ese dato legado.
       if (
         editing &&
-        (editing.descripcionCorta?.length ?? 0) > 400 &&
+        (editing.descripcionCorta?.length ?? 0) > DESCRIPCION_CORTA_MAX &&
         values.descripcionCorta === editing.descripcionCorta
       ) {
         payload.descripcionCorta = undefined
+      }
+      if (
+        editing &&
+        (editing.descripcionLarga?.length ?? 0) > DESCRIPCION_LARGA_MAX &&
+        values.descripcionLarga === editing.descripcionLarga
+      ) {
+        payload.descripcionLarga = undefined
       }
       const action = editing ? updateCatalogItem(editing.id, payload) : createCatalogItem(payload)
       action
@@ -1518,10 +1558,13 @@ const handleDelete = useCallback(
                 <Input
                   id="catalog-descripcion-corta"
                   {...form.register("descripcionCorta")}
-                  maxLength={400}
+                  maxLength={DESCRIPCION_CORTA_MAX}
                   placeholder="Resumen que verás en los listados"
                 />
-                <p className="text-xs text-muted-foreground">Máximo 400 caracteres.</p>
+                <p className={cn("text-xs", descripcionCortaWatch.length > DESCRIPCION_CORTA_MAX ? "text-destructive" : "text-muted-foreground")}>
+                  {descripcionCortaWatch.length}/{DESCRIPCION_CORTA_MAX} caracteres
+                  {descripcionCortaWatch.length > DESCRIPCION_CORTA_MAX ? " · Reduce el texto para guardar" : ""}
+                </p>
               </div>
             </div>
             <div className="space-y-2">
@@ -1530,8 +1573,13 @@ const handleDelete = useCallback(
                 id="catalog-descripcion-larga"
                 rows={4}
                 {...form.register("descripcionLarga")}
+                maxLength={DESCRIPCION_LARGA_MAX}
                 placeholder="Incluye usos recomendados, alcances o entregables."
               />
+              <p className={cn("text-xs", descripcionLargaWatch.length > DESCRIPCION_LARGA_MAX ? "text-destructive" : "text-muted-foreground")}>
+                {descripcionLargaWatch.length}/{DESCRIPCION_LARGA_MAX.toLocaleString("es-MX")} caracteres
+                {descripcionLargaWatch.length > DESCRIPCION_LARGA_MAX ? " · Reduce el texto para guardar" : ""}
+              </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -1894,6 +1942,21 @@ const handleDelete = useCallback(
           </form>
         </SheetContent>
       </Sheet>
+      <Dialog open={Boolean(descriptionLimitMessage)} onOpenChange={(open) => !open && setDescriptionLimitMessage(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Límite de caracteres excedido</DialogTitle>
+            <DialogDescription>
+              {descriptionLimitMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" onClick={() => setDescriptionLimitMessage(null)}>
+              Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
