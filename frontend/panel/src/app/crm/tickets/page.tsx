@@ -16,7 +16,17 @@ export default async function CrmTicketsPage() {
           ))}
         </div>
       ) : (
-        <ClientDataTable rows={payload.rows} />
+        <ClientDataTable
+          rows={payload.rows}
+          columnLabels={{
+            header: "Asunto",
+            type: "Estado",
+            status: "Prioridad",
+            target: "Canal",
+            limit: "Contacto",
+            reviewer: "Vendedor",
+          }}
+        />
       )}
     </AppViewLayout>
   );

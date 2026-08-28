@@ -17380,6 +17380,7 @@ class CRMRepository:
         contacto_id: UUID | None = None,
         conversacion_id: UUID | None = None,
         vendedor_id: UUID | None = None,
+        canal: str | None = None,
     ) -> list[dict[str, Any]]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -17396,6 +17397,8 @@ class CRMRepository:
             params["conversacion_id"] = f"eq.{conversacion_id}"
         if vendedor_id:
             params["vendedor_usuario_id"] = f"eq.{vendedor_id}"
+        if canal:
+            params["asignacion_canal"] = f"eq.{canal.strip().lower()}"
         resp = await self._request(
             "GET",
             "/rest/v1/v_asignaciones_vendedores",
@@ -17426,6 +17429,7 @@ class CRMRepository:
         persona_id: UUID | None = None,
         conversacion_id: UUID | None = None,
         vendedor_id: UUID | None = None,
+        canal: str | None = None,
     ) -> list[dict[str, Any]]:
         return await self.list_whatsapp_sales_assignments(
             organizacion_id=organizacion_id,
@@ -17436,6 +17440,7 @@ class CRMRepository:
             persona_id=persona_id,
             conversacion_id=conversacion_id,
             vendedor_id=vendedor_id,
+            canal=canal,
         )
 
     async def list_agenda_bookings(

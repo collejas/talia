@@ -16,7 +16,17 @@ export default async function CrmWhatsAppAssignmentsPage() {
           ))}
         </div>
       ) : (
-        <ClientDataTable rows={payload.rows} />
+        <ClientDataTable
+          rows={payload.rows}
+          columnLabels={{
+            header: "Contacto",
+            type: "Evento",
+            status: "Acuse",
+            target: "Vendedor",
+            limit: "Aceptación",
+            reviewer: "Oportunidad",
+          }}
+        />
       )}
     </AppViewLayout>
   );

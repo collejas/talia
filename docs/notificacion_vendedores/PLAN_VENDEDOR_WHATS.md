@@ -79,7 +79,9 @@ Checklist para implementar el flujo de asignación automática de vendedores, no
 - [ ] Monitorear dashboards para asegurar distribución equitativa y tiempos de respuesta.
 
 ## 11. Panel y reportes
-- [x] Crear endpoint `/crm/whatsapp/asignaciones` que consuma la vista y respete `X-Organizacion-Id`.
+- [x] Crear endpoint `/crm/whatsapp/asignaciones` (alias compatible de `/crm/asignaciones_vendedores`) que consuma la vista y respete `X-Organizacion-Id`.
+- [x] Filtrar la vista de Asignaciones WhatsApp a `canal = 'whatsapp'`.
+- [x] Mostrar el estado del acuse (`Pendiente`/`Aceptada`), fecha y medio de aceptación.
 - [x] Mostrar el historial de asignaciones en el panel (`/crm/whatsapp/asignaciones`) con tabla y manejo de errores.
 - [ ] Agregar filtros/búsqueda en la vista (por vendedor, fecha, trigger) o exportación CSV.
 

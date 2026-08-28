@@ -16,7 +16,17 @@ export default async function SalesAssignmentsPage() {
           ))}
         </div>
       ) : (
-        <ClientDataTable rows={payload.rows} />
+        <ClientDataTable
+          rows={payload.rows}
+          columnLabels={{
+            header: "Vendedor",
+            type: "Evento",
+            status: "Acuse",
+            target: "Oportunidad",
+            limit: "Canal",
+            reviewer: "Aceptación",
+          }}
+        />
       )}
     </AppViewLayout>
   );

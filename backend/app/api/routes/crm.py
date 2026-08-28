@@ -3492,6 +3492,13 @@ class WhatsAppSalesAssignment(BaseModel):
     vendedor_correo: str | None = None
     vendedor_telefono: str | None = None
     trigger_event: str
+    asignacion_canal: str | None = None
+    notificacion_message_sid: str | None = None
+    aceptado_en: datetime | None = None
+    aceptado_por_usuario_id: UUID | None = None
+    aceptado_por_nombre: str | None = None
+    aceptado_por_correo: str | None = None
+    aceptado_via: str | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -40182,7 +40189,7 @@ async def list_tickets(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("tickets.view")),
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
     estado: str | None = Query(default=None),
     prioridad: str | None = Query(default=None),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -40207,7 +40214,7 @@ async def create_ticket(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("tickets.view")),
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
     payload: CRMTicketCreate,
 ) -> CRMTicket:
     body = payload.model_dump(mode="json", exclude_unset=True)
@@ -40226,7 +40233,7 @@ async def get_ticket(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("tickets.view")),
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
     ticket_id: UUID,
 ) -> CRMTicket:
     try:
@@ -40246,7 +40253,7 @@ async def list_ticket_comments(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("tickets.view")),
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
     ticket_id: UUID,
 ) -> list[CRMTicketComment]:
     try:
@@ -40268,7 +40275,7 @@ async def create_ticket_comment(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("tickets.view")),
+    _: str = Depends(require_owner_or_admin_for_master_tenant()),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     ticket_id: UUID,
     payload: CRMTicketCommentCreate,
@@ -41040,11 +41047,15 @@ async def list_audit_logs(
     "/asignaciones_vendedores",
     response_model=WhatsAppSalesAssignmentsResponse,
 )
+@router.get(
+    "/whatsapp/asignaciones",
+    response_model=WhatsAppSalesAssignmentsResponse,
+)
 async def list_sales_assignments(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_any_permission(["conv.read", "audit.view", "audit.view_all"])),
+    _: str = Depends(require_any_permission(["conv.read", "conv.assign", "audit.view", "audit.view_all"])),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -41052,6 +41063,7 @@ async def list_sales_assignments(
     contacto_id: UUID | None = Query(default=None),
     conversacion_id: UUID | None = Query(default=None),
     vendedor_id: UUID | None = Query(default=None),
+    canal: str | None = Query(default=None, max_length=30),
 ) -> WhatsAppSalesAssignmentsResponse:
     if usuario_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
@@ -41067,10 +41079,10 @@ async def list_sales_assignments(
             limit=limit,
             offset=offset,
             oportunidad_id=oportunidad_id,
-            persona_id=persona_id,
-            contacto_id=contacto_id,
+            persona_id=contacto_id,
             conversacion_id=conversacion_id,
             vendedor_id=vendedor_id,
+            canal=canal,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

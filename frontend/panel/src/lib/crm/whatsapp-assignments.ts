@@ -23,6 +23,13 @@ type WhatsAppAssignment = {
   vendedor_correo: string | null;
   vendedor_telefono: string | null;
   trigger_event: string;
+  asignacion_canal: string | null;
+  notificacion_message_sid: string | null;
+  aceptado_en: string | null;
+  aceptado_por_usuario_id: string | null;
+  aceptado_por_nombre: string | null;
+  aceptado_por_correo: string | null;
+  aceptado_via: string | null;
   metadata: Record<string, unknown> | null;
 };
 
@@ -40,7 +47,7 @@ export type CrmWhatsAppAssignmentsPayload = {
 
 export async function loadCrmWhatsAppAssignments(): Promise<CrmWhatsAppAssignmentsPayload> {
   const response = await callCrmApi<WhatsAppAssignmentsResponse>("/crm/whatsapp/asignaciones", {
-    searchParams: { limit: "100", offset: "0" },
+    searchParams: { limit: "100", offset: "0", canal: "whatsapp" },
   });
 
   if (!response.ok || !response.data || !Array.isArray(response.data.items)) {
@@ -52,9 +59,9 @@ export async function loadCrmWhatsAppAssignments(): Promise<CrmWhatsAppAssignmen
     id: index + 1,
     header: buildContactLabel(assignment),
     type: assignment.trigger_event || "sin_trigger",
-    status: assignment.conversacion_canal || "whatsapp",
+    status: assignment.aceptado_en ? "Aceptada" : "Pendiente",
     target: assignment.vendedor_nombre || assignment.vendedor_usuario_id || "Sin vendedor",
-    limit: formatTimestamp(assignment.creado_en),
+    limit: formatAcceptance(assignment),
     reviewer:
       formatOpportunityReference(assignment.codigo_oportunidad) ||
       assignment.oportunidad_titulo ||
@@ -67,6 +74,13 @@ export async function loadCrmWhatsAppAssignments(): Promise<CrmWhatsAppAssignmen
     total: response.data.items.length,
     errors: [],
   };
+}
+
+function formatAcceptance(assignment: WhatsAppAssignment): string {
+  if (!assignment.aceptado_en) return "Pendiente de aceptar";
+  const acceptedAt = formatTimestamp(assignment.aceptado_en);
+  const acceptedBy = assignment.aceptado_por_nombre?.trim();
+  return acceptedBy ? `Aceptada por ${acceptedBy} · ${acceptedAt}` : `Aceptada · ${acceptedAt}`;
 }
 
 function buildContactLabel(assignment: WhatsAppAssignment): string {

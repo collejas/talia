@@ -21,6 +21,13 @@ type AssignmentRow = {
   vendedor_correo: string | null;
   vendedor_telefono: string | null;
   trigger_event: string;
+  asignacion_canal: string | null;
+  notificacion_message_sid: string | null;
+  aceptado_en: string | null;
+  aceptado_por_usuario_id: string | null;
+  aceptado_por_nombre: string | null;
+  aceptado_por_correo: string | null;
+  aceptado_via: string | null;
   metadata: Record<string, unknown> | null;
 };
 
@@ -49,13 +56,15 @@ export async function loadSalesAssignments(): Promise<SalesAssignmentsPayload> {
     id: index + 1,
     header: item.vendedor_nombre || item.vendedor_correo || "Vendedor",
     type: item.trigger_event,
-    status: item.contacto_nombre || "Contacto",
+    status: item.aceptado_en ? "Aceptada" : "Pendiente",
     target:
       item.codigo_oportunidad?.trim()
         ? `${item.codigo_oportunidad.trim().replace(/\s*-\s*/g, " - ")} · ${item.oportunidad_titulo || "Oportunidad"}`
         : item.oportunidad_titulo || "Sin oportunidad",
-    limit: item.conversacion_canal || "—",
-    reviewer: item.creado_en,
+    limit: item.asignacion_canal || item.conversacion_canal || "—",
+    reviewer: item.aceptado_en
+      ? `Aceptada${item.aceptado_por_nombre ? ` por ${item.aceptado_por_nombre}` : ""} · ${item.aceptado_en}`
+      : "Pendiente de aceptar",
     raw: item,
   }));
 
