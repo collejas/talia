@@ -6,8 +6,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Awaitable
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from starlette.staticfiles import StaticFiles
 
 from app.api.routes.admin import router as admin_router
@@ -175,6 +178,29 @@ def create_app() -> FastAPI:
     )
 
     app = FastAPI(title="TalIA API", version="0.1.0", root_path="/api", lifespan=app_lifespan)
+
+    @app.exception_handler(RequestValidationError)
+    async def catalog_validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        # No registrar el body: puede contener datos personales o credenciales.
+        if request.url.path.startswith("/api/crm/catalog/items"):
+            get_logger("app.request").warning(
+                "catalog.validation_failed",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "validation_errors": [
+                        {
+                            "loc": [str(part) for part in error.get("loc", ())],
+                            "type": error.get("type"),
+                            "message": error.get("msg"),
+                        }
+                        for error in exc.errors()
+                    ],
+                },
+            )
+        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
 
     app.add_middleware(
         CORSMiddleware,

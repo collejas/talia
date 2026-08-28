@@ -21,11 +21,11 @@ export default async function SalesAssignmentsPage() {
           columnLabels={{
             header: "Vendedor",
             type: "Evento",
-            status: "Acuse",
             target: "Oportunidad",
             limit: "Canal",
             reviewer: "Aceptación",
           }}
+          hiddenColumnIds={["chat"]}
         />
       )}
     </AppViewLayout>

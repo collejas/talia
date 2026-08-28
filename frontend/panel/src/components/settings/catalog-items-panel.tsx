@@ -1016,6 +1016,16 @@ export function CatalogItemsPanel({
     startTransition(() => {
       const metadataPayload = buildMetadataWithMedia(metadataSeed, mediaItems)
       const payload = formValuesToInput(values, editing?.impuestos, metadataPayload)
+      // Algunos productos importados antiguos tienen una descripción corta de más
+      // de 400 caracteres. Si el usuario no la modificó, no debemos reenviarla en
+      // el PATCH: guardar un precio no debe quedar bloqueado por ese dato legado.
+      if (
+        editing &&
+        (editing.descripcionCorta?.length ?? 0) > 400 &&
+        values.descripcionCorta === editing.descripcionCorta
+      ) {
+        payload.descripcionCorta = undefined
+      }
       const action = editing ? updateCatalogItem(editing.id, payload) : createCatalogItem(payload)
       action
         .then(async (item) => {
@@ -1508,8 +1518,10 @@ const handleDelete = useCallback(
                 <Input
                   id="catalog-descripcion-corta"
                   {...form.register("descripcionCorta")}
+                  maxLength={400}
                   placeholder="Resumen que verás en los listados"
                 />
+                <p className="text-xs text-muted-foreground">Máximo 400 caracteres.</p>
               </div>
             </div>
             <div className="space-y-2">

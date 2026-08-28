@@ -20,6 +20,7 @@ type Props = {
   detailDescription?: string;
   hideDefaultActions?: boolean;
   forcedColumnOrder?: string[];
+  hiddenColumnIds?: string[];
 };
 
 export function ClientDataTable({
@@ -34,6 +35,7 @@ export function ClientDataTable({
   detailDescription,
   hideDefaultActions,
   forcedColumnOrder,
+  hiddenColumnIds,
 }: Props) {
   return (
     <DataTable
@@ -48,6 +50,7 @@ export function ClientDataTable({
       detailDescription={detailDescription}
       hideDefaultActions={hideDefaultActions}
       forcedColumnOrder={forcedColumnOrder}
+      hiddenColumnIds={hiddenColumnIds}
     />
   );
 }

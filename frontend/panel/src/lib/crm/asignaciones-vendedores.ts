@@ -42,6 +42,28 @@ export type SalesAssignmentsPayload = {
   errors: string[];
 };
 
+function formatAssignmentEvent(triggerEvent: string): string {
+  const labels: Record<string, string> = {
+    auto_assign: "Asignación automática",
+    manual_reassign: "Reasignación manual",
+    notify_followup_escalate: "Escalamiento de seguimiento",
+    notify_close_lead: "Cierre de oportunidad",
+    notify_booking_confirmed: "Cita confirmada",
+    notify_booking_canceled: "Cita cancelada",
+    notify_information_email: "Información enviada por correo",
+    notify_webchat_session_closed: "Cierre de chat web",
+    restart_conversation: "Reinicio de conversación",
+  };
+
+  const normalized = triggerEvent.trim().toLowerCase();
+  if (labels[normalized]) return labels[normalized];
+
+  return normalized
+    .replace(/^notify_/, "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Evento de asignación";
+}
+
 export async function loadSalesAssignments(): Promise<SalesAssignmentsPayload> {
   const response = await callCrmApi<AssignmentsResponse>("/crm/asignaciones_vendedores", {
     searchParams: { limit: "200", offset: "0" },
@@ -55,7 +77,7 @@ export async function loadSalesAssignments(): Promise<SalesAssignmentsPayload> {
   const rows = response.data.items.map<DataTableRow>((item, index) => ({
     id: index + 1,
     header: item.vendedor_nombre || item.vendedor_correo || "Vendedor",
-    type: item.trigger_event,
+    type: formatAssignmentEvent(item.trigger_event),
     status: item.aceptado_en ? "Aceptada" : "Pendiente",
     target:
       item.codigo_oportunidad?.trim()

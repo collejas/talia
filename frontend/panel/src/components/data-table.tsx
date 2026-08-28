@@ -611,6 +611,7 @@ export function DataTable({
   toolbarBelowActions,
   selectionActions,
   forcedColumnOrder,
+  hiddenColumnIds = [],
   hideDefaultActions = false,
   loading = false,
 }: {
@@ -628,6 +629,7 @@ export function DataTable({
   toolbarBelowActions?: React.ReactNode
   selectionActions?: (selectedRows: TableRowData[]) => React.ReactNode
   forcedColumnOrder?: string[]
+  hiddenColumnIds?: string[]
   hideDefaultActions?: boolean
   loading?: boolean
 }) {
@@ -775,8 +777,9 @@ export function DataTable({
   }, [dateColumns])
 
   const mergedColumns = React.useMemo(
-    () => [...resolvedBaseColumns, ...metricColumnDefs, ...dateColumnDefs, ...extraColumns],
-    [resolvedBaseColumns, metricColumnDefs, dateColumnDefs, extraColumns]
+    () => [...resolvedBaseColumns, ...metricColumnDefs, ...dateColumnDefs, ...extraColumns]
+      .filter((column) => !hiddenColumnIds.includes(column.id ?? "")),
+    [resolvedBaseColumns, metricColumnDefs, dateColumnDefs, extraColumns, hiddenColumnIds]
   )
 
   const defaultColumnOrder = React.useMemo(() => {
