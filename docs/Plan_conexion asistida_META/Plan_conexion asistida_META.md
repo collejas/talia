@@ -22,6 +22,8 @@ El cliente seguirá necesitando autorizar los activos en Meta. Talia automatizar
 - `Phone Number ID`: identificador del número de WhatsApp del cliente.
 - PIN de seis dígitos para el registro de Cloud API.
 
+El `WABA_ID` es un dato nuevo para el flujo asistido. Aunque actualmente no sea necesario para enviar o resolver mensajes, debe persistirse para validar la relación entre la WABA y el número, suscribir la aplicación y mostrar el estado real de la conexión.
+
 El PIN no es el código OTP que Meta envía por SMS o llamada para verificar la propiedad del teléfono.
 
 ### Datos que permanecen en Talia
@@ -73,6 +75,65 @@ Actualmente la configuración de `settings/variables` permite guardar por tenant
 - `meta.whatsapp.app_secret` como secreto cifrado por tenant.
 
 El runtime de WhatsApp carga esos datos por organización. El webhook de Meta valida la firma con `app_secret`, valida el challenge con `verify_token` y resuelve el tenant principalmente mediante el `phone_number_id` recibido en el payload.
+
+### Aclaración del funcionamiento productivo actual
+
+La revisión del código confirma que Talia ya opera en producción con varios tenants de Meta. Esa operación no demuestra, por sí sola, que exista un único token global para todos los tenants.
+
+Actualmente:
+
+- El `phone_number_id` se configura por tenant dentro de `config.whatsapp.meta.phone_number_id`.
+- El envío de mensajes utiliza el token cargado para la organización actual desde `meta.whatsapp.page_access_token`.
+- La firma del webhook utiliza el `meta.whatsapp.app_secret` cargado para la organización actual.
+- El challenge del webhook utiliza el `meta.whatsapp.verify_token` cargado para la organización actual, con fallback a la configuración global existente.
+- La resolución del tenant del webhook utiliza el `phone_number_id` de Meta.
+- El `WABA_ID` no aparece actualmente como dato persistido en la configuración productiva del tenant.
+
+Esto explica por qué la operación existente puede funcionar sin guardar el WABA: el envío y la recepción se resuelven principalmente mediante el número. Sin embargo, el WABA sí es necesario para las operaciones administrativas de la conexión asistida, especialmente `subscribed_apps` y las validaciones de pertenencia del número.
+
+La conexión asistida no debe cambiar de inmediato el mecanismo productivo de los tenants existentes. Primero debe probarse el nuevo modelo con un System User access token global de Talia. Si ese token puede acceder a los activos compartidos por los clientes, podrá utilizarse para registrar y suscribir nuevos tenants. Si no tiene acceso a una WABA concreta, Meta rechazará la operación aunque los IDs sean correctos.
+
+### Token actual frente al token global propuesto
+
+El nombre actual `meta.whatsapp.page_access_token` corresponde a un secreto por tenant que Talia ya utiliza para enviar mensajes. La existencia de varios tenants conectados no significa necesariamente que todos compartan el mismo token.
+
+Para la conexión asistida se debe confirmar en Meta si Talia dispone de un System User access token global con acceso a las WABA y números compartidos por los clientes.
+
+El escenario objetivo es: el cliente comparte el activo con Talia y el System User de Talia recibe los permisos necesarios. Talia utiliza entonces el token global para validar, registrar y suscribir cada WABA. Antes de retirar los secretos de la pantalla, este escenario debe probarse con un tenant de prueba sin afectar a los tenants existentes.
+
+### Evidencia confirmada del token global
+
+El token utilizado actualmente como `META_TOKEN` fue validado mediante `debug_token` y Meta devolvió:
+
+- `type: SYSTEM_USER`.
+- `is_valid: true`.
+- `expires_at: 0`.
+- `data_access_expires_at: 0`.
+- `app_id: 950298070825920`, correspondiente a `App WhatApp Tal-IA`.
+- Permisos de `whatsapp_business_management` y `whatsapp_business_messaging`, además de permisos adicionales ya concedidos.
+
+El mismo token fue probado contra seis WABA y en todos los casos permitió consultar la WABA, sus números y sus aplicaciones suscritas:
+
+- Rentauto: WABA `1248465307374188`, Phone Number ID `1252312431306430`.
+- Porta Mezquite: WABA `1014490217751038`, Phone Number ID `1141725625688901`.
+- Tal-IA: WABA `1851800489561166`, Phone Number ID `1164463663426947`.
+- Saul Martinez: WABA `1895659001151044`, Phone Number ID `1230608700141056`.
+- Grupo Imlux: WABA `1492804725705304`, Phone Number ID `1046129768592659`.
+- Gran Peñón: WABA `3483150995170974`, Phone Number ID `1139218909270276`.
+
+En las seis respuestas apareció la aplicación `950298070825920` dentro de `subscribed_apps`. Esto confirma que el token actual ya tiene capacidad global de lectura y administración sobre múltiples WABA de clientes. Debe utilizarse como base del nuevo flujo, sujeto a rotación segura antes de ponerlo en una variable definitiva de producción.
+
+### Webhook compartido confirmado
+
+Los seis números devolvieron la misma aplicación de webhook:
+
+```text
+https://talia.mx/api/whatsapp/meta/a2f79c76-340a-4fe7-b05a-6ff4dd532325/webhook
+```
+
+Esto no representa una falla exclusiva de Rentauto. Es la URL común configurada para la aplicación de Talia. Los mensajes se entregan al tenant correcto porque Talia resuelve la organización mediante el `Phone Number ID` incluido en el payload de Meta.
+
+La URL compartida puede mantenerse mientras el flujo productivo continúe funcionando. Como mejora futura, se puede evaluar un endpoint global más explícito, por ejemplo `/api/whatsapp/meta/webhook`, sin cambiarlo durante la primera versión de la conexión asistida.
 
 Las operaciones manuales actuales son equivalentes a:
 
@@ -386,7 +447,7 @@ Las rutas exactas deberán seguir el patrón existente de Talia, pero el contrat
 POST /tenant/me/whatsapp/meta/validate-access
 POST /tenant/me/whatsapp/meta/register
 POST /tenant/me/whatsapp/meta/subscribe
-POST /tenant/me/whatsapp/meta/verify
+es que ese token es este:POST /tenant/me/whatsapp/meta/verify
 POST /tenant/me/whatsapp/meta/connect
 GET  /tenant/me/whatsapp/meta/connection
 ```
@@ -413,7 +474,7 @@ Las credenciales de Talia deben configurarse mediante variables de entorno del b
 - `META_SYSTEM_USER_ACCESS_TOKEN`.
 - `WHATSAPP_META_VERIFY_TOKEN`.
 - `META_TALIA_BUSINESS_ID`.
-- `WHATSAPP_META_GRAPH_API_VERSION`.
+- `WHATSAPP_META_GRAPH_API_VERSION` con valor propuesto `v25.0`.
 
 Los nombres son orientativos y deben adaptarse a la convención existente.
 
@@ -498,14 +559,14 @@ La funcionalidad podrá considerarse lista cuando:
 
 ## 17. Pendientes antes de implementar
 
-- Confirmar el Business ID exacto que debe autorizar el cliente.
-- Confirmar si la autorización será por partner Business Manager o por asignación de System User.
-- Confirmar permisos disponibles del token global de Talia.
-- Confirmar que el token tiene acceso a los WABA actuales.
-- Elegir y probar una versión única de Graph API.
+- Confirmar en Meta el procedimiento exacto de autorización por partner Business Manager que se mostrará al cliente.
+- Resolver la solicitud pendiente de aprobación de Meta relacionada con permisos administrativos, sin bloquear el uso del token ya validado.
+- Formalizar la variable global `META_TALIA_BUSINESS_ID=1358726956043196` en configuración y despliegue.
+- Formalizar `META_TOKEN` como secreto global del backend después de rotar las credenciales expuestas.
+- Definir y probar `v25.0` como versión única de Graph API.
 - Decidir si el PIN se captura temporalmente, se cifra para uso futuro o se genera por Talia.
 - Definir el modelo persistente para `waba_id`, estado y auditoría.
-- Revisar la configuración global del webhook y la resolución por `phone_number_id`.
+- Mantener documentada la configuración actual del webhook compartido y la resolución por `phone_number_id`.
 - Retirar los secretos de tenant de la UI y conservar compatibilidad durante la migración.
 - Rotar credenciales expuestas en archivos `.env` del repositorio.
 - Implementar pruebas de permisos, tenant isolation, errores de Meta, idempotencia y reintentos.
