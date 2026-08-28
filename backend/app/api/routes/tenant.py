@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timezone
 import secrets
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -35,6 +35,7 @@ from app.repositories.platform_admin import PlatformRepository, PlatformReposito
 from app.services import tenant_runtime
 from app.services import channel_routing
 from app.services.web_tracking import normalize_tracking_domain, verify_dns_txt
+from app.services.meta_whatsapp_assisted import MetaWhatsAppAssistedClient, MetaWhatsAppConnectionError
 
 router = APIRouter(prefix="/tenant", tags=["tenant"])
 logger = get_logger("app.api.tenant")
@@ -48,6 +49,32 @@ class TenantContext(BaseModel):
 
 
 MASTER_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
+
+
+class MetaWhatsAppConnectionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    waba_id: str = Field(..., min_length=5, max_length=40, pattern=r"^[0-9]+$")
+    phone_number_id: str = Field(..., min_length=5, max_length=40, pattern=r"^[0-9]+$")
+    accion: Literal["validar", "registrar", "suscribir"] = "validar"
+    pin: str | None = Field(default=None, min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
+
+
+class MetaWhatsAppConnectionResponse(BaseModel):
+    organizacion_id: UUID
+    waba_id: str
+    phone_number_id: str
+    estado: str
+    waba_nombre: str | None = None
+    phone_display: str | None = None
+    phone_verified: bool | None = None
+    suscrita: bool = False
+    ultimo_validado_en: datetime | None = None
+    registrado_en: datetime | None = None
+    suscrito_en: datetime | None = None
+    conectado_en: datetime | None = None
+    ultimo_error_codigo: str | None = None
+    ultimo_error_mensaje: str | None = None
 
 
 class ProspeccionTemplateAiPromptConfig(BaseModel):
@@ -794,6 +821,110 @@ async def get_tenant_settings(
         row["config"] = saved.get("config") if isinstance(saved.get("config"), dict) else ensured_config
     routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
     return await _build_tenant_response(context.organizacion_id, row, routes)
+
+
+def _connection_response(row: dict[str, Any]) -> MetaWhatsAppConnectionResponse:
+    return MetaWhatsAppConnectionResponse.model_validate(row)
+
+
+@router.get("/me/whatsapp/meta/connection", response_model=MetaWhatsAppConnectionResponse | None)
+async def get_meta_whatsapp_connection(
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> MetaWhatsAppConnectionResponse | None:
+    await require_permission(user_token, "settings.view")
+    try:
+        row = await platform_repo.get_whatsapp_meta_connection(organizacion_id=context.organizacion_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_meta_connection_unavailable") from exc
+    return _connection_response(row) if row else None
+
+
+@router.post("/me/whatsapp/meta/connection", response_model=MetaWhatsAppConnectionResponse)
+async def operate_meta_whatsapp_connection(
+    payload: MetaWhatsAppConnectionPayload,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> MetaWhatsAppConnectionResponse:
+    await require_permission(user_token, "settings.manage")
+    if payload.accion == "registrar" and payload.pin is None:
+        raise HTTPException(status_code=422, detail="pin_required_for_registration")
+    try:
+        existing_tenant = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_meta_tenant_config_unavailable") from exc
+    existing_config = existing_tenant.get("config") if isinstance(existing_tenant, dict) else None
+    existing_whatsapp = existing_config.get("whatsapp") if isinstance(existing_config, dict) else None
+    existing_meta = existing_whatsapp.get("meta") if isinstance(existing_whatsapp, dict) else None
+    existing_phone = existing_meta.get("phone_number_id") if isinstance(existing_meta, dict) else None
+    if existing_phone and str(existing_phone) != payload.phone_number_id:
+        raise HTTPException(status_code=409, detail="whatsapp_meta_phone_already_configured")
+    now = datetime.now(timezone.utc).isoformat()
+    values: dict[str, Any] = {
+        "waba_id": payload.waba_id,
+        "phone_number_id": payload.phone_number_id,
+        "actualizado_en": now,
+        "ultimo_error_codigo": None,
+        "ultimo_error_mensaje": None,
+    }
+    try:
+        client = MetaWhatsAppAssistedClient()
+        inspected = await client.inspect(waba_id=payload.waba_id, phone_number_id=payload.phone_number_id)
+        number = inspected["phone_number"]
+        values.update({
+            "estado": "validado",
+            "ultimo_validado_en": now,
+        })
+        if payload.accion == "registrar":
+            await client.register(phone_number_id=payload.phone_number_id, pin=payload.pin or "")
+            values.update({"estado": "registrado", "registrado_en": now})
+        elif payload.accion == "suscribir":
+            await client.subscribe(waba_id=payload.waba_id)
+            values.update({"estado": "suscrito", "suscrito_en": now})
+            inspected = await client.inspect(waba_id=payload.waba_id, phone_number_id=payload.phone_number_id)
+            if inspected["subscribed"]:
+                values.update({"estado": "conectado", "conectado_en": now})
+        if inspected.get("subscribed") and payload.accion == "validar":
+            values.update({"estado": "conectado", "conectado_en": now})
+        presentation = {
+            "waba_nombre": inspected["waba"].get("name"),
+            "phone_display": number.get("display_phone_number"),
+            "phone_verified": str(number.get("code_verification_status") or "").upper() == "VERIFIED",
+            "suscrita": bool(inspected.get("subscribed")),
+        }
+    except MetaWhatsAppConnectionError as exc:
+        values.update({"estado": "error", "ultimo_error_codigo": exc.code, "ultimo_error_mensaje": exc.message})
+        try:
+            await platform_repo.upsert_whatsapp_meta_connection(organizacion_id=context.organizacion_id, values=values)
+        except PlatformRepositoryError:
+            pass
+        raise HTTPException(status_code=422, detail=exc.code) from exc
+    try:
+        row = await platform_repo.upsert_whatsapp_meta_connection(organizacion_id=context.organizacion_id, values=values)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_meta_connection_save_failed") from exc
+    # El resolver del webhook y el envío productivo siguen usando la configuración
+    # existente del tenant. Solo después de validar Meta sincronizamos el Phone ID;
+    # no reemplazamos sus secretos ni cambiamos el proveedor hasta suscribir la app.
+    try:
+        tenant_row = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
+        current_config = tenant_row.get("config") if isinstance(tenant_row, dict) and isinstance(tenant_row.get("config"), dict) else {}
+        whatsapp = dict(current_config.get("whatsapp")) if isinstance(current_config.get("whatsapp"), dict) else {}
+        meta = dict(whatsapp.get("meta")) if isinstance(whatsapp.get("meta"), dict) else {}
+        meta["phone_number_id"] = payload.phone_number_id
+        whatsapp["meta"] = meta
+        if values.get("estado") == "conectado":
+            whatsapp["provider"] = "meta"
+        saved_config = await platform_repo.set_organizacion_config(
+            organizacion_id=context.organizacion_id,
+            config={**current_config, "whatsapp": whatsapp},
+        )
+        _ = saved_config
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_meta_tenant_config_save_failed") from exc
+    return _connection_response({**row, **presentation})
 
 
 def _require_master_tenant(context: TenantContext) -> None:

@@ -1579,6 +1579,33 @@ class PlatformRepository:
             raise PlatformRepositoryError("empleado_create_failed")
         return data[0]
 
+    async def get_whatsapp_meta_connection(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/whatsapp_meta_connections",
+            params={
+                "select": "organizacion_id,waba_id,phone_number_id,estado,ultimo_validado_en,registrado_en,suscrito_en,conectado_en,ultimo_error_codigo,ultimo_error_mensaje,creado_en,actualizado_en",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            },
+        )
+        return data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
+
+    async def upsert_whatsapp_meta_connection(
+        self, *, organizacion_id: UUID, values: dict[str, Any]
+    ) -> dict[str, Any]:
+        payload = {"organizacion_id": str(organizacion_id), **values}
+        data = await self._rest(
+            "POST",
+            "/rest/v1/whatsapp_meta_connections",
+            params={"on_conflict": "organizacion_id"},
+            json=payload,
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("whatsapp_meta_connection_upsert_failed")
+        return data[0]
+
     async def _rest(
         self,
         method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"],

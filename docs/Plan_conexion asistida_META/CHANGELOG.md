@@ -73,6 +73,17 @@ Este archivo registra las decisiones, evidencias, cambios, validaciones y despli
 - El token global validado ya existe y no debe bloquear el diseño ni la implementación del onboarding asistido.
 - Los permisos adicionales presentes en el token actual no se utilizarán como justificación para cambiar el flujo productivo.
 
+## 2026-08-28 · Implementación inicial del flujo asistido
+
+- [x] Agregados valores globales de Meta en configuración del backend, con compatibilidad para el `META_TOKEN` existente.
+- [x] Creado el cliente server-side para validar acceso, registrar el número y suscribir la aplicación sin exponer tokens.
+- [x] Agregados endpoints tenant-scoped protegidos por `settings.view` y `settings.manage`.
+- [x] Agregada migración `whatsapp_meta_connections` para guardar WABA, Phone Number ID, estado, timestamps y errores sanitizados.
+- [x] Agregado panel en `settings/variables > WhatsApp` con Business ID `1358726956043196` e instrucciones del onboarding.
+- [x] Mantención del flujo productivo: el webhook compartido, los secretos existentes y el envío actual no se reemplazan; la configuración del tenant solo sincroniza el Phone Number ID después de validar.
+- [ ] Aplicar migración en Supabase, definir variables globales en el entorno productivo y desplegar backend/panel.
+- [ ] Probar con un tenant nuevo y ejecutar regresión de los tenants existentes.
+
 ## Próximos cambios previstos
 
 - Agregar las variables globales del backend, sin valores sensibles en el repositorio:
@@ -86,4 +97,3 @@ Este archivo registra las decisiones, evidencias, cambios, validaciones y despli
 - Probar con una WABA nueva compartida por un cliente.
 - Ejecutar pruebas de no regresión con tenants existentes.
 - Rotar las credenciales que fueron expuestas antes de utilizarlas como configuración definitiva.
-

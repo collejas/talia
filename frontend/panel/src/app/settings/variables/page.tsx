@@ -19,6 +19,7 @@ import {
 } from "./components/tenant-template-ai-prompt-config-panel"
 import { TenantAiBrandContextPanel } from "./components/tenant-ai-brand-context-panel"
 import { WhatsAppAssistantSchedulePanel } from "./components/whatsapp-assistant-schedule-panel"
+import { MetaAssistedConnectionPanel } from "./components/meta-assisted-connection-panel"
 import {
   TenantTemplateAiLayoutsPanel,
   type TemplateAiLayout,
@@ -193,6 +194,10 @@ export default async function SettingsVariablesPage() {
       withUserToken: true,
     },
   )
+  const metaConnectionResp = await callCrmApi<Record<string, unknown> | null>("/tenant/me/whatsapp/meta/connection", {
+    organizacionId: null,
+    withUserToken: true,
+  })
   const emailServiceResp = await callCrmApi<TenantEmailServiceData>("/tenant/me/email-service", {
     organizacionId: null,
     withUserToken: true,
@@ -568,6 +573,10 @@ export default async function SettingsVariablesPage() {
                   <TenantTwilioSettings tenantId={tenantId} initialValues={twilioInitialValues} />
                 </TabsContent>
                 <TabsContent value="whatsapp" className="pt-4">
+                  <MetaAssistedConnectionPanel
+                    initialConnection={metaConnectionResp.ok ? metaConnectionResp.data : null}
+                    businessId={process.env.META_TALIA_BUSINESS_ID ?? "1358726956043196"}
+                  />
                   <WhatsAppAssistantSchedulePanel
                     initialValues={scheduleResp.ok ? scheduleResp.data : null}
                   />

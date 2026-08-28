@@ -17,6 +17,34 @@ export type CrudActionState = {
 
 export type CrudActionHandler = (prevState: CrudActionState, formData: FormData) => Promise<CrudActionState>
 
+export type MetaConnectionActionState = CrudActionState & {
+  connection?: Record<string, unknown> | null
+}
+
+export async function operateMetaWhatsAppConnectionAction(
+  _prevState: MetaConnectionActionState,
+  formData: FormData,
+): Promise<MetaConnectionActionState> {
+  const wabaId = getText(formData, "waba_id")
+  const phoneNumberId = getText(formData, "phone_number_id")
+  const accion = getText(formData, "accion") || "validar"
+  const pin = getText(formData, "pin")
+  if (!wabaId || !phoneNumberId) return failure("Captura el WABA ID y el Phone Number ID.", "Datos de Meta incompletos")
+  try {
+    const response = await callCrmApi<Record<string, unknown>>("/tenant/me/whatsapp/meta/connection", {
+      method: "POST",
+      body: { waba_id: wabaId, phone_number_id: phoneNumberId, accion, ...(pin ? { pin } : {}) },
+      organizacionId: null,
+      withUserToken: true,
+    })
+    if (!response.ok) return failure(response.error, "Meta no pudo completar la operación")
+    revalidatePath("/settings/variables")
+    return { status: "success", message: accion === "validar" ? "Acceso validado correctamente." : "Paso completado correctamente.", connection: response.data }
+  } catch (error) {
+    return failure(error, "No fue posible completar la operación con Meta")
+  }
+}
+
 function success(message: string): CrudActionState {
   return { status: "success", message }
 }

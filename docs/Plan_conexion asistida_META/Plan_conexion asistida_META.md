@@ -595,7 +595,21 @@ La funcionalidad podrá considerarse lista cuando:
 17. Un error durante el onboarding no deje al tenant productivo en un estado parcialmente conectado.
 18. El flujo pueda deshabilitarse sin interrumpir el envío ni la recepción de tenants existentes.
 
-## 17. Pendientes antes de implementar
+## 17. Primer corte implementado
+
+El primer corte del refactor deja preparado el flujo en paralelo al mecanismo productivo existente:
+
+- `GET /tenant/me/whatsapp/meta/connection` consulta el estado persistido del onboarding.
+- `POST /tenant/me/whatsapp/meta/connection` ejecuta una acción explícita: `validar`, `registrar` o `suscribir`.
+- La validación consulta el WABA, confirma que el Phone Number ID pertenece a ese WABA y verifica la suscripción de la aplicación.
+- El PIN se recibe únicamente durante el registro y no se persiste ni se escribe en logs.
+- El estado se persiste en `whatsapp_meta_connections`; no se guardan tokens en esa tabla.
+- Después de una validación exitosa se sincroniza `config.whatsapp.meta.phone_number_id`, que es el dato que ya usa el resolver del webhook. El proveedor solo cambia a `meta` cuando la aplicación queda suscrita.
+- La UI se agregó dentro de `settings/variables > WhatsApp`, con instrucciones, Business ID de Talia y botones por paso.
+
+La migración debe aplicarse antes de habilitar el panel en producción. El token global se lee con compatibilidad desde `META_SYSTEM_USER_ACCESS_TOKEN` o el nombre actualmente operativo `META_TOKEN`; el resto de valores globales usa `META_TALIA_BUSINESS_ID`, `META_APP_ID`, `META_APP_SECRET` y `META_GRAPH_API_VERSION`.
+
+## 18. Pendientes antes de desplegar
 
 - Confirmar en Meta el procedimiento exacto de autorización por partner Business Manager que se mostrará al cliente.
 - La solicitud de aprobación adicional de Meta quedó resuelta; no bloquea el uso del token global validado.
@@ -603,7 +617,7 @@ La funcionalidad podrá considerarse lista cuando:
 - Formalizar `META_TOKEN` como secreto global del backend después de rotar las credenciales expuestas.
 - Definir y probar `v25.0` como versión única de Graph API.
 - No persistir el PIN en Talia: recibirlo de forma temporal, enviarlo a Meta durante `/register` y descartarlo después.
-- Definir el modelo persistente para `waba_id`, estado y auditoría.
+- Aplicar la migración `20260828_120000_whatsapp_meta_assisted_connections.sql` en Supabase.
 - Mantener documentada la configuración actual del webhook compartido y la resolución por `phone_number_id`.
 - Retirar los secretos de tenant de la UI y conservar compatibilidad durante la migración.
 - Rotar credenciales expuestas en archivos `.env` del repositorio.

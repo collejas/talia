@@ -170,6 +170,30 @@ class Settings(BaseSettings):
             "TALIA_WHATSAPP_META_VERIFY_TOKEN",
         ),
     )
+    meta_talia_business_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("META_TALIA_BUSINESS_ID", "TALIA_META_BUSINESS_ID"),
+    )
+    meta_app_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("META_APP_ID", "WHATSAPP_META_APP_ID"),
+    )
+    meta_app_secret: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("META_APP_SECRET", "WHATSAPP_META_APP_SECRET"),
+    )
+    meta_system_user_access_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "META_SYSTEM_USER_ACCESS_TOKEN",
+            "META_TOKEN",
+            "WHATSAPP_META_SYSTEM_USER_ACCESS_TOKEN",
+        ),
+    )
+    meta_graph_api_version: str = Field(
+        default="v25.0",
+        validation_alias=AliasChoices("META_GRAPH_API_VERSION", "WHATSAPP_META_GRAPH_API_VERSION"),
+    )
     voice_webhook_path: str | None = Field(
         default=None,
         description="Ruta base para los callbacks de voz (TwiML) cuando Twilio inicia conexiones.",
