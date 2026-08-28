@@ -560,11 +560,11 @@ La funcionalidad podrá considerarse lista cuando:
 ## 17. Pendientes antes de implementar
 
 - Confirmar en Meta el procedimiento exacto de autorización por partner Business Manager que se mostrará al cliente.
-- Resolver la solicitud pendiente de aprobación de Meta relacionada con permisos administrativos, sin bloquear el uso del token ya validado.
+- La solicitud de aprobación adicional de Meta quedó resuelta; no bloquea el uso del token global validado.
 - Formalizar la variable global `META_TALIA_BUSINESS_ID=1358726956043196` en configuración y despliegue.
 - Formalizar `META_TOKEN` como secreto global del backend después de rotar las credenciales expuestas.
 - Definir y probar `v25.0` como versión única de Graph API.
-- Decidir si el PIN se captura temporalmente, se cifra para uso futuro o se genera por Talia.
+- No persistir el PIN en Talia: recibirlo de forma temporal, enviarlo a Meta durante `/register` y descartarlo después.
 - Definir el modelo persistente para `waba_id`, estado y auditoría.
 - Mantener documentada la configuración actual del webhook compartido y la resolución por `phone_number_id`.
 - Retirar los secretos de tenant de la UI y conservar compatibilidad durante la migración.
