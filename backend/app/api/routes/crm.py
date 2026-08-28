@@ -3471,7 +3471,7 @@ class CRMCuentaCodigoResponse(BaseModel):
 
 
 class WhatsAppSalesAssignment(BaseModel):
-    """Registro auditado de asignaciones de vendedores en WhatsApp."""
+    """Registro auditado de asignaciones de vendedores."""
 
     id: UUID
     creado_en: str
@@ -3503,7 +3503,7 @@ class WhatsAppSalesAssignment(BaseModel):
 
 
 class WhatsAppSalesAssignmentsResponse(BaseModel):
-    """Respuesta paginada para la vista de asignaciones WhatsApp."""
+    """Respuesta paginada para la auditoría de asignaciones de vendedores."""
 
     items: list[WhatsAppSalesAssignment]
     limit: int
@@ -41045,10 +41045,6 @@ async def list_audit_logs(
 
 @router.get(
     "/asignaciones_vendedores",
-    response_model=WhatsAppSalesAssignmentsResponse,
-)
-@router.get(
-    "/whatsapp/asignaciones",
     response_model=WhatsAppSalesAssignmentsResponse,
 )
 async def list_sales_assignments(

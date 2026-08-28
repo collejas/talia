@@ -9,7 +9,7 @@
   - `crm`
   - `crm/oportunidades`
   - `crm/leads`
-  - `crm/whatsapp/asignaciones`
+  - `crm/asignaciones-vendedores`
   - `prospeccion/prospectos`
   - `settings/propiedades`
   - `settings/productos/lineas`

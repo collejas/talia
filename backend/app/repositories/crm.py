@@ -17407,7 +17407,7 @@ class CRMRepository:
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(
-                f"Respuesta inesperada al listar asignaciones WhatsApp: {data!r}"
+                f"Respuesta inesperada al listar asignaciones de vendedores: {data!r}"
             )
         rows: list[dict[str, Any]] = []
         for row in data:
