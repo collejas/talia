@@ -68,7 +68,8 @@ export default async function SettingsProductosPage() {
             <h2 className="text-base font-semibold">Carga y respaldo del catálogo</h2>
             <p className="text-sm text-muted-foreground">
               Descarga una plantilla completa para capturar productos o exporta todos los productos actuales
-              con sus códigos estables y relaciones de línea, familia y modelo.
+              con sus códigos estables, relaciones de línea, familia y modelo, además de las listas de precios
+              activas del tenant.
             </p>
           </div>
           <CatalogDownloadActions />

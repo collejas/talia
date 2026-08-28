@@ -123,11 +123,12 @@ export function ProductMetadataImporterUploader({ initialSchemes }: ProductMetad
     <Card>
       <CardHeader>
         <CardTitle>Importar productos</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Sube un CSV o Excel. La columna <code>codigo</code> identifica el producto y permite actualizar nombre,
-          descripción, precio y jerarquía sin duplicarlo. Para renombrar líneas, familias o modelos incluye sus
-          códigos estables. <Link className="text-primary" href="/settings/productos/ayuda">Ver guía</Link>
-        </p>
+          <p className="text-sm text-muted-foreground">
+            Sube un CSV o Excel. La columna <code>codigo</code> identifica el producto y permite actualizar nombre,
+            descripción, precio base, listas de precios y jerarquía sin duplicarlo. Para renombrar líneas, familias o
+            modelos incluye sus códigos estables. Las columnas de listas de precios se obtienen desde la plantilla y
+            requieren permisos de administrador. <Link className="text-primary" href="/settings/productos/ayuda">Ver guía</Link>
+          </p>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid gap-4 md:grid-cols-3">

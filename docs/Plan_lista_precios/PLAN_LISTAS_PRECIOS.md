@@ -141,6 +141,23 @@ En el formulario de creación y edición de cada producto:
 
 La sección de precios debe ser dinámica: al crear una nueva lista en `settings/account`, debe aparecer para los productos sin tener que crear columnas nuevas ni modificar código por cada lista.
 
+### 2.4.1 Carga y respaldo masivo del catálogo
+
+Las acciones `Importar productos` y `Descargar productos existentes` deben trabajar
+con las listas de precios activas configuradas por el tenant:
+
+- La descarga de productos incluye una columna por cada lista activa.
+- La plantilla incluye las mismas columnas, listas para capturar precios.
+- El encabezado usa el nombre legible de la lista y su UUID, por ejemplo
+  `precio_lista_distribuidor__<uuid>`. El UUID mantiene la referencia aunque el nombre
+  visible de la lista cambie.
+- Una celda vacía conserva el precio existente; un valor numérico, incluido `0`, lo
+  crea o actualiza.
+- Las columnas de listas solo pueden importarse por `admin` o `admin_operativo`; el
+  permiso se valida en backend.
+- Las listas inactivas no se incluyen en nuevas plantillas o descargas y no pueden
+  recibir precios mediante importación.
+
 ### 2.5 Modal de cotización desde Embudo e Inbox
 
 Conservar el comportamiento actual de selección de productos y agregar por cada línea:

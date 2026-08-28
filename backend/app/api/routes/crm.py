@@ -19286,6 +19286,46 @@ async def import_product_catalog_items(
     headers = list(headers_map.keys())
     field_header_map = _build_field_header_map(headers, scheme_fields)
 
+    try:
+        import_price_lists = await repo.list_price_lists(
+            organizacion_id=organizacion_id,
+            include_inactive=True,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="price_lists_unavailable") from exc
+    price_lists_by_id = {
+        str(price_list.get("id")): price_list
+        for price_list in import_price_lists
+        if price_list.get("id")
+    }
+    price_list_columns: dict[str, dict[str, Any]] = {}
+    unknown_price_list_headers: list[str] = []
+    for header in headers:
+        if not header.startswith("precio_lista_"):
+            continue
+        lista_precio_id = _catalog_price_list_id_from_header(header)
+        price_list = price_lists_by_id.get(str(lista_precio_id)) if lista_precio_id else None
+        if not price_list:
+            unknown_price_list_headers.append(headers_map.get(header, header))
+            continue
+        price_list_columns[header] = price_list
+    if unknown_price_list_headers:
+        raise HTTPException(status_code=400, detail="price_list_column_not_found")
+    if price_list_columns:
+        permission_context = await _get_permission_context_or_raise(repo)
+        roles = permission_context.get("roles")
+        normalized_roles = {
+            str(role).strip().lower()
+            for role in roles
+            if isinstance(roles, list) and str(role).strip()
+        }
+        if not (
+            _coerce_bool(permission_context.get("es_admin")) is True
+            or "admin" in normalized_roles
+            or "admin_operativo" in normalized_roles
+        ):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="catalog_price_edit_forbidden")
+
     lineas_raw = await repo.list_lineas_de_negocio(
         organizacion_id=organizacion_id,
         include_inactive=True,
@@ -19496,6 +19536,26 @@ async def import_product_catalog_items(
                 )
 
             metadata: dict[str, Any] = dict(metadatos_importados or {})
+            imported_list_prices: list[dict[str, Any]] = []
+            for header, price_list in price_list_columns.items():
+                raw_price = (row.get(header) or "").strip()
+                if not raw_price:
+                    continue
+                if not price_list.get("activo"):
+                    raise ValueError(f'La lista de precios "{price_list.get("nombre") or "indicada"}" está inactiva.')
+                parsed_price = _parse_metadata_value(raw_price, "number")
+                if parsed_price is None or parsed_price < 0:
+                    raise ValueError("El precio de una lista de precios debe ser un número mayor o igual a cero.")
+                imported_list_prices.append(
+                    {
+                        "lista_precio_id": str(price_list["id"]),
+                        "precio": parsed_price,
+                        "moneda": price_list.get("moneda") or "MXN",
+                        "activo": True,
+                        "creado_por_usuario_id": str(usuario_id) if usuario_id else None,
+                        "actualizado_por_usuario_id": str(usuario_id) if usuario_id else None,
+                    }
+                )
             for field in scheme_fields:
                 header = field_header_map.get(field["id"])
                 if not header:
@@ -19506,7 +19566,7 @@ async def import_product_catalog_items(
             for key, value in row.items():
                 if not value:
                     continue
-                if key in field_header_map.values() or key in BASE_HEADER_KEYS:
+                if key in field_header_map.values() or key in BASE_HEADER_KEYS or key in price_list_columns:
                     continue
                 metadata[headers_map.get(key, key)] = value
             metadata = _strip_catalog_reserved_metadata_keys(metadata)
@@ -19569,12 +19629,20 @@ async def import_product_catalog_items(
                 payload["slug"] = provided_slug
             payload["organizacion_id"] = str(organizacion_id)
             if existing:
-                await repo.update_catalog_item(item_id=UUID(str(existing["id"])), payload=payload)
+                item_id = UUID(str(existing["id"]))
+                await repo.update_catalog_item(item_id=item_id, payload=payload)
                 updated += 1
             else:
                 payload["slug"] = slug
-                await repo.create_catalog_item(payload=payload)
+                created_row = await repo.create_catalog_item(payload=payload)
+                item_id = UUID(str(created_row["id"]))
                 created += 1
+            if imported_list_prices:
+                await repo.upsert_item_price_lists(
+                    organizacion_id=organizacion_id,
+                    item_id=item_id,
+                    values=imported_list_prices,
+                )
         except Exception as exc:
             if not isinstance(exc, ValueError):
                 import_debug_logger.warning(
@@ -20324,7 +20392,31 @@ def _catalog_csv_value(value: Any) -> str:
     return str(value)
 
 
-def _catalog_export_row(row: Mapping[str, Any]) -> list[str]:
+def _catalog_price_list_header(price_list: Mapping[str, Any]) -> str:
+    """Stable, human-readable CSV header for a tenant price list."""
+    name = _slugify(str(price_list.get("nombre") or "lista")) or "lista"
+    return f"precio_lista_{name}__{price_list.get('id')}"
+
+
+def _catalog_price_list_id_from_header(header: str) -> UUID | None:
+    match = re.fullmatch(
+        r"precio_lista_[a-z0-9-]+__([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+        header,
+    )
+    if not match:
+        return None
+    try:
+        return UUID(match.group(1))
+    except ValueError:
+        return None
+
+
+def _catalog_export_row(
+    row: Mapping[str, Any],
+    *,
+    price_lists: Sequence[Mapping[str, Any]] = (),
+    price_values_by_list_id: Mapping[str, Mapping[str, Any]] | None = None,
+) -> list[str]:
     linea = row.get("linea") if isinstance(row.get("linea"), dict) else {}
     familia = row.get("familia") if isinstance(row.get("familia"), dict) else {}
     modelo = row.get("modelo") if isinstance(row.get("modelo"), dict) else {}
@@ -20346,26 +20438,76 @@ def _catalog_export_row(row: Mapping[str, Any]) -> list[str]:
             "modelo_descripcion": modelo.get("descripcion"),
         }
     )
-    return [_catalog_csv_value(values.get(header)) for header in CATALOG_IMPORT_HEADERS]
+    output = [_catalog_csv_value(values.get(header)) for header in CATALOG_IMPORT_HEADERS]
+    price_values = price_values_by_list_id or {}
+    for price_list in price_lists:
+        price = price_values.get(str(price_list.get("id")))
+        output.append(_catalog_csv_value(price.get("precio") if price else None))
+    return output
 
 
-def _render_catalog_items_csv(rows: Sequence[Mapping[str, Any]]) -> str:
+def _render_catalog_items_csv(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    price_lists: Sequence[Mapping[str, Any]] = (),
+    price_values_by_item_id: Mapping[str, Mapping[str, Any]] | None = None,
+) -> str:
     output = io.StringIO()
     output.write("\ufeff")
     writer = csv.writer(output)
-    writer.writerow(CATALOG_IMPORT_HEADERS)
+    writer.writerow(
+        CATALOG_IMPORT_HEADERS
+        + [_catalog_price_list_header(price_list) for price_list in price_lists]
+    )
     for row in rows:
-        writer.writerow(_catalog_export_row(row))
+        writer.writerow(
+            _catalog_export_row(
+                row,
+                price_lists=price_lists,
+                price_values_by_list_id=(price_values_by_item_id or {}).get(str(row.get("id")), {}),
+            )
+        )
     return output.getvalue()
+
+
+async def _load_catalog_price_values_for_export(
+    repo: CRMRepository,
+    *,
+    organizacion_id: UUID,
+    rows: Sequence[Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    values_by_item_id: dict[str, dict[str, Any]] = defaultdict(dict)
+    item_ids = [UUID(str(row["id"])) for row in rows if row.get("id")]
+    for start in range(0, len(item_ids), 500):
+        batch = await repo.list_item_price_lists_for_items(
+            organizacion_id=organizacion_id,
+            item_ids=item_ids[start : start + 500],
+            include_inactive=False,
+        )
+        for value in batch:
+            item_id = value.get("catalog_item_id")
+            list_id = value.get("lista_precio_id")
+            if item_id and list_id:
+                values_by_item_id[str(item_id)][str(list_id)] = value
+    return values_by_item_id
 
 
 @router.get("/catalog/items/template")
 async def download_catalog_items_template(
     *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_any_permission(["settings.view", "settings.manage"])),
 ) -> Response:
+    try:
+        price_lists = await repo.list_price_lists(
+            organizacion_id=organizacion_id,
+            include_inactive=False,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="price_lists_unavailable") from exc
     return Response(
-        content=_render_catalog_items_csv([]),
+        content=_render_catalog_items_csv([], price_lists=price_lists),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="productos_plantilla.csv"'},
     )
@@ -20395,9 +20537,25 @@ async def export_catalog_items_csv(
             offset += batch_size
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="catalog_export_unavailable") from exc
+    try:
+        price_lists = await repo.list_price_lists(
+            organizacion_id=organizacion_id,
+            include_inactive=False,
+        )
+        price_values_by_item_id = await _load_catalog_price_values_for_export(
+            repo,
+            organizacion_id=organizacion_id,
+            rows=rows,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="catalog_export_unavailable") from exc
     filename = f"productos_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     return Response(
-        content=_render_catalog_items_csv(rows),
+        content=_render_catalog_items_csv(
+            rows,
+            price_lists=price_lists,
+            price_values_by_item_id=price_values_by_item_id,
+        ),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
