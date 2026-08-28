@@ -82,7 +82,10 @@ Este archivo registra las decisiones, evidencias, cambios, validaciones y despli
 - [x] Agregado panel en `settings/variables > WhatsApp` con Business ID `1358726956043196` e instrucciones del onboarding.
 - [x] Mantención del flujo productivo: el webhook compartido, los secretos existentes y el envío actual no se reemplazan; la configuración del tenant solo sincroniza el Phone Number ID después de validar.
 - [x] Migración aplicada exitosamente en Supabase; la tabla tiene FK tenant, unicidad de WABA/número y RLS habilitado.
-- [ ] Definir variables globales en el entorno productivo y desplegar backend/panel.
+- [x] Variables globales agregadas al `.env` del backend; el backend lee Business ID, App ID, `v25.0` y el token global sin exponerlo.
+- [x] Validación real de solo lectura contra Rentauto: WABA accesible, número verificado y aplicación suscrita.
+- [x] Backend y panel desplegados; API saludable y panel activo.
+- [x] Endpoint nuevo verificado sin autenticación: responde `401` y no permite acceso anónimo.
 - [ ] Probar con un tenant nuevo y ejecutar regresión de los tenants existentes.
 
 ## Próximos cambios previstos
