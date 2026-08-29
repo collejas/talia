@@ -201,35 +201,35 @@ const CATALOG_COLUMN_CONFIGS: Record<CatalogColumnId, CatalogColumnConfig> = {
   producto: {
     id: "producto",
     label: "Producto / servicio",
-    widthClass: "w-[360px]",
+    widthClass: "w-[360px] max-w-[360px]",
     sortable: true,
     reorderable: true,
   },
   tipo: {
     id: "tipo",
     label: "Tipo",
-    widthClass: "w-[170px]",
+    widthClass: "w-[110px]",
     sortable: true,
     reorderable: true,
   },
   precio: {
     id: "precio",
     label: "Precio base",
-    widthClass: "w-[140px]",
+    widthClass: "w-[120px]",
     sortable: true,
     reorderable: true,
   },
   estado: {
     id: "estado",
     label: "Estado",
-    widthClass: "w-[120px]",
+    widthClass: "w-[100px]",
     sortable: true,
     reorderable: true,
   },
   actualizado: {
     id: "actualizado",
     label: "Actualizado",
-    widthClass: "w-[150px]",
+    widthClass: "w-[130px]",
     sortable: true,
     reorderable: true,
   },
@@ -381,7 +381,7 @@ function renderCatalogColumnCell(item: CatalogItem, columnId: CatalogColumnId): 
   switch (columnId) {
     case "producto":
       return (
-        <div className="min-w-0 overflow-hidden">
+        <div className="w-full max-w-full min-w-0 overflow-hidden">
           <div className="flex min-w-0 items-center gap-3">
             <div className="h-12 w-12 overflow-hidden rounded-md border border-muted/40 bg-muted/5">
               {item.fotoUrl ? (
@@ -1508,14 +1508,25 @@ const handleDelete = useCallback(
               </Select>
             </div>
         </div>
-        <div className="rounded-lg border">
+          {priceLists.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+              <span className="font-semibold text-foreground">Listas de precios activas:</span>
+              {priceLists.map((priceList) => (
+                <Badge key={`active-price-list-${priceList.id}`} variant="secondary">
+                  {priceList.nombre}
+                </Badge>
+              ))}
+              <span className="text-muted-foreground">Aparecen junto a Precio base en la tabla.</span>
+            </div>
+          ) : null}
+          <div className="rounded-lg border">
           <div className="overflow-x-auto">
             <DndContext
               collisionDetection={closestCenter}
               onDragEnd={handleColumnDragEnd}
               sensors={sensors}
             >
-              <Table className="table-fixed min-w-max">
+              <Table className="table-auto min-w-full">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12 px-3">
@@ -1540,7 +1551,7 @@ const handleDelete = useCallback(
                     ))}
                   </SortableContext>
                   {priceLists.map((priceList) => (
-                    <TableHead key={`price-list-header-${priceList.id}`} className="w-[140px]">
+                    <TableHead key={`price-list-header-${priceList.id}`} className="w-[110px] whitespace-normal">
                       <div className="flex items-center gap-2">
                         {canEditInlinePrices ? (
                           <Checkbox
@@ -1555,7 +1566,7 @@ const handleDelete = useCallback(
                       </div>
                     </TableHead>
                   ))}
-                  <TableHead className="w-[120px] text-right">Acciones</TableHead>
+                  <TableHead className="w-[100px] text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1589,7 +1600,7 @@ const handleDelete = useCallback(
                       {priceLists.map((priceList) => (
                         <TableCell
                           key={`${item.id}-price-list-${priceList.id}`}
-                          className="w-[140px] overflow-hidden"
+                          className="w-[110px] overflow-hidden"
                         >
                           {editablePriceLists.has(priceList.id) ? (
                             <Input
