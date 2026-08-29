@@ -32,6 +32,26 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Implementar y verificar webhooks de entrega, rebote, queja y supresión antes de retirar el proveedor anterior.
 - Ejecutar una campaña controlada desde `prospeccion/prospectos` con el tenant maestro.
 
+## [2026-08-29]
+
+### Cambios
+
+- Se agregó el aprovisionamiento automático de Postmark para cada tenant nuevo mediante un trigger de PostgreSQL sobre `organizaciones`.
+- Cada tenant nuevo recibe estado Postmark pendiente y deshabilitado, plan mensual `included_10000` de 10,000 correos y su periodo de consumo actual.
+- Se regularizaron los tenants existentes sin habilitar Postmark ni modificar dominios, remitentes o configuración de Brevo.
+
+### Validaciones
+
+- La migración `20260829_120000_provision_postmark_for_new_tenants` fue aplicada correctamente en Supabase.
+- Los 9 tenants existentes tienen registro de migración, plan activo de 10,000 y periodo mensual actual.
+- El trigger `organizaciones_provision_tenant_email_service` está activo y su función usa `SECURITY DEFINER` con `search_path` restringido.
+
+### Pendientes
+
+- Configurar dominio, DNS y remitente por cada tenant.
+- Activar cada tenant únicamente después de validar su dominio y realizar una prueba controlada.
+- Implementar y verificar webhooks de entrega, rebote, queja, apertura y clic.
+
 ## [2026-08-26]
 
 ### Cambios

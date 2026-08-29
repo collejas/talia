@@ -13,7 +13,7 @@ Que GEOACTIV opere el servicio de correo desde Talia para todos los tenants:
 
 ## Estado de este documento
 
-Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tablas ya existe en Supabase y quedó reconciliado mediante una migración de verificación; la implementación funcional y el piloto siguen pendientes.
+Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tablas ya existe en Supabase, el tenant maestro ya fue probado y la creación de tenants ahora aprovisiona automáticamente la estructura operativa de correo en estado pendiente. La verificación de dominio, activación por tenant y webhooks de métricas siguen siendo pasos explícitos antes de retirar el proveedor anterior.
 
 ## Orden de lectura
 
@@ -41,6 +41,16 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 - Evitar `metadata`, `json`, `jsonb`, `payload`, `config` y estructuras similares para datos de negocio; usarlos solo para información cruda, opcional y no consultada frecuentemente.
 - No mostrar el nombre del proveedor en vistas, configuraciones, respuestas API, errores ni textos visibles para tenants.
 - No eliminar tablas históricas de Brevo hasta demostrar que ningún reporte, auditoría, función SQL, job o migración activa depende de ellas y conservar un respaldo.
+
+## Alta automática de tenants
+
+Desde la migración `20260829_120000_provision_postmark_for_new_tenants.sql`, cada tenant nuevo recibe automáticamente:
+
+- un registro en `tenant_email_migrations` con estado `pending` y `feature_enabled=false`;
+- el plan `included_10000` con 10,000 mensajes mensuales;
+- el periodo mensual correspondiente en `tenant_email_usage_periods`.
+
+El aprovisionamiento se ejecuta mediante un trigger de PostgreSQL sobre `organizaciones`, por lo que cubre altas administrativas, checkout y futuras rutas de creación. No registra dominios, no define remitentes y no habilita envíos. El tenant debe configurar su dominio y DNS, y el tenant maestro debe aprobar la activación.
 
 ## Decisión de implementación aprobada
 
