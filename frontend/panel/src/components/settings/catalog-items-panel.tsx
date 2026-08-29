@@ -39,6 +39,7 @@ import {
   fetchCatalogItemPriceLists,
   fetchCatalogItemPriceListsBatch,
   saveCatalogItemPriceLists,
+  updateCatalogItemBasePriceCell,
   updateCatalogItemPriceListCell,
   fetchCatalogItems,
   updateCatalogItem,
@@ -483,7 +484,7 @@ function renderCatalogPriceListCell(
   return value ? (
     <div className="overflow-hidden">
       <div className="truncate font-semibold">{formatCurrency(value.precio, value.moneda || priceList.moneda)}</div>
-      <div className="truncate text-xs text-muted-foreground">{value.moneda || priceList.moneda}</div>
+      <div className="truncate text-xs text-muted-foreground">{item.unidad}</div>
     </div>
   ) : (
     <span className="text-muted-foreground">—</span>
@@ -505,16 +506,19 @@ function CatalogSortableHeader({
   mounted,
   sortState,
   onSort,
+  editToggle,
 }: {
   column: CatalogColumnConfig
   mounted: boolean
   sortState: CatalogSortState
   onSort: (columnId: CatalogColumnId) => void
+  editToggle?: ReactNode
 }) {
   if (!mounted) {
     return (
       <TableHead className={column.widthClass}>
         <span className="inline-flex items-center gap-1">
+          {editToggle}
           {column.label}
           {column.sortable ? <IconArrowsUpDown className="size-3 text-muted-foreground" /> : null}
         </span>
@@ -530,6 +534,7 @@ function CatalogSortableHeader({
       column={column}
       activeDirection={activeDirection}
       onSort={onSort}
+      editToggle={editToggle}
     />
   )
 }
@@ -538,10 +543,12 @@ function CatalogSortableHeaderMounted({
   column,
   activeDirection,
   onSort,
+  editToggle,
 }: {
   column: CatalogColumnConfig
   activeDirection: false | CatalogSortDirection
   onSort: (columnId: CatalogColumnId) => void
+  editToggle?: ReactNode
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: catalogColumnDragId(column.id) })
@@ -557,6 +564,7 @@ function CatalogSortableHeaderMounted({
       }}
     >
       <div className="flex min-w-0 items-center gap-2">
+        {editToggle}
         <button
           type="button"
           aria-label={`Reordenar columna ${column.label}`}
@@ -687,8 +695,11 @@ export function CatalogItemsPanel({
   const [items, setItems] = useState<CatalogItem[]>(() => sortItems(initialItems))
   const [catalogPriceListValues, setCatalogPriceListValues] = useState<CatalogItemPriceListBatch>(initialPriceListValues)
   const [editablePriceLists, setEditablePriceLists] = useState<Set<string>>(() => new Set())
+  const [editableBasePrice, setEditableBasePrice] = useState(false)
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({})
   const [savingPriceCell, setSavingPriceCell] = useState<string | null>(null)
+  const [basePriceDrafts, setBasePriceDrafts] = useState<Record<string, string>>({})
+  const [savingBasePriceCell, setSavingBasePriceCell] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [includeInactive, setIncludeInactive] = useState(true)
   const [sortState, setSortState] = useState<CatalogSortState>(null)
@@ -1269,6 +1280,37 @@ const handleDelete = useCallback(
     })
   }, [])
 
+  const handleInlineBasePriceBlur = useCallback(
+    (item: CatalogItem) => {
+      const raw = basePriceDrafts[item.id] ?? (item.precioBase?.toString() ?? "")
+      if (!raw.trim()) {
+        setFeedback({ type: "error", message: "Captura un precio base válido antes de guardar." })
+        return
+      }
+      const precio = parseCurrencyInput(raw)
+      if (!Number.isFinite(precio) || precio < 0) {
+        setFeedback({ type: "error", message: "El precio base debe ser un número mayor o igual a cero." })
+        return
+      }
+      setSavingBasePriceCell(item.id)
+      updateCatalogItemBasePriceCell(item.id, precio, item.moneda || "MXN")
+        .then((value) => {
+          setItems((current) => current.map((entry) => (
+            entry.id === item.id
+              ? { ...entry, precioBase: value.precio, moneda: value.moneda }
+              : entry
+          )))
+          setBasePriceDrafts((current) => ({ ...current, [item.id]: String(value.precio) }))
+          setFeedback({ type: "success", message: "Precio base actualizado." })
+        })
+        .catch((error) => {
+          setFeedback({ type: "error", message: error instanceof Error ? error.message : "No se pudo actualizar el precio base." })
+        })
+        .finally(() => setSavingBasePriceCell(null))
+    },
+    [basePriceDrafts],
+  )
+
   const handleInlinePriceBlur = useCallback(
     (item: CatalogItem, priceList: CatalogPriceList) => {
       const key = `${item.id}:${priceList.id}`
@@ -1574,6 +1616,13 @@ const handleDelete = useCallback(
                           mounted={mounted}
                           sortState={sortState}
                           onSort={handleSortColumn}
+                          editToggle={canEditInlinePrices ? (
+                            <Checkbox
+                              aria-label="Editar Precio base"
+                              checked={editableBasePrice}
+                              onCheckedChange={(checked) => setEditableBasePrice(Boolean(checked))}
+                            />
+                          ) : null}
                         />
                       ))}
                   </SortableContext>
@@ -1651,7 +1700,32 @@ const handleDelete = useCallback(
                               "overflow-hidden",
                             )}
                           >
-                            {renderCatalogColumnCell(item, column.id)}
+                            {editableBasePrice ? (
+                              <Input
+                                aria-label={`Precio base para ${item.nombre}`}
+                                type="text"
+                                inputMode="decimal"
+                                value={basePriceDrafts[item.id] ?? (item.precioBase?.toString() ?? "")}
+                                onChange={(event) => setBasePriceDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
+                                onBlur={() => handleInlineBasePriceBlur(item)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault()
+                                    event.currentTarget.blur()
+                                  }
+                                  if (event.key === "Escape") {
+                                    setBasePriceDrafts((current) => {
+                                      const next = { ...current }
+                                      delete next[item.id]
+                                      return next
+                                    })
+                                    event.currentTarget.blur()
+                                  }
+                                }}
+                                disabled={savingBasePriceCell === item.id}
+                                className="h-8 min-w-[110px]"
+                              />
+                            ) : renderCatalogColumnCell(item, column.id)}
                           </TableCell>
                         ))}
                       <TableCell className="w-[120px] text-right">

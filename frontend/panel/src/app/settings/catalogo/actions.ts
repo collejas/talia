@@ -446,6 +446,27 @@ export async function updateCatalogItemPriceListCell(
   }
 }
 
+export async function updateCatalogItemBasePriceCell(
+  itemId: string,
+  precio: number,
+  moneda: string,
+): Promise<{ precio: number; moneda: string }> {
+  const response = await callCrmApi<Record<string, unknown>>(
+    `/crm/catalog/items/${itemId}/base-price`,
+    { method: "PATCH", body: { precio, moneda } },
+  )
+  if (!response.ok) {
+    throw new Error(response.error || "No se pudo actualizar el precio base.")
+  }
+  if (!response.data) {
+    throw new Error("No se pudo actualizar el precio base.")
+  }
+  return {
+    precio: Number(response.data.precio),
+    moneda: String(response.data.moneda ?? moneda).toUpperCase(),
+  }
+}
+
 export async function createCatalogItem(input: CatalogItemInput): Promise<CatalogItem> {
   if (!input.nombre?.trim()) {
     throw new Error("El nombre es obligatorio.");

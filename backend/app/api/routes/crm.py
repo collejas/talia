@@ -14583,6 +14583,21 @@ class CRMItemPriceListCellUpdate(BaseModel):
         return value.strip().upper()
 
 
+class CRMItemBasePriceCellUpdate(BaseModel):
+    precio: float = Field(..., ge=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+
+    @field_validator("moneda")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class CRMItemBasePriceCellRead(BaseModel):
+    precio: float
+    moneda: str
+
+
 class CRMItemPriceListValueRead(CRMItemPriceListValue):
     id: UUID
     organizacion_id: UUID
@@ -20115,6 +20130,55 @@ async def update_item_price_list_cell(
     return CRMItemPriceListValueRead(
         **row[0],
         lista_precio_nombre=price_list.get("nombre"),
+    )
+
+
+@router.patch(
+    "/catalog/items/{item_id}/base-price",
+    response_model=CRMItemBasePriceCellRead,
+)
+async def update_item_base_price_cell(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_catalog_price_admin()),
+    item_id: UUID,
+    payload: CRMItemBasePriceCellUpdate,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    background_tasks: BackgroundTasks,
+) -> CRMItemBasePriceCellRead:
+    try:
+        item = await repo.get_catalog_item(organizacion_id=organizacion_id, item_id=item_id)
+        if not item:
+            raise HTTPException(status_code=404, detail="catalog_item_not_found")
+        body = {
+            "organizacion_id": str(organizacion_id),
+            "precio_base": payload.precio,
+            "moneda": payload.moneda,
+        }
+        if usuario_id:
+            body["updated_by"] = str(usuario_id)
+        row = await repo.update_catalog_item(
+            item_id=item_id,
+            payload=body,
+        )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        detail = "catalog_item_not_found" if "catalog_item_not_found" in str(exc) else "base_price_update_failed"
+        status_code = 404 if detail == "catalog_item_not_found" else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    _trigger_catalog_reindex_entity(
+        background_tasks,
+        row.get("organizacion_id"),
+        entity_type="producto",
+        entity_id_value=row.get("id"),
+        usuario_id=usuario_id,
+        canal="panel",
+    )
+    return CRMItemBasePriceCellRead(
+        precio=float(row.get("precio_base") or 0),
+        moneda=str(row.get("moneda") or payload.moneda).upper(),
     )
     if len(subjects) != len(set(subjects)):
         raise HTTPException(status_code=409, detail="discount_limit_subject_duplicated")
