@@ -1540,7 +1540,7 @@ const handleDelete = useCallback(
                     items={reorderableColumns.map((column) => catalogColumnDragId(column.id))}
                     strategy={horizontalListSortingStrategy}
                   >
-                    {reorderableColumns.map((column) => (
+                    {reorderableColumns.filter((column) => column.id !== "precio").map((column) => (
                       <CatalogSortableHeader
                         key={column.id}
                         column={column}
@@ -1549,23 +1549,34 @@ const handleDelete = useCallback(
                         onSort={handleSortColumn}
                       />
                     ))}
+                    {priceLists.map((priceList) => (
+                      <TableHead key={`price-list-header-${priceList.id}`} className="w-[110px] whitespace-normal">
+                        <div className="flex items-center gap-2">
+                          {canEditInlinePrices ? (
+                            <Checkbox
+                              aria-label={`Editar precios de ${priceList.nombre}`}
+                              checked={editablePriceLists.has(priceList.id)}
+                              onCheckedChange={(checked) => togglePriceListEditing(priceList.id, Boolean(checked))}
+                            />
+                          ) : null}
+                          <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            {priceList.nombre}
+                          </span>
+                        </div>
+                      </TableHead>
+                    ))}
+                    {reorderableColumns
+                      .filter((column) => column.id === "precio")
+                      .map((column) => (
+                        <CatalogSortableHeader
+                          key={column.id}
+                          column={column}
+                          mounted={mounted}
+                          sortState={sortState}
+                          onSort={handleSortColumn}
+                        />
+                      ))}
                   </SortableContext>
-                  {priceLists.map((priceList) => (
-                    <TableHead key={`price-list-header-${priceList.id}`} className="w-[110px] whitespace-normal">
-                      <div className="flex items-center gap-2">
-                        {canEditInlinePrices ? (
-                          <Checkbox
-                            aria-label={`Editar precios de ${priceList.nombre}`}
-                            checked={editablePriceLists.has(priceList.id)}
-                            onCheckedChange={(checked) => togglePriceListEditing(priceList.id, Boolean(checked))}
-                          />
-                        ) : null}
-                        <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {priceList.nombre}
-                        </span>
-                      </div>
-                    </TableHead>
-                  ))}
                   <TableHead className="w-[100px] text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1586,7 +1597,7 @@ const handleDelete = useCallback(
                           onCheckedChange={(checked) => handleToggleSelection(item.id, Boolean(checked))}
                         />
                       </TableCell>
-                      {reorderableColumns.map((column) => (
+                      {reorderableColumns.filter((column) => column.id !== "precio").map((column) => (
                         <TableCell
                           key={`${item.id}-${column.id}`}
                           className={cn(
@@ -1630,6 +1641,19 @@ const handleDelete = useCallback(
                           ) : renderCatalogPriceListCell(item, priceList, catalogPriceListValues)}
                         </TableCell>
                       ))}
+                      {reorderableColumns
+                        .filter((column) => column.id === "precio")
+                        .map((column) => (
+                          <TableCell
+                            key={`${item.id}-${column.id}`}
+                            className={cn(
+                              column.widthClass,
+                              "overflow-hidden",
+                            )}
+                          >
+                            {renderCatalogColumnCell(item, column.id)}
+                          </TableCell>
+                        ))}
                       <TableCell className="w-[120px] text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" size="icon" onClick={() => openEditSheet(item)}>
