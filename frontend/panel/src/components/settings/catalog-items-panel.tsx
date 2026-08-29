@@ -1688,8 +1688,9 @@ const handleDelete = useCallback(
               </div>
               <div className="space-y-2">
                 <Label htmlFor="catalog-descripcion-corta">Descripción corta</Label>
-                <Input
+                <Textarea
                   id="catalog-descripcion-corta"
+                  rows={3}
                   {...form.register("descripcionCorta")}
                   maxLength={DESCRIPCION_CORTA_MAX}
                   placeholder="Resumen que verás en los listados"
