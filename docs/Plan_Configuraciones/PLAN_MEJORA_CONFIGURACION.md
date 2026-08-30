@@ -300,6 +300,12 @@ El onboarding debe permitir regresar a un paso completado sin perder el avance d
 los demás. Si una configuración ya fue completada desde `settings/variables`, el
 onboarding debe reflejarla como completada.
 
+Cada paso se presentará en su propia vista numerada. La vista inicial conservará
+el resumen general, pero el trabajo de configuración se realizará dentro del paso
+correspondiente. El tenant podrá avanzar, regresar a pasos anteriores, guardar y
+salir, o ir al dashboard por ahora sin que el sistema marque el onboarding como
+terminado.
+
 ### 5.4 Redirección y acceso
 
 La decisión de enviar al usuario al onboarding o al dashboard debe hacerse con base

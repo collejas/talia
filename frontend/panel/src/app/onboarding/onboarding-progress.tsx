@@ -21,16 +21,6 @@ type OnboardingProgressData = {
   pasos: OnboardingStep[]
 }
 
-const tabByStep: Record<string, string> = {
-  organizacion: "brand",
-  inteligencia: "openai",
-  webchat: "webchat",
-  whatsapp: "whatsapp",
-  voz: "twilio",
-  agenda: "calendar",
-  correo: "mail",
-}
-
 export function OnboardingProgress({ initialProgress }: { initialProgress: OnboardingProgressData }) {
   const router = useRouter()
   const [progress, setProgress] = useState(initialProgress)
@@ -71,7 +61,7 @@ export function OnboardingProgress({ initialProgress }: { initialProgress: Onboa
         const data = (await response.json()) as { error?: string }
         throw new Error(data.error || "No se pudo guardar el avance")
       }
-      router.push(`/settings/variables?tab=${tabByStep[stepId] || "brand"}`)
+      router.push(`/onboarding/${stepId}`)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudo abrir el paso")
       setSaving(false)

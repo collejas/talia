@@ -347,6 +347,26 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
 ### Infraestructura
 
 - Nginx ahora envía `/onboarding` al panel de Next.js en lugar de resolverlo
+
+## [2026-08-30] — Onboarding paso a paso con captura de datos
+
+### Cambios realizados
+
+- Se añadió una vista propia para cada paso de configuración.
+- Cada vista muestra numeración, avance, pasos disponibles y navegación anterior
+  y siguiente.
+- Los formularios existentes se reutilizan dentro del onboarding para guardar los
+  datos en la misma configuración de la organización.
+- Se añadió la opción de guardar y salir al dashboard sin marcar el proceso como
+  terminado.
+- El resumen continúa disponible para revisar el avance y volver a cualquier paso.
+
+### Pendientes
+
+- Conectar los pasos de usuarios, permisos y catálogos con sus formularios
+  específicos dentro del mismo flujo.
+- Validar automáticamente el resultado de cada guardado para actualizar el estado
+  del paso sin requerir volver al resumen.
   desde la carpeta pública de la landing.
 - Se validó la configuración con `nginx -t` y se recargó Nginx sin reinicio
   completo.

@@ -720,10 +720,12 @@ export function TenantOrganizationInfoForm({
   tenantId,
   info,
   showActiveToggle = true,
+  showOnboardingState = true,
 }: {
   tenantId: string
   info: TenantOrganizationInfo | null
   showActiveToggle?: boolean
+  showOnboardingState?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateTenantInfoAction, INITIAL_CRUD_STATE)
@@ -873,21 +875,23 @@ export function TenantOrganizationInfoForm({
               </div>
             </div>
           ) : null}
-          <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-4">
-            <Label htmlFor="tenant_estado_onboarding">Estado de onboarding</Label>
-            <select
-              id="tenant_estado_onboarding"
-              name="tenant_estado_onboarding"
-              defaultValue={defaultOnboarding}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-            >
-              <option value="pendiente">Pendiente</option>
-              <option value="en_progreso">En progreso</option>
-              <option value="completado">Completado</option>
-              <option value="pausado">Pausado</option>
-              <option value="cancelado">Cancelado</option>
-            </select>
-          </div>
+          {showOnboardingState ? (
+            <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-4">
+              <Label htmlFor="tenant_estado_onboarding">Estado de configuración inicial</Label>
+              <select
+                id="tenant_estado_onboarding"
+                name="tenant_estado_onboarding"
+                defaultValue={defaultOnboarding}
+                className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+              >
+                <option value="pendiente">Pendiente</option>
+                <option value="en_progreso">En progreso</option>
+                <option value="completado">Completado</option>
+                <option value="pausado">Pausado</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+          ) : null}
         </section>
       </div>
 
@@ -1245,22 +1249,18 @@ export function TenantWebchatSettings({
               />
               <Label htmlFor="webchat_enabled">Webchat habilitado</Label>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Nota: esto solo cambia el flag en <code>organizaciones.config.features.webchat.enabled</code>.
-            </p>
+            <p className="text-xs text-muted-foreground">Activa esta función solo si deseas atender conversaciones desde tu página.</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="webchat_alias">Alias (routing)</Label>
+            <Label htmlFor="webchat_alias">Nombre del Webchat</Label>
             <Input
               id="webchat_alias"
               name="webchat_alias"
               placeholder="ej. talia, cliente-x"
               defaultValue={initialValues.webchat_alias ?? ""}
             />
-            <p className="text-xs text-muted-foreground">
-              Se crea como ruta <code>canal=webchat</code>.
-            </p>
+            <p className="text-xs text-muted-foreground">Es el nombre que identificarán tus visitantes al iniciar una conversación.</p>
           </div>
 
           <p className="text-xs text-muted-foreground md:col-span-2">
@@ -1268,7 +1268,7 @@ export function TenantWebchatSettings({
           </p>
 
           <div className="space-y-2">
-            <Label htmlFor="webchat_assistant_id">assistant_id</Label>
+            <Label htmlFor="webchat_assistant_id">Asistente</Label>
             <Input
               id="webchat_assistant_id"
               name="webchat_assistant_id"
@@ -1278,7 +1278,7 @@ export function TenantWebchatSettings({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="webchat_prompt_version">prompt_version</Label>
+            <Label htmlFor="webchat_prompt_version">Versión de instrucciones</Label>
             <Input
               id="webchat_prompt_version"
               name="webchat_prompt_version"
@@ -1288,7 +1288,7 @@ export function TenantWebchatSettings({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="webchat_inactivity_minutes">inactivity_minutes</Label>
+            <Label htmlFor="webchat_inactivity_minutes">Tiempo de espera</Label>
             <Input
               id="webchat_inactivity_minutes"
               name="webchat_inactivity_minutes"
@@ -1307,12 +1307,12 @@ export function TenantWebchatSettings({
                 defaultChecked={Boolean(initialValues.persist_session)}
                 className="size-4"
               />
-              <Label htmlFor="webchat_persist_session">persist_session</Label>
+              <Label htmlFor="webchat_persist_session">Conservar la conversación</Label>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="webchat_reengage_minutes">reengage_minutes</Label>
+            <Label htmlFor="webchat_reengage_minutes">Tiempo para retomar conversación</Label>
             <Input
               id="webchat_reengage_minutes"
               name="webchat_reengage_minutes"
@@ -1322,7 +1322,7 @@ export function TenantWebchatSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="webchat_reengage_max_attempts">reengage_max_attempts</Label>
+            <Label htmlFor="webchat_reengage_max_attempts">Intentos para retomar conversación</Label>
             <Input
               id="webchat_reengage_max_attempts"
               name="webchat_reengage_max_attempts"
@@ -1332,7 +1332,7 @@ export function TenantWebchatSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="webchat_escalate_minutes">escalate_minutes</Label>
+            <Label htmlFor="webchat_escalate_minutes">Tiempo para solicitar atención</Label>
             <Input
               id="webchat_escalate_minutes"
               name="webchat_escalate_minutes"
