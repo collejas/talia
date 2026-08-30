@@ -59,7 +59,7 @@ export default async function CommercialBillingPage() {
           <div className="space-y-2">
             <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Comercial / Billing</p>
             <h1 className="text-3xl font-semibold tracking-tight">Billing / Stripe</h1>
-            <p className="max-w-3xl text-sm text-muted-foreground">Consulta el estado global de cobro y acceso de los tenants. Los cambios de billing continúan siendo responsabilidad del backend y Stripe.</p>
+            <p className="max-w-3xl text-sm text-muted-foreground">Consulta el estado global de cobro y acceso de las organizaciones. Los cambios de cobro continúan siendo responsabilidad del backend y Stripe.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline"><Link href="/settings/commercial/billing/subscriptions">Suscripciones</Link></Button>
@@ -70,20 +70,20 @@ export default async function CommercialBillingPage() {
         </header>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <Card><CardHeader><CardDescription>Tenants registrados</CardDescription><CardTitle>{items.length}</CardTitle></CardHeader></Card>
+          <Card><CardHeader><CardDescription>Organizaciones registradas</CardDescription><CardTitle>{items.length}</CardTitle></CardHeader></Card>
           <Card><CardHeader><CardDescription>Billing activo o trial</CardDescription><CardTitle>{active}</CardTitle></CardHeader></Card>
           <Card><CardHeader><CardDescription>Requieren atención</CardDescription><CardTitle>{attention}</CardTitle></CardHeader></Card>
         </div>
 
         <Card>
-          <CardHeader><CardTitle>Estado de cobro por tenant</CardTitle><CardDescription>Lectura global para el owner del tenant maestro.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Estado de cobro por organización</CardTitle><CardDescription>Lectura global para el propietario de la organización principal.</CardDescription></CardHeader>
           <CardContent className="space-y-4">
             <SettingsErrorCallout title="No se pudo recuperar billing" messages={[]} />
             <div className="overflow-x-auto rounded-lg border border-border/60">
               <Table>
-                <TableHeader><TableRow><TableHead>Tenant</TableHead><TableHead>Plan</TableHead><TableHead>Proveedor</TableHead><TableHead>Billing</TableHead><TableHead>Acceso</TableHead><TableHead>Periodo</TableHead><TableHead>Stripe</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Organización</TableHead><TableHead>Plan</TableHead><TableHead>Proveedor</TableHead><TableHead>Cobro</TableHead><TableHead>Acceso</TableHead><TableHead>Periodo</TableHead><TableHead>Stripe</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {items.length === 0 ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">No hay tenants para mostrar.</TableCell></TableRow> : items.map((item) => (
+                  {items.length === 0 ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">No hay organizaciones para mostrar.</TableCell></TableRow> : items.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell><Link className="font-medium hover:underline" href={`/settings/tenants/${item.id}`}>{item.nombre}</Link></TableCell>
                       <TableCell>{item.commercial_plan_name ?? item.commercial_plan_code ?? "—"}</TableCell>

@@ -59,7 +59,7 @@ export default function SettingsProductosAyudaPage() {
           <CardHeader>
             <CardTitle>Regla principal: el código identifica el registro</CardTitle>
             <CardDescription>
-              El sistema busca cada producto por tenant y <strong>codigo</strong>, no por nombre.
+              El sistema busca cada producto por organización y <strong>código</strong>, no por nombre.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">

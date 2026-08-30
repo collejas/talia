@@ -49,7 +49,7 @@ import {
 } from "./tenant-forms"
 
 export const metadata: Metadata = {
-  title: "Tenant · Settings",
+  title: "Organización · Settings",
 }
 
 export const dynamic = "force-dynamic"
@@ -340,7 +340,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
   const hasGoogleApiKey = secretKeys.has("google.places_api_key")
 
   return (
-    <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
+    <AppViewLayout title="Settings · Organización" withThemeToggle={false} contentClassName="px-0">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
         <header className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -351,13 +351,13 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               <form action={activateTenantContextAndRedirectAction}>
                 <input type="hidden" name="tenant_id" value={tenantId} />
                 <Button size="sm" type="submit">
-                  Operar este tenant
+                  Administrar esta organización
                 </Button>
               </form>
             ) : null}
           </div>
           <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Configuración / Plataforma</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Tenant</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Organización</h1>
           <p className="text-muted-foreground max-w-3xl text-sm">
             Configura <code>organizaciones.config</code> (no secreto) y <code>secretos</code> (cifrado, no se muestra el
             valor una vez guardado).
@@ -406,7 +406,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
         <Card>
           <CardHeader className="space-y-1">
             <CardTitle>Resumen comercial</CardTitle>
-            <CardDescription>Plan, estado de cobro y acceso que controla qué puede usar este tenant.</CardDescription>
+              <CardDescription>Plan, estado de cobro y acceso que controla qué puede usar esta organización.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-1">
@@ -432,7 +432,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               </p>
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Tenant comercial</p>
+                <p className="text-sm font-medium text-muted-foreground">Organización comercial</p>
               <p className="text-sm font-semibold">
                 {tenantInfo?.commercial_access_status ? "Configurado" : "Pendiente"}
               </p>
@@ -450,7 +450,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             <CardHeader className="space-y-1">
               <CardTitle>Stripe</CardTitle>
               <CardDescription>
-                Genera checkout o abre el portal de cliente para este tenant sin salir del panel.
+                Genera el pago o abre el portal de cliente para esta organización sin salir del panel.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -470,7 +470,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           <Card>
             <CardHeader className="space-y-1">
               <CardTitle>Módulos</CardTitle>
-              <CardDescription>Controla qué áreas funcionales verá y podrá usar este tenant.</CardDescription>
+              <CardDescription>Controla qué áreas funcionales verá y podrá usar esta organización.</CardDescription>
             </CardHeader>
             <CardContent>
               <TenantModuleFlagsForm tenantId={tenantId} config={config} />
@@ -483,7 +483,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
           <CardHeader className="space-y-1">
             <CardTitle>Calificación IA</CardTitle>
             <CardDescription>
-              Control maestro del perfilamiento para este tenant. Si está apagado, la vista
+              Control maestro del perfilamiento para esta organización. Si está apagado, la vista
               `Settings / Calificación IA` queda bloqueada.
             </CardDescription>
           </CardHeader>
@@ -528,7 +528,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                 <CardHeader>
                   <CardTitle>Imagen empresarial</CardTitle>
                   <CardDescription>
-                    Esta configuración se administra dentro del contexto operativo del tenant.
+                    Esta configuración se administra dentro del contexto operativo de la organización.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -566,7 +566,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                 <CardHeader>
                   <CardTitle>Página Web</CardTitle>
                   <CardDescription>
-                    Administra instalaciones de tracking, dominios autorizados y verificación desde el contexto operativo del tenant.
+                    Administra instalaciones de tracking, dominios autorizados y verificación desde el contexto operativo de la organización.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -645,7 +645,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               ) : (
                 <SettingsErrorCallout
                   title="No se pudo cargar el cierre"
-                  messages={["No se recibieron las políticas de cierre de este tenant."]}
+                  messages={["No se recibieron las políticas de cierre de esta organización."]}
                 />
               )}
             </TabsContent>

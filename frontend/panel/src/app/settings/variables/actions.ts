@@ -1175,7 +1175,7 @@ export async function validateTenantAction(_: CrudActionState, formData: FormDat
     if (!resp.ok) throw new Error(resp.error)
     const report = resp.data
     const totalMissing = report.missing_routes.length + report.missing_secrets.length + report.missing_config.length
-    return { status: "success", message: totalMissing ? `Faltantes detectados: ${totalMissing}` : "Tenant OK (sin faltantes).", report }
+    return { status: "success", message: totalMissing ? `Faltantes detectados: ${totalMissing}` : "Organización OK (sin faltantes).", report }
   } catch (error) {
     return failure(error, "No se pudo validar el tenant.")
   }

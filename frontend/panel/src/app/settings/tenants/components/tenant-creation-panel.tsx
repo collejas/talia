@@ -81,7 +81,7 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
     setSuccess(null)
 
     if (!form.name.trim()) {
-      setError("El nombre del tenant es obligatorio.")
+      setError("El nombre de la organización es obligatorio.")
       return
     }
     if (!form.adminEmail.trim()) {
@@ -127,7 +127,7 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
     try {
       const result = await createTenantWithAdmin(payload)
       if (!result.ok) {
-        setError(result.error || "No se pudo crear el tenant.")
+      setError(result.error || "No se pudo crear la organización.")
         return
       }
       setSuccess(result.data)
@@ -151,7 +151,7 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
         commercialAccessStatus: "internal_free",
       }))
     } catch (err) {
-      setError((err as Error).message || "No se pudo crear el tenant.")
+      setError((err as Error).message || "No se pudo crear la organización.")
     } finally {
       setLoading(false)
     }
@@ -160,10 +160,10 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
   return (
     <Card>
       <CardHeader className="space-y-1">
-        <CardTitle>Crear tenant + admin</CardTitle>
+        <CardTitle>Crear organización + administrador</CardTitle>
         <CardDescription>
-          Ingresa los datos del tenant y del usuario admin; los seeds mínimos se generan automáticamente en el backend.
-          Si seleccionas un plan comercial, el tenant nace con billing interno sin pasar por Stripe.
+          Ingresa los datos de la organización y del usuario administrador; la configuración inicial se genera automáticamente.
+          Si seleccionas un plan comercial, la organización nace con cobro interno sin pasar por Stripe.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -175,7 +175,7 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="tenant-name">Nombre del tenant</Label>
+              <Label htmlFor="tenant-name">Nombre de la organización</Label>
               <Input
                 id="tenant-name"
                 value={form.name}
@@ -208,7 +208,7 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
                 <option value="twilio">Twilio</option>
               </select>
               <p className="text-xs text-muted-foreground">
-                Los tenants nuevos nacen con Meta por defecto, pero puedes dejar Twilio para compatibilidad.
+                Las organizaciones nuevas usan Meta por defecto, pero puedes dejar Twilio para compatibilidad.
               </p>
             </div>
             <div className="space-y-2">
@@ -316,7 +316,7 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
                 ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                El tenant se crea con una cuenta interna de billing, lista para migrarse a Stripe después.
+                La organización se crea con una cuenta interna de cobro, lista para migrarse a Stripe después.
               </p>
             </div>
             <div className="space-y-2">
@@ -403,14 +403,14 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
 
           <div className="flex justify-end gap-3">
             <Button type="submit" disabled={loading}>
-              {loading ? "Creando tenant…" : "Crear tenant + admin"}
+              {loading ? "Creando organización…" : "Crear organización + administrador"}
             </Button>
           </div>
         </form>
 
         {success && (
           <div className="mt-6 space-y-3 rounded-lg border border-border/60 bg-muted p-4 text-sm">
-            <p className="font-semibold text-foreground">Tenant creado correctamente</p>
+            <p className="font-semibold text-foreground">Organización creada correctamente</p>
             <p className="text-muted-foreground">
               {success.invite_email_sent
                 ? "Se creó el usuario administrador y se envió el correo de acceso."
@@ -418,7 +418,7 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
             </p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
-                <p className="text-muted-foreground">Tenant ID</p>
+                <p className="text-muted-foreground">ID de organización</p>
                 <p className="font-mono">{success.tenant_id}</p>
               </div>
               <div>

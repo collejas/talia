@@ -58,7 +58,7 @@ export default async function SettingsAccountPage() {
               <div className="mb-4 space-y-1">
                 <h2 className="text-lg font-semibold">Extras</h2>
                 <p className="text-sm text-muted-foreground">
-                  Cada tenant puede definir sus propios catálogos manuales para campos select, listas reutilizables y otras configuraciones operativas.
+                  Cada organización puede definir sus propios catálogos manuales para campos select, listas reutilizables y otras configuraciones operativas.
                 </p>
               </div>
               <TenantExtrasCatalogsForm tenantId={data.organizacion_id} config={data.config ?? null} />

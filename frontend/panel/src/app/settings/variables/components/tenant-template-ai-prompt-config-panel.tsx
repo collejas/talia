@@ -60,7 +60,7 @@ export function TenantTemplateAiPromptConfigPanel({ initialItems }: Props) {
       <CardHeader>
         <CardTitle>Asistente IA para plantillas</CardTitle>
         <CardDescription>
-          Configura los prompts publicados en OpenAI que utilizarán todos los tenants al crear plantillas de WhatsApp y correo.
+          Configura los prompts publicados en OpenAI que utilizarán todas las organizaciones al crear plantillas de WhatsApp y correo.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">

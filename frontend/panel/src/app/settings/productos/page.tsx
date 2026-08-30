@@ -59,7 +59,7 @@ export default async function SettingsProductosPage() {
           </p>
           <h1 className="text-2xl font-semibold">Productos y servicios</h1>
           <p className="text-sm text-muted-foreground">
-            Organiza tus líneas, familias, modelos y productos con contexto multitenant antes de
+            Organiza tus líneas, familias, modelos y productos con contexto por organización antes de
             poblarlos con precios, medios o cotizaciones.
           </p>
         </header>

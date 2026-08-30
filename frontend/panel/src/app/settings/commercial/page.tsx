@@ -26,7 +26,7 @@ export default async function CommercialSettingsPage() {
         <header className="space-y-2">
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Plataforma / Comercial</p>
           <h1 className="text-3xl font-semibold tracking-tight">Administración comercial</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">Administra los planes que Tal-IA vende y la operación de cobro con Stripe desde el tenant maestro.</p>
+          <p className="max-w-3xl text-sm text-muted-foreground">Administra los planes que Tal-IA vende y la operación de cobro con Stripe desde la organización principal.</p>
         </header>
         <div className="grid gap-4 md:grid-cols-2">
           <Card><CardHeader><CardTitle>Planes comerciales</CardTitle><CardDescription>{activePlans} planes activos.</CardDescription></CardHeader><CardContent><Button asChild><Link href="/settings/commercial/plans">Administrar planes</Link></Button></CardContent></Card>

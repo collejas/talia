@@ -37,7 +37,7 @@ export default async function ScoringSettingsPage() {
           <SettingsErrorCallout
             title="Perfilamiento desactivado"
             messages={[
-              "La configuración de Calificación IA está deshabilitada para este tenant por el administrador maestro.",
+              "La configuración de Calificación IA está deshabilitada para esta organización por el administrador principal.",
             ]}
           />
         </div>

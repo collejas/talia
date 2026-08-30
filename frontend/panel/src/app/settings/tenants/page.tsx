@@ -13,7 +13,7 @@ import { redirect } from "next/navigation"
 import { TenantCreationPanel } from "./components/tenant-creation-panel"
 
 export const metadata: Metadata = {
-  title: "Tenants · Settings",
+  title: "Organizaciones · Settings",
 }
 
 export const dynamic = "force-dynamic"
@@ -99,7 +99,7 @@ export default async function TenantsSettingsPage() {
   const commercialPlansError = plansResponse.ok ? null : plansResponse.error
 
   return (
-    <AppViewLayout title="Settings · Tenants" withThemeToggle={false} contentClassName="px-0">
+    <AppViewLayout title="Settings · Organizaciones" withThemeToggle={false} contentClassName="px-0">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
         <header className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
@@ -107,9 +107,9 @@ export default async function TenantsSettingsPage() {
           </p>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight">Tenants</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">Organizaciones</h1>
               <p className="text-muted-foreground max-w-3xl text-sm">
-                Esta sección es global (cross-tenant): sirve para registrar nuevas organizaciones y sus claves de
+                Esta sección es global: sirve para registrar nuevas organizaciones y sus claves de
                 routing (por ejemplo, alias del widget webchat) sin crecer el archivo <code>.env</code>.
               </p>
             </div>
@@ -124,7 +124,7 @@ export default async function TenantsSettingsPage() {
         <Card>
           <CardHeader className="space-y-1">
             <CardTitle>Organizaciones</CardTitle>
-            <CardDescription>Listado global de tenants (últimos {items.length}).</CardDescription>
+            <CardDescription>Listado global de organizaciones (últimos {items.length}).</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <SettingsErrorCallout title="No se pudo recuperar la información" messages={errors} />
@@ -147,7 +147,7 @@ export default async function TenantsSettingsPage() {
                     {items.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
-                          No hay tenants registrados (o no tienes permiso de platform admin).
+                          No hay organizaciones registradas (o no tienes permiso de administrador de plataforma).
                         </TableCell>
                       </TableRow>
                     ) : (

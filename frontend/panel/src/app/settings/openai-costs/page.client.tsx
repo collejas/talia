@@ -635,7 +635,7 @@ export function OpenAiCostsPageClient() {
       <Card>
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
-          <CardDescription>Consulta rápida para el tenant actual autenticado.</CardDescription>
+          <CardDescription>Consulta rápida para la organización actual autenticada.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
@@ -644,10 +644,10 @@ export function OpenAiCostsPageClient() {
               <label className="text-xs font-medium text-muted-foreground">Alcance</label>
               <Select value={scope} onValueChange={(value) => setScope(value as "tenant" | "master")}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Tenant actual" />
+                  <SelectValue placeholder="Organización actual" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="tenant">Tenant actual</SelectItem>
+                  <SelectItem value="tenant">Organización actual</SelectItem>
                   <SelectItem value="master">Master global</SelectItem>
                 </SelectContent>
               </Select>
@@ -655,7 +655,7 @@ export function OpenAiCostsPageClient() {
           ) : null}
           {masterScopeEnabled && scope === "master" ? (
             <div className="grid gap-2 min-w-0">
-              <label className="text-xs font-medium text-muted-foreground">Organización / tenant</label>
+              <label className="text-xs font-medium text-muted-foreground">Organización</label>
               <Select
                 value={selectedTenantValue}
                 onValueChange={async (value) => {
@@ -675,10 +675,10 @@ export function OpenAiCostsPageClient() {
                 }}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={tenantsLoading ? "Cargando tenants..." : "Todos los tenants"} />
+                  <SelectValue placeholder={tenantsLoading ? "Cargando organizaciones..." : "Todas las organizaciones"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">Todos los tenants</SelectItem>
+                  <SelectItem value="__all__">Todas las organizaciones</SelectItem>
                   {tenantOptions.map((tenant) => (
                     <SelectItem key={tenant.id} value={tenant.id}>
                       {tenant.nombre ?? shortId(tenant.id)}
@@ -864,14 +864,14 @@ export function OpenAiCostsPageClient() {
       {masterScopeEnabled && scope === "master" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Auditoría de medibilidad por tenant</CardTitle>
+            <CardTitle>Auditoría de medibilidad por organización</CardTitle>
             <CardDescription>
-              Verifica qué tenants están completos, degradados o incompletos para medición y reconciliación OpenAI.
+              Verifica qué organizaciones están completas, degradadas o incompletas para medición y reconciliación OpenAI.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-4">
-              <MetricCard label="Tenants auditados" value={formatInt(measurementAuditSummary.total)} />
+              <MetricCard label="Organizaciones auditadas" value={formatInt(measurementAuditSummary.total)} />
               <MetricCard label="Completos" value={formatInt(measurementAuditSummary.complete)} />
               <MetricCard label="Degradados" value={formatInt(measurementAuditSummary.degraded)} />
               <MetricCard label="Incompletos" value={formatInt(measurementAuditSummary.incomplete)} />
@@ -879,7 +879,7 @@ export function OpenAiCostsPageClient() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tenant</TableHead>
+                  <TableHead>Organización</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Motivo</TableHead>
                   <TableHead>Proyecto</TableHead>

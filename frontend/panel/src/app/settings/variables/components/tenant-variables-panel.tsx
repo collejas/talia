@@ -65,7 +65,7 @@ export type TenantScopedSettings = {
 export function TenantVariablesPanel({
   data,
   error,
-  title = "Variables del tenant",
+  title = "Configuración de la organización",
   description = "Configura los datos organizacionales que puedes modificar desde tu cuenta.",
   showRoutes = true,
 }: {
@@ -114,7 +114,8 @@ export function TenantVariablesPanel({
       })
       const payload = await response.json()
       if (!response.ok) {
-        const errorMessage = formatApiError((payload as { error?: unknown })?.error) ?? "No se pudo actualizar el tenant"
+        const errorMessage =
+          formatApiError((payload as { error?: unknown })?.error) ?? "No se pudo actualizar la organización"
         throw new Error(errorMessage)
       }
       setMessage({ type: "success", text: "Cambios guardados" })

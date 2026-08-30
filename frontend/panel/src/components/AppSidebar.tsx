@@ -340,7 +340,7 @@ export function AppSidebar({
       child.url === "/settings/scoring" ? profilingEnabled : true,
     )
     base.unshift({
-      title: "Variables",
+      title: "Configuración",
       url: "/settings/variables",
       icon: IconAdjustments,
       permission: "settings.manage",
@@ -355,7 +355,7 @@ export function AppSidebar({
       return true
     })
     if (isPlatformAdmin) {
-      filtered.push({ title: "Tenants", url: "/settings/tenants", icon: IconDatabase })
+      filtered.push({ title: "Organizaciones", url: "/settings/tenants", icon: IconDatabase })
     }
     return filtered
   }, [isPlatformAdmin, moduleFlags.productosEnabled, moduleFlags.propiedadesEnabled, profilingEnabled])

@@ -299,7 +299,7 @@ export function TenantModuleFlagsForm({
         {showCommercialModules ? (
           <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
             <div className="space-y-1">
-              <p className="text-sm font-medium">Módulos del tenant</p>
+              <p className="text-sm font-medium">Módulos de la organización</p>
               <p className="text-xs text-muted-foreground">Controla qué áreas ve y usa el usuario en el panel.</p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
@@ -726,7 +726,7 @@ export function TenantOrganizationInfoForm({
           <div className="space-y-1">
             <p className="text-sm font-medium">Identidad</p>
             <p className="text-xs text-muted-foreground">
-              Nombre público, razón social y datos fiscales base del tenant.
+              Nombre público, razón social y datos fiscales base de la organización.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -800,7 +800,7 @@ export function TenantOrganizationInfoForm({
           <div className="space-y-1">
             <p className="text-sm font-medium">Operación</p>
             <p className="text-xs text-muted-foreground">
-              Datos que ayudan a ordenar horarios y moneda del tenant.
+              Datos que ayudan a ordenar horarios y moneda de la organización.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -862,7 +862,7 @@ export function TenantOrganizationInfoForm({
                   className="size-4"
                   defaultChecked={info?.activo ?? true}
                 />
-                <span className="text-sm text-muted-foreground">El tenant puede iniciar sesión y recibir tráfico.</span>
+                <span className="text-sm text-muted-foreground">La organización puede iniciar sesión y recibir tráfico.</span>
               </div>
             </div>
           ) : null}
@@ -940,7 +940,7 @@ export function TenantCommercialStateForm({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Si quitas el plan, el backend elimina la cuenta comercial asociada al tenant.
+            Si quitas el plan, el backend elimina la cuenta comercial asociada a la organización.
           </p>
         </div>
 
@@ -1006,7 +1006,7 @@ export function TenantBillingActionsCard({
         <div className="space-y-1">
           <p className="text-sm font-semibold">Stripe Checkout</p>
           <p className="text-xs text-muted-foreground">
-            Genera una sesión de pago para el plan activo del tenant.
+            Genera una sesión de pago para el plan activo de la organización.
           </p>
         </div>
         <div className="flex items-center justify-between gap-3">
@@ -2001,7 +2001,7 @@ export function TenantBusquedaSettings({
         <p className="text-xs text-muted-foreground">
           {hasToken
             ? "Token registrado; no se muestra el valor actual."
-            : "Aún no hay token guardado para este tenant."}
+            : "Aún no hay token guardado para esta organización."}
         </p>
       </div>
 
@@ -2010,7 +2010,7 @@ export function TenantBusquedaSettings({
           <div>
             <h3 className="text-sm font-medium">Google Places</h3>
             <p className="text-xs text-muted-foreground">
-              Configura los endpoints y límites que usa el buscador de Google por tenant.
+              Configura los endpoints y límites que usa el buscador de Google por organización.
             </p>
           </div>
           <p className="text-xs font-medium text-muted-foreground">
@@ -2571,7 +2571,7 @@ function TenantWhatsAppSettingsForm({
             <p className="text-sm font-medium">Twilio</p>
             <p className="text-xs text-emerald-600">Estado: Activo</p>
             <p className="text-xs text-muted-foreground">
-              Se conserva para tenants existentes o como fallback operativo.
+              Se conserva para organizaciones existentes o como respaldo operativo.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -2816,7 +2816,7 @@ function TenantWhatsAppSettingsForm({
 
       <form ref={createRouteRef} action={createRouteAction} className="space-y-3">
         <h3 className="text-sm font-medium">Ruta (WhatsApp)</h3>
-        <p className="text-xs text-muted-foreground">Asocia un número E.164 al tenant para recibir webhooks.</p>
+        <p className="text-xs text-muted-foreground">Asocia un número E.164 a la organización para recibir mensajes.</p>
         <input type="hidden" name="tenant_id" value={tenantId} />
         <input type="hidden" name="canal" value="whatsapp" />
         <div className="grid gap-4 md:grid-cols-2">
@@ -3186,7 +3186,7 @@ export function TenantMessengerSettings({
 
       <form ref={createRouteRef} action={createRouteAction} className="space-y-3">
         <h3 className="text-sm font-medium">Ruta (Messenger)</h3>
-        <p className="text-xs text-muted-foreground">Relaciona el page_id con este tenant.</p>
+        <p className="text-xs text-muted-foreground">Relaciona el page_id con esta organización.</p>
         <input type="hidden" name="tenant_id" value={tenantId} />
         <input type="hidden" name="canal" value="messenger" />
         <div className="grid gap-4 md:grid-cols-2">

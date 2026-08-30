@@ -49,10 +49,10 @@ type SectionConfig = {
 const SECTIONS: SectionConfig[] = [
   {
     title: "Módulos",
-    description: "Activa o desactiva las áreas funcionales visibles para este tenant.",
+    description: "Activa o desactiva las áreas funcionales visibles para esta organización.",
     groups: [
       {
-        title: "Módulos del tenant",
+        title: "Módulos de la organización",
         description: "Controlan qué áreas ve y usa el usuario en el panel.",
         fieldPaths: [
           "features.webchat.enabled",
@@ -236,7 +236,7 @@ const SECTIONS: SectionConfig[] = [
       },
       {
         title: "Proveedor activo",
-        description: "Selecciona el adapter que debe usar el backend para este tenant.",
+    description: "Selecciona el adaptador que debe usar el backend para esta organización.",
         fieldPaths: ["whatsapp.provider"],
       },
       {

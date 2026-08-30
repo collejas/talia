@@ -67,7 +67,7 @@ const tenantActions: TenantSettingsActions = {
 }
 
 export const metadata: Metadata = {
-  title: "Variables · Settings",
+  title: "Configuración · Settings",
 }
 
 export const dynamic = "force-dynamic"
@@ -454,13 +454,13 @@ export default async function SettingsVariablesPage({
   const tenantId = data?.organizacion_id ?? ""
 
   return (
-    <AppViewLayout title="Settings · Tenant" withThemeToggle={false} contentClassName="px-0">
+    <AppViewLayout title="Settings · Organización" withThemeToggle={false} contentClassName="px-0">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
         <header className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Configuración / Variables</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Variables del tenant</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Configuración de la organización</h1>
           <p className="text-muted-foreground max-w-3xl text-sm">
-            Esta vista expone las mismas secciones que el administrador general ve en <code>/settings/tenants/{tenantId}</code>.
+            Esta vista contiene la configuración de la organización seleccionada.
           </p>
         </header>
 
@@ -486,7 +486,7 @@ export default async function SettingsVariablesPage({
           <Card>
             <CardHeader className="space-y-1">
               <CardTitle>Módulos</CardTitle>
-              <CardDescription>Activa o desactiva las áreas funcionales visibles para este tenant.</CardDescription>
+              <CardDescription>Activa o desactiva las áreas funcionales visibles para esta organización.</CardDescription>
             </CardHeader>
             <CardContent>
               <TenantModuleFlagsForm
@@ -643,7 +643,7 @@ export default async function SettingsVariablesPage({
                   ) : (
                     <SettingsErrorCallout
                       title="No se pudo cargar el cierre"
-                      messages={["No se recibieron las políticas de cierre del tenant actual."]}
+                        messages={["No se recibieron las políticas de cierre de la organización actual."]}
                     />
                   )}
                 </TabsContent>
