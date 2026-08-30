@@ -36,6 +36,8 @@ export function OnboardingProgress({ initialProgress }: { initialProgress: Onboa
   const [progress, setProgress] = useState(initialProgress)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checkingStep, setCheckingStep] = useState<string | null>(null)
+  const [checkMessages, setCheckMessages] = useState<Record<string, string>>({})
 
   async function saveChoice(field: "webchat_decision" | "voz_decision", value: "usar" | "no_usar") {
     setSaving(true)
@@ -76,6 +78,46 @@ export function OnboardingProgress({ initialProgress }: { initialProgress: Onboa
     }
   }
 
+  async function checkStep(stepId: string) {
+    const scopeByStep: Record<string, string> = {
+      webchat: "webchat",
+      whatsapp: "whatsapp",
+      voz: "twilio",
+      agenda: "calendar",
+      correo: "mail",
+    }
+    const scope = scopeByStep[stepId]
+    if (!scope) {
+      setCheckMessages((current) => ({ ...current, [stepId]: "Completa este paso desde su formulario." }))
+      return
+    }
+    setCheckingStep(stepId)
+    setError(null)
+    try {
+      const response = await fetch("/api/settings/variables/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope }),
+      })
+      const data = (await response.json()) as {
+        missing_routes?: string[]
+        missing_config?: string[]
+        missing_secrets?: string[]
+        error?: string
+      }
+      if (!response.ok) throw new Error(data.error || "No se pudo comprobar el paso")
+      const pending = (data.missing_routes?.length || 0) + (data.missing_config?.length || 0) + (data.missing_secrets?.length || 0)
+      setCheckMessages((current) => ({
+        ...current,
+        [stepId]: pending ? "La revisión encontró elementos pendientes." : "Este paso está listo.",
+      }))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo comprobar el paso")
+    } finally {
+      setCheckingStep(null)
+    }
+  }
+
   const stepHelp: Record<string, string> = {
     webchat: "Si no lo necesitas, indícalo y este paso quedará resuelto.",
     voz: "Puedes dejar esta función pendiente o indicar que no la utilizarás.",
@@ -112,6 +154,15 @@ export function OnboardingProgress({ initialProgress }: { initialProgress: Onboa
                 <p className="mt-2 text-sm text-muted-foreground">{stepHelp[step.id]}</p>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
+                {step.id !== "organizacion" && (
+                  <button
+                    className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                    disabled={saving || checkingStep !== null}
+                    onClick={() => void checkStep(step.id)}
+                  >
+                    {checkingStep === step.id ? "Comprobando…" : "Comprobar"}
+                  </button>
+                )}
                 {step.completado ? (
                   <button
                     className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
@@ -142,6 +193,9 @@ export function OnboardingProgress({ initialProgress }: { initialProgress: Onboa
                 </div>
                 )}
               </div>
+              {checkMessages[step.id] && (
+                <p className="mt-2 text-sm text-muted-foreground">{checkMessages[step.id]}</p>
+              )}
             </div>
           ))}
         </div>

@@ -307,3 +307,14 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
   “Datos pendientes” y “Conexiones pendientes”.
 - La validación administrativa conserva su detalle interno fuera del flujo
   tenant-facing.
+
+## [2026-08-30] — Comprobación desde el resumen de onboarding
+
+### Cambios realizados
+
+- Cada paso compatible del onboarding ahora incluye el botón “Comprobar”.
+- El resultado se muestra en la misma tarjeta del paso.
+- El tenant recibe un mensaje funcional cuando el paso está listo o aún tiene
+  elementos pendientes.
+- La comprobación utiliza las mismas rutas de validación que la configuración
+  compartida.
