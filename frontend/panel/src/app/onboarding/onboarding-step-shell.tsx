@@ -20,7 +20,7 @@ export function OnboardingStepShell({
   const [saving, setSaving] = useState(false)
   const index = steps.findIndex((item) => item.id === step.id)
   const previous = index > 0 ? steps[index - 1] : null
-  const next = index >= 0 && index < steps.length - 1 ? steps[index + 1] : null
+  const next = index >= 0 && index < steps.length - 1 ? steps[index + 1] : step.id !== "resumen" ? steps[0] : null
   const percentage = porcentaje ?? Math.round(((index + 1) / Math.max(steps.length, 1)) * 100)
 
   useEffect(() => {

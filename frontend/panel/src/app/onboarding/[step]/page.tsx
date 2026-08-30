@@ -69,6 +69,8 @@ export default async function OnboardingStepPage({ params }: { params: Promise<{
   if (!progressResp.ok) redirect("/auth/login?redirectTo=%2Fonboarding")
   const step = progressResp.data.pasos.find((item) => item.id === requestedStep)
   if (!step) redirect("/onboarding")
+  const summaryStep = { id: "resumen", titulo: "Resumen", estado: "en_progreso" as const, completado: false }
+  const steps = [summaryStep, ...progressResp.data.pasos]
 
   const [settingsResp, secretsResp, routesResp, scheduleResp, metaResp, emailResp] = await Promise.all([
     callCrmApi<Settings>("/tenant/me/settings", { organizacionId: null, withUserToken: true }),
@@ -121,5 +123,5 @@ export default async function OnboardingStepPage({ params }: { params: Promise<{
     }
   })()
 
-  return <TenantSettingsActionsProvider value={actions}><OnboardingStepShell step={step} steps={progressResp.data.pasos} porcentaje={progressResp.data.porcentaje}>{content}</OnboardingStepShell></TenantSettingsActionsProvider>
+  return <TenantSettingsActionsProvider value={actions}><OnboardingStepShell step={step} steps={steps} porcentaje={progressResp.data.porcentaje}>{content}</OnboardingStepShell></TenantSettingsActionsProvider>
 }
