@@ -110,6 +110,17 @@ function formatCrudMessage(value: unknown): string | null {
   return String(value)
 }
 
+function friendlyValidationMessage(items: string[], emptyMessage = "Todo está correcto."): string[] {
+  if (!items.length) return [emptyMessage]
+  return items.map((item) => {
+    const value = String(item).toLowerCase()
+    if (value.includes("route") || value.includes("canal")) return "Falta configurar un canal de comunicación."
+    if (value.includes("secret") || value.includes("token") || value.includes("key")) return "Falta completar una conexión segura."
+    if (value.includes("config")) return "Falta completar un dato de configuración."
+    return "Hay un dato pendiente de revisar."
+  })
+}
+
 function FormStatusMessage({ state }: { state: CrudActionState }) {
   if (state.status === "idle") return null
   const message = formatCrudMessage(state.message)

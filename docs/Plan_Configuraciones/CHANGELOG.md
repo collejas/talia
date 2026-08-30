@@ -294,3 +294,16 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
 
 - Sustituir los resultados técnicos de validación por mensajes funcionales y
   acciones concretas para el tenant.
+
+## [2026-08-30] — Mensajes funcionales de validación
+
+### Cambios realizados
+
+- La respuesta de validación para tenants ya no devuelve rutas, nombres de
+  variables ni nombres de claves internas.
+- Los faltantes se presentan como acciones: activar un canal, completar datos
+  o completar una conexión segura.
+- El panel de validación cambió títulos técnicos por “Canales pendientes”,
+  “Datos pendientes” y “Conexiones pendientes”.
+- La validación administrativa conserva su detalle interno fuera del flujo
+  tenant-facing.

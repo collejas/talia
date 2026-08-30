@@ -58,7 +58,7 @@ export function TenantValidationPanel({ scope, label, description }: Props) {
       return item.map((child) => formatReportItem(child as ReportItem)).join(", ")
     }
     try {
-      return JSON.stringify(item)
+      return "Hay un dato pendiente de revisar."
     } catch {
       return String(item)
     }
@@ -92,20 +92,20 @@ export function TenantValidationPanel({ scope, label, description }: Props) {
         {report ? (
           <div className="grid gap-3 md:grid-cols-3">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Canales pendientes</p>
               <ul className="list-disc pl-4">{renderList(report.missing_routes)}</ul>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Datos pendientes</p>
               <ul className="list-disc pl-4">{renderList(report.missing_config)}</ul>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Conexiones pendientes</p>
               <ul className="list-disc pl-4">{renderList(report.missing_secrets)}</ul>
             </div>
             {report.notes.length ? (
               <div className="md:col-span-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recomendaciones</p>
                 <ul className="list-disc pl-4">{renderList(report.notes)}</ul>
               </div>
             ) : null}

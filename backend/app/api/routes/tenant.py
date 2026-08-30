@@ -1933,10 +1933,29 @@ async def tenant_validate(
     routes = await repo.list_channel_routes(organizacion_id=context.organizacion_id)
     secrets = await repo.list_secret_metadata(organizacion_id=context.organizacion_id)
 
-    return build_validation_report(
+    report = build_validation_report(
         organizacion_id=context.organizacion_id,
         config=config,
         routes=routes,
         secrets=secrets,
         scope=payload.scope,
     )
+    scope_labels = {
+        "webchat": "Webchat",
+        "calendar": "Agenda",
+        "mail": "Correo",
+        "twilio": "Telefonía",
+        "whatsapp": "WhatsApp",
+        "messenger": "Messenger",
+        "full": "la configuración general",
+    }
+    label = scope_labels[payload.scope]
+    if report.missing_routes:
+        report.missing_routes = [f"Activa o configura el canal de {label}."]
+    if report.missing_config:
+        report.missing_config = [f"Completa los datos necesarios para {label}."]
+    if report.missing_secrets:
+        report.missing_secrets = [f"Completa la conexión segura necesaria para {label}."]
+    if report.notes:
+        report.notes = [f"Revisa los datos pendientes de {label}."]
+    return report
