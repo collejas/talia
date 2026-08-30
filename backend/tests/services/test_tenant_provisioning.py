@@ -40,6 +40,11 @@ class DummyProvisioningRepo:
     async def get_organizacion_details(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         return {"id": str(organizacion_id), "nombre": "Cliente X", "activo": False}
 
+    async def get_latest_tenant_access_invitation(
+        self, *, tenant_id: UUID, flow_kind: str | None = None
+    ) -> dict[str, Any] | None:
+        return None
+
     async def get_tenant_billing_account(self, *, tenant_id: UUID) -> dict[str, Any] | None:
         return {
             "tenant_id": str(tenant_id),

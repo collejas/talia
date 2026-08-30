@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 from unittest.mock import AsyncMock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -28,6 +28,8 @@ class DummyPublicBillingRepo:
         self.departments: list[str] = []
         self.positions: list[str] = []
         self.deleted_organizations: list[str] = []
+        self.permissions: list[dict[str, Any]] = []
+        self.roles: list[dict[str, Any]] = []
 
     async def list_commercial_plans(self) -> list[dict[str, Any]]:
         return [
@@ -158,6 +160,38 @@ class DummyPublicBillingRepo:
         self.positions.append(nombre)
         return {"id": f"pos-{nombre}"}
 
+    async def list_permissions(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        return list(self.permissions)
+
+    async def create_permissions(
+        self, *, organizacion_id: UUID, permisos: list[dict[str, str]]
+    ) -> list[dict[str, Any]]:
+        rows = [{"id": str(uuid4()), **item} for item in permisos]
+        self.permissions.extend(rows)
+        return rows
+
+    async def list_roles(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        return list(self.roles)
+
+    async def create_role(
+        self, *, organizacion_id: UUID, nombre: str, descripcion: str | None
+    ) -> dict[str, Any]:
+        row = {"id": str(uuid4()), "nombre": nombre, "descripcion": descripcion}
+        self.roles.append(row)
+        return row
+
+    async def list_role_permissions(self, *, organizacion_id: UUID, rol_id: UUID) -> list[dict[str, Any]]:
+        return []
+
+    async def create_role_permission(self, *, organizacion_id: UUID, rol_id: UUID, permiso_id: UUID) -> None:
+        return None
+
+    async def list_departments(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        return []
+
+    async def list_positions(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        return []
+
 
 @pytest.fixture
 def clear_overrides() -> None:
@@ -235,6 +269,18 @@ async def test_create_public_billing_checkout(
     assert repo.created_organizations[0]["activo"] is False
     assert repo.billing_accounts[0]["stripe_customer_id"].startswith("pending:")
     assert repo.updated_accounts[0]["payload"]["stripe_customer_id"] == "cus_test_public"
+    assert {role["nombre"] for role in repo.roles} == {
+        "owner",
+        "admin_operativo",
+        "supervisor",
+        "agente",
+        "capturista",
+        "marketing",
+        "soporte",
+        "auditor",
+        "invitado",
+    }
+    assert len(repo.permissions) >= 42
 
 
 @pytest.mark.asyncio

@@ -2292,8 +2292,33 @@ async def _bootstrap_default_org_structure(
     if not position_names:
         position_names = list(FALLBACK_TENANT_POSITION_NAMES)
 
-    existing_department_names: set[str] = set()
-    existing_position_names: set[str] = set()
+    try:
+        existing_departments = await repo.list_departments(organizacion_id=organizacion_id)
+    except PlatformRepositoryError as exc:
+        logger.warning(
+            "tenant_bootstrap.department_list_failed",
+            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+        existing_departments = []
+    try:
+        existing_positions = await repo.list_positions(organizacion_id=organizacion_id)
+    except PlatformRepositoryError as exc:
+        logger.warning(
+            "tenant_bootstrap.position_list_failed",
+            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+        )
+        existing_positions = []
+
+    existing_department_names = {
+        str(row.get("nombre") or "").strip().lower()
+        for row in existing_departments
+        if isinstance(row, dict) and str(row.get("nombre") or "").strip()
+    }
+    existing_position_names = {
+        str(row.get("nombre") or "").strip().lower()
+        for row in existing_positions
+        if isinstance(row, dict) and str(row.get("nombre") or "").strip()
+    }
 
     if primary_department_name and primary_department_name.strip():
         existing_department_names.add(primary_department_name.strip().lower())
@@ -2333,6 +2358,69 @@ async def _bootstrap_default_org_structure(
                     "error": str(exc),
                 },
             )
+
+
+async def _bootstrap_tenant_access_structure(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+) -> None:
+    """Crea de forma idempotente la matriz operativa de una organización."""
+    tenant_role_plans = _load_tenant_role_plans()
+    role_descriptions = {
+        "owner": "Propietario de la organización",
+        "admin_operativo": "Administrador operativo",
+        "supervisor": "Supervisor comercial",
+        "agente": "Agente comercial",
+        "capturista": "Captura y apoyo operativo",
+        "marketing": "Prospección y campañas",
+        "soporte": "Atención e inbox",
+        "auditor": "Lectura y auditoría",
+        "invitado": "Lectura básica",
+    }
+    role_ids_by_name: dict[str, UUID] = {}
+    desired_permission_codes = set(TENANT_BASE_PERMISSION_CODES)
+    desired_permission_codes.update(CRITICAL_OWNER_PERMISSION_CODES)
+    for plan in tenant_role_plans:
+        role_name = _normalize_role_name(plan.role_name).lower()
+        if not role_name:
+            continue
+        role_ids_by_name[role_name] = await _ensure_role_exists(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            nombre=role_name,
+            descripcion=role_descriptions.get(role_name),
+        )
+        desired_permission_codes.update(plan.permissions)
+
+    await _ensure_permissions_exist(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        permission_codes=tuple(sorted(desired_permission_codes)),
+    )
+    permissions = await repo.list_permissions(organizacion_id=organizacion_id)
+    permission_by_code = {
+        str(row.get("codigo") or "").strip(): UUID(str(row["id"]))
+        for row in permissions
+        if isinstance(row, dict) and row.get("codigo") and row.get("id")
+    }
+    for plan in tenant_role_plans:
+        role_name = _normalize_role_name(plan.role_name).lower()
+        role_id = role_ids_by_name.get(role_name)
+        if not role_id:
+            continue
+        await _grant_permissions_to_role(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            rol_id=role_id,
+            permiso_ids={
+                permission_by_code[code]
+                for code in plan.permissions
+                if code in permission_by_code
+            },
+        )
+
+    await _bootstrap_default_org_structure(repo=repo, organizacion_id=organizacion_id)
 
 
 @router.get("/tenants", response_model=TenantsResponse)
@@ -3053,6 +3141,7 @@ async def create_tenant(
         )
         await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
         await _ensure_tenant_pipeline_bootstrap(repo=repo, organizacion_id=tenant_id)
+        await _bootstrap_tenant_access_structure(repo=repo, organizacion_id=tenant_id)
         await _create_internal_billing_account_for_tenant(
             repo=repo,
             tenant_id=tenant_id,
@@ -3081,10 +3170,7 @@ async def create_tenant(
             await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    await _bootstrap_default_org_structure(
-        repo=repo,
-        organizacion_id=tenant_id,
-    )
+    await _bootstrap_tenant_access_structure(repo=repo, organizacion_id=tenant_id)
 
     try:
         billing_account = await repo.get_tenant_billing_account(tenant_id=tenant_id)

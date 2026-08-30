@@ -129,6 +129,12 @@ class DummyRepo:
     async def create_position(self, *, organizacion_id: UUID, nombre: str) -> dict[str, Any]:
         return {"id": str(self.position_id), "nombre": nombre}
 
+    async def list_departments(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        return []
+
+    async def list_positions(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        return []
+
     async def upsert_usuario(
         self,
         *,

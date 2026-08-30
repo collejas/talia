@@ -1004,6 +1004,34 @@ class PlatformRepository:
             raise PlatformRepositoryError("roles_permisos_invalid_response")
         return data
 
+    async def list_departments(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/departamentos",
+            params={
+                "select": "id,nombre",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "order": "nombre.asc",
+            },
+        )
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("departamentos_invalid_response")
+        return data
+
+    async def list_positions(self, *, organizacion_id: UUID) -> list[dict[str, Any]]:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/puestos",
+            params={
+                "select": "id,nombre",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "order": "nombre.asc",
+            },
+        )
+        if not isinstance(data, list):
+            raise PlatformRepositoryError("puestos_invalid_response")
+        return data
+
     async def delete_role_permission(
         self, *, organizacion_id: UUID, rol_id: UUID, permiso_id: UUID
     ) -> None:

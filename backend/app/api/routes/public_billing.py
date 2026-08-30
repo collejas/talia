@@ -22,6 +22,7 @@ from app.services.supabase_admin import SupabaseAdminError, is_email_registered
 
 from .admin import (
     _bootstrap_default_org_structure,
+    _bootstrap_tenant_access_structure,
     _delete_created_tenant_best_effort,
     _ensure_tenant_calendar_bootstrap,
     _ensure_tenant_pipeline_bootstrap,
@@ -317,6 +318,7 @@ async def create_public_billing_checkout(
             )
             await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
             await _ensure_tenant_pipeline_bootstrap(repo=repo, organizacion_id=tenant_id)
+            await _bootstrap_tenant_access_structure(repo=repo, organizacion_id=tenant_id)
             await repo.create_tenant_billing_account(
                 payload={
                     "tenant_id": str(tenant_id),
