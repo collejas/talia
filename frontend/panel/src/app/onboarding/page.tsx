@@ -30,8 +30,5 @@ export default async function OnboardingPage() {
   if (!response.ok) {
     redirect("/dashboard")
   }
-  if (!response.data.requiere_onboarding || response.data.completado) {
-    redirect("/dashboard")
-  }
   return <OnboardingProgress initialProgress={response.data} />
 }

@@ -318,3 +318,39 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
   elementos pendientes.
 - La comprobación utiliza las mismas rutas de validación que la configuración
   compartida.
+
+## [2026-08-30] — Migración de avance aplicada
+
+### Cambios realizados
+
+- Se aplicó `20260830_120000_tenant_onboarding_progress.sql` en la base de
+  datos conectada.
+- La tabla quedó disponible y actualmente no tiene registros, porque se
+  crearán cuando cada tenant guarde una decisión o avance del onboarding.
+- Se verificó que los 8 tenants existentes pueden consultarse sin exponer
+  credenciales.
+
+## [2026-08-30] — Onboarding siempre accesible para revisión
+
+### Corrección
+
+- Se eliminó la redirección que impedía abrir onboarding cuando el tenant ya
+  estaba marcado como completado.
+- `onboarding` y `settings/variables` continúan usando la misma configuración
+  y el mismo avance; solo cambia la forma de presentarlos.
+- El tenant puede revisar y modificar pasos terminados sin perder su estado.
+- La redirección automática solo ocurre al entrar al Dashboard cuando faltan
+  pasos y el tenant requiere onboarding.
+
+## [2026-08-30] — Publicación de ruta de onboarding
+
+### Infraestructura
+
+- Nginx ahora envía `/onboarding` al panel de Next.js en lugar de resolverlo
+  desde la carpeta pública de la landing.
+- Se validó la configuración con `nginx -t` y se recargó Nginx sin reinicio
+  completo.
+- Se publicó el panel actualizado y se reinició únicamente
+  `talia-panel.service`.
+- La ruta requiere sesión autenticada; sin sesión redirige al flujo de acceso
+  del panel.
