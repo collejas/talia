@@ -1,0 +1,155 @@
+# Changelog — mejora de configuración por organización
+
+Este archivo registra el avance del plan de simplificación de
+`/settings/variables`.
+
+## [2026-08-30] — Verificación de conexiones y enlaces agregada al plan
+
+### Decisión
+
+- Cada API, token, clave, URL, dominio, ruta o enlace relevante tendrá una acción
+  para comprobar su conexión, respuesta, permisos o disponibilidad.
+- La comprobación se ejecutará desde backend y con alcance de la organización
+  autenticada.
+- Los resultados serán claros y orientados a la acción.
+- La prueba podrá ejecutarse antes o después de guardar, según el tipo de
+  integración.
+- No se mostrarán credenciales ni respuestas crudas del proveedor.
+- Las pruebas no podrán ejecutar operaciones irreversibles ni modificar datos.
+- La auditoría conservará únicamente resultado, fecha, organización, integración
+  y código normalizado cuando sea necesario.
+
+## [2026-08-30] — Onboarding como modo guiado de la configuración existente
+
+### Decisión
+
+- El onboarding y `settings/variables` compartirán la misma fuente de datos,
+  servicios, validaciones y componentes.
+- El onboarding será una presentación guiada de la configuración existente, no un
+  segundo sistema ni una copia de los datos.
+- Lo configurado en onboarding aparecerá en `settings/variables`, y lo configurado
+  en `settings/variables` actualizará el avance del onboarding.
+- Tenants incompletos irán al onboarding después del primer acceso.
+- Tenants completados irán directamente al dashboard.
+- Los tenants completados podrán volver a la configuración completa para revisar o
+  corregir datos.
+- El progreso se calculará con validaciones reales y no podrá completarse solo con
+  un botón.
+- Ambas vistas usarán lenguaje funcional y no mostrarán nombres técnicos ni
+  nombres de proveedores.
+
+## [2026-08-30] — Guardado parcial y reanudación del onboarding
+
+### Decisión
+
+- El tenant podrá guardar cambios sin llegar al 100% del onboarding.
+- Se podrán guardar pasos completos o avances parciales de subpasos.
+- El tenant podrá salir de la aplicación y continuar después sin perder lo guardado.
+- El siguiente acceso abrirá el primer paso pendiente.
+- Los avances válidos de un paso no se perderán por un error en otro paso.
+- El sistema distinguirá entre información guardada, información validada y paso
+  completado.
+- El 100% solo marcará el final del onboarding y habilitará la entrada normal al
+  dashboard; no será un requisito para guardar.
+
+### Estados funcionales
+
+- `Guardado`: la información fue almacenada correctamente.
+- `Pendiente de validar`: falta ejecutar o aprobar una comprobación.
+- `Requiere atención`: existe un error que el tenant debe corregir.
+- `Completado`: el paso cumple todos sus requisitos.
+
+### Pendientes generales del onboarding
+
+- Diseñar las acciones `Guardar avance` y `Guardar y continuar después`.
+- Persistir el último paso visitado y el primer paso pendiente.
+- Validar que los errores parciales no reviertan cambios válidos.
+
+### Pendientes generales del onboarding
+
+- Definir el catálogo de pasos y subpasos.
+- Crear el cálculo central del avance.
+- Crear la navegación al primer pendiente.
+- Integrar las comprobaciones de conexiones en cada paso.
+- Conectar el primer acceso con el estado real del onboarding.
+- Validar la separación entre tenant maestro y tenants clientes.
+
+## [2026-08-30] — Canales opcionales que el tenant decide no utilizar
+
+### Decisión
+
+- Webchat y Voz serán pasos opcionales del onboarding.
+- El tenant podrá marcar cada uno como `No se utilizará` mediante una opción
+  sencilla.
+- Una función marcada como no utilizada contará como paso resuelto para el avance,
+  pero no como función configurada.
+- Cuando se elija no utilizarla, no se pedirán credenciales, enlaces ni parámetros,
+  y el módulo permanecerá desactivado.
+- Cuando se elija utilizarla, sí deberán completarse sus subpasos y validaciones.
+- La decisión podrá cambiarse posteriormente desde la configuración completa.
+- La interfaz distinguirá claramente entre `Configurado` y `No se utilizará`.
+
+### Pendientes agregados
+
+- Definir los controles de decisión para Webchat y Voz.
+- Persistir la decisión de uso de cada canal.
+- Impedir que un canal omitido se active accidentalmente.
+- Ajustar el cálculo del porcentaje y del 100% final.
+
+## [2026-08-30] — Plan inicial aprobado para implementación
+
+### Estado
+
+- Estado: `planificado`.
+- No se modificó código ni base de datos en esta fase.
+- La primera prioridad es consolidar la conexión de inteligencia artificial y
+  eliminar la captura duplicada en Webchat y Voz.
+
+### Hallazgos confirmados
+
+- Webchat solicita una clave de inteligencia artificial.
+- La sección OpenAI solicita otra clave para la misma dependencia.
+- El runtime conserva compatibilidad con ambas claves mediante fallback.
+- La vista expone múltiples pestañas técnicas y una sección genérica de Secretos.
+- Correo, listas de precios y personas/contactos tienen planes propios y no deben
+  mezclarse dentro de Variables.
+
+### Decisiones
+
+- La interfaz tenant-facing usará lenguaje funcional y no nombres técnicos de
+  variables, tablas, rutas, niveles internos ni proveedores.
+- Existirá una sola captura visible para la conexión de inteligencia artificial.
+- Webchat configurará comportamiento del canal, no credenciales compartidas.
+- Voz utilizará la conexión central por defecto.
+- Las claves históricas se conservarán temporalmente para compatibilidad y se
+  retirarán únicamente después de validar tenants existentes.
+- La pestaña genérica de Secretos no formará parte del flujo normal del tenant.
+- Listas de precios permanecerán en `settings/account`.
+- Personas, empresas y relaciones permanecerán en el módulo de Personas.
+- Postmark y las credenciales centrales de correo permanecerán ocultos para el
+  tenant.
+
+### Archivos creados
+
+- `docs/Plan_Configuraciones/PLAN_MEJORA_CONFIGURACION.md`
+- `docs/Plan_Configuraciones/CHANGELOG.md`
+
+### Pendientes
+
+- Implementar la consolidación de la conexión de inteligencia artificial.
+- Diseñar el estado reutilizable de dependencias.
+- Cambiar etiquetas, ayudas, placeholders y mensajes a lenguaje de usuario.
+- Revisar la pestaña de configuración avanzada.
+- Identificar organizaciones con claves históricas y generales simultáneas.
+- Ejecutar pruebas de tenant, permisos y no exposición de secretos.
+- Validar el flujo en el entorno desplegado con usuarios representativos.
+
+### Criterio para el siguiente avance
+
+No cerrar la primera fase únicamente con compilación local. Debe comprobarse que:
+
+1. La clave se captura una sola vez.
+2. Webchat y Voz utilizan la conexión central.
+3. Los tenants existentes siguen funcionando durante la transición.
+4. La UI no muestra nombres técnicos ni valores secretos.
+5. El backend mantiene la autorización y el aislamiento por organización.
