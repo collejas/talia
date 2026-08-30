@@ -85,7 +85,6 @@ export function TenantVariablesPanel({
     estado: data?.estado ?? "",
     ciudad: data?.ciudad ?? "",
     telefono: data?.telefono ?? "",
-    sitio_web: data?.sitio_web ?? "",
     estado_onboarding: data?.estado_onboarding ?? "pendiente",
   }))
   const [message, setMessage] = useState<
@@ -220,17 +219,6 @@ export function TenantVariablesPanel({
                   handleChange("telefono", event.target.value)
                 }
                 placeholder="+521234567890"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="variables-sitio">Sitio web</Label>
-              <Input
-                id="variables-sitio"
-                value={form.sitio_web}
-                onChange={(event) =>
-                  handleChange("sitio_web", event.target.value)
-                }
-                placeholder="https://cliente.com"
               />
             </div>
             <div className="space-y-1">

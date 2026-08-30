@@ -271,7 +271,6 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     setString("direccion_fiscal_referencia", getText(formData, "tenant_direccion_fiscal_referencia"))
     setString("codigo_postal", getText(formData, "tenant_codigo_postal"))
     addString("regimen_fiscal", getText(formData, "tenant_regimen_fiscal"))
-    addString("sitio_web", getText(formData, "tenant_sitio"))
     const onboarding = getText(formData, "tenant_estado_onboarding")
     if (onboarding) {
       payload.estado_onboarding = onboarding

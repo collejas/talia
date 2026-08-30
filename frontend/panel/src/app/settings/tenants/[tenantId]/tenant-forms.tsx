@@ -831,10 +831,6 @@ export function TenantOrganizationInfoForm({
               <Label htmlFor="tenant_dominio">Dominio principal</Label>
               <Input id="tenant_dominio" name="tenant_dominio" defaultValue={info?.dominio_principal ?? ""} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="tenant_sitio">Sitio web</Label>
-              <Input id="tenant_sitio" name="tenant_sitio" defaultValue={info?.sitio_web ?? ""} type="url" />
-            </div>
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="tenant_logo_url">Logo URL</Label>
               <Input id="tenant_logo_url" name="tenant_logo_url" defaultValue={info?.logo_url ?? ""} type="url" />

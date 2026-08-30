@@ -28,7 +28,6 @@ type FormState = {
   country: string
   state: string
   city: string
-  website: string
   adminEmail: string
   adminName: string
   adminPhone: string
@@ -56,7 +55,6 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
     country: "",
     state: "",
     city: "",
-    website: "",
     adminEmail: "",
     adminName: "",
     adminPhone: "",
@@ -105,7 +103,6 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
         pais: form.country || undefined,
         estado: form.state || undefined,
         ciudad: form.city || undefined,
-        sitio_web: form.website || undefined,
         activo: form.active,
         estado_onboarding: form.onboarding || undefined,
         razon_social: form.razonSocial || undefined,
@@ -272,15 +269,6 @@ export function TenantCreationPanel({ commercialPlans, commercialPlansError }: P
                 value={form.city}
                 onChange={(event) => handleChange("city", event.target.value)}
                 placeholder="Guadalajara"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tenant-website">Sitio web</Label>
-              <Input
-                id="tenant-website"
-                value={form.website}
-                onChange={(event) => handleChange("website", event.target.value)}
-                placeholder="https://cliente.com"
               />
             </div>
             <div className="space-y-2">
