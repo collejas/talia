@@ -34,6 +34,7 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import tenant_runtime
 from app.services import channel_routing
+from app.services.tenant_onboarding import build_onboarding_progress
 from app.services.web_tracking import normalize_tracking_domain, verify_dns_txt
 from app.services.meta_whatsapp_assisted import MetaWhatsAppAssistedClient, MetaWhatsAppConnectionError
 
@@ -46,6 +47,31 @@ class TenantContext(BaseModel):
 
     user_id: UUID
     organizacion_id: UUID
+
+
+class TenantOnboardingProgressResponse(BaseModel):
+    porcentaje: int = Field(..., ge=0, le=100)
+    completados: int = Field(..., ge=0)
+    total: int = Field(..., ge=1)
+    paso_actual: str | None = None
+    ultimo_paso: str | None = None
+    completado: bool
+    errores: list[str] = Field(default_factory=list)
+    pasos: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class TenantOnboardingProgressUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    webchat_decision: Literal["pendiente", "usar", "no_usar"] | None = None
+    voz_decision: Literal["pendiente", "usar", "no_usar"] | None = None
+    ultimo_paso: str | None = Field(default=None, max_length=80)
+
+    @model_validator(mode="after")
+    def at_least_one_value(self) -> "TenantOnboardingProgressUpdate":
+        if self.webchat_decision is None and self.voz_decision is None and self.ultimo_paso is None:
+            raise ValueError("debe_indicar_un_cambio")
+        return self
 
 
 MASTER_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
@@ -832,6 +858,71 @@ async def get_tenant_settings(
         row["config"] = saved.get("config") if isinstance(saved.get("config"), dict) else ensured_config
     routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
     return await _build_tenant_response(context.organizacion_id, row, routes)
+
+
+async def _get_onboarding_progress(
+    *, context: TenantContext, platform_repo: PlatformRepository
+) -> TenantOnboardingProgressResponse:
+    tenant = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="tenant_not_found")
+    routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
+    secrets = await platform_repo.list_secret_metadata(organizacion_id=context.organizacion_id)
+    preferences = await platform_repo.get_tenant_onboarding_progress(
+        organizacion_id=context.organizacion_id
+    )
+    progress = build_onboarding_progress(
+        tenant=tenant,
+        routes=routes,
+        secrets=secrets,
+        preferences=preferences,
+    )
+    return TenantOnboardingProgressResponse.model_validate(progress)
+
+
+@router.get("/me/onboarding", response_model=TenantOnboardingProgressResponse)
+async def get_tenant_onboarding_progress(
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantOnboardingProgressResponse:
+    """Devuelve el avance funcional del tenant sin exponer nombres técnicos."""
+    await require_permission(user_token, "settings.view")
+    try:
+        return await _get_onboarding_progress(context=context, platform_repo=platform_repo)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="onboarding_progress_unavailable") from exc
+
+
+@router.patch("/me/onboarding", response_model=TenantOnboardingProgressResponse)
+async def update_tenant_onboarding_progress(
+    payload: TenantOnboardingProgressUpdate,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> TenantOnboardingProgressResponse:
+    """Guarda decisiones y posición del flujo; no exige completar todo el proceso."""
+    await require_permission(user_token, "settings.manage")
+    values = payload.model_dump(exclude_none=True)
+    if "ultimo_paso" in values:
+        values["ultimo_paso_actualizado_en"] = datetime.now(timezone.utc).isoformat()
+    values["actualizado_por"] = str(context.user_id)
+    try:
+        await platform_repo.upsert_tenant_onboarding_progress(
+            organizacion_id=context.organizacion_id,
+            payload=values,
+        )
+        result = await _get_onboarding_progress(context=context, platform_repo=platform_repo)
+        # El estado general se conserva en la organización para que otros
+        # flujos administrativos puedan consultarlo sin duplicar el cálculo.
+        onboarding_state = "completado" if result.completado else "en_progreso"
+        await platform_repo.update_organizacion_details(
+            organizacion_id=context.organizacion_id,
+            payload={"estado_onboarding": onboarding_state},
+        )
+        return result
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="onboarding_progress_unavailable") from exc
 
 
 def _connection_response(row: dict[str, Any]) -> MetaWhatsAppConnectionResponse:

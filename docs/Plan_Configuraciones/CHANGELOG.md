@@ -210,3 +210,38 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
 3. Los tenants existentes siguen funcionando durante la transición.
 4. La UI no muestra nombres técnicos ni valores secretos.
 5. El backend mantiene la autorización y el aislamiento por organización.
+
+## [2026-08-30] — Primer corte funcional de onboarding
+
+### Cambios realizados
+
+- Se añadió una migración para guardar las decisiones opcionales de Webchat y
+  Voz, así como el último paso visitado.
+- Se añadió un servicio backend que calcula el avance a partir de la
+  configuración real del tenant.
+- Se añadieron rutas tenant-scoped para consultar y guardar el avance sin
+  exponer nombres técnicos ni secretos.
+- Se añadió la vista inicial de onboarding con porcentaje, pasos, paso actual,
+  guardado de decisiones opcionales y reanudación.
+- El dashboard redirige al onboarding mientras existan pasos pendientes.
+- Cuando todos los pasos aplicables están resueltos, el tenant continúa al
+  dashboard normal.
+
+### Validación local
+
+- TypeScript del panel: correcto.
+- ESLint del panel: correcto; permanecen advertencias preexistentes fuera de
+  este cambio.
+- Compilación de los módulos backend modificados: correcta.
+- No se aplicó todavía la migración en Supabase ni se validó el flujo en un
+  entorno desplegado.
+
+### Pendientes de la siguiente iteración
+
+- Conectar cada tarjeta de onboarding con el formulario correspondiente de
+  `settings/variables` y devolver al onboarding al guardar.
+- Completar validaciones reales de conexión, respuesta, dominio y pruebas de
+  funcionamiento por subpaso.
+- Revisar la definición final de qué pasos son obligatorios según el plan y
+  los módulos contratados.
+- Aplicar la migración y probar aislamiento entre tenants.

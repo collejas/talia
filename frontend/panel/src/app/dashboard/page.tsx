@@ -10,11 +10,20 @@ import { CatalogLazySection } from '@/components/dashboard/catalog-lazy-section'
 import { DashboardOverviewClient } from '@/components/dashboard/dashboard-overview.client'
 
 import { resolveDashboardRange } from "@/lib/dashboard/range"
+import { callCrmApi } from "@/lib/api/crm"
+import { redirect } from "next/navigation"
 type DashboardPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function Page({ searchParams }: DashboardPageProps) {
+  const onboarding = await callCrmApi<{ completado?: boolean }>("/tenant/me/onboarding", {
+    organizacionId: null,
+    withUserToken: true,
+  })
+  if (onboarding.ok && onboarding.data.completado === false) {
+    redirect("/onboarding")
+  }
   const resolvedParams = searchParams ? await searchParams : {};
   const range = resolveDashboardRange(resolvedParams);
 

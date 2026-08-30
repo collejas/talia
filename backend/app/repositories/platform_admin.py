@@ -1229,6 +1229,35 @@ class PlatformRepository:
         config = row.get("config")
         return config if isinstance(config, dict) else ({} if config is None else None)
 
+    async def get_tenant_onboarding_progress(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/tenant_onboarding_progress",
+            params={
+                "select": "id,organizacion_id,webchat_decision,voz_decision,ultimo_paso,ultimo_paso_actualizado_en,actualizado_por,creado_en,actualizado_en",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            },
+        )
+        if not isinstance(data, list) or not data:
+            return None
+        return data[0] if isinstance(data[0], dict) else None
+
+    async def upsert_tenant_onboarding_progress(
+        self, *, organizacion_id: UUID, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        data = await self._rest(
+            "POST",
+            "/rest/v1/tenant_onboarding_progress",
+            params={"on_conflict": "organizacion_id"},
+            json=body,
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("tenant_onboarding_progress_update_failed")
+        return data[0]
+
     async def get_close_lead_policy(
         self, *, organizacion_id: UUID, canal: str
     ) -> dict[str, Any] | None:
