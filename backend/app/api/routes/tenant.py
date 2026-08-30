@@ -59,6 +59,7 @@ class TenantOnboardingProgressResponse(BaseModel):
     requiere_onboarding: bool = True
     webchat_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     voz_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
+    zoom_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     errores: list[str] = Field(default_factory=list)
     pasos: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -68,11 +69,17 @@ class TenantOnboardingProgressUpdate(BaseModel):
 
     webchat_decision: Literal["pendiente", "usar", "no_usar"] | None = None
     voz_decision: Literal["pendiente", "usar", "no_usar"] | None = None
+    zoom_decision: Literal["pendiente", "usar", "no_usar"] | None = None
     ultimo_paso: str | None = Field(default=None, max_length=80)
 
     @model_validator(mode="after")
     def at_least_one_value(self) -> "TenantOnboardingProgressUpdate":
-        if self.webchat_decision is None and self.voz_decision is None and self.ultimo_paso is None:
+        if (
+            self.webchat_decision is None
+            and self.voz_decision is None
+            and self.zoom_decision is None
+            and self.ultimo_paso is None
+        ):
             raise ValueError("debe_indicar_un_cambio")
         return self
 
@@ -882,6 +889,7 @@ async def _get_onboarding_progress(
     )
     progress["webchat_decision"] = str((preferences or {}).get("webchat_decision") or "pendiente")
     progress["voz_decision"] = str((preferences or {}).get("voz_decision") or "pendiente")
+    progress["zoom_decision"] = str((preferences or {}).get("zoom_decision") or "pendiente")
     return TenantOnboardingProgressResponse.model_validate(progress)
 
 
@@ -917,6 +925,16 @@ async def update_tenant_onboarding_progress(
             organizacion_id=context.organizacion_id,
             payload=values,
         )
+        if values.get("zoom_decision") == "no_usar":
+            tenant = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
+            current_config = tenant.get("config") if isinstance(tenant, dict) else {}
+            if not isinstance(current_config, dict):
+                current_config = {}
+            current_zoom = current_config.get("zoom") if isinstance(current_config.get("zoom"), dict) else {}
+            await platform_repo.set_organizacion_config(
+                organizacion_id=context.organizacion_id,
+                config={**current_config, "zoom": {**current_zoom, "enabled": False}},
+            )
         result = await _get_onboarding_progress(context=context, platform_repo=platform_repo)
         # El estado general se conserva en la organización para que otros
         # flujos administrativos puedan consultarlo sin duplicar el cálculo.

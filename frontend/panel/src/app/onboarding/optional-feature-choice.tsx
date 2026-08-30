@@ -9,11 +9,11 @@ export function OptionalFeatureChoice({
   initialDecision,
   children,
 }: {
-  feature: "Webchat" | "Voz"
+  feature: "Webchat" | "Voz" | "Zoom"
   initialDecision: Decision
   children: ReactNode
 }) {
-  const field = feature === "Webchat" ? "webchat_decision" : "voz_decision"
+  const field = feature === "Webchat" ? "webchat_decision" : feature === "Voz" ? "voz_decision" : "zoom_decision"
   const [decision, setDecision] = useState<Decision>(initialDecision)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)

@@ -663,6 +663,8 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     const calendarFullContactListUrl = getText(formData, "calendar_full_contact_list_url")
     const calendarUsername = getText(formData, "calendar_username")
     const calendarPassword = getText(formData, "calendar_password")
+    const agendaEnabled = formData.has("agenda_enabled")
+    const zoomSettingsPresent = formData.has("zoom_settings_present")
     const zoomEnabled = formData.has("zoom_enabled")
     const zoomAutoCreateMeeting = formData.has("zoom_auto_create_meeting")
     const zoomHostEmail = getText(formData, "zoom_host_email")
@@ -713,13 +715,15 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     const currentConfig = getResp.data.config ?? {}
     const patch: Record<string, unknown> = {}
 
+    patch.features = { agenda: { enabled: agendaEnabled } }
+
     if (Object.keys(calendarPatch).length) {
       patch.webchat = { calendar: calendarPatch }
     }
     if (Object.keys(calendarConfigPatch).length) {
       patch.calendar = calendarConfigPatch
     }
-    patch.zoom = zoomConfigPatch
+    if (zoomSettingsPresent) patch.zoom = zoomConfigPatch
 
     const merged = mergeDeep({ ...currentConfig }, patch)
 

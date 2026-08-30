@@ -1234,7 +1234,7 @@ class PlatformRepository:
             "GET",
             "/rest/v1/tenant_onboarding_progress",
             params={
-                "select": "id,organizacion_id,webchat_decision,voz_decision,ultimo_paso,ultimo_paso_actualizado_en,actualizado_por,creado_en,actualizado_en",
+                "select": "id,organizacion_id,webchat_decision,voz_decision,zoom_decision,ultimo_paso,ultimo_paso_actualizado_en,actualizado_por,creado_en,actualizado_en",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "limit": "1",
             },

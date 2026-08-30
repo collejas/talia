@@ -246,6 +246,7 @@ La organización objetivo será:
 
 6. **Agenda y automatizaciones**
    - Agenda.
+   - Zoom como opción independiente y opcional dentro de Agenda.
    - Cierre de conversaciones.
    - Horarios y reenganches.
 

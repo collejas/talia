@@ -146,6 +146,19 @@ Debe comprobar:
 
 Si ninguna función activa utiliza agenda, puede marcarse como `No aplica`.
 
+#### Zoom dentro de Agenda
+
+Zoom es opcional y no debe bloquear la configuración de la agenda. El tenant
+elige una de estas opciones:
+
+- **Sí, quiero utilizarlo**: se muestran los datos necesarios y se valida la
+  conexión antes de considerar terminado este subpaso.
+- **No lo utilizaré**: el subpaso queda resuelto, no se solicitan datos de
+  conexión y la agenda continúa disponible sin reuniones virtuales.
+
+La decisión puede cambiarse posteriormente desde la configuración. La pantalla
+no muestra nombres técnicos ni nombres de proveedores.
+
 ### Paso 8. Correo
 
 Obligatorio para funciones que envían correo al cliente o al equipo.
@@ -278,4 +291,3 @@ lenguaje funcional.
 - El tenant maestro no puede ser redirigido por el onboarding de un tenant cliente.
 - No se permite cambiar de organización enviando únicamente un identificador desde
   el navegador.
-

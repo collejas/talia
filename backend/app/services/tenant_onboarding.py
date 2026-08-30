@@ -31,6 +31,7 @@ def build_onboarding_progress(
     preferences = preferences or {}
     webchat_decision = str(preferences.get("webchat_decision") or "pendiente")
     voz_decision = str(preferences.get("voz_decision") or "pendiente")
+    zoom_decision = str(preferences.get("zoom_decision") or "pendiente")
 
     organization_values = (
         tenant.get("nombre_comercial") or tenant.get("nombre"),
@@ -59,8 +60,19 @@ def build_onboarding_progress(
     whatsapp_done = "whatsapp" in active_channels or _has_text(
         (config.get("whatsapp") or {}).get("meta") if isinstance(config.get("whatsapp"), dict) else None
     )
-    agenda = config.get("agenda") if isinstance(config.get("agenda"), dict) else {}
-    agenda_done = _has_text(agenda.get("zona_horaria"), agenda.get("recurso"))
+    features = config.get("features") if isinstance(config.get("features"), dict) else {}
+    agenda_feature = features.get("agenda") if isinstance(features.get("agenda"), dict) else {}
+    agenda_enabled = agenda_feature.get("enabled") is not False
+    webchat = config.get("webchat") if isinstance(config.get("webchat"), dict) else {}
+    calendar = webchat.get("calendar") if isinstance(webchat.get("calendar"), dict) else {}
+    agenda_configured = not agenda_enabled or _has_text(calendar.get("timezone"), calendar.get("resource_id"))
+    zoom = config.get("zoom") if isinstance(config.get("zoom"), dict) else {}
+    zoom_done = (
+        not agenda_enabled
+        or zoom_decision == "no_usar"
+        or (zoom_decision == "usar" and bool(zoom.get("enabled")))
+        or (zoom_decision == "pendiente" and bool(zoom.get("enabled")))
+    )
     correo = config.get("correo") if isinstance(config.get("correo"), dict) else {}
     correo_done = _has_text(correo.get("dominio"), correo.get("remitente"))
 
@@ -70,7 +82,7 @@ def build_onboarding_progress(
         ("webchat", "Webchat", webchat_done),
         ("whatsapp", "WhatsApp", whatsapp_done),
         ("voz", "Voz", voice_done),
-        ("agenda", "Agenda", agenda_done),
+        ("agenda", "Agenda", agenda_configured and zoom_done),
         ("correo", "Correo", correo_done),
     ]
     steps: list[dict[str, Any]] = []

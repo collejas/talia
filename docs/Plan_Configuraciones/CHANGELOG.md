@@ -3,6 +3,20 @@
 Este archivo registra el avance del plan de simplificación de
 `/settings/variables`.
 
+## [2026-08-30] — Zoom opcional dentro de Agenda
+
+### Cambio realizado
+
+- Agenda y Zoom ahora se configuran como decisiones independientes.
+- El tenant puede elegir no utilizar Zoom y completar Agenda sin capturar datos
+  de conexión de reuniones virtuales.
+- Si elige utilizarlo, el formulario muestra los datos necesarios dentro del
+  mismo paso y conserva la validación de Agenda.
+- Guardar Agenda sin activar Zoom ya no sobrescribe la configuración existente
+  de Zoom.
+- La selección se guarda junto con el avance del onboarding y puede cambiarse
+  posteriormente.
+
 ## [2026-08-30] — Fase 0: inventario del alta, acceso y configuración
 
 ### Revisión realizada

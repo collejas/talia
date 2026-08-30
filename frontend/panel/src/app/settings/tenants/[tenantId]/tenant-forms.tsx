@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { OptionalFeatureChoice } from "@/app/onboarding/optional-feature-choice"
 
 import {
   CrudActionHandler,
@@ -1421,10 +1422,16 @@ export function TenantCalendarSettings({
   tenantId,
   initialValues,
   allowResourceIdEdit = true,
+  showZoom = true,
+  showZoomChoice = false,
+  zoomDecision = "usar",
 }: {
   tenantId: string
   initialValues: CalendarInitialValues
   allowResourceIdEdit?: boolean
+  showZoom?: boolean
+  showZoomChoice?: boolean
+  zoomDecision?: "pendiente" | "usar" | "no_usar"
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateCalendarSettingsAction, INITIAL_CRUD_STATE)
@@ -1571,6 +1578,24 @@ export function TenantCalendarSettings({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2 md:col-span-2">
+          <p className="text-xs text-muted-foreground">
+            Estos datos permiten consultar la disponibilidad de tu calendario y se guardan de forma segura.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_username">Usuario del calendario</Label>
+          <Input id="calendar_username" name="calendar_username" placeholder="hola@talia.mx" defaultValue="" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="calendar_password">Contraseña del calendario</Label>
+          <Input id="calendar_password" name="calendar_password" type="password" placeholder="Pega para guardar o cambiar" defaultValue="" />
+        </div>
+      </div>
+
+      {showZoomChoice ? <OptionalFeatureChoice feature="Zoom" initialDecision={zoomDecision}>
+        <input type="hidden" name="zoom_settings_present" value="1" />
+        <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label className="flex items-center gap-2">
             <input
@@ -1578,10 +1603,10 @@ export function TenantCalendarSettings({
               name="zoom_enabled"
               defaultChecked={Boolean(initialValues.zoom_enabled)}
             />
-            zoom.enabled
+            Zoom activo
           </Label>
           <p className="text-xs text-muted-foreground">
-            Si está activo, al confirmar una cita se intentará crear reunión en Zoom.
+            Al confirmar una cita se puede crear una reunión virtual.
           </p>
         </div>
         <div className="space-y-2">
@@ -1591,14 +1616,14 @@ export function TenantCalendarSettings({
               name="zoom_auto_create_meeting"
               defaultChecked={initialValues.zoom_auto_create_meeting ?? true}
             />
-            zoom.auto_create_meeting
+            Crear reunión automáticamente
           </Label>
           <p className="text-xs text-muted-foreground">
-            Permite desactivar creación automática de links Zoom sin deshabilitar la configuración.
+            Permite decidir si las reuniones virtuales se crean automáticamente.
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="zoom_host_email">zoom.host_email</Label>
+          <Label htmlFor="zoom_host_email">Correo de la cuenta de Zoom</Label>
           <Input
             id="zoom_host_email"
             name="zoom_host_email"
@@ -1607,7 +1632,7 @@ export function TenantCalendarSettings({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="zoom_default_duration_minutes">zoom.default_duration_minutes</Label>
+          <Label htmlFor="zoom_default_duration_minutes">Duración predeterminada (minutos)</Label>
           <Input
             id="zoom_default_duration_minutes"
             name="zoom_default_duration_minutes"
@@ -1617,16 +1642,16 @@ export function TenantCalendarSettings({
             defaultValue={initialValues.zoom_default_duration_minutes ?? ""}
           />
         </div>
-      </div>
+        </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2 md:col-span-2">
           <p className="text-xs text-muted-foreground">
-            Secretos Zoom: <code>zoom.account_id</code> y <code>zoom.client_id</code> (tier A), <code>zoom.client_secret</code> (tier B).
+            Agrega los datos de conexión de tu cuenta para poder crear reuniones.
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="zoom_account_id">zoom.account_id</Label>
+          <Label htmlFor="zoom_account_id">Identificador de la cuenta</Label>
           <Input
             id="zoom_account_id"
             name="zoom_account_id"
@@ -1635,7 +1660,7 @@ export function TenantCalendarSettings({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="zoom_client_id">zoom.client_id</Label>
+          <Label htmlFor="zoom_client_id">Identificador de la aplicación</Label>
           <Input
             id="zoom_client_id"
             name="zoom_client_id"
@@ -1644,7 +1669,7 @@ export function TenantCalendarSettings({
           />
         </div>
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="zoom_client_secret">zoom.client_secret</Label>
+          <Label htmlFor="zoom_client_secret">Clave de conexión</Label>
           <Input
             id="zoom_client_secret"
             name="zoom_client_secret"
@@ -1653,35 +1678,39 @@ export function TenantCalendarSettings({
             defaultValue=""
           />
         </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2 md:col-span-2">
-          <p className="text-xs text-muted-foreground">
-            Las credenciales de calendario se guardan como secretos (`calendar.username` tier A y `calendar.password` tier
-            B) y no se muestran después de guardar.
-          </p>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="calendar_username">calendar.username</Label>
-          <Input
-            id="calendar_username"
-            name="calendar_username"
-            placeholder="hola@talia.mx"
-            defaultValue=""
-          />
+      </OptionalFeatureChoice> : showZoom ? <>
+        <input type="hidden" name="zoom_settings_present" value="1" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <input type="checkbox" name="zoom_enabled" defaultChecked={Boolean(initialValues.zoom_enabled)} />
+              Zoom activo
+            </Label>
+            <p className="text-xs text-muted-foreground">Al confirmar una cita se puede crear una reunión virtual.</p>
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <input type="checkbox" name="zoom_auto_create_meeting" defaultChecked={initialValues.zoom_auto_create_meeting ?? true} />
+              Crear reunión automáticamente
+            </Label>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="zoom_host_email">Correo de la cuenta de Zoom</Label>
+            <Input id="zoom_host_email" name="zoom_host_email" placeholder="usuario@tu-dominio.com" defaultValue={initialValues.zoom_host_email ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="zoom_default_duration_minutes">Duración predeterminada (minutos)</Label>
+            <Input id="zoom_default_duration_minutes" name="zoom_default_duration_minutes" type="number" min={1} max={240} defaultValue={initialValues.zoom_default_duration_minutes ?? ""} />
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="calendar_password">calendar.password</Label>
-          <Input
-            id="calendar_password"
-            name="calendar_password"
-            type="password"
-            placeholder="Pega para rotar"
-            defaultValue=""
-          />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2"><p className="text-xs text-muted-foreground">Agrega los datos de conexión de tu cuenta para poder crear reuniones.</p></div>
+          <div className="space-y-2"><Label htmlFor="zoom_account_id">Identificador de la cuenta</Label><Input id="zoom_account_id" name="zoom_account_id" placeholder="Pega para guardar o cambiar" defaultValue="" /></div>
+          <div className="space-y-2"><Label htmlFor="zoom_client_id">Identificador de la aplicación</Label><Input id="zoom_client_id" name="zoom_client_id" placeholder="Pega para guardar o cambiar" defaultValue="" /></div>
+          <div className="space-y-2 md:col-span-2"><Label htmlFor="zoom_client_secret">Clave de conexión</Label><Input id="zoom_client_secret" name="zoom_client_secret" type="password" placeholder="Pega para guardar o cambiar" defaultValue="" /></div>
         </div>
-      </div>
+      </> : null}
 
         <div className="flex items-center justify-between gap-3">
           <FormStatusMessage state={state} />
