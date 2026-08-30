@@ -57,6 +57,8 @@ class TenantOnboardingProgressResponse(BaseModel):
     ultimo_paso: str | None = None
     completado: bool
     requiere_onboarding: bool = True
+    webchat_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
+    voz_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     errores: list[str] = Field(default_factory=list)
     pasos: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -878,6 +880,8 @@ async def _get_onboarding_progress(
         secrets=secrets,
         preferences=preferences,
     )
+    progress["webchat_decision"] = str((preferences or {}).get("webchat_decision") or "pendiente")
+    progress["voz_decision"] = str((preferences or {}).get("voz_decision") or "pendiente")
     return TenantOnboardingProgressResponse.model_validate(progress)
 
 

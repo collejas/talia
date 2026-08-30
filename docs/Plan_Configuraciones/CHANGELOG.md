@@ -374,6 +374,14 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
 - Si falta una selección válida, el tenant recibe una indicación clara en español
   y no se muestra el error interno de la base de datos.
 
+## [2026-08-30] — Decisión de uso para Webchat y Voz dentro del onboarding
+
+- Cada uno de estos pasos comienza preguntando si la organización desea utilizar
+  la función.
+- Al elegir que no se utilizará, el paso queda resuelto sin pedir datos de conexión
+  ni mostrar el formulario operativo.
+- Al elegir utilizarla, se muestra el formulario y sus comprobaciones normales.
+
 ### Pendientes
 
 - Conectar los pasos de usuarios, permisos y catálogos con sus formularios

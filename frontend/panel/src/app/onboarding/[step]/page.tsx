@@ -20,13 +20,14 @@ import { MetaAssistedConnectionPanel } from "@/app/settings/variables/components
 import { TenantEmailServicePanel, type TenantEmailServiceData } from "@/app/settings/variables/components/tenant-email-service-panel"
 import { WhatsAppAssistantSchedulePanel } from "@/app/settings/variables/components/whatsapp-assistant-schedule-panel"
 import { OnboardingStepShell } from "../onboarding-step-shell"
+import { OptionalFeatureChoice } from "../optional-feature-choice"
 
 export const dynamic = "force-dynamic"
 export const fetchCache = "force-no-store"
 
 type AnyRecord = Record<string, unknown>
 type Step = { id: string; titulo: string; completado: boolean; estado: string }
-type Progress = { pasos: Step[]; paso_actual: string | null; porcentaje: number }
+type Progress = { pasos: Step[]; paso_actual: string | null; porcentaje: number; webchat_decision: "pendiente" | "usar" | "no_usar"; voz_decision: "pendiente" | "usar" | "no_usar" }
 type Settings = TenantOrganizationInfo & { organizacion_id: string; config?: AnyRecord | null }
 
 const actions: TenantSettingsActions = {
@@ -106,9 +107,9 @@ export default async function OnboardingStepPage({ params }: { params: Promise<{
       case "inteligencia":
         return <TenantOpenaiSettings tenantId={tenantId} initialValues={{ general_project_id: text(openaiGeneral, "project_id"), voice_prompt_id: text(openaiVoice, "prompt_id"), voice_prompt_version: text(openaiVoice, "prompt_version"), voice_model: text(openaiVoice, "model"), voice_max_tokens: number(openaiVoice, "max_tokens"), voice_stt_model: text(openaiVoice, "stt_model") }} hasGeneralApiKey={hasSecret("openai.general.api_key")} hasVoiceApiKey={hasSecret("openai.voice.api_key")} />
       case "webchat":
-        return <TenantWebchatSettings tenantId={tenantId} initialValues={{ enabled: bool(record(record(config.features).webchat), "enabled") ?? false, assistant_id: text(webchat, "assistant_id") ?? "", prompt_version: text(webchat, "prompt_version") ?? "", inactivity_minutes: number(webchat, "inactivity_minutes"), persist_session: bool(webchat, "persist_session"), reengage_minutes: number(webchat, "reengage_minutes"), reengage_max_attempts: number(webchat, "reengage_max_attempts"), escalate_minutes: number(webchat, "escalate_minutes"), webchat_alias: routes.find((item) => item.canal === "webchat")?.clave ?? "" }} />
+        return <OptionalFeatureChoice feature="Webchat" initialDecision={progressResp.data.webchat_decision}><TenantWebchatSettings tenantId={tenantId} initialValues={{ enabled: bool(record(record(config.features).webchat), "enabled") ?? false, assistant_id: text(webchat, "assistant_id") ?? "", prompt_version: text(webchat, "prompt_version") ?? "", inactivity_minutes: number(webchat, "inactivity_minutes"), persist_session: bool(webchat, "persist_session"), reengage_minutes: number(webchat, "reengage_minutes"), reengage_max_attempts: number(webchat, "reengage_max_attempts"), escalate_minutes: number(webchat, "escalate_minutes"), webchat_alias: routes.find((item) => item.canal === "webchat")?.clave ?? "" }} /></OptionalFeatureChoice>
       case "voz":
-        return <TenantTwilioSettings tenantId={tenantId} initialValues={{ twilio_phone_number: text(twilio, "phone_number"), twilio_phone_number_sid: text(twilio, "phone_number_sid"), twilio_validate_signatures: bool(twilio, "validate_signatures") ?? true, voice_webhook_path: text(voice, "webhook_path") ?? "", voice_full_duplex: bool(voice, "full_duplex") ?? true, voice_debug_verbose: bool(voice, "debug_verbose") ?? false, voice_debug_energy_every_n: number(voice, "energy_every_n") }} />
+        return <OptionalFeatureChoice feature="Voz" initialDecision={progressResp.data.voz_decision}><TenantTwilioSettings tenantId={tenantId} initialValues={{ twilio_phone_number: text(twilio, "phone_number"), twilio_phone_number_sid: text(twilio, "phone_number_sid"), twilio_validate_signatures: bool(twilio, "validate_signatures") ?? true, voice_webhook_path: text(voice, "webhook_path") ?? "", voice_full_duplex: bool(voice, "full_duplex") ?? true, voice_debug_verbose: bool(voice, "debug_verbose") ?? false, voice_debug_energy_every_n: number(voice, "energy_every_n") }} /></OptionalFeatureChoice>
       case "agenda":
         return <TenantCalendarSettings tenantId={tenantId} initialValues={{ agenda_enabled: bool(agenda, "enabled") ?? true, calendar_resource_id: text(webchatCalendar, "resource_id") ?? "", calendar_timezone: text(webchatCalendar, "timezone") ?? "", calendar_default_days: number(webchatCalendar, "default_days"), calendar_hold_minutes: number(webchatCalendar, "hold_minutes"), calendar_provider: text(calendar, "provider") ?? "", calendar_server_url: text(calendar, "server_url") ?? "", calendar_server_url_alternate: text(calendar, "server_url_alternate") ?? "", calendar_server_port: number(calendar, "server_port"), calendar_full_calendar_url: text(calendar, "full_calendar_url") ?? "", calendar_full_contact_list_url: text(calendar, "full_contact_list_url") ?? "", zoom_enabled: false, zoom_host_email: "", zoom_default_duration_minutes: undefined, zoom_auto_create_meeting: true }} allowResourceIdEdit={false} />
       case "correo":
