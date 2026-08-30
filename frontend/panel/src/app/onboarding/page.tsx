@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation"
 
 import { callCrmApi } from "@/lib/api/crm"
-import { OnboardingProgress } from "./onboarding-progress"
+import { OnboardingStepShell } from "./onboarding-step-shell"
+import { OnboardingSummary } from "./onboarding-summary"
 
 type OnboardingPageData = {
   porcentaje: number
@@ -30,5 +31,7 @@ export default async function OnboardingPage() {
   if (!response.ok) {
     redirect("/auth/login?redirectTo=%2Fonboarding")
   }
-  return <OnboardingProgress initialProgress={response.data} />
+  const summaryStep = { id: "resumen", titulo: "Resumen", estado: "en_progreso" as const, completado: false }
+  const steps = [summaryStep, ...response.data.pasos]
+  return <OnboardingStepShell step={summaryStep} steps={steps} porcentaje={response.data.porcentaje}><OnboardingSummary steps={response.data.pasos} /></OnboardingStepShell>
 }

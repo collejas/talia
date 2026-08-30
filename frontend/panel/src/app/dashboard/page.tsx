@@ -21,10 +21,11 @@ export default async function Page({ searchParams }: DashboardPageProps) {
     organizacionId: null,
     withUserToken: true,
   })
-  if (onboarding.ok && onboarding.data.requiere_onboarding && onboarding.data.completado === false) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const enteredFromOnboarding = resolvedParams.from_onboarding === "1";
+  if (!enteredFromOnboarding && onboarding.ok && onboarding.data.requiere_onboarding && onboarding.data.completado === false) {
     redirect("/onboarding")
   }
-  const resolvedParams = searchParams ? await searchParams : {};
   const range = resolveDashboardRange(resolvedParams);
 
   return (

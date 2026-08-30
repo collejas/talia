@@ -24,6 +24,7 @@ export function OnboardingStepShell({
   const percentage = porcentaje ?? Math.round(((index + 1) / Math.max(steps.length, 1)) * 100)
 
   useEffect(() => {
+    if (step.id === "resumen") return
     void fetch("/api/onboarding", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -33,15 +34,17 @@ export function OnboardingStepShell({
 
   const go = async (destination: string) => {
     setSaving(true)
-    await fetch("/api/onboarding", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ultimo_paso: step.id }),
-    }).catch(() => undefined)
+    if (step.id !== "resumen") {
+      await fetch("/api/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ultimo_paso: step.id }),
+      }).catch(() => undefined)
+    }
     router.push(destination)
   }
 
-  const stepLabel = useMemo(() => `Paso ${index + 1} de ${steps.length}`, [index, steps.length])
+  const stepLabel = useMemo(() => step.id === "resumen" ? "Resumen" : `Paso ${index} de ${steps.length - 1}`, [index, step.id, steps.length])
 
   return (
     <main className="min-h-screen bg-muted/30 px-4 py-6 md:px-6 md:py-10">
@@ -51,7 +54,7 @@ export function OnboardingStepShell({
             <p className="text-sm font-medium text-muted-foreground">Configuración inicial</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">Configura tu organización</h1>
           </div>
-          <button className="text-sm text-muted-foreground underline-offset-4 hover:underline" onClick={() => void go("/dashboard")}>
+          <button className="text-sm text-muted-foreground underline-offset-4 hover:underline" onClick={() => void go("/dashboard?from_onboarding=1")}>
             Ir al dashboard por ahora
           </button>
         </div>
@@ -94,11 +97,11 @@ export function OnboardingStepShell({
                 Anterior
               </button>
               <div className="flex flex-wrap gap-2">
-                <button className="rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50" disabled={saving} onClick={() => void go("/dashboard")}>
-                  Guardar y salir
+                <button className="rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50" disabled={saving} onClick={() => void go("/dashboard?from_onboarding=1")}>
+                  Salir al dashboard
                 </button>
                 <button className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50" disabled={!next || saving} onClick={() => next && void go(`/onboarding/${next.id}`)}>
-                  {next ? "Guardar y continuar" : "Ver resumen"}
+                  {next ? "Continuar" : "Ver resumen"}
                 </button>
               </div>
             </div>

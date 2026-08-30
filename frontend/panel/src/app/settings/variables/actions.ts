@@ -239,6 +239,9 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     const setString = (key: string, value: string) => {
       payload[key] = value
     }
+    const setNullableString = (key: string, value: string) => {
+      payload[key] = value || null
+    }
 
     addString("nombre", getText(formData, "tenant_nombre"))
     addString("nombre_comercial", getText(formData, "tenant_nombre_comercial"))
@@ -246,12 +249,12 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     addString("razon_social", getText(formData, "tenant_razon_social"))
     addString("rfc", getText(formData, "tenant_rfc"))
     setString("pais", getText(formData, "tenant_pais_codigo_iso2") || getText(formData, "tenant_pais"))
-    setString("pais_codigo_iso2", getText(formData, "tenant_pais_codigo_iso2"))
+    setNullableString("pais_codigo_iso2", getText(formData, "tenant_pais_codigo_iso2"))
     setString("estado", getText(formData, "tenant_estado"))
-    setString("estado_clave_entidad", getText(formData, "tenant_estado_clave_entidad"))
+    setNullableString("estado_clave_entidad", getText(formData, "tenant_estado_clave_entidad"))
     setString("ciudad", getText(formData, "tenant_ciudad"))
-    setString("municipio_clave_entidad", getText(formData, "tenant_municipio_clave_entidad"))
-    setString("municipio_clave_municipio", getText(formData, "tenant_municipio_clave_municipio"))
+    setNullableString("municipio_clave_entidad", getText(formData, "tenant_municipio_clave_entidad"))
+    setNullableString("municipio_clave_municipio", getText(formData, "tenant_municipio_clave_municipio"))
     addString("dominio_principal", getText(formData, "tenant_dominio"))
     addString("telefono", getText(formData, "tenant_telefono"))
     addString("correo_contacto_principal", getText(formData, "tenant_correo_contacto_principal"))
@@ -294,6 +297,10 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     revalidatePath("/settings/variables")
     return success("Datos generales actualizados.")
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes("estado_clave_entidad") || message.includes("23503")) {
+      return failure("Selecciona un estado válido del catálogo antes de guardar el domicilio fiscal.", "No se pudieron guardar los datos generales.")
+    }
     return failure(error, "No se pudieron guardar los datos generales.")
   }
 }

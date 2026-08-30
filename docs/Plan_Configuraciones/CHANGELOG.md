@@ -360,6 +360,19 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
 - Se añadió la opción de guardar y salir al dashboard sin marcar el proceso como
   terminado.
 - El resumen continúa disponible para revisar el avance y volver a cualquier paso.
+- El resumen quedó integrado como primer elemento de la navegación lateral.
+- “Ir al dashboard por ahora” permite entrar al dashboard sin convertir el avance
+  incompleto en un onboarding terminado.
+- La navegación no promete guardar formularios que aún no fueron enviados; cada
+  formulario conserva su acción visible de guardado y después el tenant puede
+  continuar al siguiente paso.
+
+## [2026-08-30] — Corrección del guardado de datos de organización
+
+- Los campos geográficos opcionales ya no se envían como texto vacío, evitando
+  errores de relación cuando todavía no se ha seleccionado un estado o municipio.
+- Si falta una selección válida, el tenant recibe una indicación clara en español
+  y no se muestra el error interno de la base de datos.
 
 ### Pendientes
 
