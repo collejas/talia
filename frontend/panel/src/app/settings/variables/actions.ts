@@ -359,7 +359,6 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
     const reengageMaxAttemptsRaw = getText(formData, "webchat_reengage_max_attempts")
     const escalateMinutesRaw = getText(formData, "webchat_escalate_minutes")
 
-    const openaiApiKey = getText(formData, "openai_api_key")
     const webchatAlias = getText(formData, "webchat_alias")
 
     const getResp = await callCrmApi<{
@@ -425,12 +424,8 @@ export async function updateWebchatSettingsAction(_: CrudActionState, formData: 
       }
     }
 
-    if (openaiApiKey) {
-      await upsertTenantSecret("openai.api_key", openaiApiKey, "B")
-    }
-
     revalidatePath("/settings/variables")
-    const baseMessage = "Webchat guardado (config/routing/secretos)."
+    const baseMessage = "Webchat guardado. La conexión de inteligencia se administra en un solo lugar."
     return success(aliasWarning ? `${baseMessage} ${aliasWarning}` : baseMessage)
   } catch (error) {
     return failure(error, "No se pudo guardar la configuración de Webchat.")

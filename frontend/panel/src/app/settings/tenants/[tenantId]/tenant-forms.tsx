@@ -1252,15 +1252,9 @@ export function TenantWebchatSettings({
             </p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="openai_api_key">OpenAI API key (secreto, tier B)</Label>
-            <Input
-              id="openai_api_key"
-              name="openai_api_key"
-              type="password"
-              placeholder="Pega aquí (no se vuelve a mostrar)"
-            />
-          </div>
+          <p className="text-xs text-muted-foreground md:col-span-2">
+            La conexión de inteligencia se captura una sola vez en la sección Inteligencia.
+          </p>
 
           <div className="space-y-2">
             <Label htmlFor="webchat_assistant_id">assistant_id</Label>

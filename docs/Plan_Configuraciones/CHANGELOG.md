@@ -245,3 +245,21 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
 - Revisar la definición final de qué pasos son obligatorios según el plan y
   los módulos contratados.
 - Aplicar la migración y probar aislamiento entre tenants.
+
+## [2026-08-30] — Eliminación de captura duplicada en Webchat
+
+### Cambios realizados
+
+- Webchat dejó de mostrar un campo propio para la conexión de inteligencia.
+- La conexión se administra desde una sola sección central.
+- Se conserva la compatibilidad del backend con configuraciones históricas
+  mientras se revisan los tenants existentes.
+- El mensaje de guardado de Webchat ahora indica que la conexión central se
+  configura en un solo lugar.
+
+### Pendiente
+
+- Revisar y actualizar los campos avanzados de la sección Inteligencia para
+  que sus etiquetas sean funcionales y no técnicas.
+- Validar que todos los módulos utilicen la conexión central antes de retirar
+  definitivamente las claves históricas.
