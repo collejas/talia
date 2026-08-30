@@ -128,6 +128,31 @@ Este archivo registra el avance del plan de simplificación de
 - Impedir que un canal omitido se active accidentalmente.
 - Ajustar el cálculo del porcentaje y del 100% final.
 
+## [2026-08-30] — Fase 1: contrato inicial de pasos y estados
+
+### Avance
+
+- Se definió el catálogo inicial de pasos aplicables al tenant.
+- Se definieron los estados funcionales de cada paso y subpaso.
+- Se definió la diferencia entre guardado, validado, completado y no utilizado.
+- Se definió el guardado parcial y la reanudación desde el primer pendiente.
+- Se definió el cálculo del porcentaje solo sobre pasos aplicables.
+- Se definió que Webchat y Voz pueden resolverse como `No se utilizará`.
+- Se definieron las reglas de finalización y redirección al dashboard.
+- Se estableció que onboarding y `settings/variables` comparten fuente de verdad.
+- Se estableció que ninguna de las dos vistas mostrará nombres técnicos ni
+  proveedores.
+
+### Documento creado
+
+- `docs/Plan_Configuraciones/ONBOARDING_PASOS_Y_ESTADOS.md`
+
+### Estado
+
+- Fase 1: `completada`.
+- Siguiente fase: implementar la respuesta tenant-scoped del avance y sus
+  validaciones en backend.
+
 ## [2026-08-30] — Plan inicial aprobado para implementación
 
 ### Estado
