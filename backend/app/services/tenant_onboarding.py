@@ -92,5 +92,7 @@ def build_onboarding_progress(
         "paso_actual": first_pending,
         "ultimo_paso": preferences.get("ultimo_paso"),
         "completado": completed == len(steps),
+        "requiere_onboarding": str(tenant.get("estado_onboarding") or "pendiente")
+        != "completado",
         "pasos": steps,
     }

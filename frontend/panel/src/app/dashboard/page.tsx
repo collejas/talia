@@ -17,11 +17,11 @@ type DashboardPageProps = {
 };
 
 export default async function Page({ searchParams }: DashboardPageProps) {
-  const onboarding = await callCrmApi<{ completado?: boolean }>("/tenant/me/onboarding", {
+  const onboarding = await callCrmApi<{ completado?: boolean; requiere_onboarding?: boolean }>("/tenant/me/onboarding", {
     organizacionId: null,
     withUserToken: true,
   })
-  if (onboarding.ok && onboarding.data.completado === false) {
+  if (onboarding.ok && onboarding.data.requiere_onboarding && onboarding.data.completado === false) {
     redirect("/onboarding")
   }
   const resolvedParams = searchParams ? await searchParams : {};

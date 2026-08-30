@@ -17,7 +17,18 @@ type OnboardingProgressData = {
   paso_actual: string | null
   ultimo_paso: string | null
   completado: boolean
+  requiere_onboarding: boolean
   pasos: OnboardingStep[]
+}
+
+const tabByStep: Record<string, string> = {
+  organizacion: "brand",
+  inteligencia: "openai",
+  webchat: "webchat",
+  whatsapp: "whatsapp",
+  voz: "twilio",
+  agenda: "calendar",
+  correo: "mail",
 }
 
 export function OnboardingProgress({ initialProgress }: { initialProgress: OnboardingProgressData }) {
@@ -41,6 +52,26 @@ export function OnboardingProgress({ initialProgress }: { initialProgress: Onboa
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudo guardar la decisión")
     } finally {
+      setSaving(false)
+    }
+  }
+
+  async function reviewStep(stepId: string) {
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch("/api/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ultimo_paso: stepId }),
+      })
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string }
+        throw new Error(data.error || "No se pudo guardar el avance")
+      }
+      router.push(`/settings/variables?tab=${tabByStep[stepId] || "brand"}`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo abrir el paso")
       setSaving(false)
     }
   }
@@ -80,31 +111,44 @@ export function OnboardingProgress({ initialProgress }: { initialProgress: Onboa
               {stepHelp[step.id] && !step.completado && (
                 <p className="mt-2 text-sm text-muted-foreground">{stepHelp[step.id]}</p>
               )}
-              {(step.id === "webchat" || step.id === "voz") && !step.completado && (
-                <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
+                {step.completado ? (
                   <button
                     className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
                     disabled={saving}
-                    onClick={() => void saveChoice(step.id === "webchat" ? "webchat_decision" : "voz_decision", "no_usar")}
+                    onClick={() => void reviewStep(step.id)}
                   >
-                    No lo utilizaré
+                    Revisar paso
                   </button>
+                ) : null}
+                {!step.completado && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(step.id === "webchat" || step.id === "voz") && (
+                    <button
+                      className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                      disabled={saving}
+                      onClick={() => void saveChoice(step.id === "webchat" ? "webchat_decision" : "voz_decision", "no_usar")}
+                    >
+                      No lo utilizaré
+                    </button>
+                  )}
                   <button
                     className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                     disabled={saving}
-                    onClick={() => router.push(`/settings/variables?tab=${step.id}`)}
+                    onClick={() => void reviewStep(step.id)}
                   >
-                    Configurar
+                    Revisar paso
                   </button>
                 </div>
-              )}
+                )}
+              </div>
             </div>
           ))}
         </div>
 
         {error && <p className="mt-5 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         <div className="mt-8 flex flex-wrap gap-3">
-          <button className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground" onClick={() => router.push(progress.paso_actual ? `/settings/variables?tab=${progress.paso_actual}` : "/dashboard")}>
+          <button className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground" onClick={() => progress.paso_actual ? void reviewStep(progress.paso_actual) : router.push("/dashboard")} disabled={saving}>
             {progress.paso_actual ? "Continuar configuración" : "Ir al dashboard"}
           </button>
           <button className="rounded-md border px-4 py-2 text-sm" onClick={() => router.refresh()}>

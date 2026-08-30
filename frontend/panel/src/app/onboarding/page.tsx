@@ -10,6 +10,7 @@ type OnboardingPageData = {
   paso_actual: string | null
   ultimo_paso: string | null
   completado: boolean
+  requiere_onboarding: boolean
   pasos: Array<{
     id: string
     titulo: string
@@ -29,7 +30,7 @@ export default async function OnboardingPage() {
   if (!response.ok) {
     redirect("/dashboard")
   }
-  if (response.data.completado) {
+  if (!response.data.requiere_onboarding || response.data.completado) {
     redirect("/dashboard")
   }
   return <OnboardingProgress initialProgress={response.data} />

@@ -56,6 +56,7 @@ class TenantOnboardingProgressResponse(BaseModel):
     paso_actual: str | None = None
     ultimo_paso: str | None = None
     completado: bool
+    requiere_onboarding: bool = True
     errores: list[str] = Field(default_factory=list)
     pasos: list[dict[str, Any]] = Field(default_factory=list)
 

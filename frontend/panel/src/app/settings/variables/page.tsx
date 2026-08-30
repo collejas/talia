@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { SettingsErrorCallout } from "@/components/settings/settings-helpers"
@@ -457,11 +458,14 @@ export default async function SettingsVariablesPage({
     <AppViewLayout title="Settings · Organización" withThemeToggle={false} contentClassName="px-0">
       <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
         <header className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Configuración / Variables</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Configuración de la organización</h1>
-          <p className="text-muted-foreground max-w-3xl text-sm">
-            Esta vista contiene la configuración de la organización seleccionada.
-          </p>
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Configuración</p>
+            <h1 className="text-3xl font-semibold tracking-tight">Configuración de la organización</h1>
+            <p className="text-muted-foreground max-w-3xl text-sm">
+            Revisa y actualiza las funciones de tu organización desde un solo lugar.
+            </p>
+          <Link href="/onboarding" className="inline-flex text-sm font-medium text-primary hover:underline">
+            Ver avance de configuración
+          </Link>
         </header>
 
         <SettingsErrorCallout title="No se pudo recuperar la información" messages={errors} />
@@ -475,7 +479,7 @@ export default async function SettingsVariablesPage({
             <CardHeader className="space-y-1">
               <CardTitle>Datos generales</CardTitle>
               <CardDescription>
-                Actualiza identidad, contacto, ubicación, fiscalidad y branding de <code>public.organizaciones</code>.
+                Actualiza la identidad, contacto, ubicación y datos fiscales de tu organización.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -514,12 +518,12 @@ export default async function SettingsVariablesPage({
                   <TabsTrigger value="web-tracking">Página Web</TabsTrigger>
                   <TabsTrigger value="calendar">Agenda</TabsTrigger>
                   <TabsTrigger value="mail">Correo</TabsTrigger>
-                  <TabsTrigger value="twilio">Twilio</TabsTrigger>
+                  <TabsTrigger value="twilio">Telefonía</TabsTrigger>
                   <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-                  <TabsTrigger value="whatsapp-prosp">Whats-Prosp</TabsTrigger>
+                  <TabsTrigger value="whatsapp-prosp">WhatsApp para prospección</TabsTrigger>
                   <TabsTrigger value="messenger">Messenger</TabsTrigger>
                   <TabsTrigger value="busqueda">Búsqueda</TabsTrigger>
-                  <TabsTrigger value="openai">OpenAI</TabsTrigger>
+                  <TabsTrigger value="openai">Inteligencia</TabsTrigger>
                   <TabsTrigger value="close-lead">Cierre</TabsTrigger>
                   <TabsTrigger value="secrets">Secretos</TabsTrigger>
                 </TabsList>
