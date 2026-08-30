@@ -326,6 +326,24 @@ async def update_tenant_email_sender(
     return await _update_sender(context.organizacion_id, _parse_domain_id(domain_id), payload, repository)
 
 
+@router.delete("/domains/{domain_id}", response_model=dict[str, bool])
+async def remove_tenant_email_domain(
+    domain_id: UUID,
+    context: TenantContext = Depends(require_tenant_context),
+    user_token: str = Depends(require_user_token),
+    repository: PostmarkRepository = Depends(get_postmark_repository),
+) -> dict[str, bool]:
+    await require_permission(user_token, "settings.manage")
+    try:
+        await repository.remove_domain(
+            organizacion_id=context.organizacion_id,
+            domain_id=domain_id,
+        )
+    except PostmarkRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="sending_domain_remove_failed") from exc
+    return {"ok": True}
+
+
 @admin_router.get("/{organizacion_id}/email-service", response_model=TenantEmailServiceResponse)
 async def get_admin_tenant_email_service(
     organizacion_id: UUID,
@@ -395,6 +413,23 @@ async def update_admin_tenant_email_sender(
     repository: PostmarkRepository = Depends(get_postmark_repository),
 ) -> TenantEmailDomain:
     return await _update_sender(organizacion_id, _parse_domain_id(domain_id), payload, repository)
+
+
+@admin_router.delete("/{organizacion_id}/email-service/domains/{domain_id}", response_model=dict[str, bool])
+async def remove_admin_tenant_email_domain(
+    organizacion_id: UUID,
+    domain_id: UUID,
+    _: UUID = Depends(require_master_tenant_owner),
+    repository: PostmarkRepository = Depends(get_postmark_repository),
+) -> dict[str, bool]:
+    try:
+        await repository.remove_domain(
+            organizacion_id=organizacion_id,
+            domain_id=domain_id,
+        )
+    except PostmarkRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="sending_domain_remove_failed") from exc
+    return {"ok": True}
 
 
 __all__ = ["router", "admin_router"]

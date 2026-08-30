@@ -1259,6 +1259,23 @@ export async function verifyTenantEmailDomainAction(_: CrudActionState, formData
   }
 }
 
+export async function removeTenantEmailDomainAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
+  try {
+    const domainId = getText(formData, "email_domain_id")
+    if (!domainId) throw new Error("Falta el dominio a eliminar.")
+    const response = await callCrmApi<{ ok: boolean }>(`/tenant/me/email-service/domains/${domainId}`, {
+      method: "DELETE",
+      organizacionId: null,
+      withUserToken: true,
+    })
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath("/settings/variables")
+    return success("Dominio eliminado de la configuración de correo.")
+  } catch (error) {
+    return failure(error, "No se pudo eliminar el dominio.")
+  }
+}
+
 export async function updateTenantEmailSenderAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const domainId = getText(formData, "email_domain_id")

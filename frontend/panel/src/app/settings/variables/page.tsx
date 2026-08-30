@@ -581,6 +581,7 @@ export default async function SettingsVariablesPage({
                       data={emailServiceResp.ok ? emailServiceResp.data : null}
                       createDomainAction={tenantActionsLib.createTenantEmailDomainAction}
                       verifyDomainAction={tenantActionsLib.verifyTenantEmailDomainAction}
+                      removeDomainAction={tenantActionsLib.removeTenantEmailDomainAction}
                       updateSenderAction={tenantActionsLib.updateTenantEmailSenderAction}
                     />
                   </div>

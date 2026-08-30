@@ -52,6 +52,7 @@ type Props = {
   data: TenantEmailServiceData | null
   createDomainAction?: EmailServiceAction
   verifyDomainAction?: EmailServiceAction
+  removeDomainAction?: EmailServiceAction
   updateSenderAction?: EmailServiceAction
   actionTenantId?: string
 }
@@ -129,6 +130,26 @@ function DomainVerifyForm({ domainId, action, tenantId }: { domainId: string; ac
   )
 }
 
+function DomainRemoveForm({ domain, action, tenantId }: { domain: TenantEmailServiceData["domains"][number]; action: EmailServiceAction; tenantId?: string }) {
+  const [state, formAction] = useActionState(action, { status: "idle" } satisfies EmailServiceActionState)
+
+  return (
+    <form
+      action={formAction}
+      onSubmit={(event) => {
+        if (!window.confirm(`¿Eliminar el dominio ${domain.domain} de la configuración de correo?`)) {
+          event.preventDefault()
+        }
+      }}
+    >
+      {tenantId ? <input type="hidden" name="tenant_id" value={tenantId} /> : null}
+      <input type="hidden" name="email_domain_id" value={domain.id} />
+      <Button type="submit" size="sm" variant="destructive">Eliminar</Button>
+      {state.status !== "idle" ? <p className={state.status === "error" ? "mt-2 text-xs text-destructive" : "mt-2 text-xs text-muted-foreground"}>{state.message}</p> : null}
+    </form>
+  )
+}
+
 function SenderForm({
   domain,
   action,
@@ -187,7 +208,7 @@ function SenderForm({
   )
 }
 
-export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, updateSenderAction, actionTenantId }: Props) {
+export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, removeDomainAction, updateSenderAction, actionTenantId }: Props) {
   const status = data?.migration_status ?? "pending"
   const plan = data?.plan
   const usage = data?.usage
@@ -242,6 +263,9 @@ export function TenantEmailServicePanel({ data, createDomainAction, verifyDomain
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={domain.status === "verified" ? "secondary" : "outline"}>{label(domain.status, statusLabels)}</Badge>
                       {verifyDomainAction && domain.status !== "verified" ? <DomainVerifyForm domainId={domain.id} action={verifyDomainAction} tenantId={actionTenantId} /> : null}
+                      {removeDomainAction ? (
+                        <DomainRemoveForm domain={domain} action={removeDomainAction} tenantId={actionTenantId} />
+                      ) : null}
                     </div>
                   </div>
                   {updateSenderAction && domain.status === "verified" ? (

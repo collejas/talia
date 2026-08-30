@@ -52,6 +52,7 @@ class PostmarkRepository:
             params={
                 "select": "id,organizacion_id,domain_name,status,dkim_host,dkim_record_value,return_path_domain,return_path_cname_target,dkim_verified_at,return_path_verified_at,verified_at,blocked_at,default_from_email,default_from_name,reply_to_email",
                 "organizacion_id": f"eq.{organizacion_id}",
+                "status": "not.eq.removed",
                 "order": "created_at.asc",
             },
         )
@@ -170,6 +171,27 @@ class PostmarkRepository:
         )
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise PostmarkRepositoryError("sender_update_invalid_response")
+        return data[0]
+
+    async def remove_domain(self, *, organizacion_id: UUID, domain_id: UUID) -> dict[str, Any]:
+        """Da de baja un dominio del tenant sin borrarlo de la cuenta central."""
+        data = await self._rest_patch(
+            "/rest/v1/tenant_email_domains",
+            params={
+                "id": f"eq.{domain_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "status": "not.eq.removed",
+            },
+            payload={
+                "status": "removed",
+                "blocked_at": datetime.now(timezone.utc).isoformat(),
+                "default_from_email": None,
+                "default_from_name": None,
+                "reply_to_email": None,
+            },
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("domain_remove_invalid_response")
         return data[0]
 
     async def queue_message(self, *, payload: dict[str, Any]) -> dict[str, Any]:

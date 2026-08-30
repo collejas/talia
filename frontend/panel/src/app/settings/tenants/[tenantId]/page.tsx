@@ -12,6 +12,7 @@ import {
   activateTenantContextAndRedirectAction,
   createAdminTenantEmailDomainAction,
   verifyAdminTenantEmailDomainAction,
+  removeAdminTenantEmailDomainAction,
   updateAdminTenantEmailSenderAction,
 } from "./actions"
 import { fetchTenantCloseLeadPolicy } from "@/app/settings/close-lead/actions"
@@ -589,6 +590,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                     actionTenantId={tenantId}
                     createDomainAction={createAdminTenantEmailDomainAction}
                     verifyDomainAction={verifyAdminTenantEmailDomainAction}
+                    removeDomainAction={removeAdminTenantEmailDomainAction}
                     updateSenderAction={updateAdminTenantEmailSenderAction}
                   />
                 </div>
