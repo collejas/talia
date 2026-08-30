@@ -28,7 +28,7 @@ export default async function OnboardingPage() {
     withUserToken: true,
   })
   if (!response.ok) {
-    redirect("/dashboard")
+    redirect("/auth/login?redirectTo=%2Fonboarding")
   }
   return <OnboardingProgress initialProgress={response.data} />
 }
