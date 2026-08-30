@@ -1761,7 +1761,7 @@ export function TenantMailSettings({
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="mail_incoming_server">mail.incoming_server</Label>
+            <Label htmlFor="mail_incoming_server">Servidor para recibir correo</Label>
             <Input
               id="mail_incoming_server"
               name="mail_incoming_server"
@@ -1770,7 +1770,7 @@ export function TenantMailSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="mail_incoming_port_imap">mail.incoming_port_imap</Label>
+            <Label htmlFor="mail_incoming_port_imap">Puerto para recibir correo</Label>
             <Input
               id="mail_incoming_port_imap"
               name="mail_incoming_port_imap"
@@ -1780,7 +1780,7 @@ export function TenantMailSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="mail_outgoing_server">mail.outgoing_server</Label>
+            <Label htmlFor="mail_outgoing_server">Servidor para enviar correo</Label>
             <Input
               id="mail_outgoing_server"
               name="mail_outgoing_server"
@@ -1789,7 +1789,7 @@ export function TenantMailSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="mail_outgoing_port_smtp">mail.outgoing_port_smtp</Label>
+            <Label htmlFor="mail_outgoing_port_smtp">Puerto para enviar correo</Label>
             <Input
               id="mail_outgoing_port_smtp"
               name="mail_outgoing_port_smtp"
@@ -1803,15 +1803,15 @@ export function TenantMailSettings({
         <div className="space-y-3 rounded-lg border border-border/60 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-medium">Brevo</h3>
-              <p className="text-xs text-muted-foreground">Configuración del API de Brevo usada en los envíos.</p>
+              <h3 className="text-sm font-medium">Envíos de correo</h3>
+              <p className="text-xs text-muted-foreground">Configura el servicio de envío y el remitente de tu organización.</p>
             </div>
             <p className="text-xs font-medium text-muted-foreground">
-              {hasBrevoApiKey ? "Secreto registrado" : "Sin secreto registrado"}
+              {hasBrevoApiKey ? "Servicio conectado" : "Conexión pendiente"}
             </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="brevo_base_url">brevo.base_url</Label>
+            <Label htmlFor="brevo_base_url">Dirección del servicio de envío</Label>
             <Input
               id="brevo_base_url"
               name="brevo_base_url"
@@ -1820,7 +1820,7 @@ export function TenantMailSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="brevo_sender_email">brevo.sender_email</Label>
+            <Label htmlFor="brevo_sender_email">Correo del remitente</Label>
             <Input
               id="brevo_sender_email"
               name="brevo_sender_email"
@@ -1829,7 +1829,7 @@ export function TenantMailSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="brevo_sender_name">brevo.sender_name</Label>
+            <Label htmlFor="brevo_sender_name">Nombre del remitente</Label>
             <Input
               id="brevo_sender_name"
               name="brevo_sender_name"
@@ -1838,7 +1838,7 @@ export function TenantMailSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="brevo_api_key">brevo.api_key (secreto, tier B)</Label>
+            <Label htmlFor="brevo_api_key">Clave del servicio de envío</Label>
             <Input id="brevo_api_key" name="brevo_api_key" type="password" placeholder="Pega la clave" />
             <p className="text-xs text-muted-foreground">
               El valor solo se guarda al pegar uno nuevo; el sistema nunca te muestra el valor existente.
@@ -1855,7 +1855,7 @@ export function TenantMailSettings({
               className="size-4"
               defaultChecked={Boolean(initialValues.mail_use_ssl)}
             />
-            <Label htmlFor="mail_use_ssl">mail.use_ssl</Label>
+            <Label htmlFor="mail_use_ssl">Usar conexión segura para recibir</Label>
           </div>
           <div className="flex items-center gap-3">
             <input
@@ -1865,28 +1865,28 @@ export function TenantMailSettings({
               className="size-4"
               defaultChecked={Boolean(initialValues.mail_use_tls)}
             />
-            <Label htmlFor="mail_use_tls">mail.use_tls</Label>
+            <Label htmlFor="mail_use_tls">Usar conexión segura para enviar</Label>
           </div>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Esta sección guarda la configuración no sensible de <code>organizaciones.config.mail</code>.
+          Estos datos permiten conectar el correo de tu organización para recibir y enviar mensajes.
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="mail_username">mail.username (secreto, tier A)</Label>
+            <Label htmlFor="mail_username">Usuario del correo</Label>
             <Input id="mail_username" name="mail_username" placeholder="hola@talia.mx" defaultValue="" />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="mail_password">mail.password (secreto, tier B)</Label>
+            <Label htmlFor="mail_password">Contraseña del correo</Label>
             <Input id="mail_password" name="mail_password" type="password" placeholder="Pega para rotar" defaultValue="" />
           </div>
         </div>
 
         <div className="flex items-center justify-between gap-3">
           <FormStatusMessage state={state} />
-          <SubmitButton label="Guardar Correo" pendingLabel="Guardando..." />
+          <SubmitButton label="Guardar correo" pendingLabel="Guardando..." />
         </div>
       </form>
 
@@ -1896,7 +1896,7 @@ export function TenantMailSettings({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-medium">Validación</h3>
-            <p className="text-xs text-muted-foreground">Revisa faltantes de config/secretos.</p>
+            <p className="text-xs text-muted-foreground">Comprueba que el correo esté listo para funcionar.</p>
           </div>
           <Button type="submit" variant="outline" size="sm">
             Validar
@@ -1973,7 +1973,7 @@ export function TenantBusquedaSettings({
       <input type="hidden" name="tenant_id" value={tenantId} />
 
       <div className="space-y-2">
-        <Label htmlFor="denue_base_url">denue.base_url</Label>
+        <Label htmlFor="denue_base_url">Fuente de datos de negocios</Label>
         <Input
           id="denue_base_url"
           name="denue_base_url"
@@ -1981,12 +1981,12 @@ export function TenantBusquedaSettings({
           defaultValue={initialValues.denue_base_url ?? ""}
         />
         <p className="text-xs text-muted-foreground">
-          Se graba en <code>organizaciones.config.denue.base_url</code>.
+          Dirección de la fuente de datos utilizada por la búsqueda.
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="denue_token">denue.token (secreto, tier A)</Label>
+        <Label htmlFor="denue_token">Clave de acceso a la fuente de datos</Label>
         <Input id="denue_token" name="denue_token" type="password" placeholder="Pega el token" />
         <p className="text-xs text-muted-foreground">
           {hasToken
@@ -1998,13 +1998,13 @@ export function TenantBusquedaSettings({
       <div className="space-y-3 rounded-lg border border-border/60 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-medium">Google Places</h3>
+            <h3 className="text-sm font-medium">Búsqueda de lugares</h3>
             <p className="text-xs text-muted-foreground">
-              Configura los endpoints y límites que usa el buscador de Google por organización.
+              Configura las fuentes y límites que utiliza el buscador por organización.
             </p>
           </div>
           <p className="text-xs font-medium text-muted-foreground">
-            {hasGoogleApiKey ? "API key registrada" : "Sin API key registrada"}
+            {hasGoogleApiKey ? "Conexión registrada" : "Conexión pendiente"}
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -2165,7 +2165,7 @@ export function TenantTwilioSettings({
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="twilio_phone_number">twilio.phone_number</Label>
+            <Label htmlFor="twilio_phone_number">Número de teléfono</Label>
             <Input
               id="twilio_phone_number"
               name="twilio_phone_number"
@@ -2174,7 +2174,7 @@ export function TenantTwilioSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="twilio_phone_number_sid">twilio.phone_number_sid</Label>
+            <Label htmlFor="twilio_phone_number_sid">Identificador del número</Label>
             <Input
               id="twilio_phone_number_sid"
               name="twilio_phone_number_sid"
@@ -2192,12 +2192,12 @@ export function TenantTwilioSettings({
             className="size-4"
             defaultChecked={Boolean(initialValues.twilio_validate_signatures)}
           />
-          <Label htmlFor="twilio_validate_signatures">twilio.validate_signatures</Label>
+          <Label htmlFor="twilio_validate_signatures">Validar llamadas recibidas</Label>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="voice_webhook_path">voice.webhook_path</Label>
+            <Label htmlFor="voice_webhook_path">Ruta de atención de llamadas</Label>
             <Input
               id="voice_webhook_path"
               name="voice_webhook_path"
@@ -2206,7 +2206,7 @@ export function TenantTwilioSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="voice_debug_energy_every_n">voice.energy_every_n</Label>
+            <Label htmlFor="voice_debug_energy_every_n">Frecuencia de revisión de audio</Label>
             <Input
               id="voice_debug_energy_every_n"
               name="voice_debug_energy_every_n"
@@ -2226,7 +2226,7 @@ export function TenantTwilioSettings({
               className="size-4"
               defaultChecked={Boolean(initialValues.voice_full_duplex)}
             />
-            <Label htmlFor="voice_full_duplex">voice.full_duplex</Label>
+            <Label htmlFor="voice_full_duplex">Permitir conversación en ambos sentidos</Label>
           </div>
           <div className="flex items-center gap-3">
             <input
@@ -2236,17 +2236,17 @@ export function TenantTwilioSettings({
               className="size-4"
               defaultChecked={Boolean(initialValues.voice_debug_verbose)}
             />
-            <Label htmlFor="voice_debug_verbose">voice.debug_verbose</Label>
+            <Label htmlFor="voice_debug_verbose">Activar diagnóstico detallado</Label>
           </div>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Esta sección guarda la configuración no sensible de <code>organizaciones.config.twilio</code> y <code>organizaciones.config.voice</code>.
+          Configura el número y el comportamiento de las llamadas de tu organización.
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="twilio_account_sid">twilio.account_sid (secreto, tier A)</Label>
+            <Label htmlFor="twilio_account_sid">Identificador de la cuenta telefónica</Label>
             <Input
               id="twilio_account_sid"
               name="twilio_account_sid"
@@ -2256,7 +2256,7 @@ export function TenantTwilioSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="twilio_auth_token">twilio.auth_token (secreto, tier B)</Label>
+            <Label htmlFor="twilio_auth_token">Clave de la cuenta telefónica</Label>
             <Input
               id="twilio_auth_token"
               name="twilio_auth_token"
@@ -2266,7 +2266,7 @@ export function TenantTwilioSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="voice_stream_jwt_secret">voice.stream_jwt_secret (secreto, tier B)</Label>
+            <Label htmlFor="voice_stream_jwt_secret">Clave segura para la llamada</Label>
             <Input
               id="voice_stream_jwt_secret"
               name="voice_stream_jwt_secret"
@@ -2279,7 +2279,7 @@ export function TenantTwilioSettings({
 
         <div className="flex items-center justify-between gap-3">
           <FormStatusMessage state={state} />
-          <SubmitButton label="Guardar Twilio" pendingLabel="Guardando..." />
+          <SubmitButton label="Guardar telefonía" pendingLabel="Guardando..." />
         </div>
       </form>
 
@@ -2289,7 +2289,7 @@ export function TenantTwilioSettings({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-medium">Validación</h3>
-            <p className="text-xs text-muted-foreground">Revisa faltantes de config/secretos para Twilio/Voz.</p>
+            <p className="text-xs text-muted-foreground">Comprueba que la telefonía esté lista para funcionar.</p>
           </div>
           <Button type="submit" variant="outline" size="sm">
             Validar

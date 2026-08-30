@@ -277,3 +277,20 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
 
 - Las claves específicas históricas permanecen almacenadas para permitir una
   transición segura, pero ya no se solicitan en los formularios nuevos.
+
+## [2026-08-30] — Lenguaje funcional en correo, telefonía y búsqueda
+
+### Cambios realizados
+
+- Se reemplazaron etiquetas de variables internas por nombres comprensibles
+  para correo, telefonía y búsqueda.
+- Se eliminaron referencias visibles a proveedores en títulos y ayudas.
+- Los estados de conexión ahora se muestran como “Conexión registrada”,
+  “Servicio conectado” o “Conexión pendiente”.
+- Las validaciones de estas secciones ahora se describen como una comprobación
+  de funcionamiento.
+
+### Pendiente
+
+- Sustituir los resultados técnicos de validación por mensajes funcionales y
+  acciones concretas para el tenant.
