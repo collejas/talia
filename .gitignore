@@ -44,6 +44,8 @@ pip-wheel-metadata/
 
 *.zip
 logs/
+!frontend/panel/src/app/api/crm/ventas/logs/
+!frontend/panel/src/app/api/crm/ventas/logs/route.ts
 releases/
 # Backups
 backups/*/*_full.dump
