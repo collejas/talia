@@ -506,11 +506,13 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               {tenantInfo?.nombre ? ` · ${tenantInfo.nombre}` : ""}
             </CardDescription>
           </CardHeader>
-        <CardContent>
+          <CardContent>
           <Tabs defaultValue="webchat">
-          <TabsList className="grid grid-cols-11">
+          <TabsList className="flex h-auto flex-wrap gap-1">
+            <TabsTrigger value="brand">Imagen empresarial</TabsTrigger>
             <TabsTrigger value="webchat">Webchat</TabsTrigger>
-            <TabsTrigger value="calendar">Calendario</TabsTrigger>
+            <TabsTrigger value="web-tracking">Página Web</TabsTrigger>
+            <TabsTrigger value="calendar">Agenda</TabsTrigger>
             <TabsTrigger value="mail">Correo</TabsTrigger>
             <TabsTrigger value="twilio">Twilio</TabsTrigger>
             <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
@@ -521,6 +523,23 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
             <TabsTrigger value="close-lead">Cierre</TabsTrigger>
             <TabsTrigger value="secrets">Secretos</TabsTrigger>
             </TabsList>
+            <TabsContent value="brand" className="pt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Imagen empresarial</CardTitle>
+                  <CardDescription>
+                    Esta configuración se administra dentro del contexto operativo del tenant.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form action={activateTenantContextAndRedirectAction}>
+                    <input type="hidden" name="tenant_id" value={tenantId} />
+                    <input type="hidden" name="redirect_to" value="brand" />
+                    <Button type="submit">Abrir Imagen empresarial</Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
             <TabsContent value="webchat" className="pt-4">
               <TenantWebchatSettings
                 tenantId={tenantId}
@@ -541,6 +560,23 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                   webchat_alias: webchatRoute,
                 }}
               />
+            </TabsContent>
+            <TabsContent value="web-tracking" className="pt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Página Web</CardTitle>
+                  <CardDescription>
+                    Administra instalaciones de tracking, dominios autorizados y verificación desde el contexto operativo del tenant.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form action={activateTenantContextAndRedirectAction}>
+                    <input type="hidden" name="tenant_id" value={tenantId} />
+                    <input type="hidden" name="redirect_to" value="web-tracking" />
+                    <Button type="submit">Abrir Página Web</Button>
+                  </form>
+                </CardContent>
+              </Card>
             </TabsContent>
             <TabsContent value="calendar" className="pt-4">
               <TenantCalendarSettings tenantId={tenantId} initialValues={calendarInitialValues} />

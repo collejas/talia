@@ -62,6 +62,10 @@ export async function activateTenantContextAndRedirectAction(formData: FormData)
   })
 
   revalidatePath("/settings/usuarios")
+  const target = getText(formData, "redirect_to")
+  if (target === "brand" || target === "web-tracking") {
+    redirect(`/settings/variables?tab=${target}`)
+  }
   redirect("/settings/usuarios")
 }
 

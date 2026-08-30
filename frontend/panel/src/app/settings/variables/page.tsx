@@ -174,7 +174,28 @@ function getNestedStringArray(root: Record<string, unknown>, key: string): strin
   return items.length ? items : undefined
 }
 
-export default async function SettingsVariablesPage() {
+export default async function SettingsVariablesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const requestedTab = (await searchParams).tab
+  const defaultTab =
+    requestedTab === "brand" ||
+    requestedTab === "webchat" ||
+    requestedTab === "web-tracking" ||
+    requestedTab === "calendar" ||
+    requestedTab === "mail" ||
+    requestedTab === "twilio" ||
+    requestedTab === "whatsapp" ||
+    requestedTab === "whatsapp-prosp" ||
+    requestedTab === "messenger" ||
+    requestedTab === "busqueda" ||
+    requestedTab === "openai" ||
+    requestedTab === "close-lead" ||
+    requestedTab === "secrets"
+      ? requestedTab
+      : "brand"
   const settingsResp = await callCrmApi<TenantSettingsResponse>("/tenant/me/settings", {
     organizacionId: null,
     withUserToken: true,
@@ -486,7 +507,7 @@ export default async function SettingsVariablesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue="brand">
+              <Tabs defaultValue={defaultTab}>
                 <TabsList className="flex h-auto flex-wrap gap-1">
                   <TabsTrigger value="brand">Imagen empresarial</TabsTrigger>
                   <TabsTrigger value="webchat">Webchat</TabsTrigger>
