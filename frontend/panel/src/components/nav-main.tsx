@@ -63,8 +63,9 @@ export function NavMain({ items }: { items: NavItem[] }) {
         <SidebarMenu>
           {items.map((item) => {
             const isPlaceholder = !item.url || item.url === "#"
-            const isActive = !isPlaceholder && pathname.startsWith(item.url)
-            const childIsActive = item.children?.some((child) => pathname.startsWith(child.url))
+            const itemPath = item.url.split("?", 1)[0]
+            const isActive = !isPlaceholder && pathname.startsWith(itemPath)
+            const childIsActive = item.children?.some((child) => pathname.startsWith(child.url.split("?", 1)[0]))
             const hasChildren = Array.isArray(item.children) && item.children.length > 0
 
             const content = (

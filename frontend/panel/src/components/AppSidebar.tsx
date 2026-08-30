@@ -90,7 +90,7 @@ const NAVIGATION: {
   navSecondary: NavSecondaryItem[]
 } = {
   navMain: [
-    { title: "Dashboard", url: "/dashboard", icon: IconChartBar, permission: "ver_panel" },
+    { title: "Dashboard", url: "/dashboard?from_onboarding=1", icon: IconChartBar, permission: "ver_panel" },
     {
       title: "CRM",
       url: "/crm",
@@ -417,7 +417,7 @@ export function AppSidebar({
     }
     if (!dashboardRoutePrefetchedRef.current) {
       dashboardRoutePrefetchedRef.current = true
-      void router.prefetch("/dashboard")
+      void router.prefetch("/dashboard?from_onboarding=1")
     }
     const hasMapaDeConversion = navItems.some((item) => item.url === "/mapa-de-conversion")
     if (!hasMapaDeConversion || mapaRoutePrefetchedRef.current) {
@@ -511,7 +511,7 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:!p-1.5">
-              <a href="/dashboard" className="flex items-center gap-3">
+              <a href="/dashboard?from_onboarding=1" className="flex items-center gap-3">
                 <Image
                   src="/assets/logos/Logo8.png"
                   alt="Tal-IA"
