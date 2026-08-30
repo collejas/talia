@@ -3,6 +3,38 @@
 Este archivo registra el avance del plan de simplificación de
 `/settings/variables`.
 
+## [2026-08-30] — Fase 0: inventario del alta, acceso y configuración
+
+### Revisión realizada
+
+- Se revisó el flujo documentado de alta manual y alta comercial.
+- Se confirmó que el aprovisionamiento aplica defaults del plan, crea la estructura
+  inicial y prepara el usuario propietario.
+- Se confirmó que la confirmación de correo, la invitación y el rol inicial ya tienen
+  un flujo común.
+- Se confirmó que existe un estado general de onboarding en la organización.
+- Se revisó el acceso actual después del login.
+- Se revisaron las rutas tenant-scoped de configuración, secretos, rutas y
+  validaciones.
+
+### Hallazgos
+
+- El acceso posterior al login utiliza el dashboard como destino predeterminado.
+- No existe todavía una vista dedicada de onboarding para configuración del tenant.
+- El estado general existente no representa por sí solo pasos, subpasos, validaciones
+  ni decisiones de funciones opcionales.
+- Las configuraciones actuales pueden reutilizarse como fuente de verdad del
+  onboarding.
+- El tenant maestro debe conservar su flujo administrativo y no quedar sujeto al
+  onboarding de tenants clientes.
+
+### Resultado de la fase
+
+- Estado: `completada`.
+- No se modificó código, base de datos ni comportamiento de acceso.
+- La siguiente fase es definir el contrato de pasos, estados, decisiones opcionales,
+  cálculo de avance y guardado parcial.
+
 ## [2026-08-30] — Verificación de conexiones y enlaces agregada al plan
 
 ### Decisión
