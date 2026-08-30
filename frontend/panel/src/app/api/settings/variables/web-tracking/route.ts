@@ -2,9 +2,10 @@ import { NextResponse } from "next/server"
 
 import { callCrmApi } from "@/lib/api/crm"
 
-export async function GET() {
+export async function GET(request: Request) {
+  const tenantId = new URL(request.url).searchParams.get("tenant_id")
   const response = await callCrmApi("/tenant/me/web-tracking", {
-    organizacionId: null,
+    organizacionId: tenantId,
     withUserToken: true,
   })
   if (!response.ok) {
@@ -14,10 +15,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const tenantId = new URL(request.url).searchParams.get("tenant_id")
   const body = await request.json()
   const response = await callCrmApi("/tenant/me/web-tracking/sites", {
     method: "POST",
-    organizacionId: null,
+    organizacionId: tenantId,
     withUserToken: true,
     body,
   })

@@ -21,11 +21,13 @@ import {
   TenantEmailServicePanel,
   type TenantEmailServiceData,
 } from "../../variables/components/tenant-email-service-panel"
+import { TenantWebTrackingPanel } from "../../variables/components/tenant-web-tracking-panel"
 import {
   TenantProspeccionLimitsCard,
   type TenantProspeccionLimits,
 } from "./tenant-prospeccion-limits-card"
 import { TenantEmailQuotaCard } from "./tenant-email-quota-card"
+import { TenantContextActionButton } from "./tenant-context-action-button"
 
 import {
   TenantCalendarSettings,
@@ -533,11 +535,9 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form action={activateTenantContextAndRedirectAction}>
-                    <input type="hidden" name="tenant_id" value={tenantId} />
-                    <input type="hidden" name="redirect_to" value="brand" />
-                    <Button type="submit">Abrir Imagen empresarial</Button>
-                  </form>
+                  <TenantContextActionButton tenantId={tenantId} tab="brand">
+                    Abrir Imagen empresarial
+                  </TenantContextActionButton>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -563,21 +563,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               />
             </TabsContent>
             <TabsContent value="web-tracking" className="pt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Página Web</CardTitle>
-                  <CardDescription>
-                    Administra instalaciones de tracking, dominios autorizados y verificación desde el contexto operativo de la organización.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form action={activateTenantContextAndRedirectAction}>
-                    <input type="hidden" name="tenant_id" value={tenantId} />
-                    <input type="hidden" name="redirect_to" value="web-tracking" />
-                    <Button type="submit">Abrir Página Web</Button>
-                  </form>
-                </CardContent>
-              </Card>
+              <TenantWebTrackingPanel tenantId={tenantId} />
             </TabsContent>
             <TabsContent value="calendar" className="pt-4">
               <TenantCalendarSettings tenantId={tenantId} initialValues={calendarInitialValues} />

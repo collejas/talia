@@ -63,7 +63,7 @@ function statusVariant(status: VerificationStatus): "default" | "secondary" | "d
   return "outline"
 }
 
-export function TenantWebTrackingPanel() {
+export function TenantWebTrackingPanel({ tenantId }: { tenantId?: string }) {
   const [sites, setSites] = useState<TrackingSite[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -72,11 +72,16 @@ export function TenantWebTrackingPanel() {
   const [scriptReadyBySite, setScriptReadyBySite] = useState<Record<string, boolean>>({})
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [copiedSiteId, setCopiedSiteId] = useState<string | null>(null)
+  const tenantQuery = useMemo(
+    () => (tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : ""),
+    [tenantId],
+  )
+  const withTenantQuery = useCallback((path: string) => `${path}${tenantQuery}`, [tenantQuery])
 
   const loadSites = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/settings/variables/web-tracking", { cache: "no-store" })
+      const response = await fetch(withTenantQuery("/api/settings/variables/web-tracking"), { cache: "no-store" })
       const payload = await response.json()
       if (!response.ok) throw new Error(errorMessage(payload, "No se pudo cargar el tracking web."))
       setSites(Array.isArray(payload?.items) ? (payload.items as TrackingSite[]) : [])
@@ -85,7 +90,7 @@ export function TenantWebTrackingPanel() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [withTenantQuery])
 
   useEffect(() => {
     void loadSites()
@@ -95,14 +100,14 @@ export function TenantWebTrackingPanel() {
     setMessage(null)
     setSaving(true)
     try {
-      const response = await fetch("/api/settings/variables/web-tracking", {
+      const response = await fetch(withTenantQuery("/api/settings/variables/web-tracking"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ consent_required: true }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(errorMessage(payload, "No se pudo crear la instalación."))
-      setMessage({ type: "success", text: "Instalación creada. Registra ahora el dominio del tenant." })
+      setMessage({ type: "success", text: "Instalación creada. Registra ahora el dominio de la organización." })
       await loadSites()
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo crear la instalación." })
@@ -115,7 +120,7 @@ export function TenantWebTrackingPanel() {
     setMessage(null)
     setSaving(true)
     try {
-      const response = await fetch(`/api/settings/variables/web-tracking/sites/${encodeURIComponent(site.id)}`, {
+      const response = await fetch(withTenantQuery(`/api/settings/variables/web-tracking/sites/${encodeURIComponent(site.id)}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -140,7 +145,7 @@ export function TenantWebTrackingPanel() {
     setMessage(null)
     setSaving(true)
     try {
-      const response = await fetch(`/api/settings/variables/web-tracking/sites/${encodeURIComponent(site.id)}`, {
+      const response = await fetch(withTenantQuery(`/api/settings/variables/web-tracking/sites/${encodeURIComponent(site.id)}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -164,7 +169,7 @@ export function TenantWebTrackingPanel() {
     setMessage(null)
     setSaving(true)
     try {
-      const response = await fetch(`/api/settings/variables/web-tracking/domains/${encodeURIComponent(domain.id)}`, {
+      const response = await fetch(withTenantQuery(`/api/settings/variables/web-tracking/domains/${encodeURIComponent(domain.id)}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ active: false }),
@@ -184,7 +189,7 @@ export function TenantWebTrackingPanel() {
     setMessage(null)
     setSaving(true)
     try {
-      const response = await fetch(`/api/settings/variables/web-tracking/domains/${encodeURIComponent(domain.id)}`, {
+      const response = await fetch(withTenantQuery(`/api/settings/variables/web-tracking/domains/${encodeURIComponent(domain.id)}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -204,7 +209,7 @@ export function TenantWebTrackingPanel() {
     setMessage(null)
     setSaving(true)
     try {
-      const response = await fetch(`/api/settings/variables/web-tracking/domains/${encodeURIComponent(domain.id)}`, {
+      const response = await fetch(withTenantQuery(`/api/settings/variables/web-tracking/domains/${encodeURIComponent(domain.id)}`), {
         method: "POST",
       })
       const payload = await response.json()
@@ -241,7 +246,7 @@ export function TenantWebTrackingPanel() {
             <div>
               <CardTitle>Página Web</CardTitle>
               <CardDescription>
-                Instala un único script en el sitio del tenant para registrar sesiones, referrals y UTM en Mapa de Conversión.
+                Instala un único script en el sitio de la organización para registrar sesiones, referrals y UTM en Mapa de Conversión.
               </CardDescription>
             </div>
             <Button type="button" onClick={() => void createSite()} disabled={saving}>

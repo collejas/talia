@@ -8,7 +8,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.api.routes.admin import (
@@ -245,6 +245,7 @@ def _extract_organizacion_id_from_metadata(user: dict[str, Any]) -> UUID | None:
 
 
 async def require_tenant_context(
+    request: Request,
     user_token: str = Depends(require_user_token),
     platform_repo: PlatformRepository = Depends(get_platform_repo),
     crm_repo: CRMRepository = Depends(get_crm_repo),
@@ -274,6 +275,16 @@ async def require_tenant_context(
     organizacion_id = organizacion_id_from_db or organizacion_id_from_metadata
     if not organizacion_id:
         raise HTTPException(status_code=403, detail="organizacion_not_found")
+
+    requested_organizacion_id = request.headers.get("x-organizacion-id")
+    if requested_organizacion_id:
+        try:
+            requested_id = UUID(requested_organizacion_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="organizacion_id_invalid") from exc
+        if not await platform_repo.is_platform_admin(user_id=user_id):
+            raise HTTPException(status_code=403, detail="platform_admin_required_for_organizacion_context")
+        organizacion_id = requested_id
 
     return TenantContext(user_id=user_id, organizacion_id=organizacion_id)
 
