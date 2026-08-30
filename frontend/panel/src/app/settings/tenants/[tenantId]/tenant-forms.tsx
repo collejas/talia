@@ -3302,34 +3302,34 @@ export function TenantOpenaiSettings({
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-medium">Openai General</h3>
-            <p className="text-xs text-muted-foreground">Project ID y clave base del proyecto de prompts.</p>
+            <h3 className="text-sm font-medium">Conexión de inteligencia</h3>
+            <p className="text-xs text-muted-foreground">Conexión principal que utilizarán las funciones inteligentes.</p>
           </div>
           <p className="text-xs font-medium text-muted-foreground">
-            {hasGeneralApiKey ? "Secreto registrado" : "Sin secreto registrado"}
+            {hasGeneralApiKey ? "Conexión registrada" : "Conexión pendiente"}
           </p>
         </div>
         <form action={generalAction} className="space-y-3">
           <input type="hidden" name="tenant_id" value={tenantId} />
           <div className="space-y-2">
-            <Label htmlFor="openai_general_project_id">TALIA_OPENAI_PROJECT_ID</Label>
+            <Label htmlFor="openai_general_project_id">Identificador de conexión</Label>
             <Input
               id="openai_general_project_id"
               name="openai_general_project_id"
-              placeholder="sk-proj-..."
+              placeholder="Opcional"
               defaultValue={initialValues.general_project_id ?? ""}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="openai_general_api_key">TALIA_OPENAI_API_KEY (tier B)</Label>
-            <Input id="openai_general_api_key" name="openai_general_api_key" type="password" placeholder="Pega la clave" />
+            <Label htmlFor="openai_general_api_key">Clave de conexión</Label>
+            <Input id="openai_general_api_key" name="openai_general_api_key" type="password" placeholder="Pega la clave aquí" />
             <p className="text-xs text-muted-foreground">
               El valor no se muestra una vez guardado. Solo lo ve un admin si lo rota.
             </p>
           </div>
           <div className="flex items-center justify-between gap-3">
             <FormStatusMessage state={generalState} />
-            <SubmitButton label="Guardar general" pendingLabel="Guardando..." />
+            <SubmitButton label="Guardar conexión" pendingLabel="Guardando..." />
           </div>
         </form>
       </div>
@@ -3337,27 +3337,27 @@ export function TenantOpenaiSettings({
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-medium">Voz Openai</h3>
-            <p className="text-xs text-muted-foreground">Prompt + modelo usados por Twilio / Realtime.</p>
+            <h3 className="text-sm font-medium">Configuración de voz</h3>
+            <p className="text-xs text-muted-foreground">Ajustes avanzados para las conversaciones por voz.</p>
           </div>
           <p className="text-xs font-medium text-muted-foreground">
-            {hasVoiceApiKey ? "Secreto registrado" : "Sin secreto registrado"}
+            {hasVoiceApiKey ? "Configuración anterior detectada" : "Usa la conexión principal"}
           </p>
         </div>
         <form action={voiceAction} className="space-y-3">
           <input type="hidden" name="tenant_id" value={tenantId} />
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="openai_voice_prompt_id">OPENAI_PROMPT_ID</Label>
+              <Label htmlFor="openai_voice_prompt_id">Instrucción de voz</Label>
               <Input
                 id="openai_voice_prompt_id"
                 name="openai_voice_prompt_id"
-                placeholder="pmpt_..."
+                placeholder="Opcional"
                 defaultValue={initialValues.voice_prompt_id ?? ""}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="openai_voice_prompt_version">OPENAI_PROMPT_VERSION</Label>
+              <Label htmlFor="openai_voice_prompt_version">Versión de la instrucción</Label>
               <Input
                 id="openai_voice_prompt_version"
                 name="openai_voice_prompt_version"
@@ -3365,11 +3365,11 @@ export function TenantOpenaiSettings({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="openai_voice_model">OPENAI_MODEL</Label>
+              <Label htmlFor="openai_voice_model">Configuración del modelo de voz</Label>
               <Input id="openai_voice_model" name="openai_voice_model" defaultValue={initialValues.voice_model ?? ""} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="openai_voice_max_tokens">OPENAI_MAX_TOKENS</Label>
+              <Label htmlFor="openai_voice_max_tokens">Límite de respuesta</Label>
               <Input
                 id="openai_voice_max_tokens"
                 name="openai_voice_max_tokens"
@@ -3379,7 +3379,7 @@ export function TenantOpenaiSettings({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="openai_voice_stt_model">OPENAI_STT_MODEL</Label>
+              <Label htmlFor="openai_voice_stt_model">Reconocimiento de voz</Label>
               <Input
                 id="openai_voice_stt_model"
                 name="openai_voice_stt_model"
@@ -3387,13 +3387,9 @@ export function TenantOpenaiSettings({
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="openai_voice_api_key">OPENAI_API_KEY (tier B)</Label>
-            <Input id="openai_voice_api_key" name="openai_voice_api_key" type="password" placeholder="Pega la clave" />
-            <p className="text-xs text-muted-foreground">
-              El valor solo se guarda una vez; para rotarlo pega uno nuevo.
-            </p>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            La voz utiliza la conexión principal. No necesitas registrar otra clave.
+          </p>
           <div className="flex items-center justify-between gap-3">
             <FormStatusMessage state={voiceState} />
             <SubmitButton label="Guardar voz" pendingLabel="Guardando..." />

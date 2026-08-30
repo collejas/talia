@@ -1089,9 +1089,9 @@ export async function updateOpenaiGeneralAction(_: CrudActionState, formData: Fo
     }
 
     revalidatePath("/settings/variables")
-    return success("Configuración general de OpenAI guardada.")
+    return success("Conexión de inteligencia guardada.")
   } catch (error) {
-    return failure(error, "No se pudo guardar la configuración general de OpenAI.")
+    return failure(error, "No se pudo guardar la conexión de inteligencia.")
   }
 }
 
@@ -1102,7 +1102,6 @@ export async function updateOpenaiVoiceAction(_: CrudActionState, formData: Form
     const voiceModel = getText(formData, "openai_voice_model")
     const voiceMaxTokensRaw = getText(formData, "openai_voice_max_tokens")
     const voiceSttModel = getText(formData, "openai_voice_stt_model")
-    const voiceApiKey = getText(formData, "openai_voice_api_key")
 
     const voicePatch: Record<string, unknown> = {}
     if (voicePromptId) voicePatch.prompt_id = voicePromptId
@@ -1112,7 +1111,7 @@ export async function updateOpenaiVoiceAction(_: CrudActionState, formData: Form
     if (voiceMaxTokens !== undefined) voicePatch.max_tokens = voiceMaxTokens
     if (voiceSttModel) voicePatch.stt_model = voiceSttModel
 
-    if (!Object.keys(voicePatch).length && !voiceApiKey) {
+    if (!Object.keys(voicePatch).length) {
       throw new Error("Debes completar al menos un campo del bloque Voz.")
     }
 
@@ -1140,14 +1139,10 @@ export async function updateOpenaiVoiceAction(_: CrudActionState, formData: Form
       if (!putResp.ok) throw new Error(putResp.error)
     }
 
-    if (voiceApiKey) {
-      await upsertTenantSecret("openai.voice.api_key", voiceApiKey, "B")
-    }
-
     revalidatePath("/settings/variables")
-    return success("Configuración de voz de OpenAI guardada.")
+    return success("Configuración de voz guardada.")
   } catch (error) {
-    return failure(error, "No se pudo guardar la configuración de voz de OpenAI.")
+    return failure(error, "No se pudo guardar la configuración de voz.")
   }
 }
 

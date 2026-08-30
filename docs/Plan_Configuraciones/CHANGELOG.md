@@ -263,3 +263,17 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
   que sus etiquetas sean funcionales y no técnicas.
 - Validar que todos los módulos utilicen la conexión central antes de retirar
   definitivamente las claves históricas.
+
+## [2026-08-30] — Etiquetas funcionales para inteligencia y voz
+
+### Cambios realizados
+
+- La conexión principal ahora se presenta como “Conexión de inteligencia”.
+- Los identificadores internos dejaron de mostrarse como etiquetas del tenant.
+- Voz utiliza la conexión principal y ya no solicita una segunda clave.
+- Se actualizaron ayudas y mensajes de guardado con lenguaje funcional.
+
+### Compatibilidad
+
+- Las claves específicas históricas permanecen almacenadas para permitir una
+  transición segura, pero ya no se solicitan en los formularios nuevos.
