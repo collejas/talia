@@ -44,6 +44,7 @@ def build_onboarding_progress(
         tenant.get("moneda"),
     )
     organization_done = all(_has_text(value) for value in organization_values)
+    image_done = _has_text(tenant.get("logo_url"))
     ai_done = _secret_exists(secrets, "openai") or _has_text(config.get("openai"))
 
     active_channels = {
@@ -78,6 +79,7 @@ def build_onboarding_progress(
 
     definitions = [
         ("organizacion", "Datos de tu organización", organization_done),
+        ("imagen_empresarial", "Imagen empresarial", image_done),
         ("inteligencia", "Conexión de inteligencia", ai_done),
         ("webchat", "Webchat", webchat_done),
         ("whatsapp", "WhatsApp", whatsapp_done),

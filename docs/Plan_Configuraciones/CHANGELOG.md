@@ -16,6 +16,13 @@ Este archivo registra el avance del plan de simplificación de
 - Las cotizaciones utilizan el logo empresarial como respaldo cuando no tienen
   un logo específico configurado.
 
+## [2026-08-31] — Imagen empresarial incorporada al onboarding
+
+- Se agregó “Imagen empresarial” como paso independiente del onboarding.
+- El tenant puede cargar su logo desde una vista propia del flujo inicial.
+- El avance considera completado este paso cuando el logo queda asociado a la
+  organización.
+
 ## [2026-08-30] — Zoom opcional dentro de Agenda
 
 ### Cambio realizado

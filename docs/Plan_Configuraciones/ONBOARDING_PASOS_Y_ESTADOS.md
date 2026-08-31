@@ -133,7 +133,13 @@ Si elige usarla, debe comprobar:
 Si elige no utilizarla, el paso queda en `No se utilizará` y el canal permanece
 desactivado.
 
-### Paso 7. Agenda
+### Paso 2. Imagen empresarial
+
+El tenant carga directamente el logo de su organización. El archivo se guarda
+de forma segura y queda disponible para cotizaciones, correos y materiales
+comerciales. No se solicita una dirección web del archivo.
+
+### Paso 8. Agenda
 
 Obligatorio solo si el plan o los canales activos utilizan agenda.
 
