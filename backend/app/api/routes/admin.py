@@ -4045,7 +4045,7 @@ async def delete_tenant_secret(
 @router.post("/tenants/{organizacion_id}/validate", response_model=TenantValidationReport)
 async def validate_tenant(
     organizacion_id: UUID,
-    scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "full"] = "full",
+    scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "busqueda", "full"] = "full",
     actor: AdminActor = Depends(require_platform_admin_or_owner),
     repo: PlatformRepository = Depends(get_platform_repo),
 ) -> TenantValidationReport:
@@ -4072,7 +4072,7 @@ def build_validation_report(
     config: dict[str, Any],
     routes: list[dict[str, Any]],
     secrets: list[dict[str, Any]],
-    scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "full"],
+    scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "busqueda", "full"],
 ) -> TenantValidationReport:
     report = TenantValidationReport(organizacion_id=organizacion_id)
 
@@ -4129,6 +4129,12 @@ def build_validation_report(
         "messenger.assistant_id",
         "messenger.inactivity_hours",
     ]
+    busqueda_config_keys = [
+        "denue.base_url",
+        "google_places.nearby_url",
+        "google_places.text_url",
+        "google_places.details_url",
+    ]
     whatsapp_provider = str(_get_config_value(config, "whatsapp.provider") or "twilio").strip().lower()
     whatsapp_common_config_keys = [
         "whatsapp.provider",
@@ -4183,6 +4189,8 @@ def build_validation_report(
         required_config = whatsapp_config_keys
     elif scope == "messenger":
         required_config = messenger_config_keys
+    elif scope == "busqueda":
+        required_config = busqueda_config_keys
     else:
         required_config = webchat_config_keys
 
@@ -4232,6 +4240,8 @@ def build_validation_report(
             "meta.messenger.app_secret",
             "meta.messenger.verify_token",
         ]
+    elif scope == "busqueda":
+        required_secrets = ["denue.token", "google.places_api_key"]
     else:
         required_secrets = ["openai.api_key"]
 

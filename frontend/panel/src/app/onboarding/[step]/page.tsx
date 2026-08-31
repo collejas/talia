@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { callCrmApi } from "@/lib/api/crm"
 import {
   TenantCalendarSettings,
+  TenantBusquedaSettings,
   TenantMailSettings,
   TenantOpenaiSettings,
   TenantOrganizationInfoForm,
@@ -155,6 +156,8 @@ export default async function OnboardingStepPage({ params }: { params: Promise<{
   const openai = record(config.openai)
   const openaiGeneral = record(openai.general)
   const openaiVoice = record(openai.voice)
+  const denue = record(config.denue)
+  const googlePlaces = record(config.google_places)
   const tenantId = data.organizacion_id
 
   const content = (() => {
@@ -189,6 +192,8 @@ export default async function OnboardingStepPage({ params }: { params: Promise<{
         return <TenantCalendarSettings tenantId={tenantId} initialValues={{ agenda_enabled: bool(agenda, "enabled") ?? true, calendar_timezone: text(webchatCalendar, "timezone") ?? "", calendar_default_days: number(webchatCalendar, "default_days"), calendar_hold_minutes: number(webchatCalendar, "hold_minutes"), calendar_provider: text(calendar, "provider") ?? "", calendar_server_url: text(calendar, "server_url") ?? "", calendar_server_url_alternate: text(calendar, "server_url_alternate") ?? "", calendar_server_port: number(calendar, "server_port"), calendar_full_calendar_url: text(calendar, "full_calendar_url") ?? "", calendar_full_contact_list_url: text(calendar, "full_contact_list_url") ?? "", zoom_enabled: bool(record(config.zoom), "enabled") ?? false, zoom_host_email: text(record(config.zoom), "host_email") ?? "", zoom_default_duration_minutes: number(record(config.zoom), "default_duration_minutes"), zoom_auto_create_meeting: bool(record(config.zoom), "auto_create_meeting") ?? true }} showZoomChoice zoomDecision={progressResp.data.zoom_decision} />
       case "correo":
         return <><EmailSetupChecklist status={progressResp.data.correo} /><TenantEmailServicePanel data={emailResp.ok ? emailResp.data : null} configurationComplete={progressResp.data.correo?.completado === true} createDomainAction={tenantActionsLib.createTenantEmailDomainAction} verifyDomainAction={tenantActionsLib.verifyTenantEmailDomainAction} removeDomainAction={tenantActionsLib.removeTenantEmailDomainAction} updateSenderAction={tenantActionsLib.updateTenantEmailSenderAction} /><TenantMailSettings tenantId={tenantId} initialValues={{ mail_incoming_server: text(mail, "incoming_server"), mail_incoming_port_imap: number(mail, "incoming_port_imap"), mail_outgoing_server: text(mail, "outgoing_server"), mail_outgoing_port_smtp: number(mail, "outgoing_port_smtp"), mail_use_ssl: bool(mail, "use_ssl"), mail_use_tls: bool(mail, "use_tls") }} /></>
+      case "busqueda":
+        return <TenantBusquedaSettings tenantId={tenantId} initialValues={{ denue_base_url: text(denue, "base_url"), google_nearby_url: text(googlePlaces, "nearby_url"), google_text_url: text(googlePlaces, "text_url"), google_details_url: text(googlePlaces, "details_url"), google_field_mask: text(googlePlaces, "field_mask"), google_details_field_mask: text(googlePlaces, "details_field_mask"), google_language_code: text(googlePlaces, "language_code"), google_region_code: text(googlePlaces, "region_code"), google_grid_max_tile_radius_m: number(googlePlaces, "grid_max_tile_radius_m"), google_pause_between_pages: number(googlePlaces, "pause_between_pages"), google_dense_grid_max_tile_radius_m: number(googlePlaces, "dense_grid_max_tile_radius_m"), google_dense_pause_between_pages: number(googlePlaces, "dense_pause_between_pages"), google_dense_max_results: number(googlePlaces, "dense_max_results") }} hasToken={hasSecret("denue.token")} hasGoogleApiKey={hasSecret("google.places_api_key")} />
       case "whatsapp":
         return <><MetaAssistedConnectionPanel initialConnection={metaResp.ok ? metaResp.data : null} businessId={process.env.META_TALIA_BUSINESS_ID ?? "1358726956043196"} /><WhatsAppAssistantSchedulePanel initialValues={scheduleResp.ok ? scheduleResp.data : null} /><TenantWhatsAppSettings tenantId={tenantId} initialValues={{ whatsapp_provider: text(whatsapp, "provider") as "twilio" | "meta" | undefined, whatsapp_send_seller_data_to_customer: bool(whatsapp, "send_seller_data_to_customer") ?? false, whatsapp_prompt_id: text(whatsapp, "prompt_id"), whatsapp_prompt_version: text(whatsapp, "prompt_version"), whatsapp_welcome_document_prompt_version: text(whatsapp, "welcome_document_prompt_version"), whatsapp_location_href: text(whatsapp, "location_href"), whatsapp_assistant_id: text(whatsapp, "assistant_id"), whatsapp_inactivity_minutes: number(whatsapp, "inactivity_minutes"), whatsapp_reengage_minutes: number(whatsapp, "reengage_minutes"), whatsapp_reengage_max_attempts: number(whatsapp, "reengage_max_attempts"), whatsapp_escalate_minutes: number(whatsapp, "escalate_minutes"), whatsapp_meta_phone_number_id: text(whatsappMeta, "phone_number_id") }} routes={routes} /></>
       default:

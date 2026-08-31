@@ -11,7 +11,7 @@ export function OnboardingSummary({ steps }: { steps: Step[] }) {
   const [messages, setMessages] = useState<Record<string, string>>({})
   const pending = steps.find((step) => !step.completado)
   async function check(stepId: string) {
-    const scope: Record<string, string> = { webchat: "webchat", whatsapp: "whatsapp", voz: "twilio", agenda: "calendar", correo: "mail" }
+    const scope: Record<string, string> = { webchat: "webchat", whatsapp: "whatsapp", voz: "twilio", agenda: "calendar", correo: "mail", busqueda: "busqueda" }
     if (!scope[stepId]) return
     setChecking(stepId)
     try {

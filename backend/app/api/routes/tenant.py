@@ -681,7 +681,7 @@ class TenantSecretsPayload(BaseModel):
 
 class TenantValidationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "full"] = "full"
+    scope: Literal["webchat", "calendar", "mail", "twilio", "whatsapp", "messenger", "busqueda", "full"] = "full"
 
 
 def _build_organization_address_summary(source: Any) -> str | None:
@@ -1983,6 +1983,7 @@ async def tenant_validate(
         "twilio": "Telefonía",
         "whatsapp": "WhatsApp",
         "messenger": "Messenger",
+        "busqueda": "Búsquedas",
         "full": "la configuración general",
     }
     label = scope_labels[payload.scope]

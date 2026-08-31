@@ -1928,7 +1928,7 @@ export function TenantBusquedaSettings({
       <input type="hidden" name="tenant_id" value={tenantId} />
 
       <div className="space-y-2">
-        <Label htmlFor="denue_base_url">Fuente de datos de negocios</Label>
+        <Label htmlFor="denue_base_url">Dirección de la fuente de negocios</Label>
         <Input
           id="denue_base_url"
           name="denue_base_url"
@@ -1936,17 +1936,17 @@ export function TenantBusquedaSettings({
           defaultValue={initialValues.denue_base_url ?? ""}
         />
         <p className="text-xs text-muted-foreground">
-          Dirección de la fuente de datos utilizada por la búsqueda.
+          Dirección utilizada para consultar negocios.
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="denue_token">Clave de acceso a la fuente de datos</Label>
-        <Input id="denue_token" name="denue_token" type="password" placeholder="Pega el token" />
+        <Label htmlFor="denue_token">Clave de acceso para negocios</Label>
+        <Input id="denue_token" name="denue_token" type="password" placeholder="Pega la clave" />
         <p className="text-xs text-muted-foreground">
           {hasToken
             ? "Token registrado; no se muestra el valor actual."
-            : "Aún no hay token guardado para esta organización."}
+            : "Aún no hay una clave guardada para esta organización."}
         </p>
       </div>
 
@@ -1955,7 +1955,7 @@ export function TenantBusquedaSettings({
           <div>
             <h3 className="text-sm font-medium">Búsqueda de lugares</h3>
             <p className="text-xs text-muted-foreground">
-              Configura las fuentes y límites que utiliza el buscador por organización.
+              Configura la consulta de lugares y los límites de búsqueda.
             </p>
           </div>
           <p className="text-xs font-medium text-muted-foreground">
@@ -1964,7 +1964,7 @@ export function TenantBusquedaSettings({
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="google_nearby_url">google_places_nearby_url</Label>
+            <Label htmlFor="google_nearby_url">Dirección para buscar lugares cercanos</Label>
             <Input
               id="google_nearby_url"
               name="google_nearby_url"
@@ -1973,7 +1973,7 @@ export function TenantBusquedaSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="google_text_url">google_places_text_url</Label>
+            <Label htmlFor="google_text_url">Dirección para buscar por texto</Label>
             <Input
               id="google_text_url"
               name="google_text_url"
@@ -1982,7 +1982,7 @@ export function TenantBusquedaSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="google_details_url">google_places_details_url</Label>
+            <Label htmlFor="google_details_url">Dirección para consultar un lugar</Label>
             <Input
               id="google_details_url"
               name="google_details_url"
@@ -1991,7 +1991,7 @@ export function TenantBusquedaSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="google_field_mask">PLACES_FIELD_MASK</Label>
+            <Label htmlFor="google_field_mask">Información que se solicitará</Label>
             <Textarea
               id="google_field_mask"
               name="google_field_mask"
@@ -2001,7 +2001,7 @@ export function TenantBusquedaSettings({
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="google_details_field_mask">PLACES_DETAILS_FIELD_MASK</Label>
+            <Label htmlFor="google_details_field_mask">Información adicional del lugar</Label>
             <Textarea
               id="google_details_field_mask"
               name="google_details_field_mask"
@@ -2013,7 +2013,7 @@ export function TenantBusquedaSettings({
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
-            <Label htmlFor="google_language_code">google_places_language_code</Label>
+            <Label htmlFor="google_language_code">Idioma</Label>
             <Input
               id="google_language_code"
               name="google_language_code"
@@ -2022,7 +2022,7 @@ export function TenantBusquedaSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="google_region_code">google_places_region_code</Label>
+            <Label htmlFor="google_region_code">Región</Label>
             <Input
               id="google_region_code"
               name="google_region_code"
@@ -2031,16 +2031,16 @@ export function TenantBusquedaSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="google_places_api_key">google.places_api_key (secreto, tier B)</Label>
+            <Label htmlFor="google_places_api_key">Clave de acceso para lugares</Label>
             <Input id="google_places_api_key" name="google_places_api_key" type="password" placeholder="Pega la clave" />
             <p className="text-xs text-muted-foreground">
-              Solo se guarda al pegar una nueva llave; el valor actual no se muestra.
+              Solo se guarda al pegar una nueva clave; el valor actual no se muestra.
             </p>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="google_grid_max_tile_radius_m">google_places_grid_max_tile_radius_m</Label>
+            <Label htmlFor="google_grid_max_tile_radius_m">Distancia máxima de búsqueda</Label>
             <Input
               id="google_grid_max_tile_radius_m"
               name="google_grid_max_tile_radius_m"
@@ -2050,7 +2050,7 @@ export function TenantBusquedaSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="google_pause_between_pages">google_places_pause_between_pages</Label>
+            <Label htmlFor="google_pause_between_pages">Pausa entre consultas</Label>
             <Input
               id="google_pause_between_pages"
               name="google_pause_between_pages"
@@ -2062,7 +2062,7 @@ export function TenantBusquedaSettings({
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="google_dense_grid_max_tile_radius_m">google_places_dense_grid_max_tile_radius_m</Label>
+            <Label htmlFor="google_dense_grid_max_tile_radius_m">Distancia máxima de búsqueda detallada</Label>
             <Input
               id="google_dense_grid_max_tile_radius_m"
               name="google_dense_grid_max_tile_radius_m"
@@ -2072,7 +2072,7 @@ export function TenantBusquedaSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="google_dense_pause_between_pages">google_places_dense_pause_between_pages</Label>
+            <Label htmlFor="google_dense_pause_between_pages">Pausa entre consultas detalladas</Label>
             <Input
               id="google_dense_pause_between_pages"
               name="google_dense_pause_between_pages"
@@ -2083,7 +2083,7 @@ export function TenantBusquedaSettings({
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="google_dense_max_results">google_places_dense_max_results</Label>
+          <Label htmlFor="google_dense_max_results">Máximo de resultados detallados</Label>
           <Input
             id="google_dense_max_results"
             name="google_dense_max_results"

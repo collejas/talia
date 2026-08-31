@@ -36,6 +36,21 @@ def _mail_operational_configured(config: dict[str, Any], secrets: list[dict[str,
     )
 
 
+def _search_configuration_ready(config: dict[str, Any], secrets: list[dict[str, Any]]) -> bool:
+    denue = config.get("denue") if isinstance(config.get("denue"), dict) else {}
+    places = config.get("google_places") if isinstance(config.get("google_places"), dict) else {}
+    return all(
+        (
+            _has_text(denue.get("base_url")),
+            _secret_exists(secrets, "denue", "token"),
+            _has_text(places.get("nearby_url")),
+            _has_text(places.get("text_url")),
+            _has_text(places.get("details_url")),
+            _secret_exists(secrets, "google", "places", "api_key"),
+        )
+    )
+
+
 def build_onboarding_progress(
     *,
     tenant: dict[str, Any],
@@ -95,6 +110,7 @@ def build_onboarding_progress(
     migration = email_service.get("migration") if isinstance(email_service.get("migration"), dict) else {}
     domain = email_service.get("domain") if isinstance(email_service.get("domain"), dict) else {}
     mail_operational_done = _mail_operational_configured(config, secrets)
+    search_done = _search_configuration_ready(config, secrets)
     domain_verified = domain.get("status") == "verified" and _has_text(domain.get("verified_at"))
     sender_configured = domain_verified and _has_text(domain.get("default_from_email"))
     service_validated = bool(migration.get("validated_at"))
@@ -117,6 +133,7 @@ def build_onboarding_progress(
         ("voz", "Voz", voice_done),
         ("agenda", "Agenda", agenda_configured and zoom_done),
         ("correo", "Correo", correo_done),
+        ("busqueda", "Búsquedas", search_done),
     ]
     steps: list[dict[str, Any]] = []
     for key, title, done in definitions:
