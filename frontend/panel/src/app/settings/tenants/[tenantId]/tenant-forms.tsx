@@ -718,6 +718,28 @@ export type TenantOrganizationInfo = {
   stripe_price_id?: string | null
 }
 
+const TIMEZONE_OPTIONS = [
+  ["America/Mexico_City", "Ciudad de México"],
+  ["America/Monterrey", "Monterrey"],
+  ["America/Mazatlan", "Mazatlán"],
+  ["America/Hermosillo", "Hermosillo"],
+  ["America/Tijuana", "Tijuana"],
+  ["America/Cancun", "Cancún"],
+  ["UTC", "UTC"],
+] as const
+
+const LANGUAGE_OPTIONS = [
+  ["es-MX", "Español (México)"],
+  ["es-ES", "Español (España)"],
+  ["en-US", "Inglés (Estados Unidos)"],
+] as const
+
+const CURRENCY_OPTIONS = [
+  ["MXN", "Peso mexicano (MXN)"],
+  ["USD", "Dólar estadounidense (USD)"],
+  ["EUR", "Euro (EUR)"],
+] as const
+
 export function TenantOrganizationInfoForm({
   tenantId,
   info,
@@ -767,11 +789,11 @@ export function TenantOrganizationInfoForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenant_razon_social">Razón social</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_razon_social">Razón social</RequiredLabel> : <Label htmlFor="tenant_razon_social">Razón social</Label>}
               <Input id="tenant_razon_social" name="tenant_razon_social" defaultValue={info?.razon_social ?? ""} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenant_rfc">RFC</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_rfc">RFC</RequiredLabel> : <Label htmlFor="tenant_rfc">RFC</Label>}
               <Input id="tenant_rfc" name="tenant_rfc" defaultValue={info?.rfc ?? ""} />
             </div>
           </div>
@@ -786,11 +808,11 @@ export function TenantOrganizationInfoForm({
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="tenant_contacto_nombre">Contacto principal</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_contacto_nombre">Contacto principal</RequiredLabel> : <Label htmlFor="tenant_contacto_nombre">Contacto principal</Label>}
               <Input id="tenant_contacto_nombre" name="tenant_contacto_nombre" defaultValue={info?.contacto_nombre ?? ""} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenant_contacto_telefono">Teléfono del contacto</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_contacto_telefono">Teléfono del contacto</RequiredLabel> : <Label htmlFor="tenant_contacto_telefono">Teléfono del contacto</Label>}
               <Input id="tenant_contacto_telefono" name="tenant_contacto_telefono" defaultValue={info?.contacto_telefono ?? ""} />
             </div>
             <div className="space-y-2">
@@ -828,15 +850,27 @@ export function TenantOrganizationInfoForm({
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_timezone">Zona horaria</RequiredLabel> : <Label htmlFor="tenant_timezone">Zona horaria</Label>}
-              <Input id="tenant_timezone" name="tenant_timezone" defaultValue={info?.timezone ?? ""} placeholder="America/Mexico_City" />
+              <select id="tenant_timezone" name="tenant_timezone" defaultValue={info?.timezone ?? ""} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm">
+                <option value="">Selecciona una zona horaria</option>
+                {info?.timezone && !TIMEZONE_OPTIONS.some(([value]) => value === info.timezone) ? <option value={info.timezone}>{info.timezone}</option> : null}
+                {TIMEZONE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
             </div>
             <div className="space-y-2">
               {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_idioma">Idioma</RequiredLabel> : <Label htmlFor="tenant_idioma">Idioma</Label>}
-              <Input id="tenant_idioma" name="tenant_idioma" defaultValue={info?.idioma ?? ""} placeholder="es-MX" />
+              <select id="tenant_idioma" name="tenant_idioma" defaultValue={info?.idioma ?? ""} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm">
+                <option value="">Selecciona un idioma</option>
+                {info?.idioma && !LANGUAGE_OPTIONS.some(([value]) => value === info.idioma) ? <option value={info.idioma}>{info.idioma}</option> : null}
+                {LANGUAGE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
             </div>
             <div className="space-y-2">
               {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_moneda">Moneda</RequiredLabel> : <Label htmlFor="tenant_moneda">Moneda</Label>}
-              <Input id="tenant_moneda" name="tenant_moneda" defaultValue={info?.moneda ?? ""} placeholder="MXN" />
+              <select id="tenant_moneda" name="tenant_moneda" defaultValue={info?.moneda ?? ""} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm">
+                <option value="">Selecciona una moneda</option>
+                {info?.moneda && !CURRENCY_OPTIONS.some(([value]) => value === info.moneda) ? <option value={info.moneda}>{info.moneda}</option> : null}
+                {CURRENCY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
             </div>
           </div>
         </section>

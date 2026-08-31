@@ -63,9 +63,14 @@ def build_onboarding_progress(
 
     organization_values = (
         tenant.get("nombre_comercial") or tenant.get("nombre"),
+        tenant.get("razon_social"),
+        tenant.get("rfc"),
+        tenant.get("contacto_nombre"),
+        tenant.get("contacto_telefono"),
         tenant.get("correo_contacto_principal"),
         tenant.get("telefono"),
         tenant.get("pais"),
+        tenant.get("estado"),
         tenant.get("ciudad"),
         tenant.get("timezone"),
         tenant.get("idioma"),

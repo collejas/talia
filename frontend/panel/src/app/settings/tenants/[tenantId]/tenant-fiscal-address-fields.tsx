@@ -248,7 +248,7 @@ export function TenantFiscalAddressFields({ values, disabled = false, showRequir
 
         {countryCode === "MX" ? (
           <div className="space-y-2">
-            <Label htmlFor="tenant_estado_clave_entidad">Estado</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_estado_clave_entidad">Estado</RequiredLabel> : <Label htmlFor="tenant_estado_clave_entidad">Estado</Label>}
             <select
               id="tenant_estado_clave_entidad"
               name="tenant_estado_clave_entidad"
@@ -278,7 +278,7 @@ export function TenantFiscalAddressFields({ values, disabled = false, showRequir
           </div>
         ) : (
           <div className="space-y-2">
-            <Label htmlFor="tenant_estado">Estado / provincia</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_estado">Estado / provincia</RequiredLabel> : <Label htmlFor="tenant_estado">Estado / provincia</Label>}
             <Input
               id="tenant_estado"
               name="tenant_estado"
