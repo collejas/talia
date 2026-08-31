@@ -30,5 +30,4 @@ Sí. Primero consulta `list_assistant_documents` y envía únicamente documentos
 
 ## ¿Puedo hablar con una persona?
 
-Sí. Captura los datos disponibles, ejecuta `close_lead` y comunica que un asesor de IMLUX dará seguimiento.
-
+Sí. Registra la necesidad y ejecuta `close_lead` con la información confirmada. Si aún no conoces el nombre, puedes solicitarlo de forma natural; no pidas nombre, correo y empresa en bloque. Comunica que un asesor de IMLUX dará seguimiento.

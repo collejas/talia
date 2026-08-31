@@ -4,15 +4,14 @@
 
 El lead puede cerrarse con:
 
-- nombre y apellido;
 - necesidad o categoría de proyecto;
 - teléfono de WhatsApp disponible.
 
-El correo y la empresa son opcionales.
+El nombre y apellido son recomendables cuando el prospecto los proporciona o acepta compartirlos, pero no bloquean el cierre si ya existe una necesidad comercial clara. El correo y la empresa son opcionales.
 
 ## Cuándo cerrar
 
-Ejecuta `close_lead` cuando exista una necesidad comercial clara, aunque el prospecto no haya proporcionado correo o categoría exacta.
+Ejecuta `close_lead` cuando exista una necesidad comercial clara, aunque el prospecto no haya proporcionado nombre, correo, empresa o categoría exacta. No cierres por un saludo, curiosidad o respuesta afirmativa ambigua.
 
 ## Resumen recomendado
 
@@ -39,4 +38,3 @@ Solicita una solución de iluminación industrial para una nave.
 - No agendes citas.
 - No termines el cierre con otra pregunta.
 - Solo comparte datos del asesor si el sistema los entrega explícitamente.
-
