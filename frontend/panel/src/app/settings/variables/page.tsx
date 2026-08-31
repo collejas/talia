@@ -304,7 +304,6 @@ export default async function SettingsVariablesPage({
   const zoomConfig = getNestedRecord(config, "zoom") ?? {}
   const calendarInitialValues = {
     agenda_enabled: getNestedBoolean(agendaConfig, "enabled") ?? true,
-    calendar_resource_id: getNestedString(webchatCalendar, "resource_id") ?? "",
     calendar_timezone: getNestedString(webchatCalendar, "timezone") ?? "",
     calendar_default_days: getNestedNumber(webchatCalendar, "default_days"),
     calendar_hold_minutes: getNestedNumber(webchatCalendar, "hold_minutes"),
@@ -576,7 +575,6 @@ export default async function SettingsVariablesPage({
                   <TenantCalendarSettings
                     tenantId={tenantId}
                     initialValues={calendarInitialValues}
-                    allowResourceIdEdit={false}
                   />
                 </TabsContent>
                 <TabsContent value="mail" className="pt-4">

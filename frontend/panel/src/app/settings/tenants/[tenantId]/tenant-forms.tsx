@@ -1058,7 +1058,6 @@ type WebchatInitialValues = {
 
 type CalendarInitialValues = {
   agenda_enabled?: boolean
-  calendar_resource_id?: string
   calendar_timezone?: string
   calendar_default_days?: number
   calendar_hold_minutes?: number
@@ -1421,14 +1420,12 @@ export function TenantWebchatSettings({
 export function TenantCalendarSettings({
   tenantId,
   initialValues,
-  allowResourceIdEdit = true,
   showZoom = true,
   showZoomChoice = false,
   zoomDecision = "usar",
 }: {
   tenantId: string
   initialValues: CalendarInitialValues
-  allowResourceIdEdit?: boolean
   showZoom?: boolean
   showZoomChoice?: boolean
   zoomDecision?: "pendiente" | "usar" | "no_usar"
@@ -1463,28 +1460,6 @@ export function TenantCalendarSettings({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="calendar_resource_id">webchat.calendar.resource_id</Label>
-          {allowResourceIdEdit ? (
-            <Input
-              id="calendar_resource_id"
-              name="calendar_resource_id"
-              placeholder="uuid del recurso (Supabase)"
-              defaultValue={initialValues.calendar_resource_id ?? ""}
-            />
-          ) : (
-            <Input
-              id="calendar_resource_id"
-              name="calendar_resource_id"
-              readOnly
-              defaultValue={initialValues.calendar_resource_id ?? ""}
-            />
-          )}
-          <p className="text-xs text-muted-foreground">
-            Se refiere a <code>calendar_resources.id</code> que expone slots.
-            {!allowResourceIdEdit ? " Este valor lo provisiona automáticamente la plataforma." : ""}
-          </p>
-        </div>
         <div className="space-y-2">
           <Label htmlFor="calendar_timezone">Zona horaria de la organización</Label>
           <Input

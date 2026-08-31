@@ -651,7 +651,6 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
   try {
     const tenantId = requireTenantId(formData)
 
-    const calendarResourceId = getText(formData, "calendar_resource_id")
     const calendarTimezone = getText(formData, "calendar_timezone")
     const calendarDefaultDaysRaw = getText(formData, "calendar_default_days")
     const calendarHoldMinutesRaw = getText(formData, "calendar_hold_minutes")
@@ -674,7 +673,6 @@ export async function updateCalendarSettingsAction(_: CrudActionState, formData:
     const zoomClientSecret = getText(formData, "zoom_client_secret")
 
     const calendarPatch: Record<string, unknown> = {}
-    if (calendarResourceId) calendarPatch.resource_id = calendarResourceId
     if (calendarTimezone) calendarPatch.timezone = calendarTimezone
     const calendarDefaultDays = parseNumber(calendarDefaultDaysRaw)
     if (calendarDefaultDays !== undefined) calendarPatch.default_days = calendarDefaultDays

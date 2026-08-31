@@ -121,7 +121,6 @@ const SECTIONS: SectionConfig[] = [
     title: "Calendario",
     description: "Configura el recurso calendar y los servidores asociados.",
     fields: [
-      { label: "Calendar resource ID", path: "webchat.calendar.resource_id" },
       { label: "Calendar timezone", path: "webchat.calendar.timezone" },
       { label: "Calendar default days", path: "webchat.calendar.default_days", type: "number" },
       { label: "Calendar hold minutes", path: "webchat.calendar.hold_minutes", type: "number" },
