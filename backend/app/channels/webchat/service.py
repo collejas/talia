@@ -3348,6 +3348,8 @@ async def handle_message(
             catalog_context=catalog_context,
             booking_context=booking_context_text,
             inbound_message_id=inbound_message_id,
+            runtime_location_href=runtime_location_href,
+            inventory_context_text=inventory_context_text,
         )
         _record_stage_timing(stage_timings, "assistant_generation_ms", assistant_generation_started)
         assistant_debug_timings = side_effects.get("assistant_debug_timings")
@@ -3835,6 +3837,8 @@ async def _run_assistant_turn(
     catalog_context: CatalogContext | None = None,
     booking_context: str | None = None,
     inbound_message_id: str | None = None,
+    runtime_location_href: str | None = None,
+    inventory_context_text: str | None = None,
 ) -> tuple[str | None, dict[str, Any], list[str], list[str], str | None, dict[str, Any]]:
     """Gestiona la interacción con OpenAI y la resolución de tool calls."""
     debug_timings: dict[str, float] = {}
