@@ -10,7 +10,32 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
 
 **Estado:** Migración aplicada e integración inicial en curso
 
-**Última actualización:** 2026-08-17
+**Última actualización:** 2026-08-31
+
+## 2026-08-31 — Tres modos de creación para correo
+
+### Documentado
+
+- Se definió una selección inicial con tres opciones: **Editor visual**, **Código HTML** y **Asistente IA**.
+- Se aclaró que el Editor visual no es texto plano: genera HTML sin exponer código al usuario.
+- Se establecieron como campos comunes el nombre, asunto, tipo de correo (`Broadcast` o `Transactional`) y descripción.
+- Se documentó el flujo de selección de imágenes, uso de cada imagen, variables del prospecto, prompt y estilo de diseño para IA.
+- Se definió que el resultado de IA debe quedar como borrador editable antes de guardarse.
+- Se propuso persistir `email_creation_mode` como columna explícita con valores `visual`, `html` y `ai`.
+- Se documentó la necesidad de conservar la trazabilidad de imágenes usadas durante una generación IA mediante una relación explícita.
+- Se agregaron criterios de aceptación y pendientes relacionados con el editor visual por bloques y la edición posterior.
+
+### Decisiones
+
+- El asistente IA dejará de plantearse como un panel permanente junto a los editores de correo y pasará a ser uno de los modos de creación.
+- Las imágenes se resolverán desde recursos autorizados del tenant; el modelo no podrá inventar URLs ni acceder a recursos de otros tenants.
+- El modo de creación describe la experiencia de edición, mientras que `asunto`, `cuerpo_texto` y `cuerpo_html` conservan el contrato de envío.
+- En el flujo IA, el usuario elegirá el estilo de diseño antes de escribir el prompt.
+- Los tres flujos de correo utilizarán el catálogo completo de variables disponible en backend.
+- La UI mostrará las variables con nombres legibles para el usuario, sin claves técnicas, tipos ni etiquetas adicionales; las claves técnicas permanecerán internas.
+- El HTML proporcionado por el usuario quedó definido como referencia visual y funcional obligatoria del Editor visual.
+- Se copió el HTML de referencia completo en [`REFERENCIA_EDITOR_VISUAL.html`](./REFERENCIA_EDITOR_VISUAL.html) y se enlazó desde el plan.
+- Se documentó que deben conservarse su barra superior, biblioteca de bloques, lienzo, inspector, chips de variables, vista escritorio/móvil y barra inferior de acciones.
 
 ## 2026-08-17 — Plan inicial documentado
 

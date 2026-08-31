@@ -55,6 +55,10 @@ El backend guardará sus identificadores y versiones mediante configuración seg
 
 El prompt conocerá las variables, pero el backend será la fuente de verdad operativa.
 
+Esta regla aplica a los tres flujos de creación de correo: **Editor visual**,
+**Código HTML** y **Asistente IA**. Ninguno debe mantener una lista propia ni
+mostrar solamente un subconjunto de las variables disponibles.
+
 El catálogo backend definirá para cada variable:
 
 - Clave técnica.
@@ -65,7 +69,66 @@ El catálogo backend definirá para cada variable:
 - Si puede aparecer en asunto, texto o HTML.
 - Reglas de valor vacío.
 
-El frontend solo mostrará las variables recibidas del backend. No debe mantener una lista independiente que pueda quedar desactualizada.
+El frontend cargará el catálogo completo recibido del backend. No debe mantener
+una lista independiente que pueda quedar desactualizada.
+
+Para correo, el catálogo actualmente disponible incluye:
+
+```text
+{{display_name}}
+{{nombre}}
+{{titulo}}
+{{primer_apellido}}
+{{segundo_apellido}}
+{{empresa}}
+{{email}}
+{{telefono}}
+{{segmento}}
+{{canal_origen}}
+{{logo_url}}
+{{hero_image_url}}
+{{product_image_1_url}}
+{{product_image_2_url}}
+{{product_image_3_url}}
+{{product_image_4_url}}
+{{warranty_image_url}}
+{{tracking_url}}
+{{website_url}}
+{{booking_url}}
+{{booking_link_text}}
+```
+
+La lista anterior debe resolverse dinámicamente desde el catálogo backend. Si se
+agrega o habilita una variable nueva en backend, los tres flujos de correo deben
+recibirla sin requerir una lista paralela escrita en el frontend.
+
+#### Presentación para el usuario
+
+La interfaz no mostrará claves técnicas, nombres de columnas, tipos de dato,
+descripciones internas, etiquetas como “URL”, ni información adicional junto a
+las variables. Cada opción deberá presentarse como un control simple, siguiendo
+el estilo del HTML de referencia, por ejemplo:
+
+```text
+{{nombre}}  {{empresa}}  {{telefono}}  {{correo}}
+```
+
+Para las variables cuyo nombre técnico no sea entendible para el usuario, la UI
+deberá utilizar un nombre visible en español y conservar la clave técnica
+únicamente en backend. Por ejemplo, el usuario verá **Logo**, **Imagen principal**,
+**Sitio web**, **Seguimiento**, **Agenda** o **Texto de agenda**; nunca verá
+`logo_url`, `hero_image_url`, `tracking_url` o `booking_link_text` como etiquetas
+de interfaz.
+
+El valor técnico que se guarda en la plantilla seguirá siendo el placeholder
+compatible con el motor actual, salvo que se implemente una tabla explícita de
+alias. La traducción entre nombre visible y placeholder técnico será responsabilidad
+del catálogo/backend, no del usuario.
+
+No se mostrarán debajo de cada variable textos como “tipo_dato”, “texto”, “imagen”,
+“URL pública” o descripciones técnicas. La ayuda contextual, si posteriormente se
+necesita, deberá estar separada de la etiqueta y no formar parte del control
+principal.
 
 ### 3.3 La IA genera borradores, no envía mensajes
 
@@ -157,6 +220,169 @@ El componente debe manejar explícitamente:
 - Sin variables seleccionadas.
 
 Durante la generación se debe bloquear solamente la acción de generar, no todo el editor. El usuario no debe perder el borrador si OpenAI falla.
+
+### 5.1 Modos de creación para plantillas de correo
+
+Para simplificar la experiencia, el usuario no debe enfrentarse desde el inicio a
+campos técnicos de HTML ni a un asistente que siempre esté visible. Al crear una
+plantilla de **correo**, primero se mostrarán tres opciones de creación:
+
+1. **Editor visual**.
+2. **Código HTML**.
+3. **Asistente IA**.
+
+El término recomendado para la primera opción es **Editor visual** y no “texto
+plano”. Aunque el usuario no escriba código, el resultado podrá contener imágenes,
+botones, columnas, separadores y estilos; por lo tanto, se guardará como HTML.
+
+#### Campos comunes
+
+Antes de elegir el modo, el usuario podrá completar los datos comunes de la
+plantilla:
+
+- Nombre de la plantilla.
+- Asunto.
+- Tipo de correo: `Broadcast` o `Transactional`.
+- Descripción opcional.
+
+El asunto y el tipo de correo deben conservarse como datos explícitos y ser
+independientes del modo elegido. El asunto será obligatorio para guardar una
+plantilla de correo.
+
+#### Opción 1: Editor visual
+
+El editor visual permitirá construir el correo mediante bloques, sin mostrar HTML
+al usuario. Como mínimo deberá permitir:
+
+- Texto y títulos.
+- Imágenes y logotipo.
+- Botones y enlaces.
+- Separadores.
+- Espaciado.
+- Columnas o bloques de beneficios.
+- Variables insertables mediante controles visibles.
+- Selector completo de todas las variables disponibles para correo, con nombres
+  visibles en español y sin claves técnicas ni etiquetas adicionales.
+- Selección de imágenes desde la galería del tenant.
+- Vista previa de escritorio y móvil.
+- Selección, edición, duplicado y eliminación de bloques.
+
+##### Referencia visual obligatoria
+
+El HTML completo proporcionado por el usuario quedó copiado en el archivo:
+
+[`REFERENCIA_EDITOR_VISUAL.html`](./REFERENCIA_EDITOR_VISUAL.html)
+
+Este archivo es la referencia visual y funcional aprobada del Editor visual. No se
+considera una maqueta genérica: la pantalla debe conservar su lógica de composición
+y jerarquía, adaptándola a los componentes React/Tailwind existentes sin cambiar el
+flujo principal.
+
+La implementación deberá respetar como mínimo:
+
+- Barra superior con marca, nombre editable de la plantilla, estado de guardado,
+  vista previa y guardar plantilla.
+- Biblioteca lateral de bloques bajo **Agregar contenido**.
+- Bloques de Texto, Imagen, Botón, Separador, Espacio y Columnas.
+- Sección **Personalización** con variables simples en forma de chips.
+- Lienzo central con el correo dentro de una tarjeta visual.
+- Selección visible del bloque activo.
+- Acciones del bloque para duplicar, reordenar y eliminar.
+- Botones **Agregar bloque** entre secciones del correo.
+- Selector de vista **Escritorio/Móvil**.
+- Panel lateral de propiedades del bloque seleccionado.
+- Edición de contenido, tamaño, alineación, color y espaciado.
+- Barra inferior con **Enviar prueba** y **Ver en móvil**.
+
+Los textos, colores de ejemplo, nombre de empresa, contenido inicial y bloques de
+la muestra podrán reemplazarse por información del tenant o por un lienzo vacío.
+La estructura de la pantalla, la distribución de columnas, la interacción de
+selección y la jerarquía de acciones sí forman parte de la referencia aprobada.
+
+El archivo se conserva como material de diseño asociado al plan y todavía no es
+código productivo. Antes de implementar, cualquier diferencia respecto de esta
+referencia deberá documentarse y aprobarse en el plan.
+
+El editor será la fuente de edición visual y generará `cuerpo_html` compatible con
+correo. Las variables deberán conservarse como placeholders, por ejemplo
+`{{nombre}}` o `{{empresa}}`, hasta el momento del envío.
+
+#### Opción 2: Código HTML
+
+Esta opción estará dirigida a usuarios que necesiten control directo sobre el
+marcado. Permitirá:
+
+- Editar el HTML del correo.
+- Insertar variables desde el catálogo oficial.
+- Mostrar el mismo selector completo y legible de variables utilizado por el
+  Editor visual; la clave técnica se insertará en el código sin exponerse como
+  etiqueta de ayuda.
+- Seleccionar e insertar imágenes de la galería.
+- Ver una vista previa aislada.
+- Validar y sanitizar el contenido antes de guardar.
+
+No se permitirán scripts, eventos JavaScript, formularios, iframes, objetos,
+esquemas de URL peligrosos ni etiquetas fuera de la lista autorizada por el
+backend.
+
+#### Opción 3: Asistente IA
+
+El asistente será un flujo de creación, no un panel permanente junto a los otros
+editores. Solicitará:
+
+- Imágenes que se desean utilizar.
+- Uso de cada imagen: logo, encabezado, producto, beneficio, garantía u otro uso
+  permitido por el catálogo.
+- Datos del prospecto que la plantilla puede utilizar.
+- Estilo de diseño permitido para el tenant.
+- Instrucción o prompt del usuario, después de seleccionar el estilo de diseño.
+
+El orden visible del flujo será:
+
+1. Seleccionar las imágenes.
+2. Definir el uso de cada imagen.
+3. Seleccionar los datos del prospecto.
+4. Elegir el estilo de diseño.
+5. Escribir el prompt o instrucción para el asistente.
+6. Generar la plantilla.
+
+La selección de datos del prospecto utilizará el catálogo completo de variables
+disponibles para correo. Se mostrarán únicamente nombres legibles para el usuario,
+sin claves técnicas, tipos, etiquetas internas ni textos adicionales.
+
+El estilo de diseño debe estar seleccionado antes de escribir el prompt para que
+el usuario conozca la composición que solicitará y el asistente pueda interpretar
+la instrucción dentro de ese marco visual.
+
+El asistente generará el nombre sugerido, asunto, texto, HTML, variables usadas,
+estilo aplicado y advertencias. El resultado se cargará en un editor revisable y
+el usuario deberá poder modificarlo antes de guardarlo.
+
+Las imágenes seleccionadas por el usuario no se enviarán al modelo como datos
+arbitrarios. El backend resolverá los recursos pertenecientes al tenant y el
+modelo solo podrá utilizar variables de imagen autorizadas, como
+`{{logo_url}}` o `{{product_image_1_url}}`.
+
+#### Edición posterior
+
+La plantilla debe recordar el modo con el que fue creada para abrir una interfaz
+coherente al editarla. Se utilizará una columna explícita:
+
+```text
+email_creation_mode
+```
+
+con valores controlados:
+
+```text
+visual
+html
+ai
+```
+
+El modo describe la experiencia de edición y no cambia el contrato de envío:
+una plantilla de correo podrá conservar `asunto`, `cuerpo_texto` cuando aplique y
+`cuerpo_html` cuando aplique.
 
 ## 6. Diseño de los dos prompts
 
@@ -602,6 +828,26 @@ Restricciones e índices:
 prospeccion_plantilla_ai_generaciones
 ```
 
+La plantilla final de correo podrá conservar el modo de creación mediante la
+columna explícita `email_creation_mode` en
+`prospeccion_contacto_templates`. No se guardará dentro de `metadata` porque se
+utilizará para seleccionar la interfaz de edición, validar el contenido y
+auditar el flujo.
+
+Cuando una generación IA utilice imágenes, la trazabilidad de esas selecciones
+deberá modelarse mediante una relación explícita con la generación, por ejemplo
+`prospeccion_plantilla_ai_generacion_imagenes`, con al menos:
+
+- `generacion_id`.
+- `logo_id`.
+- `uso_imagen`.
+- `variable_clave`.
+- `orden`.
+
+La relación de imágenes de la plantilla seguirá representando la asignación final
+utilizada durante el envío. La relación de generación solo conservará qué pidió o
+seleccionó el usuario durante la creación.
+
 Esta tabla persistirá qué ocurrió durante cada solicitud al asistente.
 
 Columnas iniciales:
@@ -904,7 +1150,19 @@ La métrica de generación no debe confundirse con envíos de WhatsApp, envíos 
 
 ### Fase 3: integración en los modales
 
-- Agregar el panel del asistente al modal de correo.
+- Agregar la selección inicial de los tres modos de creación de correo.
+- Crear el editor visual por bloques, con imágenes, variables y vista previa.
+- Tomar el HTML de referencia proporcionado por el usuario como contrato visual y
+  funcional del Editor visual.
+- Mantener la distribución barra superior, biblioteca lateral, lienzo central,
+  inspector lateral y barra inferior definida en la referencia.
+- Mantener un editor separado para código HTML.
+- Reutilizar el catálogo completo de variables del backend en el Editor visual, el
+  Código HTML y el Asistente IA.
+- Presentar las variables con nombres legibles y controles simples, sin claves
+  técnicas, tipos ni etiquetas adicionales.
+- Convertir el resultado IA en un borrador editable desde el editor compatible.
+- Guardar y recuperar `email_creation_mode`.
 - Agregar el panel del asistente al modal de WhatsApp.
 - Cargar variables desde backend.
 - Implementar estados de carga, error y resultado.
@@ -929,6 +1187,13 @@ La funcionalidad podrá considerarse lista cuando:
 - El backend rechace variables no permitidas.
 - El resultado respete el tenant autenticado.
 - El correo genere asunto, texto y HTML válidos.
+- El usuario pueda elegir entre Editor visual, Código HTML y Asistente IA para correo.
+- El Editor visual permita agregar y editar texto, imágenes, variables, botones y bloques.
+- El modo Código HTML valide y sanitice el contenido antes de guardarlo.
+- El Asistente IA solicite imágenes, uso de imágenes, datos del prospecto, prompt y estilo.
+- Los tres modos utilicen todas las variables de correo disponibles en el catálogo backend.
+- Las variables se muestren con nombres entendibles, sin claves técnicas, tipos ni etiquetas adicionales.
+- Una plantilla editada vuelva a abrirse en el modo de creación guardado.
 - WhatsApp genere una propuesta sin afirmar aprobación de Meta.
 - El usuario pueda editar antes de guardar.
 - No se expongan secretos en frontend, respuestas o logs.
@@ -949,9 +1214,10 @@ La funcionalidad podrá considerarse lista cuando:
 5. Confirmar el catálogo definitivo de variables y sus canales compatibles.
 6. Definir si se requiere historial completo de generaciones o solo auditoría resumida.
 7. Definir la política de retención del contenido generado.
-8. Confirmar si el HTML se guardará como cuerpo generado o si habrá una plantilla visual adicional.
-9. Preparar casos de prueba para español, inglés, mensajes cortos y diferentes segmentos.
-10. Probar la aprobación real de una plantilla de WhatsApp en Meta después de la generación.
+8. Definir el modelo de bloques del Editor visual y su conversión segura a `cuerpo_html`.
+9. Confirmar si la generación IA devolverá solo HTML o también una estructura de bloques editable.
+10. Preparar casos de prueba para español, inglés, mensajes cortos y diferentes segmentos.
+11. Probar la aprobación real de una plantilla de WhatsApp en Meta después de la generación.
 
 ## 16. Decisión arquitectónica final
 
@@ -966,7 +1232,9 @@ Catálogo de variables y contexto del tenant
         ↓
 Validación estructurada por canal
         ↓
-Editor de plantilla en /prospeccion/campanas
+Selector de modo de creación
+        ↓
+Editor visual / Código HTML / Asistente IA
         ↓
 Confirmación manual y guardado
 ```

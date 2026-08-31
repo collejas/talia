@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tal-IA · Constructor de plantillas</title>
+<style>
+  :root{
+    --bg:#f6f7fb;
+    --panel:#ffffff;
+    --line:#e8eaf1;
+    --text:#171923;
+    --muted:#7a8090;
+    --primary:#6d5dfc;
+    --primary-2:#8b7fff;
+    --soft:#f1efff;
+    --shadow:0 14px 40px rgba(25,30,55,.08);
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden}
+  button,input,textarea{font:inherit}
+  .app{display:grid;grid-template-rows:72px 1fr;height:100vh}
+  .topbar{
+    display:flex;align-items:center;gap:16px;padding:0 24px;background:rgba(255,255,255,.9);
+    border-bottom:1px solid var(--line);backdrop-filter:blur(14px);z-index:4
+  }
+  .brand{display:flex;align-items:center;gap:12px;min-width:250px}
+  .logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#6d5dfc,#9a7cff);display:grid;place-items:center;color:#fff;font-weight:800;box-shadow:0 8px 18px rgba(109,93,252,.25)}
+  .brand b{font-size:17px}.brand span{display:block;font-size:12px;color:var(--muted);margin-top:1px}
+  .titlebar{flex:1;display:flex;align-items:center;justify-content:center;gap:10px}
+  .titlebar input{
+    width:340px;border:0;background:transparent;text-align:center;font-weight:650;font-size:15px;outline:0
+  }
+  .saved{font-size:12px;color:#38a169;background:#edf9f1;padding:6px 10px;border-radius:999px}
+  .actions{display:flex;align-items:center;gap:10px}
+  .btn{border:1px solid var(--line);background:#fff;color:#222733;padding:10px 14px;border-radius:11px;font-weight:650;cursor:pointer}
+  .btn:hover{transform:translateY(-1px)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 8px 18px rgba(109,93,252,.22)}
+  .workspace{display:grid;grid-template-columns:270px minmax(520px,1fr) 300px;height:calc(100vh - 72px)}
+  .sidebar{background:#fff;border-right:1px solid var(--line);overflow:auto}
+  .inspector{background:#fff;border-left:1px solid var(--line);overflow:auto}
+  .sidebar-inner,.inspector-inner{padding:20px}
+  .side-title{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#979cac;font-weight:800;margin:4px 0 12px}
+  .block-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tool{
+    padding:14px 10px;border:1px solid var(--line);background:#fff;border-radius:14px;text-align:left;cursor:pointer;transition:.18s;
+  }
+  .tool:hover{border-color:#cbc6ff;background:#fbfaff;transform:translateY(-2px);box-shadow:0 8px 20px rgba(45,45,80,.06)}
+  .tool .ic{width:34px;height:34px;border-radius:10px;background:#f3f4f8;display:grid;place-items:center;margin-bottom:8px;font-size:17px}
+  .tool b{font-size:13px}.tool small{display:block;color:var(--muted);margin-top:3px;font-size:11px}
+  .divider{height:1px;background:var(--line);margin:22px 0}
+  .vars{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-size:12px;padding:8px 10px;background:#f7f7fa;border:1px solid #eceef3;border-radius:999px;cursor:pointer}
+  .chip:hover{background:var(--soft);border-color:#d9d3ff;color:#5144d6}
+  .ai-card{margin-top:18px;padding:15px;border-radius:16px;background:linear-gradient(135deg,#f6f3ff,#fbfaff);border:1px solid #e2dcff}
+  .ai-card h4{margin:0 0 6px;font-size:14px}.ai-card p{margin:0 0 12px;color:#74798a;font-size:12px;line-height:1.45}
+  .ai-card button{width:100%;border:0;background:#201f2d;color:white;border-radius:10px;padding:10px;font-weight:700;cursor:pointer}
+  .canvas-wrap{overflow:auto;padding:26px 34px 90px;background:
+    radial-gradient(circle at top left,rgba(109,93,252,.06),transparent 25%),
+    var(--bg);
+  }
+  .canvas-head{max-width:760px;margin:0 auto 18px;display:flex;align-items:center;justify-content:space-between;color:#717789;font-size:13px}
+  .toggle{background:#fff;border:1px solid var(--line);padding:4px;border-radius:11px;display:flex;gap:4px}
+  .toggle button{border:0;background:transparent;padding:7px 10px;border-radius:8px;cursor:pointer;color:#777d8e}
+  .toggle button.active{background:#f0eefc;color:#5145d8;font-weight:700}
+  .email{
+    width:720px;max-width:100%;margin:auto;background:#fff;border:1px solid #e7e9ef;border-radius:20px;box-shadow:var(--shadow);padding:38px
+  }
+  .email-block{
+    position:relative;border:1px solid transparent;border-radius:14px;padding:14px 16px;margin:5px 0;transition:.15s;cursor:pointer
+  }
+  .email-block:hover{border-color:#ddd9ff;background:#fdfcff}
+  .email-block.selected{border:1.5px solid var(--primary);background:#fcfbff;box-shadow:0 0 0 3px rgba(109,93,252,.08)}
+  .block-toolbar{display:none;position:absolute;right:8px;top:-14px;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 18px rgba(0,0,0,.08);overflow:hidden;z-index:2}
+  .selected .block-toolbar{display:flex}
+  .block-toolbar button{border:0;background:#fff;padding:7px 8px;cursor:pointer}
+  .block-toolbar button:hover{background:#f4f4f7}
+  .logo-placeholder{
+    width:120px;height:38px;border-radius:10px;background:#191b22;color:#fff;display:grid;place-items:center;font-weight:800;letter-spacing:.03em
+  }
+  .email h1{font-size:30px;line-height:1.18;margin:0 0 6px}
+  .email p{font-size:15px;line-height:1.7;color:#4d5361;margin:0}
+  .cta{display:inline-flex;background:#171923;color:#fff;border-radius:11px;padding:13px 20px;font-size:14px;font-weight:750;text-decoration:none}
+  .feature-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .feature{padding:16px;border:1px solid #eceef3;border-radius:14px;background:#fafbfc}
+  .feature .dot{width:32px;height:32px;border-radius:10px;background:#edeafd;display:grid;place-items:center;margin-bottom:10px}
+  .feature b{display:block;font-size:13px;margin-bottom:3px}.feature span{font-size:11px;color:#808697;line-height:1.4}
+  .add-row{display:flex;align-items:center;gap:10px;margin:16px 0;color:#969cac}
+  .add-row:before,.add-row:after{content:"";height:1px;background:#e7e9ef;flex:1}
+  .add-btn{border:1px dashed #cfd2dc;background:white;color:#5f6574;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer}
+  .add-btn:hover{border-color:var(--primary);color:var(--primary);background:#faf9ff}
+  .footer-note{text-align:center;color:#9a9fac;font-size:11px;padding-top:18px}
+  .prop h3{margin:0 0 4px;font-size:16px}.prop .sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+  .field{margin-bottom:18px}
+  .field label{display:block;font-size:12px;color:#676d7b;font-weight:700;margin-bottom:8px}
+  .field input,.field textarea{
+    width:100%;border:1px solid var(--line);background:#fff;border-radius:11px;padding:10px 11px;outline:0
+  }
+  .field input:focus,.field textarea:focus{border-color:#b9b1ff;box-shadow:0 0 0 3px rgba(109,93,252,.08)}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .seg button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px;cursor:pointer}
+  .seg button.on{border-color:#cfcaff;background:#f2efff;color:#5748da;font-weight:750}
+  .swatches{display:flex;gap:9px}
+  .swatch{width:28px;height:28px;border-radius:8px;border:2px solid #fff;box-shadow:0 0 0 1px #dfe1e7;cursor:pointer}
+  .s1{background:#171923}.s2{background:#6d5dfc}.s3{background:#0e9f6e}.s4{background:#e35157}
+  .mini-row{display:flex;align-items:center;gap:8px}
+  .mini-btn{flex:1;border:1px solid var(--line);background:white;padding:10px;border-radius:10px;cursor:pointer}
+  .bottom-bar{
+    position:fixed;left:270px;right:300px;bottom:0;height:64px;border-top:1px solid var(--line);background:rgba(255,255,255,.92);
+    backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;gap:10px;z-index:3
+  }
+  .toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%) translateY(20px);opacity:0;background:#171923;color:#fff;padding:10px 14px;border-radius:10px;font-size:12px;transition:.22s;z-index:10}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  @media(max-width:1050px){
+    .workspace{grid-template-columns:220px 1fr}.inspector{display:none}.bottom-bar{left:220px;right:0}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">T</div>
+      <div><b>Tal-IA</b><span>Constructor de plantillas</span></div>
+    </div>
+    <div class="titlebar">
+      <input value="Presentación comercial"/>
+      <div class="saved">✓ Guardado</div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="toast('Vista previa activada')">Vista previa</button>
+      <button class="btn primary" onclick="toast('Plantilla guardada')">Guardar plantilla</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar">
+      <div class="sidebar-inner">
+        <div class="side-title">Agregar contenido</div>
+        <div class="block-grid">
+          <button class="tool" onclick="addBlock('text')"><div class="ic">Aa</div><b>Texto</b><small>Títulos y párrafos</small></button>
+          <button class="tool" onclick="addBlock('image')"><div class="ic">▧</div><b>Imagen</b><small>Logo o fotografía</small></button>
+          <button class="tool" onclick="addBlock('button')"><div class="ic">▬</div><b>Botón</b><small>Llamado a acción</small></button>
+          <button class="tool" onclick="addBlock('divider')"><div class="ic">—</div><b>Separador</b><small>Divide secciones</small></button>
+          <button class="tool" onclick="addBlock('space')"><div class="ic">↕</div><b>Espacio</b><small>Más aire visual</small></button>
+          <button class="tool" onclick="addBlock('columns')"><div class="ic">▥</div><b>Columnas</b><small>2 bloques lado a lado</small></button>
+        </div>
+
+        <div class="divider"></div>
+        <div class="side-title">Personalización</div>
+        <div class="vars">
+          <span class="chip" onclick="insertVar('{{nombre}}')">{{nombre}}</span>
+          <span class="chip" onclick="insertVar('{{empresa}}')">{{empresa}}</span>
+          <span class="chip" onclick="insertVar('{{puesto}}')">{{puesto}}</span>
+          <span class="chip" onclick="insertVar('{{telefono}}')">{{telefono}}</span>
+          <span class="chip" onclick="insertVar('{{correo}}')">{{correo}}</span>
+        </div>
+      </div>
+    </aside>
+
+    <section class="canvas-wrap">
+      <div class="canvas-head">
+        <span>Haz clic en cualquier bloque para editarlo</span>
+        <div class="toggle">
+          <button class="active" onclick="desktop(this)">▱ Escritorio</button>
+          <button onclick="mobile(this)">▯ Móvil</button>
+        </div>
+      </div>
+
+      <div class="email" id="email">
+        <div class="email-block" onclick="selectBlock(this,'Logo')">
+          <div class="block-toolbar"><button>⋮⋮</button><button onclick="removeBlock(event,this)">🗑</button></div>
+          <div class="logo-placeholder">TAL‑IA</div>
+        </div>
+
+        <div class="add-row"><button class="add-btn" onclick="quickAdd(this)">＋ Agregar bloque</button></div>
+
+        <div class="email-block selected" onclick="selectBlock(this,'Texto principal')">
+          <div class="block-toolbar"><button>⋮⋮</button><button onclick="removeBlock(event,this)">🗑</button></div>
+          <h1>Hola, {{nombre}}</h1>
+          <p style="margin-top:12px">Encontramos una forma de ayudar a <b>{{empresa}}</b> a conseguir nuevos prospectos, atenderlos con IA y dar seguimiento comercial desde un solo lugar.</p>
+        </div>
+
+        <div class="add-row"><button class="add-btn" onclick="quickAdd(this)">＋ Agregar bloque</button></div>
+
+        <div class="email-block" onclick="selectBlock(this,'Beneficios')">
+          <div class="block-toolbar"><button>⋮⋮</button><button onclick="removeBlock(event,this)">🗑</button></div>
+          <div class="feature-row">
+            <div class="feature"><div class="dot">⌕</div><b>Encuentra clientes</b><span>Prospecta empresas y contactos.</span></div>
+            <div class="feature"><div class="dot">✦</div><b>Atiende con IA</b><span>Responde y califica 24/7.</span></div>
+            <div class="feature"><div class="dot">✓</div><b>Da seguimiento</b><span>Organiza todo en tu CRM.</span></div>
+          </div>
+        </div>
+
+        <div class="add-row"><button class="add-btn" onclick="quickAdd(this)">＋ Agregar bloque</button></div>
+
+        <div class="email-block" onclick="selectBlock(this,'Botón')">
+          <div class="block-toolbar"><button>⋮⋮</button><button onclick="removeBlock(event,this)">🗑</button></div>
+          <a class="cta" href="#" onclick="event.preventDefault()">Quiero conocer Tal‑IA</a>
+        </div>
+
+        <div class="add-row"><button class="add-btn" onclick="quickAdd(this)">＋ Agregar bloque</button></div>
+
+        <div class="email-block" onclick="selectBlock(this,'Firma')">
+          <div class="block-toolbar"><button>⋮⋮</button><button onclick="removeBlock(event,this)">🗑</button></div>
+          <p><b>Equipo Tal‑IA</b><br><span style="color:#8d93a2">Ventas inteligentes con IA</span></p>
+        </div>
+
+        <div class="footer-note">Este correo fue diseñado con Tal‑IA · Cancelar suscripción</div>
+      </div>
+    </section>
+
+    <aside class="inspector">
+      <div class="inspector-inner prop">
+        <h3 id="propTitle">Texto principal</h3>
+        <div class="sub">Personaliza el bloque seleccionado</div>
+
+        <div class="field">
+          <label>Contenido</label>
+          <textarea rows="5">Hola, {{nombre}}
+
+Encontramos una forma de ayudar a {{empresa}}...</textarea>
+        </div>
+
+        <div class="field">
+          <label>Tamaño</label>
+          <div class="seg"><button>Pequeño</button><button class="on">Normal</button><button>Grande</button></div>
+        </div>
+
+        <div class="field">
+          <label>Alineación</label>
+          <div class="seg"><button>←</button><button class="on">↔</button><button>→</button></div>
+        </div>
+
+        <div class="field">
+          <label>Color</label>
+          <div class="swatches"><div class="swatch s1"></div><div class="swatch s2"></div><div class="swatch s3"></div><div class="swatch s4"></div></div>
+        </div>
+
+        <div class="field">
+          <label>Espaciado</label>
+          <input type="range" min="0" max="30" value="14">
+        </div>
+
+        <div class="divider"></div>
+        <div class="mini-row">
+          <button class="mini-btn" onclick="toast('Bloque duplicado')">Duplicar</button>
+          <button class="mini-btn" onclick="toast('Bloque eliminado')">Eliminar</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <div class="bottom-bar">
+    <button class="btn" onclick="toast('Prueba enviada')">✉ Enviar prueba</button>
+    <button class="btn" onclick="toast('Vista móvil activada')">▯ Ver en móvil</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const email = document.getElementById('email');
+
+  function toast(msg){
+    const t=document.getElementById('toast');
+    t.textContent=msg;t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'),1500);
+  }
+
+  function selectBlock(el,name){
+    document.querySelectorAll('.email-block').forEach(b=>b.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('propTitle').textContent=name;
+  }
+
+  function removeBlock(e,btn){
+    e.stopPropagation();
+    btn.closest('.email-block').remove();
+    toast('Bloque eliminado');
+  }
+
+  function addBlock(type){
+    const div=document.createElement('div');
+    div.className='email-block';
+    div.onclick=()=>selectBlock(div,'Nuevo bloque');
+    div.innerHTML='<div class="block-toolbar"><button>⋮⋮</button><button onclick="removeBlock(event,this)">🗑</button></div>';
+
+    if(type==='text') div.innerHTML += '<h1>Nuevo título</h1><p style="margin-top:10px">Escribe aquí tu mensaje...</p>';
+    if(type==='image') div.innerHTML += '<div style="height:150px;border-radius:14px;background:#f1f2f6;display:grid;place-items:center;color:#8b91a0">Haz clic para subir una imagen</div>';
+    if(type==='button') div.innerHTML += '<a class="cta" href="#" onclick="event.preventDefault()">Nuevo botón</a>';
+    if(type==='divider') div.innerHTML += '<div style="height:1px;background:#e7e9ef"></div>';
+    if(type==='space') div.innerHTML += '<div style="height:38px"></div>';
+    if(type==='columns') div.innerHTML += '<div class="feature-row" style="grid-template-columns:1fr 1fr"><div class="feature"><b>Columna 1</b><span>Contenido...</span></div><div class="feature"><b>Columna 2</b><span>Contenido...</span></div></div>';
+
+    const footer=email.querySelector('.footer-note');
+    email.insertBefore(div,footer);
+    toast('Bloque agregado');
+  }
+
+  function quickAdd(){
+    addBlock('text');
+  }
+
+  function insertVar(v){
+    toast(v+' insertado');
+  }
+
+  function desktop(btn){
+    email.style.width='720px';
+    document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  function mobile(btn){
+    email.style.width='390px';
+    document.querySelectorAll('.toggle button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+</script>
+</body>
+</html>
