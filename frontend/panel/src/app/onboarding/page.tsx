@@ -31,7 +31,7 @@ export default async function OnboardingPage() {
   if (!response.ok) {
     redirect("/auth/login?redirectTo=%2Fonboarding")
   }
-  const summaryStep = { id: "resumen", titulo: "Resumen", estado: "en_progreso" as const, completado: false }
+  const summaryStep = { id: "resumen", titulo: "Resumen", estado: "en_progreso" as const, completado: response.data.completado }
   const steps = [summaryStep, ...response.data.pasos]
   return <OnboardingStepShell step={summaryStep} steps={steps} porcentaje={response.data.porcentaje}><OnboardingSummary steps={response.data.pasos} /></OnboardingStepShell>
 }

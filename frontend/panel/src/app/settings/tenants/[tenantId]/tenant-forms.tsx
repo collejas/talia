@@ -745,7 +745,7 @@ export function TenantOrganizationInfoForm({
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="tenant_nombre">Nombre</Label>
+              <Label htmlFor="tenant_nombre">Nombre de la organización</Label>
               <Input id="tenant_nombre" name="tenant_nombre" defaultValue={info?.nombre ?? ""} maxLength={40} />
             </div>
             <div className="space-y-2">
@@ -790,13 +790,17 @@ export function TenantOrganizationInfoForm({
               <Input id="tenant_contacto_telefono" name="tenant_contacto_telefono" defaultValue={info?.contacto_telefono ?? ""} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenant_correo_contacto_principal">Correo principal</Label>
+              <Label htmlFor="tenant_correo_contacto_principal">Correo de contacto principal</Label>
               <Input
                 id="tenant_correo_contacto_principal"
                 name="tenant_correo_contacto_principal"
                 defaultValue={info?.correo_contacto_principal ?? ""}
                 type="email"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tenant_telefono">Teléfono de la organización</Label>
+              <Input id="tenant_telefono" name="tenant_telefono" defaultValue={info?.telefono ?? ""} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="tenant_correo_facturacion">Correo de facturación</Label>
@@ -1770,6 +1774,31 @@ export function TenantMailSettings({
       <form action={formAction} className="space-y-6">
         <input type="hidden" name="tenant_id" value={tenantId} />
 
+        <div className="space-y-4 rounded-lg border border-border/60 p-4">
+          <div>
+            <h3 className="text-sm font-medium">Acceso y tipo de conexión</h3>
+            <p className="text-xs text-muted-foreground">Indica cómo se conectará la aplicación al correo de tu organización.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="mail_username">Usuario del correo</Label>
+              <Input id="mail_username" name="mail_username" placeholder="hola@talia.mx" defaultValue="" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mail_password">Contraseña del correo</Label>
+              <Input id="mail_password" name="mail_password" type="password" placeholder="Pega para guardar o cambiar" defaultValue="" />
+            </div>
+            <div className="flex items-center gap-3">
+              <input id="mail_use_ssl" name="mail_use_ssl" type="checkbox" className="size-4" defaultChecked={Boolean(initialValues.mail_use_ssl)} />
+              <Label htmlFor="mail_use_ssl">Conexión segura para recibir</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <input id="mail_use_tls" name="mail_use_tls" type="checkbox" className="size-4" defaultChecked={Boolean(initialValues.mail_use_tls)} />
+              <Label htmlFor="mail_use_tls">Conexión segura para enviar</Label>
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="mail_incoming_server">Servidor para recibir correo</Label>
@@ -1857,43 +1886,9 @@ export function TenantMailSettings({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="flex items-center gap-3">
-            <input
-              id="mail_use_ssl"
-              name="mail_use_ssl"
-              type="checkbox"
-              className="size-4"
-              defaultChecked={Boolean(initialValues.mail_use_ssl)}
-            />
-            <Label htmlFor="mail_use_ssl">Usar conexión segura para recibir</Label>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              id="mail_use_tls"
-              name="mail_use_tls"
-              type="checkbox"
-              className="size-4"
-              defaultChecked={Boolean(initialValues.mail_use_tls)}
-            />
-            <Label htmlFor="mail_use_tls">Usar conexión segura para enviar</Label>
-          </div>
-        </div>
-
         <p className="text-xs text-muted-foreground">
           Estos datos permiten conectar el correo de tu organización para recibir y enviar mensajes.
         </p>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="mail_username">Usuario del correo</Label>
-            <Input id="mail_username" name="mail_username" placeholder="hola@talia.mx" defaultValue="" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="mail_password">Contraseña del correo</Label>
-            <Input id="mail_password" name="mail_password" type="password" placeholder="Pega para rotar" defaultValue="" />
-          </div>
-        </div>
 
         <div className="flex items-center justify-between gap-3">
           <FormStatusMessage state={state} />

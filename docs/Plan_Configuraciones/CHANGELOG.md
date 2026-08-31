@@ -23,6 +23,15 @@ Este archivo registra el avance del plan de simplificación de
 - El avance considera completado este paso cuando el logo queda asociado a la
   organización.
 
+## [2026-08-31] — Validación visible y nombres alineados
+
+- Los nombres de los campos de organización ahora coinciden con los datos que
+  realmente determinan el avance.
+- Se agregó el teléfono de la organización como campo explícito.
+- El resumen y cada paso muestran ✓ cuando están completos y ✕ cuando están
+  pendientes.
+- El paso de Imagen empresarial y el resumen reflejan correctamente su estado.
+
 ## [2026-08-30] — Zoom opcional dentro de Agenda
 
 ### Cambio realizado

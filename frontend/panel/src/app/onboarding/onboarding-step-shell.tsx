@@ -69,7 +69,7 @@ export function OnboardingStepShell({
               <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${percentage}%` }} />
             </div>
             <nav aria-label="Pasos de configuración" className="space-y-1">
-              {steps.map((item, itemIndex) => (
+              {steps.map((item) => (
                 <button
                   key={item.id}
                   className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm ${item.id === step.id ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
@@ -77,7 +77,7 @@ export function OnboardingStepShell({
                   disabled={saving}
                 >
                   <span className="flex size-6 shrink-0 items-center justify-center rounded-full border text-xs">
-                    {item.completado ? "✓" : itemIndex + 1}
+                    {item.completado ? "✓" : "✕"}
                   </span>
                   <span className="truncate">{item.titulo}</span>
                 </button>

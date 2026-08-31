@@ -135,7 +135,7 @@ export function OnboardingProgress({ initialProgress }: { initialProgress: Onboa
             <div key={step.id} className="rounded-lg border p-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <span className="text-lg" aria-hidden="true">{step.completado ? "✓" : step.estado === "en_progreso" ? "◐" : "○"}</span>
+                  <span className="text-lg" aria-hidden="true">{step.completado ? "✓" : "✕"}</span>
                   <span className="font-medium">{step.titulo}</span>
                 </div>
                 {step.completado && <span className="text-sm text-muted-foreground">Completado</span>}

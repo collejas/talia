@@ -31,11 +31,11 @@ export function OnboardingSummary({ steps }: { steps: Step[] }) {
         <p className="text-sm text-muted-foreground">Aquí puedes consultar el estado de toda tu configuración y entrar directamente a cualquier paso.</p>
       </div>
       <div className="space-y-2">
-        {steps.map((step, index) => (
+        {steps.map((step) => (
           <div key={step.id} className="space-y-3 rounded-lg border p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="flex size-7 items-center justify-center rounded-full border text-sm">{step.completado ? "✓" : index + 1}</span>
+                <span className="flex size-7 items-center justify-center rounded-full border text-sm">{step.completado ? "✓" : "✕"}</span>
                 <div>
                   <p className="font-medium">{step.titulo}</p>
                   <p className="text-xs text-muted-foreground">{step.completado ? "Completado" : step.estado === "en_progreso" ? "Paso actual" : "Pendiente"}</p>

@@ -28,7 +28,7 @@ export const fetchCache = "force-no-store"
 
 type AnyRecord = Record<string, unknown>
 type Step = { id: string; titulo: string; completado: boolean; estado: string }
-type Progress = { pasos: Step[]; paso_actual: string | null; porcentaje: number; webchat_decision: "pendiente" | "usar" | "no_usar"; voz_decision: "pendiente" | "usar" | "no_usar"; zoom_decision: "pendiente" | "usar" | "no_usar" }
+type Progress = { pasos: Step[]; paso_actual: string | null; porcentaje: number; completado: boolean; webchat_decision: "pendiente" | "usar" | "no_usar"; voz_decision: "pendiente" | "usar" | "no_usar"; zoom_decision: "pendiente" | "usar" | "no_usar" }
 type Settings = TenantOrganizationInfo & {
   organizacion_id: string
   config?: AnyRecord | null
@@ -85,7 +85,7 @@ export default async function OnboardingStepPage({ params }: { params: Promise<{
   if (!progressResp.ok) redirect("/auth/login?redirectTo=%2Fonboarding")
   const step = progressResp.data.pasos.find((item) => item.id === requestedStep)
   if (!step) redirect("/onboarding")
-  const summaryStep = { id: "resumen", titulo: "Resumen", estado: "en_progreso" as const, completado: false }
+  const summaryStep = { id: "resumen", titulo: "Resumen", estado: "en_progreso" as const, completado: progressResp.data.completado }
   const steps = [summaryStep, ...progressResp.data.pasos]
 
   const [settingsResp, secretsResp, routesResp, scheduleResp, metaResp, emailResp] = await Promise.all([
