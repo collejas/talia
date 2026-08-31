@@ -38,14 +38,10 @@ def _mail_operational_configured(config: dict[str, Any], secrets: list[dict[str,
 
 def _search_configuration_ready(config: dict[str, Any], secrets: list[dict[str, Any]]) -> bool:
     denue = config.get("denue") if isinstance(config.get("denue"), dict) else {}
-    places = config.get("google_places") if isinstance(config.get("google_places"), dict) else {}
     return all(
         (
             _has_text(denue.get("base_url")),
             _secret_exists(secrets, "denue", "token"),
-            _has_text(places.get("nearby_url")),
-            _has_text(places.get("text_url")),
-            _has_text(places.get("details_url")),
             _secret_exists(secrets, "google", "places", "api_key"),
         )
     )

@@ -4131,9 +4131,6 @@ def build_validation_report(
     ]
     busqueda_config_keys = [
         "denue.base_url",
-        "google_places.nearby_url",
-        "google_places.text_url",
-        "google_places.details_url",
     ]
     whatsapp_provider = str(_get_config_value(config, "whatsapp.provider") or "twilio").strip().lower()
     whatsapp_common_config_keys = [
