@@ -264,7 +264,6 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     addString("timezone", getText(formData, "tenant_timezone"))
     addString("idioma", getText(formData, "tenant_idioma"))
     addString("moneda", getText(formData, "tenant_moneda"))
-    addString("logo_url", getText(formData, "tenant_logo_url"))
     setString("direccion_fiscal", buildFiscalAddressSummary(formData))
     setString("direccion_fiscal_calle", getText(formData, "tenant_direccion_fiscal_calle"))
     setString("direccion_fiscal_numero_exterior", getText(formData, "tenant_direccion_fiscal_numero_exterior"))

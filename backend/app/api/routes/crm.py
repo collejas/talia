@@ -2702,6 +2702,19 @@ async def _resolve_quote_logo_url(
                 },
             )
             return resolved_url
+    try:
+        organization = await platform_repo.get_organizacion_details(
+            organizacion_id=organizacion_id
+        )
+    except PlatformRepositoryError:
+        organization = None
+    organization_logo_url = (
+        organization.get("logo_url")
+        if isinstance(organization, dict)
+        else None
+    )
+    if isinstance(organization_logo_url, str) and organization_logo_url.strip():
+        return organization_logo_url.strip()
     logger.warning(
         "quote_logo_debug_no_logo_in_template",
         extra={"organizacion_id": str(organizacion_id)},

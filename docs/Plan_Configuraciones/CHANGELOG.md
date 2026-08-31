@@ -3,6 +3,19 @@
 Este archivo registra el avance del plan de simplificación de
 `/settings/variables`.
 
+## [2026-08-31] — Logo empresarial mediante carga de archivo
+
+### Cambio realizado
+
+- Se eliminó la captura manual de `Logo URL` de los datos generales y del
+  onboarding.
+- La sección “Imagen empresarial” ahora permite cargar directamente el logo de
+  la organización.
+- El archivo se guarda en la galería de imágenes del tenant y se asocia a su
+  organización para reutilizarlo en materiales comerciales.
+- Las cotizaciones utilizan el logo empresarial como respaldo cuando no tienen
+  un logo específico configurado.
+
 ## [2026-08-30] — Zoom opcional dentro de Agenda
 
 ### Cambio realizado

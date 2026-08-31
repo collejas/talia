@@ -529,6 +529,7 @@ export default async function SettingsVariablesPage({
                 <TabsContent value="brand" className="space-y-6 pt-4">
                   {data ? (
                     <TenantAiBrandContextPanel
+                      initialLogoUrl={data.logo_url}
                       initialValues={{
                         ia_descripcion_empresa: data.ia_descripcion_empresa ?? "",
                         ia_productos_servicios: data.ia_productos_servicios ?? "",
