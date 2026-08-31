@@ -34,14 +34,9 @@ No se debe afirmar una integración específica sin confirmarla en la configurac
 
 ## ¿Cuál es el precio?
 
-Los precios publicados son:
+Las modalidades y precios se cargan desde la configuración comercial vigente de la página de precios. No memorices importes de una versión anterior ni inventes descuentos, cargos o condiciones.
 
-- Plan anual: $1,149 MXN al mes + IVA. Son 12 pagos mensuales y se reciben 13 meses por el precio de 12.
-- Plan mensual: $1,436.25 MXN al mes + IVA. Tiene pago y renovación mensual.
-- Configuración inicial: $20,000 MXN + IVA, dividida en 4 pagos de $5,000 MXN + IVA.
-- Usuarios adicionales: de 3 a 6, $324 MXN por usuario al mes; de 7 a 12, $301 MXN por usuario al mes; de 13 a 20, $280 MXN por usuario al mes.
-
-Ambos planes incluyen 2 usuarios y las mismas funciones principales. Todos los precios son más IVA. Los consumos adicionales de WhatsApp, llamadas, servicios de terceros, integraciones especiales y desarrollos personalizados se cotizan por separado. No inventar descuentos, cargos ni condiciones adicionales.
+La página informa que las modalidades incluyen configuración, capacitación y licencia para 3 usuarios, y que sus precios incluyen IVA. También publica una renovación mensual de $1,500 MXN después del periodo contratado. Si el contacto solicita un importe que no esté confirmado en el contexto vigente, indica que debe confirmarlo un asesor.
 
 ## ¿Qué incluyen los planes publicados?
 

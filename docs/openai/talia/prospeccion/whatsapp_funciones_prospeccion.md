@@ -141,36 +141,12 @@
       "necesidad_proposito": {
         "type": "string",
         "description": "Intención principal del lead."
-      },
-      "source": {
-        "type": [
-          "string",
-          "null"
-        ],
-        "description": "Origen conversacional. Valor esperado: 'prospeccion_whatsapp'."
-      },
-      "campana_id": {
-        "type": [
-          "string",
-          "null"
-        ],
-        "description": "Campaña origen si aplica."
-      },
-      "batch_id": {
-        "type": [
-          "string",
-          "null"
-        ],
-        "description": "Lote de envío si aplica."
       }
     },
     "required": [
       "conversacion_id",
       "notes",
-      "necesidad_proposito",
-      "source",
-      "campana_id",
-      "batch_id"
+      "necesidad_proposito"
     ],
     "additionalProperties": false
   }
