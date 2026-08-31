@@ -54,21 +54,8 @@ type Props = {
   verifyDomainAction?: EmailServiceAction
   removeDomainAction?: EmailServiceAction
   updateSenderAction?: EmailServiceAction
+  configurationComplete?: boolean
   actionTenantId?: string
-}
-
-const migrationLabels: Record<string, string> = {
-  pending: "Pendiente",
-  configuring: "En configuración",
-  domain_verified: "Dominio verificado",
-  validating: "En validación",
-  active: "Activo",
-  validated: "Validado",
-  migrated: "Listo",
-  blocked: "Requiere atención",
-  rolled_back: "Pausado",
-  paused: "Pausado",
-  failed: "Requiere atención",
 }
 
 const statusLabels: Record<string, string> = {
@@ -216,8 +203,7 @@ function SenderForm({
   )
 }
 
-export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, removeDomainAction, updateSenderAction, actionTenantId }: Props) {
-  const status = data?.migration_status ?? "pending"
+export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, removeDomainAction, updateSenderAction, configurationComplete = false, actionTenantId }: Props) {
   const plan = data?.plan
   const usage = data?.usage
 
@@ -226,7 +212,7 @@ export function TenantEmailServicePanel({ data, createDomainAction, verifyDomain
       <CardHeader className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="flex items-center gap-2"><Mail className="size-5" /> Servicio de correo</CardTitle>
-          <Badge variant={data?.feature_enabled ? "secondary" : "outline"}>{label(status, migrationLabels)}</Badge>
+          <Badge variant={configurationComplete ? "secondary" : "outline"}>{data ? (configurationComplete ? "Configuración completa" : "Pendiente") : "No disponible"}</Badge>
         </div>
         <CardDescription>
           Consulta el dominio autorizado, los registros DNS y la cuota asignada para los envíos de este tenant.
@@ -240,12 +226,6 @@ export function TenantEmailServicePanel({ data, createDomainAction, verifyDomain
           </p>
         ) : (
           <>
-            {!data.feature_enabled ? (
-              <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-                El servicio todavía no está habilitado para este tenant. El administrador maestro debe completar la asignación antes de enviar.
-              </div>
-            ) : null}
-
             {createDomainAction ? (
               <section className="space-y-3 rounded-lg border border-dashed p-4">
                 <div><h3 className="font-medium">Registrar un dominio</h3><p className="text-sm text-muted-foreground">Después de registrarlo, publica los registros DNS que aparecerán abajo.</p></div>

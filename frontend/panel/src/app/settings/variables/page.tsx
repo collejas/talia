@@ -224,6 +224,10 @@ export default async function SettingsVariablesPage({
     organizacionId: null,
     withUserToken: true,
   })
+  const onboardingResp = await callCrmApi<{ correo?: { completado?: boolean } }>("/tenant/me/onboarding", {
+    organizacionId: null,
+    withUserToken: true,
+  })
   const data = settingsResp.ok ? settingsResp.data : null
   const promptConfigResp = data?.organizacion_id === MASTER_TENANT_ID
     ? await callCrmApi<TemplateAiPromptConfigResponse>("/tenant/me/prospeccion-template-ai-prompts", {
@@ -577,6 +581,7 @@ export default async function SettingsVariablesPage({
                   <div className="space-y-6">
                     <TenantEmailServicePanel
                       data={emailServiceResp.ok ? emailServiceResp.data : null}
+                      configurationComplete={onboardingResp.ok && onboardingResp.data.correo?.completado === true}
                       createDomainAction={tenantActionsLib.createTenantEmailDomainAction}
                       verifyDomainAction={tenantActionsLib.verifyTenantEmailDomainAction}
                       removeDomainAction={tenantActionsLib.removeTenantEmailDomainAction}
