@@ -319,7 +319,6 @@ export default async function SettingsVariablesPage({
     zoom_auto_create_meeting: getNestedBoolean(zoomConfig, "auto_create_meeting") ?? true,
   }
   const mailConfig = getNestedRecord(config, "mail") ?? {}
-  const brevoConfig = getNestedRecord(config, "brevo") ?? {}
   const mailInitialValues = {
     mail_incoming_server: getNestedString(mailConfig, "incoming_server"),
     mail_incoming_port_imap: getNestedNumber(mailConfig, "incoming_port_imap"),
@@ -327,9 +326,6 @@ export default async function SettingsVariablesPage({
     mail_outgoing_port_smtp: getNestedNumber(mailConfig, "outgoing_port_smtp"),
     mail_use_ssl: getNestedBoolean(mailConfig, "use_ssl"),
     mail_use_tls: getNestedBoolean(mailConfig, "use_tls"),
-    brevo_base_url: getNestedString(brevoConfig, "base_url"),
-    brevo_sender_email: getNestedString(brevoConfig, "sender_email"),
-    brevo_sender_name: getNestedString(brevoConfig, "sender_name"),
   }
   const twilioConfig = getNestedRecord(config, "twilio") ?? {}
   const voiceConfig = getNestedRecord(config, "voice") ?? {}
@@ -448,7 +444,6 @@ export default async function SettingsVariablesPage({
   const secretKeys = new Set(secrets.map((item) => item.clave.trim().toLowerCase()))
   const hasGeneralApiKey = secretKeys.has("openai.general.api_key")
   const hasVoiceApiKey = secretKeys.has("openai.voice.api_key")
-  const hasBrevoApiKey = secretKeys.has("brevo.api_key")
   const hasDenueToken = secretKeys.has("denue.token")
   const hasGoogleApiKey = secretKeys.has("google.places_api_key")
   const tenantId = data?.organizacion_id ?? ""
@@ -591,7 +586,6 @@ export default async function SettingsVariablesPage({
                   <TenantMailSettings
                     tenantId={tenantId}
                     initialValues={mailInitialValues}
-                    hasBrevoApiKey={hasBrevoApiKey}
                   />
                 </TabsContent>
                 <TabsContent value="twilio" className="pt-4">

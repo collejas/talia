@@ -20,12 +20,29 @@ def _secret_exists(secrets: list[dict[str, Any]], *parts: str) -> bool:
     )
 
 
+def _mail_operational_configured(config: dict[str, Any], secrets: list[dict[str, Any]]) -> bool:
+    mail = config.get("mail") if isinstance(config.get("mail"), dict) else {}
+    return all(
+        (
+            _has_text(mail.get("incoming_server")),
+            isinstance(mail.get("incoming_port_imap"), int),
+            _has_text(mail.get("outgoing_server")),
+            isinstance(mail.get("outgoing_port_smtp"), int),
+            isinstance(mail.get("use_ssl"), bool),
+            isinstance(mail.get("use_tls"), bool),
+            _secret_exists(secrets, "mail", "username"),
+            _secret_exists(secrets, "mail", "password"),
+        )
+    )
+
+
 def build_onboarding_progress(
     *,
     tenant: dict[str, Any],
     routes: list[dict[str, Any]],
     secrets: list[dict[str, Any]],
     preferences: dict[str, Any] | None,
+    email_service: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     config = tenant.get("config") if isinstance(tenant.get("config"), dict) else {}
     preferences = preferences or {}
@@ -74,8 +91,22 @@ def build_onboarding_progress(
         or (zoom_decision == "usar" and bool(zoom.get("enabled")))
         or (zoom_decision == "pendiente" and bool(zoom.get("enabled")))
     )
-    correo = config.get("correo") if isinstance(config.get("correo"), dict) else {}
-    correo_done = _has_text(correo.get("dominio"), correo.get("remitente"))
+    email_service = email_service or {}
+    migration = email_service.get("migration") if isinstance(email_service.get("migration"), dict) else {}
+    domain = email_service.get("domain") if isinstance(email_service.get("domain"), dict) else {}
+    mail_operational_done = _mail_operational_configured(config, secrets)
+    domain_verified = domain.get("status") == "verified" and _has_text(domain.get("verified_at"))
+    sender_configured = domain_verified and _has_text(domain.get("default_from_email"))
+    service_validated = bool(migration.get("validated_at"))
+    service_enabled = bool(migration.get("feature_enabled")) and str(migration.get("status") or "") in {
+        "active",
+        "validated",
+        "migrated",
+    }
+    # La habilitación administrativa del servicio central es independiente del
+    # avance que puede completar el tenant. El onboarding valida la configuración
+    # que el tenant controla: correo operativo, DNS y remitente.
+    correo_done = mail_operational_done and domain_verified and sender_configured
 
     definitions = [
         ("organizacion", "Datos de tu organización", organization_done),
@@ -109,4 +140,13 @@ def build_onboarding_progress(
         "requiere_onboarding": str(tenant.get("estado_onboarding") or "pendiente")
         != "completado",
         "pasos": steps,
+        "correo": {
+            "correo_operativo_configurado": mail_operational_done,
+            "dominio_registrado": bool(domain),
+            "dns_validado": domain_verified,
+            "remitente_configurado": sender_configured,
+            "servicio_habilitado": service_enabled,
+            "servicio_validado": service_validated,
+            "completado": correo_done,
+        },
     }

@@ -1080,9 +1080,6 @@ type MailInitialValues = {
   mail_outgoing_port_smtp?: number
   mail_use_ssl?: boolean
   mail_use_tls?: boolean
-  brevo_base_url?: string
-  brevo_sender_email?: string
-  brevo_sender_name?: string
 }
 
 type TwilioInitialValues = {
@@ -1759,11 +1756,9 @@ export function TenantCalendarSettings({
 export function TenantMailSettings({
   tenantId,
   initialValues,
-  hasBrevoApiKey,
 }: {
   tenantId: string
   initialValues: MailInitialValues
-  hasBrevoApiKey: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateMailSettingsAction, INITIAL_CRUD_STATE)
@@ -1840,54 +1835,8 @@ export function TenantMailSettings({
           </div>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-border/60 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-medium">Envíos de correo</h3>
-              <p className="text-xs text-muted-foreground">Configura el servicio de envío y el remitente de tu organización.</p>
-            </div>
-            <p className="text-xs font-medium text-muted-foreground">
-              {hasBrevoApiKey ? "Servicio conectado" : "Conexión pendiente"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="brevo_base_url">Dirección del servicio de envío</Label>
-            <Input
-              id="brevo_base_url"
-              name="brevo_base_url"
-              placeholder="https://api.brevo.com/v3"
-              defaultValue={initialValues.brevo_base_url ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="brevo_sender_email">Correo del remitente</Label>
-            <Input
-              id="brevo_sender_email"
-              name="brevo_sender_email"
-              placeholder="pui@geoactiv.mx"
-              defaultValue={initialValues.brevo_sender_email ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="brevo_sender_name">Nombre del remitente</Label>
-            <Input
-              id="brevo_sender_name"
-              name="brevo_sender_name"
-              placeholder="PUI - Geoactiv"
-              defaultValue={initialValues.brevo_sender_name ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="brevo_api_key">Clave del servicio de envío</Label>
-            <Input id="brevo_api_key" name="brevo_api_key" type="password" placeholder="Pega la clave" />
-            <p className="text-xs text-muted-foreground">
-              El valor solo se guarda al pegar uno nuevo; el sistema nunca te muestra el valor existente.
-            </p>
-          </div>
-        </div>
-
         <p className="text-xs text-muted-foreground">
-          Estos datos permiten conectar el correo de tu organización para recibir y enviar mensajes.
+          Estos datos permiten conectar el correo de tu organización para recibir mensajes y enviar comunicaciones operativas. Los envíos masivos se configuran en el bloque superior.
         </p>
 
         <div className="flex items-center justify-between gap-3">

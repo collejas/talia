@@ -35,6 +35,7 @@ from app.repositories.platform_admin import PlatformRepository, PlatformReposito
 from app.services import tenant_runtime
 from app.services import channel_routing
 from app.services.tenant_onboarding import build_onboarding_progress
+from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
 from app.services.web_tracking import normalize_tracking_domain, verify_dns_txt
 from app.services.meta_whatsapp_assisted import MetaWhatsAppAssistedClient, MetaWhatsAppConnectionError
 
@@ -62,6 +63,7 @@ class TenantOnboardingProgressResponse(BaseModel):
     zoom_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     errores: list[str] = Field(default_factory=list)
     pasos: list[dict[str, Any]] = Field(default_factory=list)
+    correo: dict[str, bool] = Field(default_factory=dict)
 
 
 class TenantOnboardingProgressUpdate(BaseModel):
@@ -881,11 +883,23 @@ async def _get_onboarding_progress(
     preferences = await platform_repo.get_tenant_onboarding_progress(
         organizacion_id=context.organizacion_id
     )
+    email_service: dict[str, Any] = {}
+    try:
+        email_repository = PostmarkRepository()
+        email_service = {
+            "migration": await email_repository.get_migration(organizacion_id=context.organizacion_id),
+            "domain": await email_repository.get_verified_domain(organizacion_id=context.organizacion_id),
+        }
+    except PostmarkRepositoryError:
+        # El resto del onboarding debe seguir siendo visible aunque el servicio
+        # central de correo no esté disponible temporalmente.
+        email_service = {}
     progress = build_onboarding_progress(
         tenant=tenant,
         routes=routes,
         secrets=secrets,
         preferences=preferences,
+        email_service=email_service,
     )
     progress["webchat_decision"] = str((preferences or {}).get("webchat_decision") or "pendiente")
     progress["voz_decision"] = str((preferences or {}).get("voz_decision") or "pendiente")

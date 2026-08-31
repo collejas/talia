@@ -59,17 +59,25 @@ type Props = {
 
 const migrationLabels: Record<string, string> = {
   pending: "Pendiente",
+  configuring: "En configuración",
+  domain_verified: "Dominio verificado",
   validating: "En validación",
   active: "Activo",
+  validated: "Validado",
+  migrated: "Listo",
+  blocked: "Requiere atención",
+  rolled_back: "Pausado",
   paused: "Pausado",
   failed: "Requiere atención",
 }
 
 const statusLabels: Record<string, string> = {
   pending_dns: "DNS pendiente",
+  pending_verification: "Verificación pendiente",
   verifying: "Verificando",
   verified: "Verificado",
   blocked: "Bloqueado",
+  removed: "Retirado",
 }
 
 function number(value: number) {
@@ -280,7 +288,7 @@ export function TenantEmailServicePanel({ data, createDomainAction, verifyDomain
                   {domain.dns_records.length ? (
                     <div className="overflow-x-auto rounded-md border">
                       <Table>
-                        <TableHeader><TableRow><TableHead>Host</TableHead><TableHead>Tipo</TableHead><TableHead>Valor</TableHead><TableHead className="w-10" /></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Tipo</TableHead><TableHead>Valor</TableHead><TableHead className="w-10" /></TableRow></TableHeader>
                         <TableBody>{domain.dns_records.map((record) => (
                           <TableRow key={`${record.record_type}-${record.host}`}>
                             <TableCell className="font-mono text-xs">{record.host}</TableCell>

@@ -559,10 +559,6 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     const useTls = formData.has("mail_use_tls")
     const mailUsername = getText(formData, "mail_username")
     const mailPassword = getText(formData, "mail_password")
-    const brevoBaseUrl = getText(formData, "brevo_base_url")
-    const brevoSenderEmail = getText(formData, "brevo_sender_email")
-    const brevoSenderName = getText(formData, "brevo_sender_name")
-    const brevoApiKey = getText(formData, "brevo_api_key")
 
     const mailPatch: Record<string, unknown> = {}
     if (incomingServer) mailPatch.incoming_server = incomingServer
@@ -575,9 +571,8 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     mailPatch.use_tls = useTls
 
     const hasMailConfig = Object.keys(mailPatch).length > 0
-    const hasBrevoConfig = Boolean(brevoBaseUrl || brevoSenderEmail || brevoSenderName)
-    if (!hasMailConfig && !mailUsername && !mailPassword && !hasBrevoConfig && !brevoApiKey) {
-      throw new Error("Debes completar al menos un campo de la configuración de correo o Brevo.")
+    if (!hasMailConfig && !mailUsername && !mailPassword) {
+      throw new Error("Debes completar al menos un campo de la configuración del correo.")
     }
 
     const getResp = await callCrmApi<{
@@ -596,14 +591,6 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     if (hasMailConfig) {
       patch.mail = mailPatch
     }
-    const brevoPatch: Record<string, unknown> = {}
-    if (brevoBaseUrl) brevoPatch.base_url = brevoBaseUrl
-    if (brevoSenderEmail) brevoPatch.sender_email = brevoSenderEmail
-    if (brevoSenderName) brevoPatch.sender_name = brevoSenderName
-    if (Object.keys(brevoPatch).length) {
-      patch.brevo = brevoPatch
-    }
-
     const merged = mergeDeep({ ...currentConfig }, patch)
 
     const putResp = await callCrmApi<{ ok: boolean }>("/tenant/me/config", {
@@ -620,10 +607,6 @@ export async function updateMailSettingsAction(_: CrudActionState, formData: For
     if (mailPassword) {
       await upsertTenantSecret("mail.password", mailPassword, "B")
     }
-    if (brevoApiKey) {
-      await upsertTenantSecret("brevo.api_key", brevoApiKey, "B")
-    }
-
     revalidatePath("/settings/variables")
     return success("Configuración de correo guardada.")
   } catch (error) {
