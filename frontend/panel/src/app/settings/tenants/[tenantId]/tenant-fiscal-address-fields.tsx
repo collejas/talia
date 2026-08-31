@@ -4,6 +4,7 @@ import * as React from "react"
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { RequiredLabel } from "@/components/ui/required-label"
 
 type GeoCountryOption = {
   code: string
@@ -42,6 +43,7 @@ type FiscalAddressValues = {
 type FiscalAddressFieldsProps = {
   values?: FiscalAddressValues | null
   disabled?: boolean
+  showRequiredMarkers?: boolean
 }
 
 async function fetchGeoJson<T>(url: string, signal: AbortSignal): Promise<T[]> {
@@ -53,7 +55,7 @@ async function fetchGeoJson<T>(url: string, signal: AbortSignal): Promise<T[]> {
   return Array.isArray(body.items) ? body.items : []
 }
 
-export function TenantFiscalAddressFields({ values, disabled = false }: FiscalAddressFieldsProps) {
+export function TenantFiscalAddressFields({ values, disabled = false, showRequiredMarkers = false }: FiscalAddressFieldsProps) {
   const [countries, setCountries] = React.useState<GeoCountryOption[]>([])
   const [states, setStates] = React.useState<GeoStateOption[]>([])
   const [municipalities, setMunicipalities] = React.useState<GeoMunicipalityOption[]>([])
@@ -215,7 +217,7 @@ export function TenantFiscalAddressFields({ values, disabled = false }: FiscalAd
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="tenant_pais_codigo_iso2">País</Label>
+          {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_pais_codigo_iso2">País</RequiredLabel> : <Label htmlFor="tenant_pais_codigo_iso2">País</Label>}
           <select
             id="tenant_pais_codigo_iso2"
             name="tenant_pais_codigo_iso2"
@@ -293,7 +295,7 @@ export function TenantFiscalAddressFields({ values, disabled = false }: FiscalAd
 
         {countryCode === "MX" ? (
           <div className="space-y-2">
-            <Label htmlFor="tenant_municipio_clave_municipio">Municipio</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_municipio_clave_municipio">Municipio</RequiredLabel> : <Label htmlFor="tenant_municipio_clave_municipio">Municipio</Label>}
             <select
               id="tenant_municipio_clave_municipio"
               name="tenant_municipio_clave_municipio"
@@ -321,7 +323,7 @@ export function TenantFiscalAddressFields({ values, disabled = false }: FiscalAd
           </div>
         ) : (
           <div className="space-y-2">
-            <Label htmlFor="tenant_ciudad">Ciudad</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_ciudad">Ciudad</RequiredLabel> : <Label htmlFor="tenant_ciudad">Ciudad</Label>}
             <Input
               id="tenant_ciudad"
               name="tenant_ciudad"

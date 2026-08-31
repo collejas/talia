@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { RequiredLabel } from "@/components/ui/required-label"
 
 export type TenantEmailServiceData = {
   migration_status: string
@@ -56,6 +57,7 @@ type Props = {
   updateSenderAction?: EmailServiceAction
   configurationComplete?: boolean
   actionTenantId?: string
+  showRequiredMarkers?: boolean
 }
 
 const statusLabels: Record<string, string> = {
@@ -91,13 +93,13 @@ function CopyValue({ value }: { value: string }) {
   )
 }
 
-function DomainCreateForm({ action, tenantId }: { action: EmailServiceAction; tenantId?: string }) {
+function DomainCreateForm({ action, tenantId, showRequiredMarkers }: { action: EmailServiceAction; tenantId?: string; showRequiredMarkers?: boolean }) {
   const [state, formAction] = useActionState(action, { status: "idle" } satisfies EmailServiceActionState)
   return (
     <form action={formAction} className="grid gap-3 sm:grid-cols-[minmax(0,24rem)_auto] sm:items-end">
       {tenantId ? <input type="hidden" name="tenant_id" value={tenantId} /> : null}
       <div className="space-y-2">
-        <label htmlFor="email-domain" className="text-sm font-medium">Dominio de envío</label>
+        {showRequiredMarkers ? <RequiredLabel htmlFor="email-domain">Dominio de envío</RequiredLabel> : <label htmlFor="email-domain" className="text-sm font-medium">Dominio de envío</label>}
         <input
           id="email-domain"
           name="email_domain"
@@ -149,10 +151,12 @@ function SenderForm({
   domain,
   action,
   tenantId,
+  showRequiredMarkers,
 }: {
   domain: TenantEmailServiceData["domains"][number]
   action: EmailServiceAction
   tenantId?: string
+  showRequiredMarkers?: boolean
 }) {
   const [state, formAction] = useActionState(action, { status: "idle" } satisfies EmailServiceActionState)
   return (
@@ -160,7 +164,7 @@ function SenderForm({
       {tenantId ? <input type="hidden" name="tenant_id" value={tenantId} /> : null}
       <input type="hidden" name="email_domain_id" value={domain.id} />
       <div className="space-y-2">
-        <label htmlFor={`sender-email-${domain.id}`} className="text-sm font-medium">Correo remitente</label>
+        {showRequiredMarkers ? <RequiredLabel htmlFor={`sender-email-${domain.id}`}>Correo remitente</RequiredLabel> : <label htmlFor={`sender-email-${domain.id}`} className="text-sm font-medium">Correo remitente</label>}
         <input
           id={`sender-email-${domain.id}`}
           name="sender_email"
@@ -203,7 +207,7 @@ function SenderForm({
   )
 }
 
-export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, removeDomainAction, updateSenderAction, configurationComplete = false, actionTenantId }: Props) {
+export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, removeDomainAction, updateSenderAction, configurationComplete = false, actionTenantId, showRequiredMarkers = false }: Props) {
   const plan = data?.plan
   const usage = data?.usage
 
@@ -229,7 +233,7 @@ export function TenantEmailServicePanel({ data, createDomainAction, verifyDomain
             {createDomainAction ? (
               <section className="space-y-3 rounded-lg border border-dashed p-4">
                 <div><h3 className="font-medium">Registrar un dominio</h3><p className="text-sm text-muted-foreground">Después de registrarlo, publica los registros DNS que aparecerán abajo.</p></div>
-                <DomainCreateForm action={createDomainAction} tenantId={actionTenantId} />
+                <DomainCreateForm action={createDomainAction} tenantId={actionTenantId} showRequiredMarkers={showRequiredMarkers} />
               </section>
             ) : null}
 
@@ -262,7 +266,7 @@ export function TenantEmailServicePanel({ data, createDomainAction, verifyDomain
                         <h3 className="font-medium">Remitente de los correos</h3>
                         <p className="text-sm text-muted-foreground">Define el correo y el nombre que aparecerán al enviar desde este dominio.</p>
                       </div>
-                      <SenderForm domain={domain} action={updateSenderAction} tenantId={actionTenantId} />
+                    <SenderForm domain={domain} action={updateSenderAction} tenantId={actionTenantId} showRequiredMarkers={showRequiredMarkers} />
                     </section>
                   ) : null}
                   {domain.dns_records.length ? (

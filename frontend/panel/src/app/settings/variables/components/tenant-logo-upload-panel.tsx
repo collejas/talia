@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 
 type LogoAsset = { file_url?: string | null; error?: string }
 
-export function TenantLogoUploadPanel({ initialLogoUrl = "" }: { initialLogoUrl?: string | null }) {
+export function TenantLogoUploadPanel({ initialLogoUrl = "", showRequiredMarkers = false }: { initialLogoUrl?: string | null; showRequiredMarkers?: boolean }) {
   const [logoUrl, setLogoUrl] = useState(initialLogoUrl ?? "")
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -51,7 +51,7 @@ export function TenantLogoUploadPanel({ initialLogoUrl = "" }: { initialLogoUrl?
   return (
     <section className="space-y-4 rounded-lg border bg-muted/20 p-4">
       <div>
-        <h3 className="font-medium">Logo de la organización</h3>
+        <h3 className="font-medium">Logo de la organización{showRequiredMarkers ? <span className="text-destructive" aria-hidden="true"> *</span> : null}</h3>
         <p className="text-sm text-muted-foreground">Carga una imagen para utilizarla en cotizaciones, correos y materiales comerciales.</p>
       </div>
       <div className="flex flex-wrap items-center gap-4">

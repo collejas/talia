@@ -90,6 +90,7 @@ export function OnboardingStepShell({
               <p className="text-sm font-medium text-primary">{stepLabel}</p>
               <h2 className="mt-1 text-2xl font-semibold">{step.titulo}</h2>
               <p className="mt-2 text-sm text-muted-foreground">Guarda tus cambios. Puedes continuar después sin perder el avance.</p>
+              <p className="mt-2 text-xs text-muted-foreground"><span className="text-destructive" aria-hidden="true">*</span> Campo o decisión necesaria para completar este paso.</p>
             </div>
             {children}
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t pt-5">

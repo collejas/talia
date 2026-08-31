@@ -37,6 +37,7 @@ import {
   validateTenantAction,
 } from "./actions"
 import { TenantFiscalAddressFields } from "./tenant-fiscal-address-fields"
+import { RequiredLabel } from "@/components/ui/required-label"
 
 export type TenantSettingsActions = {
   updateTenantConfigAction: CrudActionHandler
@@ -722,11 +723,13 @@ export function TenantOrganizationInfoForm({
   info,
   showActiveToggle = true,
   showOnboardingState = true,
+  showRequiredMarkers = false,
 }: {
   tenantId: string
   info: TenantOrganizationInfo | null
   showActiveToggle?: boolean
   showOnboardingState?: boolean
+  showRequiredMarkers?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateTenantInfoAction, INITIAL_CRUD_STATE)
@@ -742,14 +745,15 @@ export function TenantOrganizationInfoForm({
             <p className="text-xs text-muted-foreground">
               Nombre público, razón social y datos fiscales base de la organización.
             </p>
+            {showRequiredMarkers ? <p className="text-xs text-muted-foreground">El nombre de la organización o el nombre comercial es obligatorio; puedes capturar cualquiera de los dos.</p> : null}
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="tenant_nombre">Nombre de la organización</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_nombre">Nombre de la organización</RequiredLabel> : <Label htmlFor="tenant_nombre">Nombre de la organización</Label>}
               <Input id="tenant_nombre" name="tenant_nombre" defaultValue={info?.nombre ?? ""} maxLength={40} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenant_nombre_comercial">Nombre comercial</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_nombre_comercial">Nombre comercial</RequiredLabel> : <Label htmlFor="tenant_nombre_comercial">Nombre comercial</Label>}
               <Input id="tenant_nombre_comercial" name="tenant_nombre_comercial" defaultValue={info?.nombre_comercial ?? ""} />
             </div>
             <div className="space-y-2 md:col-span-2">
@@ -790,7 +794,7 @@ export function TenantOrganizationInfoForm({
               <Input id="tenant_contacto_telefono" name="tenant_contacto_telefono" defaultValue={info?.contacto_telefono ?? ""} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenant_correo_contacto_principal">Correo de contacto principal</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_correo_contacto_principal">Correo de contacto principal</RequiredLabel> : <Label htmlFor="tenant_correo_contacto_principal">Correo de contacto principal</Label>}
               <Input
                 id="tenant_correo_contacto_principal"
                 name="tenant_correo_contacto_principal"
@@ -799,7 +803,7 @@ export function TenantOrganizationInfoForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenant_telefono">Teléfono de la organización</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_telefono">Teléfono de la organización</RequiredLabel> : <Label htmlFor="tenant_telefono">Teléfono de la organización</Label>}
               <Input id="tenant_telefono" name="tenant_telefono" defaultValue={info?.telefono ?? ""} />
             </div>
             <div className="space-y-2">
@@ -823,15 +827,15 @@ export function TenantOrganizationInfoForm({
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="tenant_timezone">Zona horaria</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_timezone">Zona horaria</RequiredLabel> : <Label htmlFor="tenant_timezone">Zona horaria</Label>}
               <Input id="tenant_timezone" name="tenant_timezone" defaultValue={info?.timezone ?? ""} placeholder="America/Mexico_City" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenant_idioma">Idioma</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_idioma">Idioma</RequiredLabel> : <Label htmlFor="tenant_idioma">Idioma</Label>}
               <Input id="tenant_idioma" name="tenant_idioma" defaultValue={info?.idioma ?? ""} placeholder="es-MX" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tenant_moneda">Moneda</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="tenant_moneda">Moneda</RequiredLabel> : <Label htmlFor="tenant_moneda">Moneda</Label>}
               <Input id="tenant_moneda" name="tenant_moneda" defaultValue={info?.moneda ?? ""} placeholder="MXN" />
             </div>
           </div>
@@ -850,7 +854,7 @@ export function TenantOrganizationInfoForm({
               <Input id="tenant_dominio" name="tenant_dominio" defaultValue={info?.dominio_principal ?? ""} />
             </div>
           </div>
-          <TenantFiscalAddressFields values={info} />
+          <TenantFiscalAddressFields values={info} showRequiredMarkers={showRequiredMarkers} />
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="tenant_regimen_fiscal">Régimen fiscal</Label>
@@ -1420,12 +1424,14 @@ export function TenantCalendarSettings({
   showZoom = true,
   showZoomChoice = false,
   zoomDecision = "usar",
+  showRequiredMarkers = false,
 }: {
   tenantId: string
   initialValues: CalendarInitialValues
   showZoom?: boolean
   showZoomChoice?: boolean
   zoomDecision?: "pendiente" | "usar" | "no_usar"
+  showRequiredMarkers?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateCalendarSettingsAction, INITIAL_CRUD_STATE)
@@ -1458,7 +1464,7 @@ export function TenantCalendarSettings({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="calendar_timezone">Zona horaria de la organización</Label>
+          {showRequiredMarkers ? <RequiredLabel htmlFor="calendar_timezone">Zona horaria de la organización</RequiredLabel> : <Label htmlFor="calendar_timezone">Zona horaria de la organización</Label>}
           <Input
             id="calendar_timezone"
             name="calendar_timezone"
@@ -1756,9 +1762,11 @@ export function TenantCalendarSettings({
 export function TenantMailSettings({
   tenantId,
   initialValues,
+  showRequiredMarkers = false,
 }: {
   tenantId: string
   initialValues: MailInitialValues
+  showRequiredMarkers?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateMailSettingsAction, INITIAL_CRUD_STATE)
@@ -1776,27 +1784,27 @@ export function TenantMailSettings({
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="mail_username">Usuario del correo</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="mail_username">Usuario del correo</RequiredLabel> : <Label htmlFor="mail_username">Usuario del correo</Label>}
               <Input id="mail_username" name="mail_username" placeholder="hola@talia.mx" defaultValue="" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="mail_password">Contraseña del correo</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="mail_password">Contraseña del correo</RequiredLabel> : <Label htmlFor="mail_password">Contraseña del correo</Label>}
               <Input id="mail_password" name="mail_password" type="password" placeholder="Pega para guardar o cambiar" defaultValue="" />
             </div>
             <div className="flex items-center gap-3">
               <input id="mail_use_ssl" name="mail_use_ssl" type="checkbox" className="size-4" defaultChecked={Boolean(initialValues.mail_use_ssl)} />
-              <Label htmlFor="mail_use_ssl">Conexión segura para recibir</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="mail_use_ssl">Conexión segura para recibir</RequiredLabel> : <Label htmlFor="mail_use_ssl">Conexión segura para recibir</Label>}
             </div>
             <div className="flex items-center gap-3">
               <input id="mail_use_tls" name="mail_use_tls" type="checkbox" className="size-4" defaultChecked={Boolean(initialValues.mail_use_tls)} />
-              <Label htmlFor="mail_use_tls">Conexión segura para enviar</Label>
+              {showRequiredMarkers ? <RequiredLabel htmlFor="mail_use_tls">Conexión segura para enviar</RequiredLabel> : <Label htmlFor="mail_use_tls">Conexión segura para enviar</Label>}
             </div>
           </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="mail_incoming_server">Servidor para recibir correo</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="mail_incoming_server">Servidor para recibir correo</RequiredLabel> : <Label htmlFor="mail_incoming_server">Servidor para recibir correo</Label>}
             <Input
               id="mail_incoming_server"
               name="mail_incoming_server"
@@ -1805,7 +1813,7 @@ export function TenantMailSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="mail_incoming_port_imap">Puerto para recibir correo</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="mail_incoming_port_imap">Puerto para recibir correo</RequiredLabel> : <Label htmlFor="mail_incoming_port_imap">Puerto para recibir correo</Label>}
             <Input
               id="mail_incoming_port_imap"
               name="mail_incoming_port_imap"
@@ -1815,7 +1823,7 @@ export function TenantMailSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="mail_outgoing_server">Servidor para enviar correo</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="mail_outgoing_server">Servidor para enviar correo</RequiredLabel> : <Label htmlFor="mail_outgoing_server">Servidor para enviar correo</Label>}
             <Input
               id="mail_outgoing_server"
               name="mail_outgoing_server"
@@ -1824,7 +1832,7 @@ export function TenantMailSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="mail_outgoing_port_smtp">Puerto para enviar correo</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="mail_outgoing_port_smtp">Puerto para enviar correo</RequiredLabel> : <Label htmlFor="mail_outgoing_port_smtp">Puerto para enviar correo</Label>}
             <Input
               id="mail_outgoing_port_smtp"
               name="mail_outgoing_port_smtp"
@@ -1914,11 +1922,13 @@ export function TenantBusquedaSettings({
   initialValues,
   hasToken,
   hasGoogleApiKey,
+  showRequiredMarkers = false,
 }: {
   tenantId: string
   initialValues: BusquedaInitialValues
   hasToken: boolean
   hasGoogleApiKey: boolean
+  showRequiredMarkers?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateBusquedaSettingsAction, INITIAL_CRUD_STATE)
@@ -1928,7 +1938,7 @@ export function TenantBusquedaSettings({
       <input type="hidden" name="tenant_id" value={tenantId} />
 
       <div className="space-y-2">
-        <Label htmlFor="denue_base_url">Dirección de la fuente de negocios</Label>
+        {showRequiredMarkers ? <RequiredLabel htmlFor="denue_base_url">Dirección de la fuente de negocios</RequiredLabel> : <Label htmlFor="denue_base_url">Dirección de la fuente de negocios</Label>}
         <Input
           id="denue_base_url"
           name="denue_base_url"
@@ -1941,7 +1951,7 @@ export function TenantBusquedaSettings({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="denue_token">Clave de acceso para negocios</Label>
+        {showRequiredMarkers ? <RequiredLabel htmlFor="denue_token">Clave de acceso para negocios</RequiredLabel> : <Label htmlFor="denue_token">Clave de acceso para negocios</Label>}
         <Input id="denue_token" name="denue_token" type="password" placeholder="Pega la clave" />
         <p className="text-xs text-muted-foreground">
           {hasToken
@@ -2031,7 +2041,7 @@ export function TenantBusquedaSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="google_places_api_key">Clave de acceso para lugares</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="google_places_api_key">Clave de acceso para lugares</RequiredLabel> : <Label htmlFor="google_places_api_key">Clave de acceso para lugares</Label>}
             <Input id="google_places_api_key" name="google_places_api_key" type="password" placeholder="Pega la clave" />
             <p className="text-xs text-muted-foreground">
               Solo se guarda al pegar una nueva clave; el valor actual no se muestra.
@@ -2105,9 +2115,11 @@ export function TenantBusquedaSettings({
 export function TenantTwilioSettings({
   tenantId,
   initialValues,
+  showRequiredMarkers = false,
 }: {
   tenantId: string
   initialValues: TwilioInitialValues
+  showRequiredMarkers?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateTwilioSettingsAction, INITIAL_CRUD_STATE)
@@ -2221,7 +2233,7 @@ export function TenantTwilioSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="voice_stream_jwt_secret">Clave segura para la llamada</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="voice_stream_jwt_secret">Clave segura para la llamada</RequiredLabel> : <Label htmlFor="voice_stream_jwt_secret">Clave segura para la llamada</Label>}
             <Input
               id="voice_stream_jwt_secret"
               name="voice_stream_jwt_secret"
@@ -3242,11 +3254,13 @@ export function TenantOpenaiSettings({
   initialValues,
   hasGeneralApiKey,
   hasVoiceApiKey,
+  showRequiredMarkers = false,
 }: {
   tenantId: string
   initialValues: OpenaiInitialValues
   hasGeneralApiKey: boolean
   hasVoiceApiKey: boolean
+  showRequiredMarkers?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [generalState, generalAction] = useActionState(actions.updateOpenaiGeneralAction, INITIAL_CRUD_STATE)
@@ -3276,7 +3290,7 @@ export function TenantOpenaiSettings({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="openai_general_api_key">Clave de conexión</Label>
+            {showRequiredMarkers ? <RequiredLabel htmlFor="openai_general_api_key">Clave de conexión</RequiredLabel> : <Label htmlFor="openai_general_api_key">Clave de conexión</Label>}
             <Input id="openai_general_api_key" name="openai_general_api_key" type="password" placeholder="Pega la clave aquí" />
             <p className="text-xs text-muted-foreground">
               El valor no se muestra una vez guardado. Solo lo ve un admin si lo rota.

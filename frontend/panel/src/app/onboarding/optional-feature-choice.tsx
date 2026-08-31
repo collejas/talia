@@ -39,7 +39,7 @@ export function OptionalFeatureChoice({
   return (
     <div className="space-y-6">
       <div className="rounded-lg border bg-muted/20 p-5">
-        <h3 className="font-medium">¿Quieres utilizar {feature}?</h3>
+        <h3 className="font-medium">¿Quieres utilizar {feature}? <span className="text-destructive" aria-hidden="true">*</span></h3>
         <p className="mt-1 text-sm text-muted-foreground">Puedes cambiar esta decisión después desde la configuración.</p>
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="button" className={`rounded-md px-4 py-2 text-sm ${decision === "usar" ? "bg-primary text-primary-foreground" : "border hover:bg-muted"}`} disabled={saving} onClick={() => void choose("usar")}>Sí, quiero utilizarlo</button>

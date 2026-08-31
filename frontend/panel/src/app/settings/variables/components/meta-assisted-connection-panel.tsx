@@ -33,8 +33,8 @@ export function MetaAssistedConnectionPanel({
         <p className="text-xs text-muted-foreground">Concede a Talia acceso al WABA y al número que vas a conectar.</p>
       </div>
       <form action={formAction} className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2"><Label htmlFor="meta-assisted-waba">WABA ID</Label><Input id="meta-assisted-waba" name="waba_id" defaultValue={String(connection?.waba_id ?? "")} required /></div>
-        <div className="space-y-2"><Label htmlFor="meta-assisted-phone">Phone Number ID</Label><Input id="meta-assisted-phone" name="phone_number_id" defaultValue={String(connection?.phone_number_id ?? "")} required /></div>
+        <div className="space-y-2"><Label htmlFor="meta-assisted-waba">WABA ID <span className="text-destructive" aria-hidden="true">*</span></Label><Input id="meta-assisted-waba" name="waba_id" defaultValue={String(connection?.waba_id ?? "")} required /></div>
+        <div className="space-y-2"><Label htmlFor="meta-assisted-phone">Phone Number ID <span className="text-destructive" aria-hidden="true">*</span></Label><Input id="meta-assisted-phone" name="phone_number_id" defaultValue={String(connection?.phone_number_id ?? "")} required /></div>
         <div className="md:col-span-2 flex flex-wrap gap-2">
           <Button name="accion" value="validar" type="submit" disabled={pending}>1. Validar acceso</Button>
           <Input className="w-32" name="pin" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="PIN de 6 dígitos" aria-label="PIN de registro" />

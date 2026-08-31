@@ -51,7 +51,7 @@ function normalizeValues(values: Partial<Values>): Values {
   return { ...EMPTY_VALUES, ...values }
 }
 
-export function TenantAiBrandContextPanel({ initialValues, initialLogoUrl = "" }: { initialValues: Partial<Values>; initialLogoUrl?: string | null }) {
+export function TenantAiBrandContextPanel({ initialValues, initialLogoUrl = "", showRequiredMarkers = false }: { initialValues: Partial<Values>; initialLogoUrl?: string | null; showRequiredMarkers?: boolean }) {
   const [form, setForm] = useState(() => normalizeValues(initialValues))
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -91,7 +91,7 @@ export function TenantAiBrandContextPanel({ initialValues, initialLogoUrl = "" }
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <TenantLogoUploadPanel initialLogoUrl={initialLogoUrl} />
+        <TenantLogoUploadPanel initialLogoUrl={initialLogoUrl} showRequiredMarkers={showRequiredMarkers} />
         <form className="space-y-8" onSubmit={submit}>
           <section className="space-y-4">
             <div>
