@@ -33,6 +33,30 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
 - En el flujo IA, el usuario elegirá el estilo de diseño antes de escribir el prompt.
 - Los tres flujos de correo utilizarán el catálogo completo de variables disponible en backend.
 - La UI mostrará las variables con nombres legibles para el usuario, sin claves técnicas, tipos ni etiquetas adicionales; las claves técnicas permanecerán internas.
+
+## 2026-08-31 — Inicio de implementación del selector y Editor visual
+
+### Cambios realizados
+
+- Se agregó la columna explícita `email_creation_mode` a las plantillas.
+- Se aplicó la migración en Supabase y se inicializaron plantillas existentes con `html` cuando ya tenían HTML y `visual` en los demás casos.
+- Se agregaron los valores `visual`, `html` y `ai` al contrato FastAPI y al cliente TypeScript.
+- Se agregó el selector de modo en el editor de plantillas.
+- Se montó un Editor visual inicial separado, basado en `REFERENCIA_EDITOR_VISUAL.html`.
+- El Editor visual incluye biblioteca de bloques, lienzo, selección de bloque, inspector, variables, imágenes y vista escritorio/móvil.
+
+### Validación
+
+- TypeScript: correcto.
+- ESLint: 0 errores; 36 warnings preexistentes.
+- React Doctor: 100/100.
+- `git diff --check`: correcto.
+
+### Pendiente
+
+- Refinar el modelo de bloques y la conversión completa del HTML existente.
+- Compartir el catálogo completo de variables entre Editor visual, Código HTML y Asistente IA.
+- Completar pruebas de creación, edición, imágenes, variables y guardado en flujo autenticado.
 - El HTML proporcionado por el usuario quedó definido como referencia visual y funcional obligatoria del Editor visual.
 - Se copió el HTML de referencia completo en [`REFERENCIA_EDITOR_VISUAL.html`](./REFERENCIA_EDITOR_VISUAL.html) y se enlazó desde el plan.
 - Se documentó que deben conservarse su barra superior, biblioteca de bloques, lienzo, inspector, chips de variables, vista escritorio/móvil y barra inferior de acciones.

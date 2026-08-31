@@ -1150,8 +1150,8 @@ La métrica de generación no debe confundirse con envíos de WhatsApp, envíos 
 
 ### Fase 3: integración en los modales
 
-- Agregar la selección inicial de los tres modos de creación de correo.
-- Crear el editor visual por bloques, con imágenes, variables y vista previa.
+- Implementado inicialmente: selección de los tres modos de creación de correo.
+- Implementado inicialmente: Editor visual separado con bloques, imágenes, variables y vista previa.
 - Tomar el HTML de referencia proporcionado por el usuario como contrato visual y
   funcional del Editor visual.
 - Mantener la distribución barra superior, biblioteca lateral, lienzo central,

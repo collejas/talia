@@ -536,6 +536,7 @@ export type ContactoBatchResumen = {
 export type ContactoTemplate = {
   id: string
   canal: "correo" | "whatsapp" | "llamada"
+  email_creation_mode?: "visual" | "html" | "ai" | null
   email_message_kind?: "transactional" | "broadcast" | null
   slug: string
   nombre: string
@@ -1756,6 +1757,7 @@ export async function listContactoTemplates(params: {
 
 export async function createContactoTemplate(payload: {
   canal: "correo" | "whatsapp" | "llamada"
+  email_creation_mode?: "visual" | "html" | "ai" | null
   email_message_kind?: "transactional" | "broadcast" | null
   nombre: string
   slug: string
@@ -1778,6 +1780,7 @@ export async function updateContactoTemplate(
   templateId: string,
   payload: {
     canal?: "correo" | "whatsapp" | "llamada"
+    email_creation_mode?: "visual" | "html" | "ai" | null
     email_message_kind?: "transactional" | "broadcast" | null
     nombre?: string
     slug?: string

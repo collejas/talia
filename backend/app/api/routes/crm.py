@@ -4256,6 +4256,7 @@ class ContactoTemplatePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     canal: Literal["correo", "whatsapp", "llamada"]
+    email_creation_mode: Literal["visual", "html", "ai"] | None = None
     email_message_kind: Literal["transactional", "broadcast"] | None = None
     nombre: str = Field(..., min_length=3, max_length=160)
     slug: str = Field(..., min_length=3, max_length=160)
@@ -4275,6 +4276,7 @@ class ContactoTemplateUpdatePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     canal: Literal["correo", "whatsapp", "llamada"] | None = None
+    email_creation_mode: Literal["visual", "html", "ai"] | None = None
     email_message_kind: Literal["transactional", "broadcast"] | None = None
     nombre: str | None = Field(default=None, min_length=3, max_length=160)
     slug: str | None = Field(default=None, min_length=3, max_length=160)

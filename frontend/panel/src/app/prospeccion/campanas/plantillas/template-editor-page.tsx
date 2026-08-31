@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { TemplateAiAssistant, type TemplateAiDraft } from "../components/template-ai-assistant"
+import { VisualEmailTemplateEditor } from "./components/visual-email-template-editor"
 import {
   createContactoTemplate,
   createWhatsProspTemplate,
@@ -31,6 +32,7 @@ import {
 type Props = { templateId?: string; initialCampaignId?: string }
 type Channel = "correo" | "whatsapp"
 type EmailFormat = "html" | "texto"
+type EmailCreationMode = "visual" | "html" | "ai"
 type EmailMessageKind = "transactional" | "broadcast"
 type LogoAsset = { id: string; nombre: string; file_url: string }
 
@@ -68,6 +70,7 @@ type FormState = {
   asunto: string
   cuerpoTexto: string
   cuerpoHtml: string
+  emailCreationMode: EmailCreationMode
   emailFormat: EmailFormat
   emailMessageKind: EmailMessageKind
   metaTemplateName: string
@@ -89,6 +92,7 @@ const emptyForm = (campaign?: CrmCampaign): FormState => ({
   asunto: "",
   cuerpoTexto: "",
   cuerpoHtml: "",
+  emailCreationMode: "visual",
   emailFormat: "html",
   emailMessageKind: "broadcast",
   metaTemplateName: "",
@@ -122,6 +126,12 @@ function formFromTemplate(template: ContactoTemplate, campaignId: string): FormS
     asunto: template.asunto ?? "",
     cuerpoTexto: template.cuerpo_texto ?? "",
     cuerpoHtml: template.cuerpo_html ?? "",
+    emailCreationMode:
+      template.email_creation_mode === "html" || template.email_creation_mode === "ai"
+        ? template.email_creation_mode
+        : template.cuerpo_html?.trim()
+          ? "html"
+          : "visual",
     emailFormat: template.cuerpo_html?.trim() ? "html" : "texto",
     emailMessageKind: template.email_message_kind === "transactional" ? "transactional" : "broadcast",
     metaTemplateName: template.template_name ?? "",
@@ -296,6 +306,10 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
       const separator = current.trim() ? "\n" : ""
       return { ...previous, [field]: `${current}${separator}${value}` }
     })
+  }, [])
+
+  const handleVisualHtmlChange = useCallback((value: string) => {
+    setForm((previous) => ({ ...previous, cuerpoHtml: value, emailFormat: "html" }))
   }, [])
 
   const handleLogoUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -536,6 +550,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
         descripcion: form.descripcion.trim() || null,
         asunto: form.canal === "correo" ? form.asunto.trim() || null : null,
         email_message_kind: form.canal === "correo" ? form.emailMessageKind : null,
+        email_creation_mode: form.canal === "correo" ? form.emailCreationMode : "visual",
         cuerpo_texto:
           form.canal === "whatsapp" ||
           (form.canal === "correo" && form.emailFormat === "texto")
@@ -784,20 +799,35 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                     </p>
                   </div>
                   <div className="max-w-sm space-y-2">
-                    <Label>Formato del correo</Label>
+                    <Label>Forma de creación</Label>
                     <Select
-                      value={form.emailFormat}
-                      onValueChange={(value) => setForm((previous) => ({ ...previous, emailFormat: value as EmailFormat }))}
+                      value={form.emailCreationMode}
+                      onValueChange={(value) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          emailCreationMode: value as EmailCreationMode,
+                          emailFormat: "html",
+                        }))
+                      }
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="html">HTML con diseño</SelectItem>
-                        <SelectItem value="texto">Texto plano</SelectItem>
+                        <SelectItem value="visual">Editor visual</SelectItem>
+                        <SelectItem value="html">Código HTML</SelectItem>
+                        <SelectItem value="ai">Asistente IA</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">Solo se guardará el formato elegido.</p>
+                    <p className="text-xs text-muted-foreground">
+                      Elige cómo quieres crear y editar el contenido de este correo.
+                    </p>
                   </div>
-                  {form.emailFormat === "html" ? (
+                  {form.emailCreationMode === "visual" ? (
+                    <VisualEmailTemplateEditor
+                      value={form.cuerpoHtml}
+                      assets={logos}
+                      onChange={handleVisualHtmlChange}
+                    />
+                  ) : form.emailCreationMode === "html" ? (
                     <div className="space-y-2">
                       <Label htmlFor="template-html">HTML del correo</Label>
                       <Textarea
@@ -808,18 +838,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                         placeholder="<p>Hola {{nombre}}...</p>"
                       />
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Label htmlFor="template-plain-text">Texto plano</Label>
-                      <Textarea
-                        id="template-plain-text"
-                        className="min-h-[360px] resize-y"
-                        value={form.cuerpoTexto}
-                        onChange={(event) => setForm((previous) => ({ ...previous, cuerpoTexto: event.target.value }))}
-                        placeholder="Hola {{nombre}}..."
-                      />
-                    </div>
-                  )}
+                  ) : null}
                 </>
               ) : (
                 <>
@@ -1149,14 +1168,16 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
           </Card>
         </main>
 
-        <aside className="space-y-6 xl:sticky xl:top-4">
-          <TemplateAiAssistant
-            canal={form.canal}
-            campanaId={form.campanaId || null}
-            variableValues={aiVariableValues}
-            onApply={applyDraft}
-          />
-        </aside>
+        {form.canal === "whatsapp" || form.emailCreationMode === "ai" ? (
+          <aside className="space-y-6 xl:sticky xl:top-4">
+            <TemplateAiAssistant
+              canal={form.canal}
+              campanaId={form.campanaId || null}
+              variableValues={aiVariableValues}
+              onApply={applyDraft}
+            />
+          </aside>
+        ) : null}
       </div>
 
       <Card>
