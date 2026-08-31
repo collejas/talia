@@ -78,6 +78,7 @@ type ContactoTemplateRow = {
 };
 
 type WebSessionAttributionRow = {
+  id?: string | null;
   session_id?: string | null;
   eid?: string | null;
   cid?: string | null;
@@ -111,6 +112,14 @@ type WebSessionAttributionRow = {
   template_slug?: string | null;
   template_nombre?: string | null;
   metadata?: Record<string, unknown> | null;
+  canal?: string | null;
+  iniciada_en?: string | null;
+  ultimo_mensaje_en?: string | null;
+  tuvo_chat?: boolean | null;
+  mensajes_entrantes?: number | null;
+  mensajes_salientes?: number | null;
+  primer_mensaje_en?: string | null;
+  ultimo_mensaje_conversacion?: string | null;
 };
 
 export type VisitDetailRaw = {
@@ -367,23 +376,23 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailR
         eid: row.eid ?? null,
         cid: row.cid ?? null,
         oportunidad_id: null,
-        canal: "webchat",
+        canal: row.canal ?? "webchat",
         prospeccion_campana_id: row.cid ?? null,
         prospeccion_campana_tipo: promotionType,
         ip: row.ip ?? null,
-        registrado_en: row.first_seen_at ?? null,
-        primera_visita_en: row.first_seen_at ?? null,
-        ultimo_evento_en: row.last_seen_at ?? null,
+        registrado_en: row.iniciada_en ?? row.first_seen_at ?? null,
+        primera_visita_en: row.iniciada_en ?? row.first_seen_at ?? null,
+        ultimo_evento_en: row.ultimo_mensaje_en ?? row.last_seen_at ?? null,
         closed_at: null,
         stay_seconds: null,
         avg_stay_seconds: null,
         visit_count: row.visit_count ?? 1,
         total_visitas: row.visit_count ?? 1,
-        tuvo_chat: null,
-        mensajes_entrantes: null,
-        mensajes_salientes: null,
-        primer_mensaje_en: null,
-        ultimo_mensaje_conversacion: null,
+        tuvo_chat: row.tuvo_chat ?? null,
+        mensajes_entrantes: row.mensajes_entrantes ?? null,
+        mensajes_salientes: row.mensajes_salientes ?? null,
+        primer_mensaje_en: row.primer_mensaje_en ?? null,
+        ultimo_mensaje_conversacion: row.ultimo_mensaje_conversacion ?? row.ultimo_mensaje_en ?? null,
         persona_id: row.persona_id ?? row.contacto_id ?? null,
         contacto_id: row.persona_id ?? row.contacto_id ?? null,
         contacto_nombre: row.contacto_nombre ?? null,
@@ -434,6 +443,26 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailR
     }
   }
   return normalized;
+}
+
+async function loadWebchatConversationRows(
+  filters: VisitsFilters = {},
+): Promise<{ rows: VisitDetailRaw[]; errors: string[] }> {
+  const result = await callCrmApi<WebSessionAttributionRow[]>(
+    "/crm/visitas/webchat/conversaciones",
+    {
+      withUserToken: true,
+      searchParams: {
+        rango: filters.rango || undefined,
+        desde: filters.desde || undefined,
+        hasta: filters.hasta || undefined,
+        limit: 5000,
+        offset: 0,
+      },
+    },
+  );
+  if (!result.ok) return { rows: [], errors: [result.error] };
+  return { rows: normalizeWebSessionRows(result.data), errors: [] };
 }
 
 function buildTemplateLookup(
@@ -595,7 +624,7 @@ export async function loadConversationsTableForConversionMap(
         withUserToken: true,
       })
     : null;
-  const webchat = await loadWebchatVisitRows(filters);
+  const webchat = await loadWebchatConversationRows(filters);
   if (webchat.errors.length) {
     throw new Error(webchat.errors[0]);
   }
@@ -690,7 +719,10 @@ export async function loadConversionMapTablesForConversionMap(
           withUserToken: true,
         })
       : Promise.resolve(null);
-    const webchatPromise = loadWebchatVisitRows(filters);
+    const webchatPromise =
+      section === "conversations"
+        ? loadWebchatConversationRows(filters)
+        : loadWebchatVisitRows(filters);
     const whatsappPromise =
       section === "visits"
         ? Promise.resolve(null)

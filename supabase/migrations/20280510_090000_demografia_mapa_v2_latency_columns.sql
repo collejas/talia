@@ -266,7 +266,23 @@ webchat_geo AS (
             NULLIF((v.geo -> 'client') ->> 'country_name', ''),
             NULLIF(v.geo -> 'ip_lookup' ->> 'country', ''),
             NULLIF((v.geo -> 'client') ->> 'country', '')
-        ) AS raw_country_name
+        ) AS raw_country_name,
+        COALESCE(
+            NULLIF(v.nom_ent, ''),
+            NULLIF(v.geo ->> 'nom_ent', ''),
+            NULLIF(v.geo -> 'ip_lookup' ->> 'region', ''),
+            NULLIF(v.geo -> 'ip_lookup' ->> 'state', ''),
+            NULLIF(v.geo -> 'client' ->> 'nom_ent', ''),
+            NULLIF(v.geo -> 'client' ->> 'region', ''),
+            NULLIF(v.geo -> 'client' ->> 'state', '')
+        ) AS raw_state_name,
+        COALESCE(
+            NULLIF(v.nom_mun, ''),
+            NULLIF(v.geo ->> 'nom_mun', ''),
+            NULLIF(v.geo -> 'ip_lookup' ->> 'city', ''),
+            NULLIF(v.geo -> 'client' ->> 'nom_mun', ''),
+            NULLIF(v.geo -> 'client' ->> 'city', '')
+        ) AS raw_city_name
     FROM webchat_visits v
 ),
 webchat_normalized AS (
@@ -284,23 +300,42 @@ webchat_normalized AS (
             CASE WHEN upper(COALESCE(g.raw_country_code, '')) = 'MX' THEN 'México' ELSE 'País desconocido' END
         ) AS country_name,
         CASE
-            WHEN g.cve_ent IS NOT NULL AND g.cve_ent <> '' THEN lpad(regexp_replace(g.cve_ent, '\\D', '', 'g'), 2, '0')
+            WHEN COALESCE(g.cve_ent, ge.clave_entidad) IS NOT NULL
+                THEN lpad(regexp_replace(COALESCE(g.cve_ent, ge.clave_entidad), '\\D', '', 'g'), 2, '0')
             ELSE NULL
         END AS cve_ent,
-        g.nom_ent,
+        COALESCE(g.nom_ent, ge.nombre, g.raw_state_name) AS nom_ent,
         CASE
-            WHEN g.cve_mun IS NOT NULL AND g.cve_mun <> '' THEN lpad(regexp_replace(g.cve_mun, '\\D', '', 'g'), 3, '0')
+            WHEN COALESCE(g.cve_mun, gm.clave_municipio) IS NOT NULL
+                THEN lpad(regexp_replace(COALESCE(g.cve_mun, gm.clave_municipio), '\\D', '', 'g'), 3, '0')
             ELSE NULL
         END AS cve_mun,
-        g.nom_mun,
+        COALESCE(g.nom_mun, gm.nombre, g.raw_city_name) AS nom_mun,
         CASE
             WHEN g.cvegeo IS NOT NULL AND g.cvegeo <> '' THEN lpad(regexp_replace(g.cvegeo, '\\D', '', 'g'), 5, '0')
-            WHEN g.cve_ent IS NOT NULL AND g.cve_mun IS NOT NULL THEN
-                lpad(regexp_replace(g.cve_ent, '\\D', '', 'g'), 2, '0')
-                || lpad(regexp_replace(g.cve_mun, '\\D', '', 'g'), 3, '0')
+            WHEN COALESCE(g.cve_ent, ge.clave_entidad) IS NOT NULL
+             AND COALESCE(g.cve_mun, gm.clave_municipio) IS NOT NULL THEN
+                lpad(regexp_replace(COALESCE(g.cve_ent, ge.clave_entidad), '\\D', '', 'g'), 2, '0')
+                || lpad(regexp_replace(COALESCE(g.cve_mun, gm.clave_municipio), '\\D', '', 'g'), 3, '0')
             ELSE NULL
         END AS cvegeo
     FROM webchat_geo g
+    LEFT JOIN public.geo_estados_mexico ge
+      ON ge.activo = TRUE
+     AND (
+          lower(translate(btrim(g.raw_state_name), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN')) =
+              lower(translate(btrim(ge.nombre), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN'))
+          OR (lower(translate(btrim(g.raw_state_name), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN')) = 'veracruz'
+              AND ge.clave_entidad = '30')
+     )
+    LEFT JOIN public.geo_municipios_mexico gm
+      ON gm.activo = TRUE
+     AND gm.clave_entidad = COALESCE(
+          NULLIF(regexp_replace(g.cve_ent, '\\D', '', 'g'), ''),
+          ge.clave_entidad
+     )
+     AND lower(translate(btrim(g.raw_city_name), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN')) =
+         lower(translate(btrim(gm.nombre), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN'))
 ),
 webchat_scoped AS (
     SELECT

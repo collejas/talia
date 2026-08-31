@@ -39942,6 +39942,42 @@ async def get_visits_web_sessions(
     return items
 
 
+@router.get("/visitas/webchat/conversaciones")
+async def get_visits_webchat_conversations(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("reports.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    limit: Annotated[int, Query(ge=1, le=5000)] = 500,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    date_from, date_to = _resolve_date_range(
+        rango,
+        desde,
+        hasta,
+        timezone_name=effective_timezone,
+    )
+    try:
+        return await repo.list_webchat_conversations_detail(
+            organizacion_id=organizacion_id,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.get("/visitas/whatsapp/total")
 async def get_visits_whatsapp_total(
     *,

@@ -4528,6 +4528,35 @@ class CRMRepository:
             )
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_webchat_conversations_detail(
+        self,
+        *,
+        organizacion_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        payload: dict[str, Any] = {
+            "p_limit": max(1, min(limit, 5000)),
+            "p_offset": max(0, int(offset)),
+        }
+        if date_from:
+            payload["p_from"] = date_from.isoformat()
+        if date_to:
+            payload["p_to"] = date_to.isoformat()
+        resp = await self._request(
+            "POST",
+            "/rest/v1/rpc/panel_webchat_conversaciones_detalle",
+            json=payload,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                f"Respuesta inesperada al listar conversaciones webchat: {data!r}"
+            )
+        return [row for row in data if isinstance(row, dict)]
+
     async def summarize_web_session_contacts(
         self,
         *,
