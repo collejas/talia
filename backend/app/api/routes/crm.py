@@ -4290,6 +4290,49 @@ class ContactoTemplateUpdatePayload(BaseModel):
     imagenes: list[ContactoTemplateImagenPayload] | None = Field(default=None, max_length=7)
 
 
+class ContactoTemplateVersionCreatePayload(BaseModel):
+    """Crea un borrador de versión sin modificar la versión publicada."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    metodo_creacion: Literal["visual", "html", "ai"]
+    asunto: str | None = Field(default=None, max_length=200)
+    cuerpo_texto: str | None = Field(default=None, max_length=4000)
+    cuerpo_html: str | None = Field(default=None, max_length=32_000)
+    estilo_diseno: str | None = Field(default=None, max_length=120)
+    bloques: list["ContactoTemplateVersionBlockPayload"] = Field(default_factory=list, max_length=40)
+
+
+class ContactoTemplateVersionElementPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    orden: int = Field(..., ge=0, le=50)
+    tipo_elemento: Literal["texto", "imagen", "boton", "separador", "espacio"]
+    contenido: str | None = Field(default=None, max_length=4000)
+    destino_url: str | None = Field(default=None, max_length=2000)
+    logo_id: UUID | None = None
+
+
+class ContactoTemplateVersionColumnPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    orden: Literal[0, 1]
+    ancho_porcentaje: Decimal = Field(..., ge=10, le=90)
+    elementos: list[ContactoTemplateVersionElementPayload] = Field(default_factory=list, max_length=20)
+
+
+class ContactoTemplateVersionBlockPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    orden: int = Field(..., ge=0, le=100)
+    tipo_bloque: Literal["texto", "imagen", "boton", "separador", "espacio", "columnas", "firma"]
+    titulo: str | None = Field(default=None, max_length=200)
+    contenido: str | None = Field(default=None, max_length=4000)
+    destino_url: str | None = Field(default=None, max_length=2000)
+    logo_id: UUID | None = None
+    columnas: list[ContactoTemplateVersionColumnPayload] = Field(default_factory=list, max_length=2)
+
+
 class WhatsProspTemplateQuery(BaseModel):
     """Filtros para listar plantillas Meta de Whats-Prosp."""
 
@@ -34857,6 +34900,7 @@ async def listar_templates_prospeccion_contacto_legacy(
             func=lambda: repo.list_contact_templates(
                 usuario_token=user_token,
                 canal=params.canal or None,
+                campana_id=params.campana_id,
             ),
             retries=1,
         )
@@ -34875,18 +34919,6 @@ async def listar_templates_prospeccion_contacto_legacy(
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         _attach_contact_template_images(persisted_items, image_rows)
-    if params.campana_id:
-        campana_key = str(params.campana_id)
-        filtered_items: list[dict[str, Any]] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
-            linked = _clean_text(metadata.get("campana_id"))
-            if linked == campana_key:
-                filtered_items.append(item)
-        items = filtered_items
-
     if (not params.canal or params.canal == "whatsapp") and not params.campana_id:
         runtime_settings = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
         twilio_runtime = await tenant_runtime.get_twilio_runtime_settings(organizacion_id=organizacion_id)
@@ -35379,10 +35411,7 @@ async def crear_template_prospeccion_contacto_legacy(
     images = payload.imagenes
     raw.pop("imagenes", None)
     metadata = _ensure_dict(raw.get("metadata"), default={})
-    if payload.campana_id:
-        metadata["campana_id"] = str(payload.campana_id)
     raw["metadata"] = metadata
-    raw.pop("campana_id", None)
     body = _build_contact_template_payload(raw, include_metadata=True)
     try:
         template = await repo.create_contact_template(usuario_token=user_token, payload=body)
@@ -35421,7 +35450,7 @@ async def actualizar_template_prospeccion_contacto_legacy(
         raise HTTPException(status_code=400, detail="empty_update")
     images = raw_data.pop("imagenes", None)
     current_metadata = _ensure_dict(current.get("metadata"), default={})
-    current_campana_id = _clean_text(current_metadata.get("campana_id"))
+    current_campana_id = _clean_text(current.get("campana_id")) or _clean_text(current_metadata.get("campana_id"))
     effective_campana_id = str(raw_data["campana_id"]) if "campana_id" in raw_data and raw_data.get("campana_id") else current_campana_id
     effective_canal = _clean_text(raw_data.get("canal") or current.get("canal")).lower()
     effective_email_kind = raw_data.get("email_message_kind", current.get("email_message_kind"))
@@ -35445,13 +35474,8 @@ async def actualizar_template_prospeccion_contacto_legacy(
         if effective_canal and effective_canal != campana_canal:
             raise HTTPException(status_code=400, detail="template_canal_mismatch_with_campana")
     metadata_patch = _ensure_dict(raw_data.get("metadata"), default={}) if "metadata" in raw_data else {}
-    if "campana_id" in raw_data:
-        campana_raw = raw_data.pop("campana_id")
-        if campana_raw:
-            metadata_patch["campana_id"] = str(campana_raw)
-        else:
-            metadata_patch["campana_id"] = None
-        raw_data["metadata"] = metadata_patch
+    if "campana_id" in raw_data and raw_data.get("campana_id"):
+        raw_data["campana_id"] = str(raw_data["campana_id"])
     body = _build_contact_template_payload(
         raw_data,
         allow_null_keys={"descripcion", "asunto", "cuerpo_texto", "cuerpo_html", "email_message_kind"},
@@ -35498,6 +35522,130 @@ async def eliminar_template_prospeccion_contacto_legacy(
             raise HTTPException(status_code=404, detail="contact_template_not_found") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/prospeccion/contacto/templates/{template_id}/versions")
+async def listar_versiones_template_prospeccion_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    template_id: UUID,
+) -> dict[str, Any]:
+    template = await repo.get_contact_template(usuario_token=user_token, template_id=template_id)
+    if not template or str(template.get("organizacion_id")) != str(organizacion_id):
+        raise HTTPException(status_code=404, detail="contact_template_not_found")
+    try:
+        versions = await repo.list_contact_template_versions(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="contact_template_versions_unavailable") from exc
+    return {"ok": True, "items": versions}
+
+
+@router.post("/prospeccion/contacto/templates/{template_id}/versions", status_code=status.HTTP_201_CREATED)
+async def crear_version_template_prospeccion_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    template_id: UUID,
+    payload: ContactoTemplateVersionCreatePayload,
+) -> dict[str, Any]:
+    template = await repo.get_contact_template(usuario_token=user_token, template_id=template_id)
+    if not template or str(template.get("organizacion_id")) != str(organizacion_id):
+        raise HTTPException(status_code=404, detail="contact_template_not_found")
+    try:
+        versions = await repo.list_contact_template_versions(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+        )
+        next_number = max((int(row.get("numero") or 0) for row in versions), default=0) + 1
+        raw_version = payload.model_dump(mode="json", exclude_none=True)
+        blocks = raw_version.pop("bloques", [])
+        version = await repo.create_contact_template_version(
+            usuario_token=user_token,
+            payload={
+                "organizacion_id": str(organizacion_id),
+                "template_id": str(template_id),
+                "numero": next_number,
+                "estado": "borrador",
+                **raw_version,
+            },
+        )
+        if blocks:
+            await repo.replace_contact_template_version_blocks(
+                usuario_token=user_token,
+                organizacion_id=organizacion_id,
+                version_id=UUID(str(version["id"])),
+                blocks=blocks,
+            )
+    except (CRMRepositoryError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="contact_template_version_create_failed") from exc
+    return {"ok": True, "version": version}
+
+
+@router.post("/prospeccion/contacto/templates/{template_id}/versions/{version_id}/publish")
+async def publicar_version_template_prospeccion_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    template_id: UUID,
+    version_id: UUID,
+) -> dict[str, Any]:
+    template = await repo.get_contact_template(usuario_token=user_token, template_id=template_id)
+    if not template or str(template.get("organizacion_id")) != str(organizacion_id):
+        raise HTTPException(status_code=404, detail="contact_template_not_found")
+    try:
+        version = await repo.publish_contact_template_version(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+            version_id=version_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "not_found" in detail:
+            raise HTTPException(status_code=404, detail="contact_template_version_not_found") from exc
+        if "forbidden" in detail:
+            raise HTTPException(status_code=403, detail="contact_template_version_forbidden") from exc
+        raise HTTPException(status_code=502, detail="contact_template_version_publish_failed") from exc
+    return {"ok": True, "version": version}
+
+
+@router.get("/prospeccion/contacto/templates/{template_id}/versions/{version_id}")
+async def obtener_version_template_prospeccion_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    template_id: UUID,
+    version_id: UUID,
+) -> dict[str, Any]:
+    template = await repo.get_contact_template(usuario_token=user_token, template_id=template_id)
+    if not template or str(template.get("organizacion_id")) != str(organizacion_id):
+        raise HTTPException(status_code=404, detail="contact_template_not_found")
+    try:
+        tree = await repo.get_contact_template_version_tree(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+            version_id=version_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="contact_template_version_unavailable") from exc
+    if not tree:
+        raise HTTPException(status_code=404, detail="contact_template_version_not_found")
+    return {"ok": True, **tree}
 
 
 @router.get("/prospeccion/contacto/listas")

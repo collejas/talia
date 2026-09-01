@@ -1,6 +1,6 @@
 # Plan: Asistente de IA para plantillas de prospección
 
-**Estado:** Propuesta funcional y técnica
+**Estado:** Rediseño integral aprobado para implementación por fases
 
 **Fecha:** 2026-08-17
 
@@ -23,6 +23,74 @@ El backend será responsable de la seguridad, el aislamiento por tenant, el cat�
 
 La IA no sustituirá la aprobación de Meta. En WhatsApp generará una propuesta o referencia que posteriormente deberá coincidir con una plantilla creada y aprobada en WhatsApp Manager.
 
+## 1.1 Rediseño integral de la creación de plantillas de correo
+
+La creación de plantillas se reorganizará alrededor de la campaña y su canal de
+distribución. La plantilla base incluida en
+[`REFERENCIA_EDITOR_VISUAL.html`](./REFERENCIA_EDITOR_VISUAL.html) será el
+contrato visual del editor de correo: no será únicamente una maqueta, sino la
+base del sistema de composición, selección, edición, preview y publicación.
+
+El flujo de negocio obligatorio será:
+
+```text
+Crear campaña publicitaria
+  ↓
+Asignar canales: Voz, Correo y/o WhatsApp
+  ↓
+Entrar al canal Correo de la campaña
+  ↓
+Administrar plantillas de esa campaña
+  ↓
+Crear o editar una plantilla
+  ↓
+Capturar datos básicos
+  ↓
+Elegir Editor visual, Código HTML o Asistente IA
+  ↓
+Validar, probar, guardar borrador y publicar una versión
+```
+
+No se crearán plantillas de correo fuera de una campaña cuando el flujo se
+origine en prospección. La relación con la campaña será explícita mediante
+`campana_id`; `metadata` no será la fuente de esa relación.
+
+La reconstrucción tendrá cinco líneas de trabajo coordinadas:
+
+1. **Dominio y persistencia:** separar plantilla, versión, bloques, elementos,
+   assets, variables, enlaces y generaciones IA.
+2. **Experiencia de campaña:** mostrar las plantillas pertenecientes al canal
+   de la campaña, con estado, versión activa, pruebas y publicación.
+3. **Editor visual:** reconstruir la composición con la referencia aprobada,
+   incluyendo bloques editables, columnas anidadas, CTA, imágenes y responsive.
+4. **HTML e IA:** hacer que Código HTML y Asistente IA compartan variables,
+   assets, sanitización, preview y salida compatible con el editor visual.
+5. **Operación segura:** versionado, validación antes de publicar, auditoría,
+   envío de prueba, aislamiento por tenant y compatibilidad con el sender actual.
+
+El objetivo no es añadir campos al editor existente, sino que los tres métodos
+produzcan y consuman una misma plantilla de correo versionable y publicable.
+
+### 1.2 Regla de composición de la pantalla
+
+La pantalla de correo no debe combinar el editor nuevo con controles heredados.
+Una vez seleccionada la campaña, se mostrará únicamente:
+
+1. El contexto de la campaña y su canal Correo, como referencia no editable.
+2. Los datos básicos de la plantilla: nombre, asunto y tipo de envío
+   **Broadcast** o **Transactional**.
+3. Una sola opción de creación activa: Editor visual, Código HTML o Asistente
+   IA.
+4. Las acciones generales de guardar, previsualizar, enviar prueba y publicar.
+
+Las tarjetas heredadas de contenido genérico, personalización, imágenes,
+enlaces y vista previa no se renderizarán dentro del flujo de correo. Sus
+capacidades solo existirán dentro del método que las necesita: bloques e
+inspector en el Editor visual, código y preview en HTML, y selección guiada de
+variables, imágenes, usos de imagen, estilo y prompt en IA. El contenedor del
+flujo ocupará todo el ancho disponible; solo el lienzo de preview mantendrá una
+anchura acotada para representar un correo real.
+
 ## 2. Objetivo del producto
 
 Reducir el tiempo y la dificultad para crear plantillas comerciales consistentes, sin obligar al usuario a conocer:
@@ -35,6 +103,85 @@ Reducir el tiempo y la dificultad para crear plantillas comerciales consistentes
 - Reglas de tracking y enlaces.
 
 El usuario debe poder describir lo que necesita en lenguaje natural, seleccionar las variables permitidas y revisar el resultado antes de guardarlo.
+
+## 2.1 Modelo de producto propuesto
+
+### A. Centro de plantillas por campaña
+
+La pantalla del canal Correo de cada campaña mostrará nombre, asunto, tipo de
+correo, estado, versión activa, fecha de modificación y acciones para editar,
+duplicar, probar, publicar o archivar. Una campaña podrá conservar varias
+plantillas y versiones, pero solo una versión publicada será la utilizada por
+el envío configurado.
+
+### B. Creación por etapas
+
+La creación tendrá cuatro momentos visibles:
+
+1. **Información básica:** nombre, asunto, tipo de correo, objetivo y
+   descripción.
+2. **Método de creación:** Editor visual, Código HTML o Asistente IA.
+3. **Contenido:** únicamente el editor elegido, con variables, imágenes,
+   enlaces y preview compartidos.
+4. **Revisión y publicación:** validaciones, preview de escritorio/móvil,
+   envío de prueba, guardado como borrador y publicación explícita.
+
+### C. Fuente única de contenido
+
+El Editor visual trabajará con bloques estructurados. Código HTML conservará el
+HTML editado después de sanitizarlo. El Asistente IA devolverá un borrador que
+podrá abrirse y editarse en el Editor visual. Los tres modos compartirán el
+catálogo de variables, assets, CTA, preview, validaciones y reglas de envío.
+
+### D. Modelo estructurado del Editor visual
+
+El editor tendrá bloques de primer nivel y elementos internos. Columnas será un
+contenedor de dos columnas con ancho explícito, no un bloque de texto especial:
+
+```text
+Plantilla
+  └── Bloque de columnas
+      ├── Columna 1 (40%)
+      │   ├── Imagen
+      │   ├── Título
+      │   └── Texto
+      └── Columna 2 (60%)
+          ├── Texto
+          └── Botón
+```
+
+Los botones separarán texto visible, destino y CTA. El destino podrá ser un
+enlace funcional disponible para la campaña/tenant, un CTA del catálogo o un
+enlace personalizado validado. Las variables se insertarán con etiquetas
+legibles y conservarán su placeholder técnico solo internamente.
+
+### F. Contrato inicial de versiones
+
+La API de versiones será tenant-aware y tendrá estas operaciones:
+
+```text
+GET  /crm/prospeccion/contacto/templates/{template_id}/versions
+POST /crm/prospeccion/contacto/templates/{template_id}/versions
+POST /crm/prospeccion/contacto/templates/{template_id}/versions/{version_id}/publish
+```
+
+El `POST` crea un borrador con `metodo_creacion`, asunto, texto, HTML y estilo
+de diseño. No cambia la versión publicada ni la plantilla activa. La futura
+publicación es una operación separada y transaccional, responsable de marcar
+una sola versión como publicada, archivar la anterior y actualizar
+`version_activa_id`.
+
+Cuando el método sea `visual`, el mismo contrato recibirá `bloques` anidados.
+El backend validará y persistirá sus columnas y elementos en las tablas
+normalizadas correspondientes. El HTML se conservará como salida renderizada
+para mantener compatibilidad temporal con el sender existente.
+
+### E. Versionado
+
+Editar una plantilla publicada no modificará silenciosamente el contenido que
+usa una campaña. Se trabajará sobre un borrador o nueva versión; publicar será
+una acción explícita. Cada generación IA y cada publicación conservarán autor,
+fecha, prompt/estilo aplicado y relación con la campaña y la plantilla.
 
 ## 3. Decisiones principales
 
@@ -257,15 +404,32 @@ al usuario. Como mínimo deberá permitir:
 - Texto y títulos.
 - Imágenes y logotipo.
 - Botones y enlaces.
+- Edición del texto visible del botón.
+- Selección de enlaces y CTA disponibles en el sistema, además de enlace
+  personalizado cuando corresponda.
 - Separadores.
 - Espaciado.
 - Columnas o bloques de beneficios.
+- Edición de las dos columnas con anchos configurables que siempre sumen 100%.
+- Elementos internos dentro de cada columna: texto, botón/enlace e imagen.
 - Variables insertables mediante controles visibles.
 - Selector completo de todas las variables disponibles para correo, con nombres
   visibles en español y sin claves técnicas ni etiquetas adicionales.
 - Selección de imágenes desde la galería del tenant.
 - Vista previa de escritorio y móvil.
 - Selección, edición, duplicado y eliminación de bloques.
+
+En el bloque **Columnas**, el usuario podrá editar cada columna por separado y
+agregar o eliminar sus elementos internos. El editor mantendrá dos columnas y
+ajustará automáticamente el ancho complementario al modificar una de ellas,
+evitando combinaciones inválidas. El contenido anidado se convertirá a HTML
+seguro junto con el resto del correo.
+
+En el bloque **Botón**, el usuario podrá cambiar el texto visible y elegir un
+enlace o CTA del catálogo disponible. También podrá capturar un enlace
+personalizado permitido por el sistema. La etiqueta visible será de negocio;
+los placeholders o valores técnicos solo se conservarán internamente para el
+envío.
 
 ##### Referencia visual obligatoria
 
@@ -828,11 +992,14 @@ Restricciones e índices:
 prospeccion_plantilla_ai_generaciones
 ```
 
-La plantilla final de correo podrá conservar el modo de creación mediante la
+La plantilla final de correo conservará su relación con la campaña mediante la
+columna explícita `campana_id`, con foreign key a `campanas(id)`, además de
+conservar el modo de creación mediante la
 columna explícita `email_creation_mode` en
 `prospeccion_contacto_templates`. No se guardará dentro de `metadata` porque se
-utilizará para seleccionar la interfaz de edición, validar el contenido y
-auditar el flujo.
+utilizarán para seleccionar la interfaz de edición, filtrar la plantilla de la
+campaña correcta, validar el contenido y auditar el flujo. Las asociaciones
+históricas guardadas en `metadata.campana_id` deberán migrarse a `campana_id`.
 
 Cuando una generación IA utilice imágenes, la trazabilidad de esas selecciones
 deberá modelarse mediante una relación explícita con la generación, por ejemplo
@@ -1152,6 +1319,8 @@ La métrica de generación no debe confundirse con envíos de WhatsApp, envíos 
 
 - Implementado inicialmente: selección de los tres modos de creación de correo.
 - Implementado inicialmente: Editor visual separado con bloques, imágenes, variables y vista previa.
+- Implementado: edición de botones con CTA/enlaces y edición de columnas con
+  anchos complementarios y elementos internos de texto, botón e imagen.
 - Tomar el HTML de referencia proporcionado por el usuario como contrato visual y
   funcional del Editor visual.
 - Mantener la distribución barra superior, biblioteca lateral, lienzo central,
@@ -1189,6 +1358,14 @@ La funcionalidad podrá considerarse lista cuando:
 - El correo genere asunto, texto y HTML válidos.
 - El usuario pueda elegir entre Editor visual, Código HTML y Asistente IA para correo.
 - El Editor visual permita agregar y editar texto, imágenes, variables, botones y bloques.
+- Los botones permitan editar su texto y elegir un CTA/enlace disponible o un
+  enlace personalizado permitido.
+- Las columnas permitan establecer el ancho de ambas columnas, manteniendo una
+  suma válida de 100%, y agregar dentro texto, botones/enlaces e imágenes.
+- Una plantilla visual reabra su versión activa con el árbol de bloques y no
+  dependa de convertir el HTML final nuevamente a texto plano.
+- Guardar cree un borrador y publicar cambie la versión activa únicamente por
+  una operación explícita y tenant-safe.
 - El modo Código HTML valide y sanitice el contenido antes de guardarlo.
 - El Asistente IA solicite imágenes, uso de imágenes, datos del prospecto, prompt y estilo.
 - Los tres modos utilicen todas las variables de correo disponibles en el catálogo backend.

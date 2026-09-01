@@ -15,13 +15,18 @@ import { TemplateAiAssistant, type TemplateAiDraft } from "../components/templat
 import { VisualEmailTemplateEditor } from "./components/visual-email-template-editor"
 import {
   createContactoTemplate,
+  createContactoTemplateVersion,
   createWhatsProspTemplate,
   listContactoTemplates,
+  listContactoTemplateVersions,
+  getContactoTemplateVersionTree,
   listCrmCampaigns,
   listProspectos,
   listWhatsAppAtribucionReglas,
   updateContactoTemplate,
   updateWhatsProspTemplate,
+  publishContactoTemplateVersion,
+  type ContactoTemplateVersion,
   type ContactoTemplate,
   type ContactoTemplateImagenVariable,
   type CrmCampaign,
@@ -35,6 +40,10 @@ type EmailFormat = "html" | "texto"
 type EmailCreationMode = "visual" | "html" | "ai"
 type EmailMessageKind = "transactional" | "broadcast"
 type LogoAsset = { id: string; nombre: string; file_url: string }
+type EmailVariable = { clave: string; etiqueta: string; descripcion?: string }
+type VisualStructureElement = { id?: string; kind: string; content?: string; href?: string; imageId?: string }
+type VisualStructureColumn = { id?: string; width?: number; elements?: VisualStructureElement[] }
+type VisualStructureBlock = { id?: string; kind: string; title?: string; content?: string; href?: string; imageId?: string; columns?: VisualStructureColumn[] }
 
 const IMAGE_SLOTS: Array<{ key: ContactoTemplateImagenVariable; label: string }> = [
   { key: "logo_url", label: "Logo" },
@@ -70,7 +79,7 @@ type FormState = {
   asunto: string
   cuerpoTexto: string
   cuerpoHtml: string
-  emailCreationMode: EmailCreationMode
+  emailCreationMode: EmailCreationMode | null
   emailFormat: EmailFormat
   emailMessageKind: EmailMessageKind
   metaTemplateName: string
@@ -92,7 +101,7 @@ const emptyForm = (campaign?: CrmCampaign): FormState => ({
   asunto: "",
   cuerpoTexto: "",
   cuerpoHtml: "",
-  emailCreationMode: "visual",
+  emailCreationMode: null,
   emailFormat: "html",
   emailMessageKind: "broadcast",
   metaTemplateName: "",
@@ -150,6 +159,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
   const logoFileInputRef = useRef<HTMLInputElement>(null)
   const [campaigns, setCampaigns] = useState<CrmCampaign[]>([])
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
+  const [versions, setVersions] = useState<ContactoTemplateVersion[]>([])
   const [logos, setLogos] = useState<LogoAsset[]>([])
   const [logosLoading, setLogosLoading] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -164,6 +174,8 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(() => emptyForm())
+  const [visualStructure, setVisualStructure] = useState("[]")
+  const [emailVariables, setEmailVariables] = useState<EmailVariable[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -173,6 +185,18 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
     () => campaigns.find((campaign) => campaign.id === form.campanaId) ?? null,
     [campaigns, form.campanaId],
   )
+
+  const needsEmailCreationMode = form.canal === "correo" && !form.id && !form.emailCreationMode
+
+  useEffect(() => {
+    if (form.canal !== "correo") return
+    void fetch("/api/prospeccion/plantillas/ai?canal=correo", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => {
+        if (Array.isArray(payload?.items)) setEmailVariables(payload.items as EmailVariable[])
+      })
+      .catch(() => setEmailVariables([]))
+  }, [form.canal])
 
   const loadLogos = useCallback(async () => {
     setLogosLoading(true)
@@ -232,11 +256,49 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
         const template = items.find((item) => item.id === templateId)
         if (!template) throw new Error("No se encontró la plantilla dentro de la campaña seleccionada.")
         setForm(formFromTemplate(template, campaign.id))
+        const versionsResponse = await listContactoTemplateVersions(template.id)
+        setVersions(Array.isArray(versionsResponse?.items) ? versionsResponse.items : [])
+        if (template.version_activa_id) {
+          const treeResponse = await getContactoTemplateVersionTree(template.id, template.version_activa_id)
+          const structure = (treeResponse.bloques ?? []).map((block) => {
+            const row = block as Record<string, unknown>
+            return {
+              id: String(row.id ?? crypto.randomUUID()),
+              kind: row.tipo_bloque === "texto" ? "text" : row.tipo_bloque === "imagen" ? "image" : row.tipo_bloque === "boton" ? "button" : row.tipo_bloque === "separador" ? "divider" : row.tipo_bloque === "espacio" ? "space" : row.tipo_bloque === "columnas" ? "columns" : "text",
+              title: String(row.titulo ?? "Bloque"),
+              content: String(row.contenido ?? ""),
+              href: typeof row.destino_url === "string" ? row.destino_url : undefined,
+              imageId: typeof row.logo_id === "string" ? row.logo_id : undefined,
+              columns: Array.isArray(row.columnas) ? row.columnas.map((column, columnIndex) => {
+                const columnRow = column as Record<string, unknown>
+                return {
+                  id: String(columnRow.id ?? `column-${columnIndex}`),
+                  width: Number(columnRow.ancho_porcentaje ?? 50),
+                  elements: Array.isArray(columnRow.elementos) ? columnRow.elementos.map((element, elementIndex) => {
+                    const elementRow = element as Record<string, unknown>
+                    return {
+                      id: String(elementRow.id ?? `element-${elementIndex}`),
+                      kind: elementRow.tipo_elemento === "imagen" ? "image" : elementRow.tipo_elemento === "boton" ? "button" : "text",
+                      content: String(elementRow.contenido ?? ""),
+                      href: typeof elementRow.destino_url === "string" ? elementRow.destino_url : undefined,
+                      imageId: typeof elementRow.logo_id === "string" ? elementRow.logo_id : undefined,
+                    }
+                  }) : [],
+                }
+              }) : undefined,
+            }
+          })
+          setVisualStructure(JSON.stringify(structure))
+        } else {
+          setVisualStructure("[]")
+        }
         setImageIds(
           Object.fromEntries((template.imagenes ?? []).map((image) => [image.variable_clave, image.logo_id])),
         )
       } else {
         setForm(emptyForm(campaign))
+        setVersions([])
+        setVisualStructure("[]")
         setImageIds({})
       }
     } catch (reason) {
@@ -310,6 +372,10 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
 
   const handleVisualHtmlChange = useCallback((value: string) => {
     setForm((previous) => ({ ...previous, cuerpoHtml: value, emailFormat: "html" }))
+  }, [])
+
+  const handleVisualStructureChange = useCallback((value: string) => {
+    setVisualStructure(value)
   }, [])
 
   const handleLogoUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -522,6 +588,27 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
     setNotice("Borrador generado. Revisa el contenido y las advertencias antes de guardar.")
   }
 
+  const handlePublishLatest = async () => {
+    if (!form.id) return setError("Guarda primero la plantilla para poder publicarla.")
+    const latestDraft = versions.find((version) => version.estado === "borrador")
+    if (!latestDraft) return setError("No hay un borrador de versión para publicar.")
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await publishContactoTemplateVersion(form.id, latestDraft.id)
+      setVersions((current) => current.map((version) => (
+        version.id === response.version.id
+          ? response.version
+          : version.estado === "publicada" ? { ...version, estado: "archivada" } : version
+      )))
+      setNotice("Versión publicada correctamente.")
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo publicar la versión.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleSave = async () => {
     const name = form.nombre.trim()
     const content =
@@ -533,6 +620,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
 
     if (!form.campanaId) return setError("No hay una campaña asociada a esta plantilla.")
     if (!name) return setError("Escribe un nombre para la plantilla.")
+    if (form.canal === "correo" && !form.emailCreationMode) return setError("Selecciona cómo quieres crear la plantilla.")
     if (!content) return setError("Escribe el contenido de la plantilla.")
 
     setSaving(true)
@@ -569,6 +657,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             : {},
       }
 
+      let savedTemplateId = form.id
       if (form.canal === "whatsapp") {
         const whatsPayload = {
           nombre: name,
@@ -591,14 +680,57 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
         const response = await createContactoTemplate(payload)
         const created = response?.template
         if (created?.id) {
-          router.replace(
-            `/prospeccion/campanas/plantillas/${created.id}/editar?campana_id=${encodeURIComponent(form.campanaId)}`,
-          )
-          return
+          savedTemplateId = created.id
         }
       }
 
-      setNotice(form.id ? "Plantilla actualizada correctamente." : "Plantilla guardada correctamente.")
+      if (form.canal === "correo" && savedTemplateId) {
+        const visualBlocks = form.emailCreationMode === "visual" && form.emailFormat === "html"
+          ? (() => {
+              try {
+                const parsed = JSON.parse(visualStructure) as unknown
+                return Array.isArray(parsed) ? parsed as VisualStructureBlock[] : []
+              } catch {
+                return []
+              }
+            })()
+          : []
+        const versionResponse = await createContactoTemplateVersion(savedTemplateId, {
+          metodo_creacion: form.emailCreationMode ?? "visual",
+          asunto: form.asunto.trim() || null,
+          cuerpo_texto: form.emailFormat === "texto" ? form.cuerpoTexto : null,
+          cuerpo_html: form.emailFormat === "html" ? form.cuerpoHtml : null,
+          bloques: visualBlocks.map((block, index) => ({
+            orden: index,
+            tipo_bloque: block.kind === "text" ? "texto" : block.kind === "image" ? "imagen" : block.kind === "button" ? "boton" : block.kind === "divider" ? "separador" : block.kind === "space" ? "espacio" : block.kind === "columns" ? "columnas" : "firma",
+            titulo: block.title,
+            contenido: block.content,
+            destino_url: block.href,
+            logo_id: block.imageId,
+            columnas: (block.columns ?? []).map((column, columnIndex) => ({
+              orden: columnIndex as 0 | 1,
+              ancho_porcentaje: column.width ?? (columnIndex === 0 ? 50 : 50),
+              elementos: (column.elements ?? []).map((element, elementIndex) => ({
+                orden: elementIndex,
+                tipo_elemento: element.kind === "text" ? "texto" : element.kind === "image" ? "imagen" : "boton",
+                contenido: element.content,
+                destino_url: element.href,
+                logo_id: element.imageId,
+              })),
+            })),
+          })),
+        })
+        setVersions((current) => [versionResponse.version, ...current])
+      }
+
+      if (!form.id && savedTemplateId) {
+        router.replace(
+          `/prospeccion/campanas/plantillas/${savedTemplateId}/editar?campana_id=${encodeURIComponent(form.campanaId)}`,
+        )
+        return
+      }
+
+      setNotice(form.canal === "correo" ? "Borrador de versión guardado correctamente." : form.id ? "Plantilla actualizada correctamente." : "Plantilla guardada correctamente.")
       const refreshed = await listContactoTemplates({
         campana_id: form.campanaId,
         canal: form.canal,
@@ -620,7 +752,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <header className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-3">
           <Button
@@ -659,6 +791,17 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             {saving ? <IconLoader className="mr-2 size-4 animate-spin" /> : null}
             {saving ? "Guardando..." : "Guardar plantilla"}
           </Button>
+          {form.id && versions.some((version) => version.estado === "borrador") ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1 sm:flex-none"
+              onClick={() => void handlePublishLatest()}
+              disabled={saving}
+            >
+              Publicar versión
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -685,40 +828,161 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                 <Badge variant="outline">{form.canal === "correo" ? "Correo" : "WhatsApp"}</Badge>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Plantilla de esta campaña</Label>
-              <Select
-                value={form.id || "__new__"}
-                onValueChange={(value) => {
-                  if (value === "__new__") {
-                    router.push(
-                      `/prospeccion/campanas/plantillas/nueva?campana_id=${encodeURIComponent(form.campanaId)}`,
-                    )
-                    return
-                  }
-                  router.push(
-                    `/prospeccion/campanas/plantillas/${value}/editar?campana_id=${encodeURIComponent(form.campanaId)}`,
-                  )
-                }}
-              >
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Selecciona una plantilla" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__new__">+ Crear nueva plantilla</SelectItem>
-                  {templates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Aquí crearás una plantilla asociada a esta campaña. El canal no se puede cambiar desde esta pantalla.
+            </p>
           </div>
         </section>
       ) : null}
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      {needsEmailCreationMode ? (
+        <Card className="w-full border-violet-200">
+          <CardHeader className="text-center">
+            <CardTitle>¿Cómo quieres crear esta plantilla?</CardTitle>
+            <CardDescription>
+              La plantilla quedará asociada a la campaña «{selectedCampaign?.nombre ?? ""}» y al canal Correo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            <button
+              type="button"
+              className="rounded-xl border p-5 text-left transition hover:border-violet-400 hover:bg-violet-50/50"
+              onClick={() => setForm((previous) => ({ ...previous, emailCreationMode: "visual", emailFormat: "html" }))}
+            >
+              <span className="text-2xl">▦</span>
+              <span className="mt-3 block font-semibold">Editor visual</span>
+              <span className="mt-1 block text-sm text-muted-foreground">Construye el correo con bloques, imágenes, botones y variables.</span>
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border p-5 text-left transition hover:border-violet-400 hover:bg-violet-50/50"
+              onClick={() => setForm((previous) => ({ ...previous, emailCreationMode: "html", emailFormat: "html" }))}
+            >
+              <span className="font-mono text-2xl">&lt;/&gt;</span>
+              <span className="mt-3 block font-semibold">Código HTML</span>
+              <span className="mt-1 block text-sm text-muted-foreground">Escribe directamente el código del correo y revisa su vista previa.</span>
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-violet-200 bg-violet-50/40 p-5 text-left transition hover:border-violet-400 hover:bg-violet-100/60"
+              onClick={() => setForm((previous) => ({ ...previous, emailCreationMode: "ai", emailFormat: "html" }))}
+            >
+              <span className="text-2xl">✦</span>
+              <span className="mt-3 block font-semibold">Asistente IA</span>
+              <span className="mt-1 block text-sm text-muted-foreground">Elige imágenes, variables y estilo antes de escribir tu prompt.</span>
+            </button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!needsEmailCreationMode && form.canal === "correo" ? (
+        <section className="w-full space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Datos del correo</CardTitle>
+              <CardDescription>Define la información básica que verá el destinatario y el tipo de envío.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_260px]">
+              <div className="space-y-2">
+                <Label htmlFor="email-template-name">Nombre de la plantilla</Label>
+                <Input
+                  id="email-template-name"
+                  value={form.nombre}
+                  onChange={(event) => setForm((previous) => ({ ...previous, nombre: event.target.value }))}
+                  placeholder="Primer contacto comercial"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email-template-subject">Asunto del correo</Label>
+                <Input
+                  id="email-template-subject"
+                  value={form.asunto}
+                  onChange={(event) => setForm((previous) => ({ ...previous, asunto: event.target.value }))}
+                  placeholder="Una idea para {{empresa}}"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Tipo de envío</Label>
+                <Select
+                  value={form.emailMessageKind}
+                  onValueChange={(value) => setForm((previous) => ({ ...previous, emailMessageKind: value as EmailMessageKind }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="broadcast">Campaña comercial</SelectItem>
+                    <SelectItem value="transactional">Aviso transaccional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Contenido de la plantilla</CardTitle>
+              <CardDescription>Trabaja únicamente con el método que elegiste al comenzar.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {form.emailCreationMode === "visual" ? (
+                <VisualEmailTemplateEditor
+                  value={form.cuerpoHtml}
+                  assets={logos}
+                  onChange={handleVisualHtmlChange}
+                  onStructureChange={handleVisualStructureChange}
+                  structure={visualStructure}
+                />
+              ) : null}
+
+              {form.emailCreationMode === "html" ? (
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
+                  <div className="space-y-3">
+                    <div>
+                      <Label htmlFor="email-template-html">Código HTML</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">Escribe o pega el HTML del correo. Puedes insertar datos del prospecto desde el catálogo.</p>
+                    </div>
+                    <Textarea
+                      id="email-template-html"
+                      className="min-h-[520px] resize-y font-mono text-xs leading-5"
+                      value={form.cuerpoHtml}
+                      onChange={(event) => setForm((previous) => ({ ...previous, cuerpoHtml: event.target.value, emailFormat: "html" }))}
+                      placeholder="<p>Hola {{nombre}}...</p>"
+                    />
+                    {emailVariables.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {emailVariables.map((variable) => (
+                          <Button key={variable.clave} type="button" variant="outline" size="sm" onClick={() => appendToContent(`{{${variable.clave}}}`)}>
+                            {variable.etiqueta}
+                          </Button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="overflow-hidden rounded-lg border bg-muted/30">
+                    <div className="border-b bg-background px-4 py-3 text-sm font-medium">Vista previa</div>
+                    <iframe
+                      title="Vista previa del correo HTML"
+                      className="h-[600px] w-full bg-white"
+                      sandbox=""
+                      srcDoc={previewHtml || "<p style='font:14px sans-serif;padding:24px;color:#888'>La vista previa aparecerá aquí.</p>"}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {form.emailCreationMode === "ai" ? (
+                <TemplateAiAssistant
+                  canal="correo"
+                  campanaId={form.campanaId || null}
+                  variableValues={aiVariableValues}
+                  onApply={applyDraft}
+                />
+              ) : null}
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
+
+      {!needsEmailCreationMode && form.canal !== "correo" ? <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0 space-y-6">
           <Card>
             <CardHeader>
@@ -738,7 +1002,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
               <div className="space-y-2">
                 <Label>Canal</Label>
                 <div className="flex h-10 items-center justify-between rounded-md border bg-muted/30 px-3 text-sm">
-                  <span>{form.canal === "correo" ? "Correo electrónico" : "WhatsApp"}</span>
+                  <span>WhatsApp</span>
                   <Badge variant="secondary">Fijo por campaña</Badge>
                 </div>
               </div>
@@ -760,87 +1024,11 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             <CardHeader>
               <CardTitle className="text-base">Contenido</CardTitle>
               <CardDescription>
-                {form.canal === "correo"
-                  ? "Elige un único formato para evitar duplicar el contenido del correo."
-                  : "Redacta el mensaje que se enviará por WhatsApp."}
+                Redacta el mensaje que se enviará por WhatsApp.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              {form.canal === "correo" ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="template-subject">Asunto</Label>
-                    <Input
-                      id="template-subject"
-                      value={form.asunto}
-                      onChange={(event) => setForm((previous) => ({ ...previous, asunto: event.target.value }))}
-                      placeholder="Una idea para {{empresa}}"
-                    />
-                  </div>
-                  <div className="max-w-sm space-y-2">
-                    <Label>Tipo de correo</Label>
-                    <Select
-                      value={form.emailMessageKind}
-                      onValueChange={(value) =>
-                        setForm((previous) => ({
-                          ...previous,
-                          emailMessageKind: value as EmailMessageKind,
-                        }))
-                      }
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="transactional">Transactional · avisos operativos</SelectItem>
-                        <SelectItem value="broadcast">Broadcasts · campañas comerciales</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Esta selección define el Message Stream de Postmark para los envíos.
-                    </p>
-                  </div>
-                  <div className="max-w-sm space-y-2">
-                    <Label>Forma de creación</Label>
-                    <Select
-                      value={form.emailCreationMode}
-                      onValueChange={(value) =>
-                        setForm((previous) => ({
-                          ...previous,
-                          emailCreationMode: value as EmailCreationMode,
-                          emailFormat: "html",
-                        }))
-                      }
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="visual">Editor visual</SelectItem>
-                        <SelectItem value="html">Código HTML</SelectItem>
-                        <SelectItem value="ai">Asistente IA</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Elige cómo quieres crear y editar el contenido de este correo.
-                    </p>
-                  </div>
-                  {form.emailCreationMode === "visual" ? (
-                    <VisualEmailTemplateEditor
-                      value={form.cuerpoHtml}
-                      assets={logos}
-                      onChange={handleVisualHtmlChange}
-                    />
-                  ) : form.emailCreationMode === "html" ? (
-                    <div className="space-y-2">
-                      <Label htmlFor="template-html">HTML del correo</Label>
-                      <Textarea
-                        id="template-html"
-                        className="min-h-[440px] resize-y font-mono text-xs leading-5"
-                        value={form.cuerpoHtml}
-                        onChange={(event) => setForm((previous) => ({ ...previous, cuerpoHtml: event.target.value }))}
-                        placeholder="<p>Hola {{nombre}}...</p>"
-                      />
-                    </div>
-                  ) : null}
-                </>
-              ) : (
+              {
                 <>
                   <div className="grid gap-5 sm:grid-cols-2">
                     <div className="space-y-2">
@@ -868,7 +1056,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                     <Textarea id="whatsapp-body" className="min-h-[360px] resize-y" value={form.cuerpoTexto} onChange={(event) => setForm((previous) => ({ ...previous, cuerpoTexto: event.target.value }))} placeholder="Hola {{nombre}}, ..." />
                   </div>
                 </>
-              )}
+              }
             </CardContent>
           </Card>
 
@@ -1178,9 +1366,9 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             />
           </aside>
         ) : null}
-      </div>
+      </div> : null}
 
-      <Card>
+      {!needsEmailCreationMode && form.canal !== "correo" ? <Card>
         <CardHeader>
           <CardTitle className="text-base">Vista previa de la plantilla</CardTitle>
           <CardDescription>
@@ -1198,7 +1386,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
               {previewError} Se muestran valores de ejemplo para que puedas revisar el diseño.
             </p>
           ) : null}
-          {form.canal === "correo" && form.emailFormat === "html" ? (
+          {(form.canal as Channel) === "correo" && form.emailFormat === "html" ? (
             <div className="overflow-auto rounded-lg border bg-muted/40 p-3 sm:p-6">
               <iframe
                 title="Vista previa completa del correo"
@@ -1218,7 +1406,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card> : null}
     </div>
   )
 }

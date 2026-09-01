@@ -22024,12 +22024,15 @@ class CRMRepository:
         *,
         usuario_token: str,
         canal: str | None = None,
+        campana_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
         """Obtiene plantillas de contacto opcionalmente filtradas por canal."""
 
         params: dict[str, str] = {"select": "*"}
         if canal:
             params["canal"] = f"eq.{canal}"
+        if campana_id:
+            params["campana_id"] = f"eq.{campana_id}"
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/prospeccion_contacto_templates",
@@ -22339,6 +22342,240 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"contact_template_invalid:{row!r}")
         return row
+
+    async def list_contact_template_versions(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        template_id: UUID,
+    ) -> list[dict[str, Any]]:
+        """Lista las versiones de una plantilla dentro del tenant actual."""
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_plantilla_versiones",
+            token=usuario_token,
+            params={
+                "select": "*",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "template_id": f"eq.{template_id}",
+                "order": "numero.desc",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_template_versions_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def get_contact_template_version_tree(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        template_id: UUID,
+        version_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Obtiene una versión y su árbol visual normalizado."""
+
+        versions = await self.list_contact_template_versions(
+            usuario_token=usuario_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+        )
+        version = next((row for row in versions if str(row.get("id")) == str(version_id)), None)
+        if not version:
+            return None
+        block_response = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_plantilla_version_bloques",
+            token=usuario_token,
+            params={
+                "select": "*",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "version_id": f"eq.{version_id}",
+                "order": "orden.asc",
+            },
+        )
+        blocks = block_response.json() or []
+        if not isinstance(blocks, list):
+            raise CRMRepositoryError("contact_template_blocks_invalid")
+        block_rows = [row for row in blocks if isinstance(row, dict)]
+        block_ids = [str(row["id"]) for row in block_rows if row.get("id")]
+        columns: list[dict[str, Any]] = []
+        if block_ids:
+            column_response = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_plantilla_bloque_columnas",
+                token=usuario_token,
+                params={
+                    "select": "*",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "bloque_id": f"in.({','.join(block_ids)})",
+                    "order": "orden.asc",
+                },
+            )
+            raw_columns = column_response.json() or []
+            if not isinstance(raw_columns, list):
+                raise CRMRepositoryError("contact_template_columns_invalid")
+            columns = [row for row in raw_columns if isinstance(row, dict)]
+        column_ids = [str(row["id"]) for row in columns if row.get("id")]
+        elements: list[dict[str, Any]] = []
+        if column_ids:
+            element_response = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_plantilla_columna_elementos",
+                token=usuario_token,
+                params={
+                    "select": "*",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "columna_id": f"in.({','.join(column_ids)})",
+                    "order": "orden.asc",
+                },
+            )
+            raw_elements = element_response.json() or []
+            if not isinstance(raw_elements, list):
+                raise CRMRepositoryError("contact_template_elements_invalid")
+            elements = [row for row in raw_elements if isinstance(row, dict)]
+        elements_by_column: dict[str, list[dict[str, Any]]] = {}
+        for element in elements:
+            elements_by_column.setdefault(str(element.get("columna_id")), []).append(element)
+        columns_by_block: dict[str, list[dict[str, Any]]] = {}
+        for column in columns:
+            row = dict(column)
+            row["elementos"] = elements_by_column.get(str(column.get("id")), [])
+            columns_by_block.setdefault(str(column.get("bloque_id")), []).append(row)
+        tree_blocks: list[dict[str, Any]] = []
+        for block in block_rows:
+            row = dict(block)
+            row["columnas"] = columns_by_block.get(str(block.get("id")), [])
+            tree_blocks.append(row)
+        return {"version": version, "bloques": tree_blocks}
+
+    async def create_contact_template_version(
+        self,
+        *,
+        usuario_token: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Crea una versión validada por las relaciones RLS/FK de Supabase."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_plantilla_versiones",
+            token=usuario_token,
+            json=[payload],
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("contact_template_version_create_failed")
+        return data[0]
+
+    async def replace_contact_template_version_blocks(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        version_id: UUID,
+        blocks: Sequence[dict[str, Any]],
+    ) -> None:
+        """Reemplaza el árbol de bloques de una versión concreta."""
+
+        base_params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "version_id": f"eq.{version_id}",
+        }
+        await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_plantilla_version_bloques",
+            token=usuario_token,
+            params=base_params,
+        )
+        for block in blocks:
+            block_payload = {
+                "organizacion_id": str(organizacion_id),
+                "version_id": str(version_id),
+                "orden": block["orden"],
+                "tipo_bloque": block["tipo_bloque"],
+                "titulo": block.get("titulo"),
+                "contenido": block.get("contenido"),
+                "destino_url": block.get("destino_url"),
+                "logo_id": block.get("logo_id"),
+            }
+            response = await self._request_with_user(
+                "POST",
+                "/rest/v1/prospeccion_plantilla_version_bloques",
+                token=usuario_token,
+                json=[block_payload],
+                prefer="return=representation",
+            )
+            rows = response.json() or []
+            if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+                raise CRMRepositoryError("contact_template_block_create_failed")
+            block_id = rows[0].get("id")
+            for column in block.get("columnas", []):
+                column_response = await self._request_with_user(
+                    "POST",
+                    "/rest/v1/prospeccion_plantilla_bloque_columnas",
+                    token=usuario_token,
+                    json=[{
+                        "organizacion_id": str(organizacion_id),
+                        "bloque_id": block_id,
+                        "orden": column["orden"],
+                        "ancho_porcentaje": column["ancho_porcentaje"],
+                    }],
+                    prefer="return=representation",
+                )
+                column_rows = column_response.json() or []
+                if not isinstance(column_rows, list) or not column_rows or not isinstance(column_rows[0], dict):
+                    raise CRMRepositoryError("contact_template_column_create_failed")
+                column_id = column_rows[0].get("id")
+                elements = [
+                    {
+                        "organizacion_id": str(organizacion_id),
+                        "columna_id": column_id,
+                        "orden": element["orden"],
+                        "tipo_elemento": element["tipo_elemento"],
+                        "contenido": element.get("contenido"),
+                        "destino_url": element.get("destino_url"),
+                        "logo_id": element.get("logo_id"),
+                    }
+                    for element in column.get("elementos", [])
+                ]
+                if elements:
+                    await self._request_with_user(
+                        "POST",
+                        "/rest/v1/prospeccion_plantilla_columna_elementos",
+                        token=usuario_token,
+                        json=elements,
+                        prefer="return=minimal",
+                    )
+
+    async def publish_contact_template_version(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        template_id: UUID,
+        version_id: UUID,
+    ) -> dict[str, Any]:
+        """Publica una versión mediante la función transaccional tenant-safe."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/publicar_prospeccion_plantilla_version",
+            token=usuario_token,
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_template_id": str(template_id),
+                "p_version_id": str(version_id),
+            },
+        )
+        data = resp.json() or {}
+        if not isinstance(data, dict) or not data.get("id"):
+            raise CRMRepositoryError("contact_template_version_publish_failed")
+        return data
 
     async def create_contact_template(
         self,

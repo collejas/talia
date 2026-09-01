@@ -536,6 +536,8 @@ export type ContactoBatchResumen = {
 export type ContactoTemplate = {
   id: string
   canal: "correo" | "whatsapp" | "llamada"
+  campana_id?: string | null
+  version_activa_id?: string | null
   email_creation_mode?: "visual" | "html" | "ai" | null
   email_message_kind?: "transactional" | "broadcast" | null
   slug: string
@@ -570,6 +572,22 @@ export type ContactoTemplateImagen = {
   logo_id: string
   nombre?: string | null
   file_url?: string | null
+}
+
+export type ContactoTemplateVersion = {
+  id: string
+  organizacion_id: string
+  template_id: string
+  numero: number
+  estado: "borrador" | "probada" | "publicada" | "archivada"
+  metodo_creacion: "visual" | "html" | "ai"
+  asunto?: string | null
+  cuerpo_texto?: string | null
+  cuerpo_html?: string | null
+  estilo_diseno?: string | null
+  creado_en?: string | null
+  actualizado_en?: string | null
+  publicado_en?: string | null
 }
 
 export type WhatsProspTemplateInput = {
@@ -1798,6 +1816,62 @@ export async function updateContactoTemplate(
     method: "PATCH",
     body: JSON.stringify(payload),
   })
+}
+
+export async function listContactoTemplateVersions(templateId: string) {
+  return requestJson<{ ok: boolean; items: ContactoTemplateVersion[] }>(
+    `/api/prospeccion/contacto/templates/${templateId}/versions`,
+  )
+}
+
+export async function createContactoTemplateVersion(
+  templateId: string,
+  payload: {
+    metodo_creacion: "visual" | "html" | "ai"
+    asunto?: string | null
+    cuerpo_texto?: string | null
+    cuerpo_html?: string | null
+    estilo_diseno?: string | null
+    bloques?: Array<{
+      orden: number
+      tipo_bloque: "texto" | "imagen" | "boton" | "separador" | "espacio" | "columnas" | "firma"
+      titulo?: string | null
+      contenido?: string | null
+      destino_url?: string | null
+      logo_id?: string | null
+      columnas?: Array<{
+        orden: 0 | 1
+        ancho_porcentaje: number
+        elementos?: Array<{
+          orden: number
+          tipo_elemento: "texto" | "imagen" | "boton"
+          contenido?: string | null
+          destino_url?: string | null
+          logo_id?: string | null
+        }>
+      }>
+    }>
+  },
+) {
+  return requestJson<{ ok: boolean; version: ContactoTemplateVersion }>(
+    `/api/prospeccion/contacto/templates/${templateId}/versions`,
+    { method: "POST", body: JSON.stringify(payload) },
+  )
+}
+
+export async function publishContactoTemplateVersion(templateId: string, versionId: string) {
+  return requestJson<{ ok: boolean; version: ContactoTemplateVersion }>(
+    `/api/prospeccion/contacto/templates/${templateId}/versions/${versionId}/publish`,
+    { method: "POST" },
+  )
+}
+
+export async function getContactoTemplateVersionTree(templateId: string, versionId: string) {
+  return requestJson<{
+    ok: boolean
+    version: ContactoTemplateVersion
+    bloques: Array<Record<string, unknown>>
+  }>(`/api/prospeccion/contacto/templates/${templateId}/versions/${versionId}`)
 }
 
 export async function deleteContactoTemplate(templateId: string) {

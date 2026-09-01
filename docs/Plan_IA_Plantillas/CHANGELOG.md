@@ -39,11 +39,146 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
 ### Cambios realizados
 
 - Se agregó la columna explícita `email_creation_mode` a las plantillas.
+- Se agregó la columna explícita `campana_id` con relación a `campanas`, para que la plantilla pertenezca realmente a la campaña seleccionada y no dependa de `metadata`.
+- Se migraron las asociaciones históricas encontradas en `metadata.campana_id`.
 - Se aplicó la migración en Supabase y se inicializaron plantillas existentes con `html` cuando ya tenían HTML y `visual` en los demás casos.
 - Se agregaron los valores `visual`, `html` y `ai` al contrato FastAPI y al cliente TypeScript.
 - Se agregó el selector de modo en el editor de plantillas.
 - Se montó un Editor visual inicial separado, basado en `REFERENCIA_EDITOR_VISUAL.html`.
 - El Editor visual incluye biblioteca de bloques, lienzo, selección de bloque, inspector, variables, imágenes y vista escritorio/móvil.
+
+## 2026-08-31 — Botones y columnas editables en el Editor visual
+
+### Cambios realizados
+
+- Los bloques de botón ahora permiten editar el texto visible.
+- Se agregó selección de CTA/enlace disponible y captura de enlace personalizado.
+- Las columnas ahora conservan dos anchos configurables y ajustan
+  automáticamente la columna complementaria para mantener el 100%.
+- Cada columna permite agregar y editar elementos internos de texto, botón o
+  imagen, así como eliminarlos.
+- La estructura de columnas y sus elementos se serializa al HTML guardado de la
+  plantilla, sin exponer al usuario la estructura técnica.
+
+### Validación
+
+- TypeScript: correcto.
+- ESLint: correcto.
+- React Doctor: 100/100.
+- `git diff --check`: correcto.
+
+## 2026-08-31 — Inicio de reconstrucción del dominio de plantillas
+
+### Cambios realizados
+
+- Se documentó el rediseño completo alrededor del flujo campaña → canal →
+  plantilla → versión.
+- Se creó el dominio normalizado de versiones editables y publicables.
+- Se crearon tablas explícitas para bloques, columnas y elementos internos.
+- Se agregó `version_activa_id` a la plantilla para identificar la versión que
+  utilizará el envío.
+- Se migró cada plantilla existente a una primera versión conservando asunto,
+  texto, HTML, método de creación y estado activo.
+- Se agregaron claves foráneas, índices, restricciones de orden, tipos, anchos
+  de columnas y políticas RLS por organización.
+
+### Validación
+
+- Migración aplicada correctamente en Supabase.
+- Se verificaron 62 plantillas con versión activa.
+
+### Siguiente fase
+
+- Exponer el contrato API de versiones y publicación.
+- Conectar el editor visual al modelo estructurado.
+- Rehacer la pantalla de plantillas de cada campaña.
+
+## 2026-08-31 — Primer contrato API de versiones
+
+### Cambios realizados
+
+- Se agregó el endpoint tenant-aware para listar versiones de una plantilla.
+- Se agregó el endpoint para crear borradores sin alterar la versión publicada.
+- Se agregó una función transaccional y endpoint de publicación que archiva la
+  versión anterior y actualiza `version_activa_id`.
+- Se validó que la plantilla pertenezca a la organización autenticada antes de
+  consultar o crear versiones.
+- Se documentó que la publicación será una operación posterior, separada y
+  transaccional.
+
+### Validación
+
+- FastAPI/Python: compilación correcta.
+- `git diff --check`: correcto.
+
+## 2026-08-31 — Persistencia del árbol visual de bloques
+
+### Cambios realizados
+
+- El editor visual ahora emite, además del HTML, su estructura de bloques.
+- El guardado de una versión transforma esa estructura al contrato explícito de
+  bloques, columnas y elementos internos.
+- Se validan tipos de bloque, orden, ancho de columnas, destinos e imágenes con
+  Pydantic antes de persistir.
+- El HTML continúa guardándose como resultado renderizado para mantener la
+  compatibilidad del sender actual.
+- Al abrir una plantilla con versión activa, el editor solicita y reconstruye
+  el árbol de bloques, columnas y elementos guardado.
+
+### Validación
+
+- TypeScript: correcto.
+- Prueba de validación Pydantic para bloque de columnas: correcta.
+- Python: compilación correcta.
+- `git diff --check`: correcto.
+
+### Siguiente fase
+
+- Leer el árbol estructurado al abrir una versión.
+- Reemplazar el HTML plano heredado únicamente cuando exista estructura visual.
+- Completar el workspace de campaña y la publicación desde la revisión final.
+
+## 2026-08-31 — Centro de plantillas por campaña
+
+### Cambios realizados
+
+- La acción `Plantillas` de una campaña ahora abre un centro de trabajo propio.
+- El centro muestra las plantillas asociadas al canal de la campaña, asunto,
+  tipo, estado y cantidad de versiones.
+- Se agregaron acciones de editar, consultar versiones y revisar/publicar.
+- La creación de una plantilla continúa iniciando desde la campaña seleccionada.
+- El centro permite expandir el historial de versiones y consultar una preview
+  aislada de cada versión HTML.
+- Los borradores pueden publicarse directamente desde el historial mediante la
+  operación transaccional tenant-safe.
+
+### Validación
+
+- TypeScript: correcto.
+- React Doctor: 100/100.
+- ESLint: 0 errores; warnings preexistentes.
+- `git diff --check`: correcto.
+
+## 2026-08-31 — Corrección del BFF de versiones
+
+### Cambios realizados
+
+- Se agregaron las rutas dinámicas de Next.js que faltaban para el contrato de
+  versiones:
+  - Listar versiones.
+  - Consultar una versión con su árbol visual.
+  - Crear versiones.
+  - Publicar una versión.
+- Las rutas reenvían la sesión del usuario mediante el proxy existente y no
+  exponen credenciales al navegador.
+
+### Diagnóstico
+
+- El `404` observado en `talia.mx` era una página HTML de Next.js, no un error
+  del backend ni de Supabase: la ruta BFF no existía en el release desplegado.
+- El código local ya compila y React Doctor marca 100/100.
+- Falta desplegar frontend y backend para que la corrección sea visible en
+  producción.
 
 ### Validación
 
@@ -537,3 +672,12 @@ Cada avance debe registrar:
 
 - Se agruparon las secciones **Contexto empresarial y sistema visual** y **Estilo de diseño** dentro de la pestaña **Imagen empresarial** en `settings/variables`.
 - La pestaña quedó como sección principal de identidad comercial, visual y composiciones disponibles para el asistente.
+# 2026-09-01 — Simplificación del creador de plantillas de correo
+
+- Se separó visualmente el flujo de `correo` del editor legado de WhatsApp.
+- Al crear una plantilla de correo solo se muestran: campaña asociada, datos básicos del correo y la opción de creación elegida.
+- Se eliminaron del flujo de correo las tarjetas duplicadas de personalización, imágenes, enlaces y vista previa heredadas.
+- El área nueva ocupa todo el ancho disponible; el ancho limitado queda únicamente dentro del lienzo para representar el correo como lo recibirá el destinatario.
+- El asistente visual conserva bloques, variables, imágenes, CTA y columnas editables; el asistente IA queda visible solo cuando se selecciona ese modo.
+- Las variables del asistente se muestran con etiquetas comprensibles y descripción, sin claves técnicas ni tipo de dato.
+- Se retiraron botones visuales sin comportamiento real del editor visual; guardar y publicar quedan en la barra principal del flujo.

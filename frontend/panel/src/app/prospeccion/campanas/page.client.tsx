@@ -299,7 +299,9 @@ export function CampanasMetricsClient() {
       const nextTemplateCounts: Record<string, number> = {}
       ;(templatesResponse.items ?? []).forEach((template) => {
         const metadata = template?.metadata && typeof template.metadata === "object" ? template.metadata : {}
-        const campanaId = typeof metadata["campana_id"] === "string" ? metadata["campana_id"].trim() : ""
+        const campanaId =
+          (typeof template.campana_id === "string" && template.campana_id.trim()) ||
+          (typeof metadata["campana_id"] === "string" ? metadata["campana_id"].trim() : "")
         if (!campanaId) return
         nextTemplateCounts[campanaId] = (nextTemplateCounts[campanaId] ?? 0) + 1
       })
@@ -1227,7 +1229,7 @@ ${secondCellHtml}
 
   const handleManageTemplates = useCallback(
     (campanaId: string) => {
-      router.push(`/prospeccion/campanas/plantillas/nueva?campana_id=${encodeURIComponent(campanaId)}`)
+      router.push(`/prospeccion/campanas/plantillas?campana_id=${encodeURIComponent(campanaId)}`)
     },
     [router]
   )

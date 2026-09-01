@@ -201,7 +201,9 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
               />
               <span>
                 <span className="block font-medium">{variable.etiqueta}</span>
-                <span className="block text-[10px] text-muted-foreground">{`{{${variable.clave}}}`} · {variable.tipo_dato}</span>
+                {variable.descripcion ? (
+                  <span className="block text-[10px] text-muted-foreground">{variable.descripcion}</span>
+                ) : null}
                 {Object.hasOwn(variableValues, variable.clave) && !variableValues[variable.clave]?.trim() ? (
                   <span className="block text-[10px] text-amber-700">Configura primero este enlace.</span>
                 ) : null}
