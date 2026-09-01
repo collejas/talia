@@ -701,3 +701,4 @@ Cada avance debe registrar:
 - El asistente visual conserva bloques, variables, imágenes, CTA y columnas editables; el asistente IA queda visible solo cuando se selecciona ese modo.
 - Las variables del asistente se muestran con etiquetas comprensibles y descripción, sin claves técnicas ni tipo de dato.
 - Se retiraron botones visuales sin comportamiento real del editor visual; guardar y publicar quedan en la barra principal del flujo.
+- La vista previa de imágenes dentro de columnas ahora muestra el asset seleccionado y lo ajusta al ancho de la columna sin deformarlo ni desbordarse.

@@ -103,6 +103,30 @@ function blockToHtml(block: Block, assets: LogoAsset[]): string {
   return `<div style="margin:5px 0;"><p style="font-size:15px;line-height:1.7;color:#4d5361;white-space:pre-line;">${escapeHtml(block.content).replaceAll("\n", "<br />")}</p></div>`
 }
 
+function columnElementPreview(element: ColumnElement, assets: LogoAsset[]) {
+  if (element.kind === "image") {
+    const asset = assets.find((item) => item.id === element.imageId)
+    return asset ? (
+      <Image
+        src={asset.file_url}
+        alt={asset.nombre}
+        width={600}
+        height={240}
+        unoptimized
+        className="block h-auto max-h-40 w-full rounded object-contain"
+      />
+    ) : (
+      <div className="grid h-24 place-items-center rounded bg-slate-100 px-2 text-center text-[10px] text-slate-400">
+        Selecciona una imagen
+      </div>
+    )
+  }
+  if (element.kind === "button") {
+    return <span className="inline-flex rounded bg-[#171923] px-2 py-1 text-[10px] font-bold text-white">{element.content}</span>
+  }
+  return <span className="whitespace-pre-line">{element.content}</span>
+}
+
 type Props = {
   value: string
   assets: LogoAsset[]
@@ -278,7 +302,7 @@ export function VisualEmailTemplateEditor({ value, assets, websiteBaseUrl = "", 
           <div className={`mx-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_40px_rgba(25,30,55,.08)] transition-all sm:p-8 ${mobile ? "max-w-[390px]" : "max-w-[720px]"}`}>
             {blocks.map((block) => <button key={block.id} type="button" className={`group relative mb-2 block w-full rounded-xl border p-3 text-left ${selected?.id === block.id ? "border-violet-500 bg-violet-50/40 ring-4 ring-violet-500/10" : "border-transparent hover:border-violet-200"}`} onClick={() => setSelectedId(block.id)}>
               {selected?.id === block.id ? <span className="absolute -right-1 -top-3 rounded-md border bg-white px-1.5 py-1 text-[10px] shadow-sm">⋮⋮</span> : null}
-              {block.kind === "image" ? (block.imageId && assets.find((asset) => asset.id === block.imageId) ? <Image src={assets.find((asset) => asset.id === block.imageId)?.file_url ?? ""} alt="" width={600} height={180} className="mx-auto max-h-40 w-full object-contain" unoptimized /> : <div className="grid h-28 place-items-center rounded-xl bg-slate-100 text-xs text-slate-400">Logo o fotografía</div>) : block.kind === "divider" ? <div className="h-px bg-slate-200" /> : block.kind === "space" ? <div className="h-10" /> : block.kind === "button" ? <div className="text-center"><span className="inline-flex rounded-xl bg-[#171923] px-5 py-3 text-sm font-bold text-white">{block.content}</span></div> : block.kind === "columns" ? <div className="grid gap-2" style={{ gridTemplateColumns: `${block.columns?.[0]?.width ?? 50}% ${block.columns?.[1]?.width ?? 50}%` }}>{(block.columns ?? []).map((column) => <div key={column.id} className="min-h-16 rounded-xl border bg-slate-50 p-3 text-xs text-slate-600">{column.elements.map((element) => <div key={element.id} className="mb-2 last:mb-0">{element.kind === "button" ? <span className="inline-flex rounded bg-[#171923] px-2 py-1 text-[10px] font-bold text-white">{element.content}</span> : element.kind === "image" ? <span className="text-slate-400">Imagen</span> : element.content}</div>)}</div>)}</div> : <div><h3 className="text-xl font-bold">{block.title}</h3><p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{block.content}</p></div>}
+              {block.kind === "image" ? (block.imageId && assets.find((asset) => asset.id === block.imageId) ? <Image src={assets.find((asset) => asset.id === block.imageId)?.file_url ?? ""} alt="" width={600} height={180} className="mx-auto max-h-40 w-full object-contain" unoptimized /> : <div className="grid h-28 place-items-center rounded-xl bg-slate-100 text-xs text-slate-400">Logo o fotografía</div>) : block.kind === "divider" ? <div className="h-px bg-slate-200" /> : block.kind === "space" ? <div className="h-10" /> : block.kind === "button" ? <div className="text-center"><span className="inline-flex rounded-xl bg-[#171923] px-5 py-3 text-sm font-bold text-white">{block.content}</span></div> : block.kind === "columns" ? <div className="grid gap-2" style={{ gridTemplateColumns: `${block.columns?.[0]?.width ?? 50}% ${block.columns?.[1]?.width ?? 50}%` }}>{(block.columns ?? []).map((column) => <div key={column.id} className="min-h-16 rounded-xl border bg-slate-50 p-3 text-xs text-slate-600">{column.elements.map((element) => <div key={element.id} className="mb-2 last:mb-0">{columnElementPreview(element, assets)}</div>)}</div>)}</div> : <div><h3 className="text-xl font-bold">{block.title}</h3><p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{block.content}</p></div>}
             </button>)}
           </div>
         </section>
