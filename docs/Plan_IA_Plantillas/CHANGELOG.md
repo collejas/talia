@@ -50,6 +50,17 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
   asunto y dirige allí la variable; no se agrega un catálogo duplicado debajo
   del campo.
 
+## 2026-09-01 — Destinos de enlaces en Código HTML
+
+### Cambios realizados
+
+- El modo Código HTML utiliza un selector único de destino: Landing principal,
+  Agenda/demo, CTA de WhatsApp o Página interna.
+- Los CTA de WhatsApp se seleccionan desde las reglas activas de atribución y
+  conservan su frase; los enlaces web reciben seguimiento UTM.
+- Se eliminaron de la vista los controles duplicados de inserción para mantener
+  un flujo simple y consistente con el Editor visual.
+
 ### Documentado
 
 - Se definió una selección inicial con tres opciones: **Editor visual**, **Código HTML** y **Asistente IA**.

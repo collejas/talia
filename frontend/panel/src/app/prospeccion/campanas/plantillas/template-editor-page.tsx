@@ -40,6 +40,7 @@ type Channel = "correo" | "whatsapp"
 type EmailFormat = "html" | "texto"
 type EmailCreationMode = "visual" | "html" | "ai"
 type EmailMessageKind = "transactional" | "broadcast"
+type HtmlLinkDestination = "landing" | "agenda" | "whatsapp" | "internal"
 type LogoAsset = { id: string; nombre: string; file_url: string }
 type EmailVariable = { clave: string; etiqueta: string; descripcion?: string }
 type VisualStructureElement = { id?: string; kind: string; content?: string; href?: string; imageId?: string }
@@ -173,6 +174,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
   const [waRules, setWaRules] = useState<WhatsAppAtribucionRule[]>([])
   const [waRulesLoading, setWaRulesLoading] = useState(false)
   const [selectedWaRuleId, setSelectedWaRuleId] = useState("")
+  const [htmlLinkDestination, setHtmlLinkDestination] = useState<HtmlLinkDestination>("landing")
   const [waLinkLabel, setWaLinkLabel] = useState("Escríbenos por WhatsApp")
   const [tenantPhone, setTenantPhone] = useState("")
   const [previewProspecto, setPreviewProspecto] = useState<ProspectoItem | null>(null)
@@ -486,16 +488,31 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
     return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
   }, [])
 
+  const addEmailTracking = useCallback((rawUrl: string) => {
+    try {
+      const base = normalizeUrl(form.websiteBaseUrl)
+      const url = new URL(rawUrl, base)
+      url.searchParams.set("utm_source", "prospeccion")
+      url.searchParams.set("utm_medium", "email")
+      url.searchParams.set("utm_campaign", form.campanaId)
+      url.searchParams.set("utm_content", "html_link")
+      return url.toString()
+    } catch {
+      return rawUrl
+    }
+  }, [form.campanaId, form.websiteBaseUrl, normalizeUrl])
+
   const insertLink = useCallback((label: string, url: string) => {
     const safeLabel = label.trim() || url
     if (!url) return setError("Escribe o configura una URL antes de insertar el enlace.")
     if (form.canal === "correo" && form.emailFormat === "html") {
-      appendToContent(`<a href="${url}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`)
+      const href = url.startsWith("{{") || /^https:\/\/wa\.me\//i.test(url) ? url : addEmailTracking(url)
+      appendToContent(`<a href="${href}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`)
     } else {
       appendToContent(`${safeLabel}: ${url}`)
     }
     setNotice("Enlace insertado en el contenido.")
-  }, [appendToContent, form.canal, form.emailFormat])
+  }, [addEmailTracking, appendToContent, form.canal, form.emailFormat])
 
   const previewVariableValues = useMemo(() => {
     const prospecto = previewProspecto
@@ -619,6 +636,29 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
       return ""
     }
   }, [form.internalLinkUrl, form.websiteBaseUrl, normalizeUrl])
+
+  const htmlLinkLabel = htmlLinkDestination === "landing"
+    ? form.websiteLinkLabel
+    : htmlLinkDestination === "agenda"
+      ? form.demoLinkLabel
+      : htmlLinkDestination === "whatsapp"
+        ? waLinkLabel
+        : form.internalLinkLabel
+
+  const htmlLinkHref = htmlLinkDestination === "landing"
+    ? "{{website_url}}"
+    : htmlLinkDestination === "agenda"
+      ? "{{booking_url}}"
+      : htmlLinkDestination === "whatsapp"
+        ? waMeUrl
+        : form.internalLinkUrl.trim()
+
+  const updateHtmlLinkLabel = (label: string) => {
+    if (htmlLinkDestination === "landing") setForm((previous) => ({ ...previous, websiteLinkLabel: label }))
+    else if (htmlLinkDestination === "agenda") setForm((previous) => ({ ...previous, demoLinkLabel: label }))
+    else if (htmlLinkDestination === "whatsapp") setWaLinkLabel(label)
+    else setForm((previous) => ({ ...previous, internalLinkLabel: label }))
+  }
 
   const aiVariableValues = useMemo(
     () => ({ whatsapp_url: waMeUrl, custom_url: customAiUrl }),
@@ -1089,6 +1129,60 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                 </div>
               ) : null}
 
+              {form.emailCreationMode === "html" ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Enlaces y llamadas a la acción</CardTitle>
+                    <CardDescription>Elige un destino y agrégalo directamente al código HTML.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="html-website-base-url">URL principal del sitio</Label>
+                      <Input id="html-website-base-url" value={form.websiteBaseUrl} onChange={(event) => setForm((previous) => ({ ...previous, websiteBaseUrl: event.target.value }))} placeholder="https://tu-dominio.com" />
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] md:items-end">
+                      <div className="space-y-2">
+                        <Label>Destino del enlace</Label>
+                        <Select value={htmlLinkDestination} onValueChange={(value) => setHtmlLinkDestination(value as HtmlLinkDestination)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="landing">Landing principal</SelectItem>
+                            <SelectItem value="agenda">Agenda / demo</SelectItem>
+                            <SelectItem value="whatsapp">CTA de WhatsApp</SelectItem>
+                            <SelectItem value="internal">Página interna</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="html-link-label-inline">Texto visible del enlace</Label>
+                        <Input id="html-link-label-inline" value={htmlLinkLabel} onChange={(event) => updateHtmlLinkLabel(event.target.value)} placeholder="Texto del enlace" />
+                      </div>
+                      <Button type="button" variant="outline" disabled={!htmlLinkHref} onClick={() => insertLink(htmlLinkLabel, htmlLinkHref)}>Insertar enlace</Button>
+                    </div>
+                    {htmlLinkDestination === "whatsapp" ? (
+                      <div className="space-y-2 rounded-lg border p-4">
+                        <Label>CTA de WhatsApp</Label>
+                        <Select value={selectedWaRuleId || "__none__"} onValueChange={(selected) => setSelectedWaRuleId(selected === "__none__" ? "" : selected)}>
+                          <SelectTrigger><SelectValue placeholder={waRulesLoading ? "Cargando CTAs..." : "Selecciona una frase"} /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Sin frase</SelectItem>
+                            {waRules.map((rule) => <SelectItem key={rule.id} value={rule.id}>{(rule.nombre_regla || "Regla") + " · " + (rule.frase_objetivo || "")}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">La frase se conserva para identificar el origen en WhatsApp; no se agregan UTM.</p>
+                      </div>
+                    ) : null}
+                    {htmlLinkDestination === "internal" ? (
+                      <div className="space-y-2 rounded-lg border p-4">
+                        <Label htmlFor="html-internal-link-url">Ruta o URL de la página interna</Label>
+                        <Input id="html-internal-link-url" value={form.internalLinkUrl} onChange={(event) => setForm((previous) => ({ ...previous, internalLinkUrl: event.target.value }))} placeholder="/precios o https://..." />
+                        <p className="text-xs text-muted-foreground">Las URL web reciben seguimiento UTM; las rutas relativas usan el dominio principal del tenant.</p>
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              ) : null}
+
               {form.emailCreationMode === "ai" ? (
                 <TemplateAiAssistant
                   canal="correo"
@@ -1364,7 +1458,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="hidden">
             <CardHeader>
               <CardTitle className="text-base">Enlaces y llamadas a la acción</CardTitle>
               <CardDescription>
@@ -1385,7 +1479,49 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                 </p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] md:items-end">
+                <div className="space-y-2">
+                  <Label>Destino del enlace</Label>
+                  <Select value={htmlLinkDestination} onValueChange={(value) => setHtmlLinkDestination(value as HtmlLinkDestination)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="landing">Landing principal</SelectItem>
+                      <SelectItem value="agenda">Agenda / demo</SelectItem>
+                      <SelectItem value="whatsapp">CTA de WhatsApp</SelectItem>
+                      <SelectItem value="internal">Página interna</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="html-link-label">Texto visible del enlace</Label>
+                  <Input id="html-link-label" value={htmlLinkLabel} onChange={(event) => updateHtmlLinkLabel(event.target.value)} placeholder="Texto del enlace" />
+                </div>
+                <Button type="button" variant="outline" disabled={!htmlLinkHref} onClick={() => insertLink(htmlLinkLabel, htmlLinkHref)}>Insertar enlace</Button>
+              </div>
+
+              {htmlLinkDestination === "whatsapp" ? (
+                <div className="space-y-2 rounded-lg border p-4">
+                  <Label>CTA de WhatsApp</Label>
+                  <Select value={selectedWaRuleId || "__none__"} onValueChange={(selected) => setSelectedWaRuleId(selected === "__none__" ? "" : selected)}>
+                    <SelectTrigger><SelectValue placeholder={waRulesLoading ? "Cargando CTAs..." : "Selecciona una frase"} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin frase</SelectItem>
+                      {waRules.map((rule) => <SelectItem key={rule.id} value={rule.id}>{(rule.nombre_regla || "Regla") + " · " + (rule.frase_objetivo || "")}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">WhatsApp conserva la frase para identificar el origen; no se le agregan parámetros UTM.</p>
+                </div>
+              ) : null}
+
+              {htmlLinkDestination === "internal" ? (
+                <div className="space-y-2 rounded-lg border p-4">
+                  <Label htmlFor="internal-link-url">Ruta o URL de la página interna</Label>
+                  <Input id="internal-link-url" value={form.internalLinkUrl} onChange={(event) => setForm((previous) => ({ ...previous, internalLinkUrl: event.target.value }))} placeholder="/precios o https://..." />
+                  <p className="text-xs text-muted-foreground">Las URL web reciben seguimiento UTM; las rutas relativas usan el dominio principal del tenant.</p>
+                </div>
+              ) : null}
+
+              <div className="hidden">
                 <div className="space-y-3 rounded-lg border p-4">
                   <div className="space-y-2">
                     <Label htmlFor="website-link-label">Texto del enlace web</Label>
@@ -1415,7 +1551,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                 </div>
               </div>
 
-              <div className="rounded-lg border p-4">
+              <div className="hidden rounded-lg border p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
                   <div className="min-w-0 flex-1 space-y-2">
                     <Label>Frase de WhatsApp para captación</Label>
@@ -1448,7 +1584,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                 ) : null}
               </div>
 
-              <div className="rounded-lg border p-4">
+              <div className="hidden rounded-lg border p-4">
                 <p className="text-sm font-medium">Enlace personalizado</p>
                 <p className="mt-1 text-xs text-muted-foreground">Para páginas internas, catálogos, precios o demos específicas.</p>
                 <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] md:items-end">
