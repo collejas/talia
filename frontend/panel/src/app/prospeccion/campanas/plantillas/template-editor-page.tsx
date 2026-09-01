@@ -16,6 +16,7 @@ import { VisualEmailTemplateEditor } from "./components/visual-email-template-ed
 import {
   createContactoTemplate,
   createContactoTemplateVersion,
+  sendContactoTemplateTest,
   createWhatsProspTemplate,
   listContactoTemplates,
   listContactoTemplateVersions,
@@ -179,6 +180,8 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [testRecipient, setTestRecipient] = useState("")
+  const [testSending, setTestSending] = useState(false)
 
   const selectedCampaign = useMemo(
     () => campaigns.find((campaign) => campaign.id === form.campanaId) ?? null,
@@ -606,6 +609,32 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
     }
   }
 
+  const handleSendTest = async () => {
+    const recipient = testRecipient.trim()
+    if (!recipient) {
+      setError("Escribe el correo que recibirá la prueba.")
+      return
+    }
+    setTestSending(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const response = await sendContactoTemplateTest({
+        destinatario: recipient,
+        asunto: form.asunto.trim(),
+        cuerpo_texto: form.emailFormat === "texto" ? form.cuerpoTexto : null,
+        cuerpo_html: form.emailFormat === "html" ? form.cuerpoHtml : null,
+        campana_id: form.campanaId,
+        template_id: form.id || null,
+      })
+      setNotice(`Prueba enviada a ${response.recipient}. Variables tomadas de: ${response.sample_prospect}.`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo enviar la prueba.")
+    } finally {
+      setTestSending(false)
+    }
+  }
+
   const handleSave = async () => {
     const name = form.nombre.trim()
     const content =
@@ -806,6 +835,30 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
         <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {notice}
         </div>
+      ) : null}
+
+      {form.canal === "correo" && !needsEmailCreationMode ? (
+        <section className="rounded-xl border bg-muted/20 px-4 py-4 sm:px-5" aria-label="Enviar prueba">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <div className="min-w-0 flex-1 space-y-2">
+              <Label htmlFor="template-test-recipient">Correo que recibirá la prueba</Label>
+              <Input
+                id="template-test-recipient"
+                type="email"
+                value={testRecipient}
+                onChange={(event) => setTestRecipient(event.target.value)}
+                placeholder="tu-correo@dominio.com"
+              />
+              <p className="text-xs text-muted-foreground">
+                Se usará un prospecto aleatorio solo para sustituir las variables. El correo se enviará únicamente al destinatario que escribas.
+              </p>
+            </div>
+            <Button type="button" onClick={() => void handleSendTest()} disabled={testSending || !form.asunto.trim()}>
+              {testSending ? <IconLoader className="mr-2 size-4 animate-spin" /> : null}
+              {testSending ? "Enviando..." : "Enviar prueba por correo normal"}
+            </Button>
+          </div>
+        </section>
       ) : null}
 
       {selectedCampaign ? (

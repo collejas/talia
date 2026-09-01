@@ -1859,6 +1859,26 @@ export async function createContactoTemplateVersion(
   )
 }
 
+export async function sendContactoTemplateTest(payload: {
+  destinatario: string
+  asunto: string
+  cuerpo_texto?: string | null
+  cuerpo_html?: string | null
+  campana_id: string
+  template_id?: string | null
+}) {
+  return requestJson<{
+    ok: boolean
+    recipient: string
+    provider: string
+    provider_message_id: string
+    sample_prospect: string
+  }>("/api/prospeccion/contacto/templates/send-test", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function publishContactoTemplateVersion(templateId: string, versionId: string) {
   return requestJson<{ ok: boolean; version: ContactoTemplateVersion }>(
     `/api/prospeccion/contacto/templates/${templateId}/versions/${versionId}/publish`,

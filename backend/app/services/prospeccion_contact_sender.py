@@ -1139,6 +1139,80 @@ async def _run_envio_correo(
     )
 
 
+async def render_prospeccion_email_test(
+    *,
+    organizacion_id: UUID,
+    prospecto: dict[str, Any],
+    subject_template: str,
+    body_template: str | None,
+    body_html_template: str | None,
+    campana_id: UUID | None = None,
+    template_id: UUID | None = None,
+) -> dict[str, str | None]:
+    """Renderiza una prueba con datos de un prospecto sin iniciar un envío masivo."""
+
+    public_base_url = await tenant_runtime.get_org_public_base_url(organizacion_id=organizacion_id)
+    payload: dict[str, Any] = {
+        "metadata": {
+            "tracking_keyword": "template-test",
+            **({"campana_id": str(campana_id)} if campana_id else {}),
+            **({"template_id": str(template_id)} if template_id else {}),
+        }
+    }
+    payload = _apply_tenant_public_base_url_defaults(payload, public_base_url)
+
+    if template_id:
+        image_context = await CRMRepository().list_contact_template_image_context(
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+        )
+        if image_context:
+            metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+            metadata = {**metadata, **image_context}
+            payload["metadata"] = metadata
+
+    context = _build_placeholder_context(prospecto, payload, payload.get("metadata"))
+    tracking_url = _build_email_tracking_url(
+        context=context,
+        payload=payload,
+        prospecto_id=prospecto.get("id"),
+    )
+    context["tracking_url"] = tracking_url
+    context["website_url"] = _resolve_tracking_base_url(payload)
+    context["booking_url"] = _build_booking_url(
+        context=context,
+        payload=payload,
+        tracking_url=tracking_url,
+        prospecto_id=prospecto.get("id"),
+    )
+
+    subject = _render_template_text(subject_template, context).strip()
+    body = _render_template_text(body_template or "", context).strip()
+    if not body and body_html_template:
+        body = _extract_visible_text_from_html(
+            _render_template_text(body_html_template, context)
+        ).strip()
+    body_html: str | None = None
+    if body_html_template and body_html_template.strip():
+        body_html = _render_template_text(
+            _normalize_email_html_template(body_html_template), context
+        ).strip() or None
+        if body_html:
+            body_html = _preserve_html_line_breaks(body_html)
+            body_html = _inject_text_fallback_into_html(body_text=body, body_html=body_html)
+            body_html = _wrap_images_with_tracking_link(body_html, tracking_url)
+            body_html = _append_tracking_params_to_anchor_hrefs(body_html, tracking_url)
+
+    if not subject or not body:
+        raise ValueError("correo_payload_incompleto")
+    return {
+        "subject": subject,
+        "body": body,
+        "body_html": body_html,
+        "tracking_url": tracking_url,
+    }
+
+
 async def _postmark_enabled_for_tenant(*, organizacion_id: UUID) -> bool:
     """Resuelve el corte por tenant sin consultar ni modificar la configuración Brevo."""
 
@@ -2066,4 +2140,5 @@ __all__ = [
     "ContactEnvioResult",
     "ProspeccionContactSender",
     "contact_sender",
+    "render_prospeccion_email_test",
 ]

@@ -98,6 +98,7 @@ from app.services import (
     storage,
     tenant_runtime,
 )
+from app.services.prospeccion_contact_sender import render_prospeccion_email_test
 from app.services.high_demand_mode import high_demand_controller
 from app.services.non_critical_job_gate import should_defer_non_critical_jobs
 from app.services.channel_routing import resolve_organizacion_id
@@ -4268,6 +4269,32 @@ class ContactoTemplatePayload(BaseModel):
     activo: bool = Field(default=True)
     campana_id: UUID | None = None
     imagenes: list[ContactoTemplateImagenPayload] = Field(default_factory=list, max_length=7)
+
+
+class ContactoTemplateTestSendPayload(BaseModel):
+    """Datos del destinatario y borrador para una prueba SMTP individual."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    destinatario: str = Field(..., min_length=3, max_length=320)
+    asunto: str = Field(..., min_length=1, max_length=200)
+    cuerpo_texto: str | None = Field(default=None, max_length=4000)
+    cuerpo_html: str | None = Field(default=None, max_length=32_000)
+    campana_id: UUID
+    template_id: UUID | None = None
+
+    @field_validator("destinatario")
+    @classmethod
+    def validate_recipient(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+            raise ValueError("destinatario_email_invalido")
+        return normalized
+
+    @field_validator("asunto", "cuerpo_texto", "cuerpo_html")
+    @classmethod
+    def strip_optional_content(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
 
 
 class ContactoTemplateUpdatePayload(BaseModel):
@@ -35522,6 +35549,123 @@ async def eliminar_template_prospeccion_contacto_legacy(
             raise HTTPException(status_code=404, detail="contact_template_not_found") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/prospeccion/contacto/templates/send-test")
+async def enviar_prueba_template_prospeccion_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    payload: ContactoTemplateTestSendPayload,
+) -> dict[str, Any]:
+    """Envía una prueba individual por el SMTP operativo del tenant."""
+
+    campana = await repo.get_campaign(
+        organizacion_id=organizacion_id,
+        campana_id=payload.campana_id,
+    )
+    if not campana:
+        raise HTTPException(status_code=404, detail="campana_not_found")
+    if _clean_text(campana.get("canal")).lower() != "correo":
+        raise HTTPException(status_code=400, detail="template_test_only_for_email_campaigns")
+
+    if payload.template_id:
+        template = await repo.get_contact_template(
+            usuario_token=user_token,
+            template_id=payload.template_id,
+        )
+        if (
+            not template
+            or str(template.get("organizacion_id")) != str(organizacion_id)
+            or str(template.get("campana_id") or "") != str(payload.campana_id)
+        ):
+            raise HTTPException(status_code=404, detail="contact_template_not_found")
+
+    try:
+        _, total = await repo.list_prospectos(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            limit=1,
+            offset=0,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="test_prospect_lookup_failed") from exc
+    if total <= 0:
+        raise HTTPException(status_code=409, detail="test_prospect_required")
+
+    prospecto: dict[str, Any] | None = None
+    # La consulta conserva el orden del repositorio y solo cambia el offset,
+    # evitando cargar el catálogo completo en memoria.
+    for _attempt in range(3):
+        offset = secrets.randbelow(total)
+        try:
+            rows, _ = await repo.list_prospectos(
+                usuario_token=user_token,
+                organizacion_id=organizacion_id,
+                limit=1,
+                offset=offset,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="test_prospect_lookup_failed") from exc
+        if rows and isinstance(rows[0], dict):
+            prospecto = rows[0]
+            break
+    if not prospecto:
+        raise HTTPException(status_code=409, detail="test_prospect_unavailable")
+
+    try:
+        rendered = await render_prospeccion_email_test(
+            organizacion_id=organizacion_id,
+            prospecto=prospecto,
+            subject_template=payload.asunto or "Prueba de plantilla",
+            body_template=payload.cuerpo_texto,
+            body_html_template=payload.cuerpo_html,
+            campana_id=payload.campana_id,
+            template_id=payload.template_id,
+        )
+        mail_settings = await tenant_runtime.get_mail_runtime_settings(
+            organizacion_id=organizacion_id,
+        )
+        if not mail_settings.username or not mail_settings.password or not mail_settings.outgoing_server:
+            raise HTTPException(status_code=409, detail="smtp_configuration_incomplete")
+        headers: dict[str, str] | None = None
+        reply_to = _clean_text(getattr(mail_settings, "reply_to", None))
+        if reply_to:
+            headers = {"Reply-To": reply_to}
+        send_result = await asyncio.to_thread(
+            send_email_detailed,
+            subject=str(rendered["subject"]),
+            body_text=str(rendered["body"]),
+            body_html=rendered.get("body_html"),
+            recipients=[payload.destinatario],
+            headers=headers,
+            mail_settings=mail_settings,
+            provider_preference="smtp",
+            flow="prospeccion_template_test",
+        )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except EmailSendError as exc:
+        raise HTTPException(status_code=502, detail="test_email_send_failed") from exc
+    except (CRMRepositoryError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="test_email_render_failed") from exc
+
+    return {
+        "ok": True,
+        "recipient": payload.destinatario,
+        "provider": send_result.provider,
+        "provider_message_id": send_result.provider_message_id,
+        "sample_prospect": _clean_text(
+            prospecto.get("display_name")
+            or prospecto.get("nombre_comercial")
+            or prospecto.get("nombre")
+        )
+        or "Prospecto de ejemplo",
+    }
 
 
 @router.get("/prospeccion/contacto/templates/{template_id}/versions")

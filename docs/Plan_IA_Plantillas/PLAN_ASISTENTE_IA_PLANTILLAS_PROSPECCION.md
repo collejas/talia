@@ -91,6 +91,21 @@ variables, imágenes, usos de imagen, estilo y prompt en IA. El contenedor del
 flujo ocupará todo el ancho disponible; solo el lienzo de preview mantendrá una
 anchura acotada para representar un correo real.
 
+### 1.3 Prueba real desde el constructor
+
+El botón **Enviar prueba** utilizará el correo SMTP operativo configurado en
+`settings/variables`, dentro de **Acceso y tipo de conexión**. El destinatario
+se capturará manualmente y será el único receptor.
+
+Para sustituir las variables, el backend seleccionará un prospecto aleatorio
+perteneciente al tenant de la campaña. Ese prospecto solo será una fuente de
+datos de ejemplo: nunca será el destinatario de la prueba, no se creará un
+envío masivo y no se descontará cuota del proveedor masivo.
+
+La ruta de prueba será independiente del sender masivo y forzará SMTP. El
+flujo masivo conservará su proveedor, cuotas, streams, tracking y reglas de
+campaña actuales.
+
 ## 2. Objetivo del producto
 
 Reducir el tiempo y la dificultad para crear plantillas comerciales consistentes, sin obligar al usuario a conocer:

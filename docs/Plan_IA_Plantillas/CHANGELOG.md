@@ -702,3 +702,5 @@ Cada avance debe registrar:
 - Las variables del asistente se muestran con etiquetas comprensibles y descripción, sin claves técnicas ni tipo de dato.
 - Se retiraron botones visuales sin comportamiento real del editor visual; guardar y publicar quedan en la barra principal del flujo.
 - La vista previa de imágenes dentro de columnas ahora muestra el asset seleccionado y lo ajusta al ancho de la columna sin deformarlo ni desbordarse.
+- Se agregó el envío de prueba individual desde el constructor: el destinatario se captura manualmente, mientras las variables se renderizan con un prospecto aleatorio del tenant.
+- La prueba usa exclusivamente la configuración SMTP de `settings/variables` y `provider_preference="smtp"`; no crea envíos masivos ni pasa por Postmark.
