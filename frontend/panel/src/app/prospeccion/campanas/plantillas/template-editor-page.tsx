@@ -158,7 +158,6 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
   const router = useRouter()
   const logoFileInputRef = useRef<HTMLInputElement>(null)
   const [campaigns, setCampaigns] = useState<CrmCampaign[]>([])
-  const [templates, setTemplates] = useState<ContactoTemplate[]>([])
   const [versions, setVersions] = useState<ContactoTemplateVersion[]>([])
   const [logos, setLogos] = useState<LogoAsset[]>([])
   const [logosLoading, setLogosLoading] = useState(false)
@@ -250,8 +249,6 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
         canal: campaign.canal,
       })
       const items = Array.isArray(response?.items) ? response.items : []
-      setTemplates(items)
-
       if (templateId) {
         const template = items.find((item) => item.id === templateId)
         if (!template) throw new Error("No se encontró la plantilla dentro de la campaña seleccionada.")
@@ -731,11 +728,6 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
       }
 
       setNotice(form.canal === "correo" ? "Borrador de versión guardado correctamente." : form.id ? "Plantilla actualizada correctamente." : "Plantilla guardada correctamente.")
-      const refreshed = await listContactoTemplates({
-        campana_id: form.campanaId,
-        canal: form.canal,
-      })
-      setTemplates(Array.isArray(refreshed?.items) ? refreshed.items : [])
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudo guardar la plantilla.")
     } finally {
@@ -927,6 +919,10 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                 <VisualEmailTemplateEditor
                   value={form.cuerpoHtml}
                   assets={logos}
+                  websiteBaseUrl={form.websiteBaseUrl}
+                  whatsappRules={waRules}
+                  tenantPhone={tenantPhone}
+                  whatsappRulesLoading={waRulesLoading}
                   onChange={handleVisualHtmlChange}
                   onStructureChange={handleVisualStructureChange}
                   structure={visualStructure}

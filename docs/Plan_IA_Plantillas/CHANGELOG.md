@@ -14,6 +14,26 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
 
 ## 2026-08-31 — Tres modos de creación para correo
 
+## 2026-09-01 — Destinos de botones del Editor visual
+
+### Cambios realizados
+
+- Los botones principales y los botones dentro de columnas comparten un
+  selector de destino.
+- Se agregaron Landing principal, Agenda, Página específica de la landing y
+  WhatsApp.
+- Las páginas específicas se construyen sobre el dominio público del tenant.
+- Los CTAs de WhatsApp se cargan desde las reglas activas de atribución y se
+  conserva la frase preconfigurada dentro del enlace `wa.me`.
+- Se retiró el enlace genérico como opción para nuevos botones; los enlaces
+  existentes se conservan para no romper plantillas ya creadas.
+
+### Regla de medición
+
+- Los destinos web se procesan con el tracking UTM del envío.
+- WhatsApp conserva su mecanismo independiente de atribución por frase; no se
+  interpreta como una visita web.
+
 ### Documentado
 
 - Se definió una selección inicial con tres opciones: **Editor visual**, **Código HTML** y **Asistente IA**.
