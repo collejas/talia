@@ -158,6 +158,11 @@ function formFromTemplate(template: ContactoTemplate, campaignId: string): FormS
 export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
   const router = useRouter()
   const logoFileInputRef = useRef<HTMLInputElement>(null)
+  const subjectInputRef = useRef<HTMLInputElement>(null)
+  const subjectCursorRef = useRef({ start: 0, end: 0 })
+  const contentInputRefs = useRef<Record<"html" | "text", HTMLTextAreaElement | null>>({ html: null, text: null })
+  const contentCursorRefs = useRef<Record<"html" | "text", { start: number; end: number }>>({ html: { start: 0, end: 0 }, text: { start: 0, end: 0 } })
+  const activeContentFieldRef = useRef<"html" | "text">("text")
   const [campaigns, setCampaigns] = useState<CrmCampaign[]>([])
   const [versions, setVersions] = useState<ContactoTemplateVersion[]>([])
   const [logos, setLogos] = useState<LogoAsset[]>([])
@@ -361,14 +366,69 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
       .finally(() => setPreviewLoading(false))
   }, [loading, previewLoading, previewProspecto])
 
+  const rememberContentCursor = useCallback((field: "html" | "text", target: HTMLTextAreaElement) => {
+    activeContentFieldRef.current = field
+    contentInputRefs.current[field] = target
+    contentCursorRefs.current[field] = {
+      start: target.selectionStart ?? target.value.length,
+      end: target.selectionEnd ?? target.value.length,
+    }
+  }, [])
+
   const appendToContent = useCallback((value: string) => {
+    const field = activeContentFieldRef.current
     setForm((previous) => {
-      const field = previous.canal === "correo" && previous.emailFormat === "html" ? "cuerpoHtml" : "cuerpoTexto"
-      const current = previous[field]
-      const separator = current.trim() ? "\n" : ""
-      return { ...previous, [field]: `${current}${separator}${value}` }
+      const formField = field === "html" ? "cuerpoHtml" : "cuerpoTexto"
+      const current = previous[formField]
+      const cursor = contentCursorRefs.current[field]
+      const start = Math.max(0, Math.min(cursor.start, current.length))
+      const end = Math.max(start, Math.min(cursor.end, current.length))
+      const nextValue = `${current.slice(0, start)}${value}${current.slice(end)}`
+      const nextPosition = start + value.length
+      contentCursorRefs.current[field] = { start: nextPosition, end: nextPosition }
+      return { ...previous, [formField]: nextValue }
+    })
+    requestAnimationFrame(() => {
+      const input = contentInputRefs.current[field]
+      const cursor = contentCursorRefs.current[field]
+      if (!input) return
+      input.focus()
+      input.setSelectionRange(cursor.start, cursor.end)
     })
   }, [])
+
+  const rememberSubjectCursor = useCallback(() => {
+    const input = subjectInputRef.current
+    if (!input) return
+    subjectCursorRef.current = {
+      start: input.selectionStart ?? input.value.length,
+      end: input.selectionEnd ?? input.value.length,
+    }
+  }, [])
+
+  const insertSubjectVariable = useCallback((variable: string) => {
+    const token = `{{${variable}}}`
+    setForm((previous) => {
+      const { start, end } = subjectCursorRef.current
+      const safeStart = Math.max(0, Math.min(start, previous.asunto.length))
+      const safeEnd = Math.max(safeStart, Math.min(end, previous.asunto.length))
+      const position = safeStart + token.length
+      subjectCursorRef.current = { start: position, end: position }
+      return { ...previous, asunto: `${previous.asunto.slice(0, safeStart)}${token}${previous.asunto.slice(safeEnd)}` }
+    })
+    requestAnimationFrame(() => {
+      const input = subjectInputRef.current
+      if (!input) return
+      input.focus()
+      input.setSelectionRange(subjectCursorRef.current.start, subjectCursorRef.current.end)
+    })
+  }, [])
+
+  const handlePersonalizationVariable = useCallback((variable: string) => {
+    if (document.activeElement !== subjectInputRef.current) return false
+    insertSubjectVariable(variable)
+    return true
+  }, [insertSubjectVariable])
 
   const handleVisualHtmlChange = useCallback((value: string) => {
     setForm((previous) => ({ ...previous, cuerpoHtml: value, emailFormat: "html" }))
@@ -942,7 +1002,12 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                 <Input
                   id="email-template-subject"
                   value={form.asunto}
+                  ref={subjectInputRef}
                   onChange={(event) => setForm((previous) => ({ ...previous, asunto: event.target.value }))}
+                  onFocus={rememberSubjectCursor}
+                  onClick={rememberSubjectCursor}
+                  onKeyUp={rememberSubjectCursor}
+                  onSelect={rememberSubjectCursor}
                   placeholder="Una idea para {{empresa}}"
                 />
               </div>
@@ -977,6 +1042,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                   tenantPhone={tenantPhone}
                   whatsappRulesLoading={waRulesLoading}
                   onChange={handleVisualHtmlChange}
+                  onVariableInsert={handlePersonalizationVariable}
                   onStructureChange={handleVisualStructureChange}
                   structure={visualStructure}
                 />
@@ -992,14 +1058,19 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                     <Textarea
                       id="email-template-html"
                       className="min-h-[520px] resize-y font-mono text-xs leading-5"
+                      ref={(node) => { contentInputRefs.current.html = node }}
+                      onFocus={(event) => rememberContentCursor("html", event.currentTarget)}
+                      onClick={(event) => rememberContentCursor("html", event.currentTarget)}
+                      onKeyUp={(event) => rememberContentCursor("html", event.currentTarget)}
+                      onSelect={(event) => rememberContentCursor("html", event.currentTarget)}
                       value={form.cuerpoHtml}
-                      onChange={(event) => setForm((previous) => ({ ...previous, cuerpoHtml: event.target.value, emailFormat: "html" }))}
+                      onChange={(event) => { rememberContentCursor("html", event.currentTarget); setForm((previous) => ({ ...previous, cuerpoHtml: event.target.value, emailFormat: "html" })) }}
                       placeholder="<p>Hola {{nombre}}...</p>"
                     />
                     {emailVariables.length ? (
                       <div className="flex flex-wrap gap-2">
                         {emailVariables.map((variable) => (
-                          <Button key={variable.clave} type="button" variant="outline" size="sm" onClick={() => appendToContent(`{{${variable.clave}}}`)}>
+                          <Button key={variable.clave} type="button" variant="outline" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => { if (!handlePersonalizationVariable(variable.clave)) appendToContent(`{{${variable.clave}}}`) }}>
                             {variable.etiqueta}
                           </Button>
                         ))}
@@ -1102,7 +1173,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="whatsapp-body">Texto de la plantilla</Label>
-                    <Textarea id="whatsapp-body" className="min-h-[360px] resize-y" value={form.cuerpoTexto} onChange={(event) => setForm((previous) => ({ ...previous, cuerpoTexto: event.target.value }))} placeholder="Hola {{nombre}}, ..." />
+                    <Textarea id="whatsapp-body" className="min-h-[360px] resize-y" ref={(node) => { contentInputRefs.current.text = node }} onFocus={(event) => rememberContentCursor("text", event.currentTarget)} onClick={(event) => rememberContentCursor("text", event.currentTarget)} onKeyUp={(event) => rememberContentCursor("text", event.currentTarget)} onSelect={(event) => rememberContentCursor("text", event.currentTarget)} value={form.cuerpoTexto} onChange={(event) => { rememberContentCursor("text", event.currentTarget); setForm((previous) => ({ ...previous, cuerpoTexto: event.target.value })) }} placeholder="Hola {{nombre}}, ..." />
                   </div>
                 </>
               }
@@ -1124,7 +1195,8 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                   variant="outline"
                   size="sm"
                   className="font-mono text-xs"
-                  onClick={() => appendToContent(variable)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => { if (!handlePersonalizationVariable(variable)) appendToContent(variable) }}
                 >
                   {variable}
                 </Button>

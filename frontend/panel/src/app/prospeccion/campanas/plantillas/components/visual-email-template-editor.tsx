@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -135,15 +135,19 @@ type Props = {
   tenantPhone?: string
   whatsappRulesLoading?: boolean
   onChange: (value: string) => void
+  onVariableInsert?: (variable: string) => boolean
   onStructureChange?: (value: string) => void
   structure?: string
 }
 
-export function VisualEmailTemplateEditor({ value, assets, websiteBaseUrl = "", whatsappRules = [], tenantPhone = "", whatsappRulesLoading = false, onChange, onStructureChange, structure }: Props) {
+export function VisualEmailTemplateEditor({ value, assets, websiteBaseUrl = "", whatsappRules = [], tenantPhone = "", whatsappRulesLoading = false, onChange, onVariableInsert, onStructureChange, structure }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(() => initialBlocks(value, structure))
   const [selectedId, setSelectedId] = useState(() => blocks[0]?.id ?? "")
   const [mobile, setMobile] = useState(false)
   const [variables, setVariables] = useState<Variable[]>(fallbackVariables)
+  const textInputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
+  const textCursorRefs = useRef<Record<string, { start: number; end: number }>>({})
+  const activeTextTargetRef = useRef<{ key: string; blockId: string; columnIndex?: number; elementId?: string } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -269,6 +273,56 @@ export function VisualEmailTemplateEditor({ value, assets, websiteBaseUrl = "", 
       : block))
   }
 
+  const rememberTextCursor = (key: string, target: HTMLTextAreaElement, targetInfo?: Omit<NonNullable<typeof activeTextTargetRef.current>, "key">) => {
+    activeTextTargetRef.current = { key, blockId: selected?.id ?? "", ...targetInfo }
+    textInputRefs.current[key] = target
+    textCursorRefs.current[key] = {
+      start: target.selectionStart ?? target.value.length,
+      end: target.selectionEnd ?? target.value.length,
+    }
+  }
+
+  const insertVariable = (variable: string) => {
+    const target = activeTextTargetRef.current
+    const token = `{{${variable}}}`
+    if (!target?.blockId) return
+    const cursor = textCursorRefs.current[target.key] ?? { start: 0, end: 0 }
+    let nextPosition = cursor.start + token.length
+
+    setBlocks((current) => current.map((block) => {
+      if (block.id !== target.blockId) return block
+      if (target.columnIndex !== undefined && target.elementId) {
+        return {
+          ...block,
+          columns: block.columns?.map((column, columnIndex) => columnIndex === target.columnIndex
+            ? {
+                ...column,
+                elements: column.elements.map((element) => {
+                  if (element.id !== target.elementId) return element
+                  const start = Math.max(0, Math.min(cursor.start, element.content.length))
+                  const end = Math.max(start, Math.min(cursor.end, element.content.length))
+                  nextPosition = start + token.length
+                  return { ...element, content: `${element.content.slice(0, start)}${token}${element.content.slice(end)}` }
+                }),
+              }
+            : column),
+        }
+      }
+      const start = Math.max(0, Math.min(cursor.start, block.content.length))
+      const end = Math.max(start, Math.min(cursor.end, block.content.length))
+      nextPosition = start + token.length
+      return { ...block, content: `${block.content.slice(0, start)}${token}${block.content.slice(end)}` }
+    }))
+
+    requestAnimationFrame(() => {
+      const input = textInputRefs.current[target.key]
+      if (!input) return
+      input.focus()
+      input.setSelectionRange(nextPosition, nextPosition)
+      textCursorRefs.current[target.key] = { start: nextPosition, end: nextPosition }
+    })
+  }
+
   const removeColumnElement = (columnIndex: number, elementId: string) => {
     if (!selected?.columns) return
     setBlocks((current) => current.map((block) => block.id === selected.id
@@ -294,7 +348,7 @@ export function VisualEmailTemplateEditor({ value, assets, websiteBaseUrl = "", 
           <div className="my-5 h-px bg-slate-100" />
           <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Personalización</p>
           <div className="flex flex-wrap gap-1.5">
-            {variables.map((variable) => <button key={variable.clave} type="button" className="rounded-full border bg-[#f7f7fa] px-2 py-1.5 text-[11px] hover:border-violet-300 hover:bg-violet-50" onClick={() => updateSelected({ content: `${selected?.content ?? ""}${selected?.content ? " " : ""}{{${variable.clave}}}` })}>{variable.clave === variable.etiqueta ? `{{${variable.clave}}}` : variable.etiqueta}</button>)}
+            {variables.map((variable) => <button key={variable.clave} type="button" className="rounded-full border bg-[#f7f7fa] px-2 py-1.5 text-[11px] hover:border-violet-300 hover:bg-violet-50" onMouseDown={(event) => event.preventDefault()} onClick={() => { if (!onVariableInsert?.(variable.clave)) insertVariable(variable.clave) }}>{variable.clave === variable.etiqueta ? `{{${variable.clave}}}` : variable.etiqueta}</button>)}
           </div>
         </aside>
         <section className="overflow-auto p-4 sm:p-6">
@@ -310,8 +364,8 @@ export function VisualEmailTemplateEditor({ value, assets, websiteBaseUrl = "", 
           <p className="text-sm font-semibold">{selected?.title ?? "Bloque"}</p><p className="mb-5 mt-1 text-xs text-muted-foreground">Personaliza el bloque seleccionado</p>
           {selected?.kind === "image" ? <div className="space-y-2"><Label>Imagen</Label><select className="h-9 w-full rounded-md border bg-white px-2 text-sm" value={selected.imageId ?? ""} onChange={(event) => updateSelected({ imageId: event.target.value || undefined })}><option value="">Seleccionar imagen</option>{assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.nombre}</option>)}</select></div> : null}
           {selected?.kind === "button" ? <div className="space-y-3"><div className="space-y-2"><Label>Texto del botón</Label><Input value={selected.content} onChange={(event) => updateSelected({ content: event.target.value })} /></div><div className="space-y-2"><Label>Destino</Label><select className="h-9 w-full rounded-md border bg-white px-2 text-sm" value={destinationForHref(selected.href)} onChange={(event) => updateButtonDestination(event.target.value, selected.href, (href) => updateSelected({ href }))}><option value="landing">Landing principal</option><option value="agenda">Agenda</option><option value="landing_page">Página específica de la landing</option><option value="whatsapp">WhatsApp</option>{destinationForHref(selected.href) === "custom" ? <option value="custom">Enlace existente</option> : null}</select></div>{destinationForHref(selected.href) === "landing_page" ? <div className="space-y-2"><Label>Ruta de la página</Label><Input value={landingPathForHref(selected.href)} onChange={(event) => updateSelected({ href: tenantOrigin ? `${tenantOrigin}/${event.target.value.replace(/^\/+/, "")}` : event.target.value })} placeholder="/servicios" /><p className="text-[10px] text-muted-foreground">Debe pertenecer al dominio público del tenant.</p></div> : null}{destinationForHref(selected.href) === "whatsapp" ? <div className="space-y-2"><Label>CTA de WhatsApp</Label><select className="h-9 w-full rounded-md border bg-white px-2 text-sm" value={whatsappLinks.find((item) => item.href === selected.href)?.id ?? ""} onChange={(event) => updateSelected({ href: whatsappLinks.find((item) => item.id === event.target.value)?.href ?? "" })}><option value="">{whatsappRulesLoading ? "Cargando CTAs..." : "Seleccionar CTA"}</option>{whatsappLinks.map((item) => <option key={item.id} value={item.id}>{item.nombre_regla || item.frase_objetivo}</option>)}</select><p className="text-[10px] text-muted-foreground">La frase se conservará para atribuir el origen del prospecto.</p></div> : null}{destinationForHref(selected.href) === "custom" ? <p className="text-[10px] text-amber-700">Este botón conserva un enlace anterior. Para nuevos botones utiliza uno de los destinos disponibles.</p> : null}</div> : null}
-          {selected?.kind === "columns" ? <div className="space-y-5">{(selected.columns ?? []).map((column, columnIndex) => <div key={column.id} className="space-y-3 rounded-lg border p-3"><div className="flex items-end gap-2"><div className="flex-1 space-y-2"><Label>Columna {columnIndex + 1}</Label><Input type="number" min={10} max={90} value={column.width} onChange={(event) => updateColumnWidth(columnIndex, Number(event.target.value))} /></div><span className="pb-2 text-xs text-muted-foreground">%</span></div>{column.elements.map((element) => <div key={element.id} className="space-y-2 rounded border bg-muted/20 p-2"><div className="flex items-center justify-between"><span className="text-xs font-medium">{element.kind === "text" ? "Texto" : element.kind === "button" ? "Botón" : "Imagen"}</span><Button type="button" variant="ghost" size="sm" className="h-6 px-1 text-destructive" onClick={() => removeColumnElement(columnIndex, element.id)}>Eliminar</Button></div>{element.kind === "text" ? <Textarea rows={3} value={element.content} onChange={(event) => updateColumnElement(columnIndex, element.id, { content: event.target.value })} /> : element.kind === "button" ? <div className="space-y-2"><Input value={element.content} onChange={(event) => updateColumnElement(columnIndex, element.id, { content: event.target.value })} placeholder="Texto del botón" /><select className="h-9 w-full rounded-md border bg-white px-2 text-sm" value={destinationForHref(element.href)} onChange={(event) => updateButtonDestination(event.target.value, element.href, (href) => updateColumnElement(columnIndex, element.id, { href }))}><option value="landing">Landing principal</option><option value="agenda">Agenda</option><option value="landing_page">Página específica de la landing</option><option value="whatsapp">WhatsApp</option>{destinationForHref(element.href) === "custom" ? <option value="custom">Enlace existente</option> : null}</select>{destinationForHref(element.href) === "landing_page" ? <Input value={landingPathForHref(element.href)} onChange={(event) => updateColumnElement(columnIndex, element.id, { href: tenantOrigin ? `${tenantOrigin}/${event.target.value.replace(/^\/+/, "")}` : event.target.value })} placeholder="/servicios" /> : null}{destinationForHref(element.href) === "whatsapp" ? <select className="h-9 w-full rounded-md border bg-white px-2 text-sm" value={whatsappLinks.find((item) => item.href === element.href)?.id ?? ""} onChange={(event) => updateColumnElement(columnIndex, element.id, { href: whatsappLinks.find((item) => item.id === event.target.value)?.href ?? "" })}><option value="">{whatsappRulesLoading ? "Cargando CTAs..." : "Seleccionar CTA de WhatsApp"}</option>{whatsappLinks.map((item) => <option key={item.id} value={item.id}>{item.nombre_regla || item.frase_objetivo}</option>)}</select> : null}{destinationForHref(element.href) === "custom" ? <p className="text-[10px] text-amber-700">Este botón conserva un enlace anterior.</p> : null}</div> : <select className="h-9 w-full rounded-md border bg-white px-2 text-sm" value={element.imageId ?? ""} onChange={(event) => updateColumnElement(columnIndex, element.id, { imageId: event.target.value || undefined })}><option value="">Seleccionar imagen</option>{assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.nombre}</option>)}</select>}</div>)}<div className="flex gap-1"><Button type="button" variant="outline" size="sm" onClick={() => addColumnElement(columnIndex, "text")}>+ Texto</Button><Button type="button" variant="outline" size="sm" onClick={() => addColumnElement(columnIndex, "button")}>+ Botón</Button><Button type="button" variant="outline" size="sm" onClick={() => addColumnElement(columnIndex, "image")}>+ Imagen</Button></div></div>)}</div> : null}
-          {selected?.kind === "text" ? <div className="space-y-2"><Label>Contenido</Label><Textarea rows={8} value={selected.content} onChange={(event) => updateSelected({ content: event.target.value })} /></div> : null}
+          {selected?.kind === "columns" ? <div className="space-y-5">{(selected.columns ?? []).map((column, columnIndex) => <div key={column.id} className="space-y-3 rounded-lg border p-3"><div className="flex items-end gap-2"><div className="flex-1 space-y-2"><Label>Columna {columnIndex + 1}</Label><Input type="number" min={10} max={90} value={column.width} onChange={(event) => updateColumnWidth(columnIndex, Number(event.target.value))} /></div><span className="pb-2 text-xs text-muted-foreground">%</span></div>{column.elements.map((element) => <div key={element.id} className="space-y-2 rounded border bg-muted/20 p-2"><div className="flex items-center justify-between"><span className="text-xs font-medium">{element.kind === "text" ? "Texto" : element.kind === "button" ? "Botón" : "Imagen"}</span><Button type="button" variant="ghost" size="sm" className="h-6 px-1 text-destructive" onClick={() => removeColumnElement(columnIndex, element.id)}>Eliminar</Button></div>{element.kind === "text" ? <Textarea rows={3} ref={(node) => { textInputRefs.current[`column-${element.id}`] = node }} onFocus={(event) => rememberTextCursor(`column-${element.id}`, event.currentTarget, { blockId: selected.id, columnIndex, elementId: element.id })} onClick={(event) => rememberTextCursor(`column-${element.id}`, event.currentTarget, { blockId: selected.id, columnIndex, elementId: element.id })} onKeyUp={(event) => rememberTextCursor(`column-${element.id}`, event.currentTarget, { blockId: selected.id, columnIndex, elementId: element.id })} onSelect={(event) => rememberTextCursor(`column-${element.id}`, event.currentTarget, { blockId: selected.id, columnIndex, elementId: element.id })} value={element.content} onChange={(event) => { rememberTextCursor(`column-${element.id}`, event.currentTarget, { blockId: selected.id, columnIndex, elementId: element.id }); updateColumnElement(columnIndex, element.id, { content: event.target.value }) }} /> : element.kind === "button" ? <div className="space-y-2"><Input value={element.content} onChange={(event) => updateColumnElement(columnIndex, element.id, { content: event.target.value })} placeholder="Texto del botón" /><select className="h-9 w-full rounded-md border bg-white px-2 text-sm" value={destinationForHref(element.href)} onChange={(event) => updateButtonDestination(event.target.value, element.href, (href) => updateColumnElement(columnIndex, element.id, { href }))}><option value="landing">Landing principal</option><option value="agenda">Agenda</option><option value="landing_page">Página específica de la landing</option><option value="whatsapp">WhatsApp</option>{destinationForHref(element.href) === "custom" ? <option value="custom">Enlace existente</option> : null}</select>{destinationForHref(element.href) === "landing_page" ? <Input value={landingPathForHref(element.href)} onChange={(event) => updateColumnElement(columnIndex, element.id, { href: tenantOrigin ? `${tenantOrigin}/${event.target.value.replace(/^\/+/, "")}` : event.target.value })} placeholder="/servicios" /> : null}{destinationForHref(element.href) === "whatsapp" ? <select className="h-9 w-full rounded-md border bg-white px-2 py-1 text-sm" value={whatsappLinks.find((item) => item.href === element.href)?.id ?? ""} onChange={(event) => updateColumnElement(columnIndex, element.id, { href: whatsappLinks.find((item) => item.id === event.target.value)?.href ?? "" })}><option value="">{whatsappRulesLoading ? "Cargando CTAs..." : "Seleccionar CTA de WhatsApp"}</option>{whatsappLinks.map((item) => <option key={item.id} value={item.id}>{item.nombre_regla || item.frase_objetivo}</option>)}</select> : null}{destinationForHref(element.href) === "custom" ? <p className="text-[10px] text-amber-700">Este botón conserva un enlace anterior.</p> : null}</div> : <select className="h-9 w-full rounded-md border bg-white px-2 text-sm" value={element.imageId ?? ""} onChange={(event) => updateColumnElement(columnIndex, element.id, { imageId: event.target.value || undefined })}><option value="">Seleccionar imagen</option>{assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.nombre}</option>)}</select>}</div>)}<div className="flex gap-1"><Button type="button" variant="outline" size="sm" onClick={() => addColumnElement(columnIndex, "text")}>+ Texto</Button><Button type="button" variant="outline" size="sm" onClick={() => addColumnElement(columnIndex, "button")}>+ Botón</Button><Button type="button" variant="outline" size="sm" onClick={() => addColumnElement(columnIndex, "image")}>+ Imagen</Button></div></div>)}</div> : null}
+          {selected?.kind === "text" ? <div className="space-y-2"><Label>Contenido</Label><Textarea rows={8} ref={(node) => { textInputRefs.current[`block-${selected.id}`] = node }} onFocus={(event) => rememberTextCursor(`block-${selected.id}`, event.currentTarget)} onClick={(event) => rememberTextCursor(`block-${selected.id}`, event.currentTarget)} onKeyUp={(event) => rememberTextCursor(`block-${selected.id}`, event.currentTarget)} onSelect={(event) => rememberTextCursor(`block-${selected.id}`, event.currentTarget)} value={selected.content} onChange={(event) => { rememberTextCursor(`block-${selected.id}`, event.currentTarget); updateSelected({ content: event.target.value }) }} /></div> : null}
           <div className="mt-5 flex gap-2"><Button type="button" variant="outline" className="flex-1" onClick={() => moveSelected(-1)}>↑</Button><Button type="button" variant="outline" className="flex-1" onClick={() => moveSelected(1)}>↓</Button></div><Button type="button" variant="outline" className="mt-2 w-full" onClick={() => { if (selected) { const copy = makeBlock(selected.kind, selected); setBlocks((current) => [...current, copy]); setSelectedId(copy.id) } }}>Duplicar</Button><Button type="button" variant="outline" className="mt-2 w-full text-destructive" onClick={removeSelected}>Eliminar</Button>
         </aside>
       </div>

@@ -34,6 +34,22 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
 - WhatsApp conserva su mecanismo independiente de atribución por frase; no se
   interpreta como una visita web.
 
+## 2026-09-01 — Inserción de variables en la posición del cursor
+
+### Cambios realizados
+
+- Las variables del catálogo ahora se insertan en la posición actual del cursor
+  o reemplazan el texto seleccionado.
+- El comportamiento aplica al contenido principal del Editor visual y a los
+  textos editables dentro de columnas.
+- El mismo comportamiento se aplica al código HTML y al cuerpo de WhatsApp
+  cuando el catálogo de variables está visible.
+- El foco y la nueva posición del cursor se conservan después de insertar la
+  variable, incluso cuando el catálogo está en el panel lateral.
+- La sección única de “Personalización” ahora detecta si el cursor está en el
+  asunto y dirige allí la variable; no se agrega un catálogo duplicado debajo
+  del campo.
+
 ### Documentado
 
 - Se definió una selección inicial con tres opciones: **Editor visual**, **Código HTML** y **Asistente IA**.
