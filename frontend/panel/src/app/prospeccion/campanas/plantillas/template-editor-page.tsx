@@ -1184,12 +1184,36 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
               ) : null}
 
               {form.emailCreationMode === "ai" ? (
-                <TemplateAiAssistant
-                  canal="correo"
-                  campanaId={form.campanaId || null}
-                  variableValues={aiVariableValues}
-                  onApply={applyDraft}
-                />
+                <div className="space-y-4">
+                  <TemplateAiAssistant
+                    canal="correo"
+                    campanaId={form.campanaId || null}
+                    variableValues={aiVariableValues}
+                    assets={logos}
+                    imageSlots={IMAGE_SLOTS}
+                    selectedImages={imageIds}
+                    onImageSelectionChange={(slotKey, assetId) => setImageIds((current) => ({ ...current, [slotKey]: assetId }))}
+                    onApply={applyDraft}
+                  />
+                  {form.cuerpoHtml.trim() ? (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Plantilla generada</CardTitle>
+                        <CardDescription>Revisa y edita el resultado antes de guardar la plantilla.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="grid gap-5 xl:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="ai-generated-html">Código HTML generado</Label>
+                          <Textarea id="ai-generated-html" className="min-h-[420px] resize-y font-mono text-xs leading-5" value={form.cuerpoHtml} onChange={(event) => setForm((previous) => ({ ...previous, cuerpoHtml: event.target.value, emailFormat: "html" }))} />
+                        </div>
+                        <div className="overflow-hidden rounded-lg border bg-muted/30">
+                          <div className="border-b bg-background px-4 py-3 text-sm font-medium">Vista previa</div>
+                          <iframe title="Vista previa de la plantilla generada" className="h-[420px] w-full bg-white" sandbox="" srcDoc={previewHtml} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </div>
               ) : null}
             </CardContent>
           </Card>
@@ -1298,7 +1322,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={form.emailCreationMode === "ai" ? "hidden" : undefined}>
             <CardHeader>
               <CardTitle className="text-base">Imágenes de la plantilla</CardTitle>
               <CardDescription>
@@ -1613,7 +1637,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
           </Card>
         </main>
 
-        {form.canal === "whatsapp" || form.emailCreationMode === "ai" ? (
+        {form.canal === "whatsapp" ? (
           <aside className="space-y-6 xl:sticky xl:top-4">
             <TemplateAiAssistant
               canal={form.canal}

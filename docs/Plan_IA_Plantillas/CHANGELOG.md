@@ -61,6 +61,21 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
 - Se eliminaron de la vista los controles duplicados de inserción para mantener
   un flujo simple y consistente con el Editor visual.
 
+## 2026-09-01 — Flujo guiado del Asistente IA
+
+### Cambios realizados
+
+- La creación de correo con IA ahora se presenta en pasos consecutivos:
+  variables, imágenes, estilo de diseño y prompt.
+- La selección de imágenes y su uso se realiza dentro del paso de imágenes del
+  asistente, sin duplicarse en la galería general.
+- La generación solo está disponible después de completar el prompt; el
+  resultado continúa aplicándose como borrador editable.
+- Las variables de logo e imágenes quedan fuera del paso de variables; se
+  seleccionan únicamente en el paso de imágenes para evitar duplicidad.
+- Después de generar, el asistente muestra el HTML resultante en un editor y
+  una vista previa para que el usuario pueda revisarlo antes de guardar.
+
 ### Documentado
 
 - Se definió una selección inicial con tres opciones: **Editor visual**, **Código HTML** y **Asistente IA**.
