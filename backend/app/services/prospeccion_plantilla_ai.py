@@ -339,7 +339,9 @@ async def generate_template_draft(
         if isinstance(variable, dict) and isinstance(variable.get("clave"), str):
             variable_map[variable["clave"]] = {**variable, **{key: row.get(key) for key in ("permite_asunto", "permite_cuerpo_texto", "permite_cuerpo_html", "permite_header_media")}}
     selected = set(request.variables_seleccionadas)
-    unknown = selected - variable_map.keys()
+    implicit_selected = {"tracking_url"} if request.canal == "correo" else set()
+    allowed_selected = selected | implicit_selected
+    unknown = allowed_selected - variable_map.keys()
     if unknown:
         raise ValueError("template_ai_variable_not_allowed")
     layout_rows = await platform_repo.list_prospeccion_template_ai_layouts(
@@ -440,8 +442,8 @@ async def generate_template_draft(
             "instruccion_usuario": request.instruccion_usuario,
             "idioma": request.idioma,
             "tono": request.tono,
-            "variables_seleccionadas": json.dumps(request.variables_seleccionadas, ensure_ascii=False),
-            "catalogo_variables": json.dumps([variable_map[key] for key in request.variables_seleccionadas], ensure_ascii=False),
+            "variables_seleccionadas": json.dumps(sorted(allowed_selected), ensure_ascii=False),
+            "catalogo_variables": json.dumps([variable_map[key] for key in sorted(allowed_selected)], ensure_ascii=False),
             "contexto_empresa": json.dumps(context, ensure_ascii=False),
             "sistema_diseno_empresa": json.dumps(design, ensure_ascii=False),
             "borrador_actual": request.borrador_actual or "",
@@ -513,7 +515,7 @@ async def generate_template_draft(
                 raise ValueError("template_ai_layout_mismatch")
         else:
             applied_layout = None
-        _validate_placeholders(result, selected, request.canal, request.marcadores_imagenes_seleccionados)
+        _validate_placeholders(result, allowed_selected, request.canal, request.marcadores_imagenes_seleccionados)
         usage = await platform_repo.get_openai_usage_by_response_id(organizacion_id=organizacion_id, response_id=str(response_payload.get("id") or ""))
         update_payload: dict[str, Any] = {
             "resultado_estado": "generada",

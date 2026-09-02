@@ -76,6 +76,7 @@ const IMAGE_VARIABLE_KEYS = new Set([
   "product_image_4_url",
   "warranty_image_url",
 ])
+const HIDDEN_VARIABLE_KEYS = new Set(["canal_origen", "email", "telefono", "tracking_url"])
 
 function formatTemplateAiError(value: string) {
   if (value.startsWith("html_tag_not_allowed:")) {
@@ -141,7 +142,7 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
 
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const contentVariables = useMemo(
-    () => variables.filter((variable) => !IMAGE_VARIABLE_KEYS.has(variable.clave)),
+    () => variables.filter((variable) => !IMAGE_VARIABLE_KEYS.has(variable.clave) && !HIDDEN_VARIABLE_KEYS.has(variable.clave)),
     [variables],
   )
 
@@ -152,6 +153,7 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
   }, [variableValues])
 
   const toggleVariable = (clave: string) => {
+    if (HIDDEN_VARIABLE_KEYS.has(clave)) return
     setSelected((current) => {
       if (current.includes(clave)) {
         return current.filter(
@@ -176,7 +178,7 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
   const generate = async () => {
     setError(null)
     setWarning([])
-    const selectedContentVariables = selected.filter((key) => !IMAGE_VARIABLE_KEYS.has(key))
+    const selectedContentVariables = selected.filter((key) => !IMAGE_VARIABLE_KEYS.has(key) && !HIDDEN_VARIABLE_KEYS.has(key))
     if (selectedContentVariables.length === 0) {
       setError("Selecciona al menos una variable para generar la plantilla.")
       return
@@ -258,10 +260,10 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
   }
 
   const maxStep = canal === "correo" ? 3 : 1
-  const canContinue = step === 0 ? selected.some((key) => !IMAGE_VARIABLE_KEYS.has(key)) : step < maxStep || instruction.trim().length >= 10
+  const canContinue = step === 0 ? selected.some((key) => !IMAGE_VARIABLE_KEYS.has(key) && !HIDDEN_VARIABLE_KEYS.has(key)) : step < maxStep || instruction.trim().length >= 10
 
   const nextStep = () => {
-    if (step === 0 && selected.length === 0) {
+    if (step === 0 && !selected.some((key) => !IMAGE_VARIABLE_KEYS.has(key) && !HIDDEN_VARIABLE_KEYS.has(key))) {
       setError("Selecciona al menos una variable para continuar.")
       return
     }

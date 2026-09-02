@@ -794,6 +794,11 @@ Cada avance debe registrar:
 - El panel transforma ese código en un mensaje legible para facilitar la corrección del prompt y del catálogo de etiquetas seguras.
 - El panel registra en consola el canal, paso, generación, estado y mensaje del error, sin incluir el prompt ni el HTML generado.
 
+## 2026-09-02 — Variables automáticas ocultas en el asistente IA
+
+- El paso de selección ya no muestra `canal_origen`, `email`, `telefono` ni `tracking_url`.
+- `tracking_url` permanece disponible en backend como variable implícita y automática para correos, sin requerir selección manual del usuario.
+
 ## 2026-09-02 — Generación asíncrona sin timeout artificial
 
 - La llamada al proveedor de IA ya no se cancela mediante el timeout de aplicación; la generación continúa en segundo plano y conserva los límites propios del SDK.
