@@ -792,6 +792,7 @@ Cada avance debe registrar:
 
 - El sanitizador ahora identifica la etiqueta exacta que no está permitida y la registra como `html_tag_not_allowed:<tag>`.
 - El panel transforma ese código en un mensaje legible para facilitar la corrección del prompt y del catálogo de etiquetas seguras.
+- El panel registra en consola el canal, paso, generación, estado y mensaje del error, sin incluir el prompt ni el HTML generado.
 
 ## 2026-09-02 — Generación asíncrona sin timeout artificial
 

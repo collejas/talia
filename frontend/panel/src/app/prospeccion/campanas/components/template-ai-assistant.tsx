@@ -186,6 +186,8 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
       return
     }
     setGenerating(true)
+    let generationIdForLog: string | undefined
+    let generationStatusForLog: string | undefined
     try {
       const response = await fetch("/api/prospeccion/plantillas/ai", {
         method: "POST",
@@ -204,6 +206,7 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
       const payload = await response.json()
       if (!response.ok) throw new Error(payloadError(payload, "No se pudo iniciar la generación."))
       const generationId = payload?.generation_id as string | undefined
+      generationIdForLog = generationId
       if (!generationId) throw new Error("La respuesta no contiene el identificador de generación.")
       let resultPayload: { status?: string; error?: string; resultado?: TemplateAiDraft } = payload
       for (;;) {
@@ -212,6 +215,7 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
         const statusPayload = await statusResponse.json()
         if (!statusResponse.ok) throw new Error(payloadError(statusPayload, "No se pudo consultar la generación."))
         resultPayload = statusPayload
+        generationStatusForLog = statusPayload?.status
         if (statusPayload?.status === "generada" || statusPayload?.status === "error" || statusPayload?.status === "respuesta_invalida") break
       }
       if (resultPayload.status !== "generada") {
@@ -239,7 +243,15 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
       setWarning(Array.isArray(resolvedDraft.advertencias) ? resolvedDraft.advertencias : [])
       onApply(resolvedDraft)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "No se pudo generar el borrador.")
+      const message = reason instanceof Error ? reason.message : "No se pudo generar el borrador."
+      console.error("[TemplateAiAssistant] Error al generar plantilla", {
+        canal,
+        paso: step,
+        generation_id: generationIdForLog,
+        estado: generationStatusForLog,
+        error: message,
+      })
+      setError(message)
     } finally {
       setGenerating(false)
     }
