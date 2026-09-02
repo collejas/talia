@@ -2,6 +2,27 @@
 
 Este archivo registra las decisiones, evidencias, cambios, validaciones y despliegues del refactor de conexión asistida de WhatsApp Meta en Talia.
 
+## 2026-09-02 · Recuperación de intentos fallidos
+
+- Se permite corregir el WABA y el Phone Number ID cuando el intento anterior
+  está pendiente o en error.
+- Una conexión ya confirmada como `conectado` conserva sus IDs y no puede ser
+  reemplazada accidentalmente desde el alta.
+- Los IDs candidatos rechazados por Meta ya no reemplazan la conexión canónica;
+  el error se conserva sin destruir los datos anteriores.
+- La configuración operativa solo sincroniza el Phone Number ID cuando la
+  suscripción fue confirmada y el estado final es `conectado`.
+- El onboarding usa el estado persistido de la conexión asistida para distinguir
+  entre una conexión fallida y una conexión realmente terminada.
+
+## 2026-09-02 · Mensajes funcionales para errores de Meta
+
+- Los errores del proveedor se clasifican por operación, código y estado HTTP.
+- El tenant recibe una explicación y una acción concreta, sin el mensaje crudo
+  de Meta ni nombres técnicos internos.
+- Los códigos técnicos permanecen disponibles para diagnóstico interno y los
+  errores temporales se identifican como reintentables.
+
 ## 2026-08-28 · Evidencia base confirmada
 
 - Se confirmó que el token usado actualmente como `META_TOKEN` es un token de tipo `SYSTEM_USER`.

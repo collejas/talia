@@ -54,6 +54,7 @@ def build_onboarding_progress(
     secrets: list[dict[str, Any]],
     preferences: dict[str, Any] | None,
     email_service: dict[str, Any] | None = None,
+    whatsapp_connection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     config = tenant.get("config") if isinstance(tenant.get("config"), dict) else {}
     preferences = preferences or {}
@@ -91,9 +92,13 @@ def build_onboarding_progress(
     voice_done = voz_decision == "no_usar" or (
         voz_decision == "usar" and ("voz" in active_channels or _secret_exists(secrets, "voice"))
     )
-    whatsapp_done = "whatsapp" in active_channels or _has_text(
-        (config.get("whatsapp") or {}).get("meta") if isinstance(config.get("whatsapp"), dict) else None
-    )
+    # Los tenants legacy pueden seguir resolviendo WhatsApp mediante su ruta
+    # activa. Cuando ya existe el registro del onboarding asistido, el estado
+    # persistido es la fuente de verdad y solo "conectado" completa el paso.
+    if whatsapp_connection is None:
+        whatsapp_done = "whatsapp" in active_channels
+    else:
+        whatsapp_done = str(whatsapp_connection.get("estado") or "") == "conectado"
     features = config.get("features") if isinstance(config.get("features"), dict) else {}
     agenda_feature = features.get("agenda") if isinstance(features.get("agenda"), dict) else {}
     agenda_enabled = agenda_feature.get("enabled") is not False

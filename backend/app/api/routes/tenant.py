@@ -883,6 +883,9 @@ async def _get_onboarding_progress(
         raise HTTPException(status_code=404, detail="tenant_not_found")
     routes = await platform_repo.list_channel_routes(organizacion_id=context.organizacion_id)
     secrets = await platform_repo.list_secret_metadata(organizacion_id=context.organizacion_id)
+    whatsapp_connection = await platform_repo.get_whatsapp_meta_connection(
+        organizacion_id=context.organizacion_id
+    )
     preferences = await platform_repo.get_tenant_onboarding_progress(
         organizacion_id=context.organizacion_id
     )
@@ -903,6 +906,7 @@ async def _get_onboarding_progress(
         secrets=secrets,
         preferences=preferences,
         email_service=email_service,
+        whatsapp_connection=whatsapp_connection,
     )
     progress["webchat_decision"] = str((preferences or {}).get("webchat_decision") or "pendiente")
     progress["voz_decision"] = str((preferences or {}).get("voz_decision") or "pendiente")
@@ -992,7 +996,14 @@ async def operate_meta_whatsapp_connection(
 ) -> MetaWhatsAppConnectionResponse:
     await require_permission(user_token, "settings.manage")
     if payload.accion == "registrar" and payload.pin is None:
-        raise HTTPException(status_code=422, detail="pin_required_for_registration")
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "pin_required_for_registration",
+                "message": "Captura el PIN de verificación en dos pasos para registrar el número.",
+                "retryable": False,
+            },
+        )
     try:
         existing_tenant = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
     except PlatformRepositoryError as exc:
@@ -1001,8 +1012,48 @@ async def operate_meta_whatsapp_connection(
     existing_whatsapp = existing_config.get("whatsapp") if isinstance(existing_config, dict) else None
     existing_meta = existing_whatsapp.get("meta") if isinstance(existing_whatsapp, dict) else None
     existing_phone = existing_meta.get("phone_number_id") if isinstance(existing_meta, dict) else None
-    if existing_phone and str(existing_phone) != payload.phone_number_id:
-        raise HTTPException(status_code=409, detail="whatsapp_meta_phone_already_configured")
+    try:
+        existing_connection = await platform_repo.get_whatsapp_meta_connection(
+            organizacion_id=context.organizacion_id
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_meta_connection_unavailable") from exc
+
+    existing_connection_state = str((existing_connection or {}).get("estado") or "")
+    connection_ids_differ = bool(existing_connection) and (
+        str(existing_connection.get("waba_id") or "") != payload.waba_id
+        or str(existing_connection.get("phone_number_id") or "") != payload.phone_number_id
+    )
+    # Una conexión confirmada o una configuración legacy sin registro asistido
+    # está operativa y no debe cambiarse desde un alta accidental. Los intentos
+    # pendientes o fallidos sí deben poder corregirse con nuevos IDs.
+    if existing_connection_state == "conectado" and connection_ids_differ:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "whatsapp_meta_connection_already_connected",
+                "message": "Esta conexión ya está activa. Para cambiarla, solicita a soporte una sustitución controlada.",
+                "retryable": False,
+            },
+        )
+    if existing_connection is None and existing_phone and str(existing_phone) != payload.phone_number_id:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "whatsapp_meta_phone_already_configured",
+                "message": "Este tenant ya tiene un número operativo. Para cambiarlo, solicita a soporte una sustitución controlada.",
+                "retryable": False,
+            },
+        )
+    if payload.accion == "suscribir" and not (existing_connection or {}).get("registrado_en"):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "whatsapp_registration_required",
+                "message": "Primero completa el registro del número en el paso 2. Después podrás activar la conexión en el paso 3.",
+                "retryable": False,
+            },
+        )
     now = datetime.now(timezone.utc).isoformat()
     values: dict[str, Any] = {
         "waba_id": payload.waba_id,
@@ -1011,9 +1062,15 @@ async def operate_meta_whatsapp_connection(
         "ultimo_error_codigo": None,
         "ultimo_error_mensaje": None,
     }
+    if connection_ids_differ:
+        values.update({"registrado_en": None, "suscrito_en": None, "conectado_en": None})
     try:
         client = MetaWhatsAppAssistedClient()
-        inspected = await client.inspect(waba_id=payload.waba_id, phone_number_id=payload.phone_number_id)
+        inspected = await client.inspect(
+            waba_id=payload.waba_id,
+            phone_number_id=payload.phone_number_id,
+            operation=payload.accion,
+        )
         number = inspected["phone_number"]
         values.update({
             "estado": "validado",
@@ -1025,7 +1082,11 @@ async def operate_meta_whatsapp_connection(
         elif payload.accion == "suscribir":
             await client.subscribe(waba_id=payload.waba_id)
             values.update({"estado": "suscrito", "suscrito_en": now})
-            inspected = await client.inspect(waba_id=payload.waba_id, phone_number_id=payload.phone_number_id)
+            inspected = await client.inspect(
+                waba_id=payload.waba_id,
+                phone_number_id=payload.phone_number_id,
+                operation="suscribir",
+            )
             if inspected["subscribed"]:
                 values.update({"estado": "conectado", "conectado_en": now})
         if inspected.get("subscribed") and payload.accion == "validar":
@@ -1037,35 +1098,65 @@ async def operate_meta_whatsapp_connection(
             "suscrita": bool(inspected.get("subscribed")),
         }
     except MetaWhatsAppConnectionError as exc:
-        values.update({"estado": "error", "ultimo_error_codigo": exc.code, "ultimo_error_mensaje": exc.message})
+        error_values: dict[str, Any] = {
+            "estado": "error",
+            "ultimo_error_codigo": exc.code,
+            "ultimo_error_mensaje": exc.message,
+            "actualizado_en": now,
+        }
+        # No reemplazar la conexión canónica con IDs candidatos que Meta no
+        # pudo validar. Esto permite reintentar con los IDs correctos sin
+        # destruir una conexión previa o bloquear la recuperación.
+        if existing_connection_state == "conectado":
+            error_values["estado"] = "conectado"
+        elif connection_ids_differ:
+            # Solo se actualiza el error y la fecha; al no incluir IDs en este
+            # payload, el upsert conserva la conexión canónica anterior.
+            error_values["estado"] = "error"
+        else:
+            error_values.update(values)
         try:
-            await platform_repo.upsert_whatsapp_meta_connection(organizacion_id=context.organizacion_id, values=values)
+            if existing_connection is None:
+                await platform_repo.upsert_whatsapp_meta_connection(
+                    organizacion_id=context.organizacion_id, values=error_values
+                )
+            else:
+                await platform_repo.update_whatsapp_meta_connection_status(
+                    organizacion_id=context.organizacion_id, values=error_values
+                )
         except PlatformRepositoryError:
             pass
-        raise HTTPException(status_code=422, detail=exc.code) from exc
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": exc.code,
+                "message": exc.message,
+                "retryable": exc.retryable,
+            },
+        ) from exc
     try:
         row = await platform_repo.upsert_whatsapp_meta_connection(organizacion_id=context.organizacion_id, values=values)
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail="whatsapp_meta_connection_save_failed") from exc
-    # El resolver del webhook y el envío productivo siguen usando la configuración
-    # existente del tenant. Solo después de validar Meta sincronizamos el Phone ID;
-    # no reemplazamos sus secretos ni cambiamos el proveedor hasta suscribir la app.
-    try:
-        tenant_row = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
-        current_config = tenant_row.get("config") if isinstance(tenant_row, dict) and isinstance(tenant_row.get("config"), dict) else {}
-        whatsapp = dict(current_config.get("whatsapp")) if isinstance(current_config.get("whatsapp"), dict) else {}
-        meta = dict(whatsapp.get("meta")) if isinstance(whatsapp.get("meta"), dict) else {}
-        meta["phone_number_id"] = payload.phone_number_id
-        whatsapp["meta"] = meta
-        if values.get("estado") == "conectado":
+    # El resolver del webhook y el envío productivo siguen usando la
+    # configuración existente del tenant. Solo una conexión completamente
+    # confirmada puede cambiar el Phone ID y el proveedor operativo.
+    if values.get("estado") == "conectado":
+        try:
+            tenant_row = await platform_repo.get_organizacion_details(organizacion_id=context.organizacion_id)
+            current_config = tenant_row.get("config") if isinstance(tenant_row, dict) and isinstance(tenant_row.get("config"), dict) else {}
+            whatsapp = dict(current_config.get("whatsapp")) if isinstance(current_config.get("whatsapp"), dict) else {}
+            meta = dict(whatsapp.get("meta")) if isinstance(whatsapp.get("meta"), dict) else {}
+            meta["phone_number_id"] = payload.phone_number_id
+            whatsapp["meta"] = meta
             whatsapp["provider"] = "meta"
-        saved_config = await platform_repo.set_organizacion_config(
-            organizacion_id=context.organizacion_id,
-            config={**current_config, "whatsapp": whatsapp},
-        )
-        _ = saved_config
-    except PlatformRepositoryError as exc:
-        raise HTTPException(status_code=502, detail="whatsapp_meta_tenant_config_save_failed") from exc
+            saved_config = await platform_repo.set_organizacion_config(
+                organizacion_id=context.organizacion_id,
+                config={**current_config, "whatsapp": whatsapp},
+            )
+            _ = saved_config
+        except PlatformRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="whatsapp_meta_tenant_config_save_failed") from exc
     return _connection_response({**row, **presentation})
 
 

@@ -27,10 +27,43 @@ export function MetaAssistedConnectionPanel({
           Autoriza el activo de WhatsApp de tu empresa a Talia y valida cada paso desde aquí. Talia no muestra ni guarda el PIN.
         </p>
       </div>
-      <div className="rounded-md bg-muted/40 p-3 text-sm space-y-1">
-        <p>1. En Meta, agrega o comparte tu WABA con el Business ID de Talia:</p>
-        <p className="font-mono text-xs break-all">{businessId || "Configurar META_TALIA_BUSINESS_ID"}</p>
-        <p className="text-xs text-muted-foreground">Concede a Talia acceso al WABA y al número que vas a conectar.</p>
+      <div className="rounded-md bg-muted/40 p-3 text-sm space-y-3">
+        <p className="font-medium">INSTRUCCIONES:</p>
+        <ol className="list-decimal space-y-3 pl-5">
+          <li>
+            <p>En Meta, agrega el número en WhatsApp Manager y verifícalo mediante SMS o llamada.</p>
+            <p className="text-xs text-muted-foreground">Si el número ya está agregado y aparece como verificado, omite este paso.</p>
+          </li>
+          <li>
+            <p>Agrega a Talia como empresa asociada o partner usando este Business ID:</p>
+            <p className="font-mono text-xs break-all">{businessId || "Configurar META_TALIA_BUSINESS_ID"}</p>
+            <p className="text-xs text-muted-foreground">
+              Entra a{" "}
+              <a
+                className="underline underline-offset-2"
+                href="https://business.facebook.com/business/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                business.facebook.com/business/
+              </a>
+              {" "}y abre la cuenta donde agregaste tu número de WhatsApp Business API. Entra a “Socios”, pulsa “+ Agregar”, captura el identificador del negocio y sigue el proceso.
+            </p>
+            <p className="text-xs text-muted-foreground">Concede a Talia estos permisos:</p>
+            <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+              <li>Administrar WhatsApp Account.</li>
+              <li>Administrar plantillas.</li>
+              <li>Administrar números.</li>
+            </ul>
+          </li>
+          <li>Regresa a Talia y captura el WABA ID y el Phone Number ID.</li>
+          <li>En Talia, haz clic en “Validar acceso” (Paso 1). Este botón no concede permisos; solo comprueba que Talia tenga acceso a la WABA y que el número pertenezca a ella.</li>
+          <li>
+            <p>Si la validación es correcta, captura un PIN de seis dígitos y ejecuta “Registrar número” (Paso 2).</p>
+            <p className="text-xs text-muted-foreground">El PIN puede ser nuevo si el número nunca tuvo registro Cloud API. Si ya tenía verificación en dos pasos, usa el PIN existente. No es el código SMS.</p>
+          </li>
+          <li>Solo cuando el paso 2 termine correctamente, ejecuta el paso 3: “Suscribir aplicación”.</li>
+        </ol>
       </div>
       <form action={formAction} className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2"><Label htmlFor="meta-assisted-waba">WABA ID <span className="text-destructive" aria-hidden="true">*</span></Label><Input id="meta-assisted-waba" name="waba_id" defaultValue={String(connection?.waba_id ?? "")} required /></div>

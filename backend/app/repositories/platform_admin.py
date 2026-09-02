@@ -1685,6 +1685,21 @@ class PlatformRepository:
             raise PlatformRepositoryError("whatsapp_meta_connection_upsert_failed")
         return data[0]
 
+    async def update_whatsapp_meta_connection_status(
+        self, *, organizacion_id: UUID, values: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Actualiza estado/error de una conexión ya existente sin reinsertarla."""
+        data = await self._rest(
+            "PATCH",
+            "/rest/v1/whatsapp_meta_connections",
+            params={"organizacion_id": f"eq.{organizacion_id}"},
+            json=values,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PlatformRepositoryError("whatsapp_meta_connection_update_failed")
+        return data[0]
+
     async def _rest(
         self,
         method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"],

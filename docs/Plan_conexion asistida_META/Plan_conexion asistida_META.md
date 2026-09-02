@@ -604,7 +604,8 @@ El primer corte del refactor deja preparado el flujo en paralelo al mecanismo pr
 - La validación consulta el WABA, confirma que el Phone Number ID pertenece a ese WABA y verifica la suscripción de la aplicación.
 - El PIN se recibe únicamente durante el registro y no se persiste ni se escribe en logs.
 - El estado se persiste en `whatsapp_meta_connections`; no se guardan tokens en esa tabla.
-- Después de una validación exitosa se sincroniza `config.whatsapp.meta.phone_number_id`, que es el dato que ya usa el resolver del webhook. El proveedor solo cambia a `meta` cuando la aplicación queda suscrita.
+- Solo después de una conexión completamente confirmada se sincroniza `config.whatsapp.meta.phone_number_id`, que es el dato que ya usa el resolver del webhook. El proveedor solo cambia a `meta` cuando la aplicación queda suscrita.
+- Si un intento queda en `error` o `pendiente`, el tenant puede corregir el WABA y el Phone Number ID. Una conexión `conectado` permanece protegida contra reemplazos accidentales.
 - La UI se agregó dentro de `settings/variables > WhatsApp`, con instrucciones, Business ID de Talia y botones por paso.
 
 La migración debe aplicarse antes de habilitar el panel en producción. El token global se lee con compatibilidad desde `META_SYSTEM_USER_ACCESS_TOKEN` o el nombre actualmente operativo `META_TOKEN`; el resto de valores globales usa `META_TALIA_BUSINESS_ID`, `META_APP_ID`, `META_APP_SECRET` y `META_GRAPH_API_VERSION`.

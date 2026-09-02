@@ -3,6 +3,15 @@
 Este archivo registra el avance del plan de simplificación de
 `/settings/variables`.
 
+## [2026-09-02] — Recuperación de WhatsApp durante el onboarding
+
+- El paso de WhatsApp ahora se considera completo únicamente cuando la conexión
+  asistida está en estado `conectado`.
+- Los tenants con un intento fallido pueden corregir sus identificadores y
+  reanudar el proceso sin borrar una conexión operativa confirmada.
+- El número productivo no cambia durante la validación ni el registro; solo se
+  sincroniza al confirmar la conexión completa.
+
 ## [2026-08-31] — Logo empresarial mediante carga de archivo
 
 ### Cambio realizado
