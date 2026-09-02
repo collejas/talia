@@ -17,6 +17,7 @@ type PropiedadGeomEditorProps = {
   onGeometryChange: (geojson?: string) => void;
   features?: GeoFeature[];
   highlightId?: string;
+  onFeatureClick?: (feature: GeoFeature) => void;
 };
 
 export function PropiedadGeomEditor({
@@ -24,16 +25,22 @@ export function PropiedadGeomEditor({
   onGeometryChange,
   features,
   highlightId,
+  onFeatureClick,
 }: PropiedadGeomEditorProps) {
   const mapEl = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
   const overlayRef = useRef<any>(null);
   const onGeometryChangeRef = useRef(onGeometryChange);
+  const onFeatureClickRef = useRef(onFeatureClick);
 
   useEffect(() => {
     onGeometryChangeRef.current = onGeometryChange;
   }, [onGeometryChange]);
+
+  useEffect(() => {
+    onFeatureClickRef.current = onFeatureClick;
+  }, [onFeatureClick]);
 
   useEffect(() => {
     if (mapRef.current) {
@@ -57,6 +64,14 @@ export function PropiedadGeomEditor({
       layerRef.current = featureGroup;
       const overlayLayer = L.geoJSON([]).addTo(map);
       overlayRef.current = overlayLayer;
+      overlayLayer.on("click", (event: any) => {
+        const feature = event?.layer?.feature as GeoFeature | undefined;
+        if (!feature?.id) {
+          return;
+        }
+        event?.originalEvent?.stopPropagation?.();
+        onFeatureClickRef.current?.(feature);
+      });
       const control = new L.Control.Draw({
         draw: {
           polyline: false,

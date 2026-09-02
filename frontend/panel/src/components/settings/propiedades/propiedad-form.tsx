@@ -901,6 +901,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [unidadFormError, setUnidadFormError] = useState<string | null>(null);
   const [isSubmittingUnidad, setIsSubmittingUnidad] = useState(false);
   const [editingUnidad, setEditingUnidad] = useState<UnidadNode | null>(null);
+  const [selectedUnidadId, setSelectedUnidadId] = useState<string | null>(null);
   const [isPrecioFocused, setIsPrecioFocused] = useState(false);
   const [isPrecioM2Focused, setIsPrecioM2Focused] = useState(false);
   const [duplicatingCapa, setDuplicatingCapa] = useState<CapaNode | null>(null);
@@ -1211,18 +1212,6 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     [handleSelectCapaGeometry],
   );
 
-  const handleFocusUnidad = useCallback(
-    (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
-      handleSelectUnidadGeometry(desarrollo, capa, unidad);
-      setExpandedNodes((prev) => ({
-        ...prev,
-        [desarrollo.id]: true,
-        [capa.id]: true,
-      }));
-    },
-    [handleSelectUnidadGeometry],
-  );
-
   const isTreeNodeSelected = useCallback(
     (nodeType: GeometryTarget["type"], nodeId: string) => {
       return geometryTarget?.type === nodeType && geometryTarget.id === nodeId;
@@ -1447,6 +1436,36 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   const [hierarchy, setHierarchy] = useState<DesarrolloNode[]>([]);
   const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
   const [hierarchyError, setHierarchyError] = useState<string | null>(null);
+
+  const handleMapFeatureClick = useCallback(
+    (feature: GeoFeature) => {
+      if (feature.properties?.layerType !== "unidad") {
+        return;
+      }
+
+      const unidadId = String(feature.id);
+      for (const desarrollo of hierarchy) {
+        for (const capa of desarrollo.capas ?? []) {
+          for (const manzana of capa.manzanas ?? []) {
+            const unidad = manzana.unidades?.find((item) => String(item.id) === unidadId);
+            if (unidad) {
+              setSelectedUnidadId(unidad.id);
+              openEditUnidadModal(desarrollo, capa, unidad);
+              return;
+            }
+          }
+
+          const unidad = capa.unidades?.find((item) => String(item.id) === unidadId);
+          if (unidad) {
+            setSelectedUnidadId(unidad.id);
+            openEditUnidadModal(desarrollo, capa, unidad);
+            return;
+          }
+        }
+      }
+    },
+    [hierarchy, openEditUnidadModal],
+  );
   const [estadoOptions, setEstadoOptions] = useState<LocationOption[]>([]);
   const [desarrolloMunicipioOptions, setDesarrolloMunicipioOptions] = useState<LocationOption[]>([]);
   const [mixMunicipioOptions, setMixMunicipioOptions] = useState<LocationOption[]>([]);
@@ -2600,7 +2619,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
   );
 
   const renderUnidadRow = (desarrollo: DesarrolloNode, capa: CapaNode, unidad: UnidadNode) => {
-    const isSelected = isTreeNodeSelected("unidad", unidad.id);
+    const isSelected = selectedUnidadId === unidad.id;
     return (
       <div key={unidad.id} className="space-y-1 border-b border-dashed border-slate-200 pb-2 last:border-b-0">
         <div className="flex items-center justify-between gap-3 text-[0.75rem]">
@@ -2611,8 +2630,11 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
                 ? "border-l-sky-500 bg-sky-50 text-sky-900 shadow-sm"
                 : "border-l-transparent hover:bg-slate-100/80"
             }`}
-            onClick={() => handleFocusUnidad(desarrollo, capa, unidad)}
-            aria-label={`Centrar unidad ${unidad.unidad || "sin clave"}`}
+            onClick={() => {
+              setSelectedUnidadId(unidad.id);
+              openEditUnidadModal(desarrollo, capa, unidad);
+            }}
+            aria-label={`Editar unidad ${unidad.unidad || "sin clave"}`}
           >
             <IconSquares className={`size-4 ${isSelected ? "text-sky-600" : "text-slate-400"}`} />
             <div className="flex flex-col">
@@ -2995,7 +3017,8 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
               value={formValues.geom}
               onGeometryChange={handleGeometryChange}
               features={visibleHierarchyFeatures}
-              highlightId={geometryTarget?.id ?? undefined}
+              highlightId={selectedUnidadId ?? geometryTarget?.id ?? undefined}
+              onFeatureClick={handleMapFeatureClick}
             />
         <div className="space-y-2">
             {geometryTarget ? (

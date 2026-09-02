@@ -2,7 +2,7 @@
 
 Fecha: 2026-09-02 (UTC)
 
-Estado: Idea documentada / pendiente de implementación
+Estado: Implementado localmente / pendiente de prueba funcional y deploy
 
 ## Objetivo
 
@@ -132,6 +132,14 @@ propiedad_unidades.desarrollo_id
 - `frontend/panel/src/app/api/crm/propiedad-unidades/[unidadId]/route.ts`
 - `backend/app/api/routes/crm.py` únicamente para validar ownership y contrato existente, si aplica.
 
+## Implementación realizada
+
+- `PropiedadGeomEditor` ahora expone un callback de clic de feature independiente del callback de geometría.
+- `PropiedadForm` identifica la unidad clickeada dentro de la jerarquía y abre el modal CRUD existente.
+- La unidad seleccionada usa `selectedUnidadId` para el resaltado visual, separado de `geometryTarget`.
+- Las unidades hermanas permanecen visibles al seleccionar una unidad.
+- El clic principal de una unidad en el árbol también abre el modal CRUD; el botón de mapa conserva la edición del polígono.
+
 ## Próximo paso
 
-Implementar primero el callback de clic de unidad en `PropiedadGeomEditor` y conectarlo con el modal existente de `PropiedadForm`. Después validar el flujo completo con persistencia real y comprobar que el editor de polígonos no se vea afectado.
+Validar el flujo completo en navegador con una manzana que tenga varias unidades: clic directo, carga correcta del modal, cancelar, guardar mediante PATCH, recarga de la jerarquía y comprobación de que la edición de polígonos conserva su comportamiento independiente.
