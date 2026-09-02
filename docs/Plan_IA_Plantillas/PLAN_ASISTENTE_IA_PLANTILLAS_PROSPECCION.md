@@ -91,6 +91,47 @@ variables, imágenes, usos de imagen, estilo y prompt en IA. El contenedor del
 flujo ocupará todo el ancho disponible; solo el lienzo de preview mantendrá una
 anchura acotada para representar un correo real.
 
+### 1.2.1 Biblioteca independiente de imágenes
+
+La administración de imágenes no formará parte de ninguno de los tres métodos
+de creación. Existirá una sección gráfica independiente llamada **Biblioteca de
+imágenes**, disponible dentro del módulo de plantillas y separada del flujo de
+crear o editar una plantilla.
+
+La biblioteca será la fuente común de imágenes para Editor visual, Código HTML y
+Asistente IA. Permitirá al usuario del tenant:
+
+- Ver las imágenes existentes como tarjetas con miniatura y nombre.
+- Agregar nuevas imágenes.
+- Definir o editar el nombre de una imagen.
+- Eliminar imágenes que ya no sean necesarias.
+- Consultar si una imagen está siendo utilizada por plantillas o versiones.
+
+Los tres creadores únicamente consumirán las imágenes disponibles en esta
+biblioteca. No mostrarán controles de carga, eliminación ni administración de
+recursos. En el Asistente IA, el paso **Imágenes de la plantilla** será solo un
+selector de imágenes existentes y su uso dentro del correo.
+
+La biblioteca estará aislada por `organizacion_id`. La eliminación deberá
+proteger recursos usados por una plantilla o versión publicada: podrá bloquearse
+con un mensaje claro o convertir la imagen en inactiva sin romper contenidos
+históricos. La URL del recurso y sus relaciones deberán conservar ownership del
+tenant y validarse en backend.
+
+La implementación será un movimiento controlado de interfaz, no una sustitución
+del almacenamiento existente:
+
+- Se conservarán los endpoints actuales para listar, cargar y eliminar imágenes.
+- Se conservará Supabase Storage y el bucket de imágenes actualmente utilizado.
+- Se moverán los controles de administración desde la pantalla de creación hacia
+  la Biblioteca de imágenes.
+- Editor visual, Código HTML y Asistente IA dejarán únicamente selectores para
+  consumir imágenes existentes.
+- Se reutilizarán los mismos identificadores, URLs, relaciones y validaciones de
+  tenant para evitar romper plantillas o versiones guardadas.
+- La eliminación seguirá protegida contra recursos utilizados por plantillas o
+  versiones publicadas.
+
 ### 1.3 Prueba real desde el constructor
 
 El botón **Enviar prueba** utilizará el correo SMTP operativo configurado en
@@ -430,7 +471,7 @@ al usuario. Como mínimo deberá permitir:
 - Variables insertables mediante controles visibles.
 - Selector completo de todas las variables disponibles para correo, con nombres
   visibles en español y sin claves técnicas ni etiquetas adicionales.
-- Selección de imágenes desde la galería del tenant.
+- Selección de imágenes existentes desde la Biblioteca de imágenes.
 - Vista previa de escritorio y móvil.
 - Selección, edición, duplicado y eliminación de bloques.
 
@@ -496,7 +537,7 @@ marcado. Permitirá:
 - Mostrar el mismo selector completo y legible de variables utilizado por el
   Editor visual; la clave técnica se insertará en el código sin exponerse como
   etiqueta de ayuda.
-- Seleccionar e insertar imágenes de la galería.
+- Seleccionar e insertar imágenes existentes desde la Biblioteca de imágenes.
 - Ver una vista previa aislada.
 - Validar y sanitizar el contenido antes de guardar.
 
@@ -509,7 +550,7 @@ backend.
 El asistente será un flujo de creación, no un panel permanente junto a los otros
 editores. Solicitará:
 
-- Imágenes que se desean utilizar.
+- Imágenes existentes de la Biblioteca de imágenes que se desean utilizar.
 - Uso de cada imagen: logo, encabezado, producto, beneficio, garantía u otro uso
   permitido por el catálogo.
 - Datos del prospecto que la plantilla puede utilizar.
@@ -518,12 +559,16 @@ editores. Solicitará:
 
 El orden visible del flujo será:
 
-1. Seleccionar las imágenes.
+1. Seleccionar imágenes existentes de la Biblioteca de imágenes.
 2. Definir el uso de cada imagen.
 3. Seleccionar los datos del prospecto.
 4. Elegir el estilo de diseño.
 5. Escribir el prompt o instrucción para el asistente.
 6. Generar la plantilla.
+
+El asistente no permitirá subir ni eliminar imágenes. Esas operaciones se
+realizarán exclusivamente en la Biblioteca de imágenes, para que el mismo
+recurso pueda ser reutilizado por los tres creadores.
 
 La selección de datos del prospecto utilizará el catálogo completo de variables
 disponibles para correo. Se mostrarán únicamente nombres legibles para el usuario,
@@ -1352,6 +1397,10 @@ La métrica de generación no debe confundirse con envíos de WhatsApp, envíos 
 - Implementar estados de carga, error y resultado.
 - Insertar resultado sin perder el borrador manual.
 - Mostrar advertencias antes de guardar.
+- Mover la administración de imágenes a la Biblioteca independiente.
+- Retirar de los tres creadores los controles de carga y eliminación.
+- Reutilizar el catálogo común de imágenes desde Editor visual, Código HTML y
+  Asistente IA.
 
 ### Fase 4: auditoría y optimización
 

@@ -805,6 +805,20 @@ Cada avance debe registrar:
 - Al seleccionar `custom_url`, el usuario puede indicar la ruta o URL de una página del sitio del tenant.
 - El asistente no permite avanzar ni generar mientras falte configurar el destino seleccionado.
 
+## 2026-09-02 — Biblioteca independiente de imágenes
+
+- Se definió una Biblioteca de imágenes separada de Editor visual, Código HTML y Asistente IA.
+- La biblioteca permitirá agregar, nombrar, consultar y eliminar imágenes del tenant.
+- Los tres creadores solo consumirán imágenes existentes desde esa fuente común; no tendrán controles propios de carga o eliminación.
+- El paso de imágenes del Asistente IA quedará limitado a seleccionar recursos existentes y asignarles un uso.
+- La eliminación deberá proteger imágenes utilizadas por plantillas o versiones publicadas.
+
+## 2026-09-02 — Migración de administración de imágenes
+
+- Se definió que la implementación moverá la interfaz de carga, consulta y eliminación a la Biblioteca de imágenes sin reemplazar el almacenamiento existente.
+- Se conservarán los endpoints, Supabase Storage, URLs, relaciones e identificación por tenant.
+- Editor visual, Código HTML y Asistente IA quedarán como consumidores del catálogo común y solo permitirán seleccionar imágenes existentes.
+
 ## 2026-09-02 — Generación asíncrona sin timeout artificial
 
 - La llamada al proveedor de IA ya no se cancela mediante el timeout de aplicación; la generación continúa en segundo plano y conserva los límites propios del SDK.
