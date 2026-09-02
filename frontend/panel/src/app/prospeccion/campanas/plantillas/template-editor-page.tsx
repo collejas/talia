@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { IconArrowLeft, IconLoader, IconPhoto, IconUpload } from "@tabler/icons-react"
+import { IconArrowLeft, IconLoader, IconPhoto, IconTrash, IconUpload } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -169,6 +169,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
   const [logos, setLogos] = useState<LogoAsset[]>([])
   const [logosLoading, setLogosLoading] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
+  const [deletingLogoId, setDeletingLogoId] = useState<string | null>(null)
   const [imageIds, setImageIds] = useState<Partial<Record<ContactoTemplateImagenVariable, string>>>({})
   const [selectedImageSlot, setSelectedImageSlot] = useState<ContactoTemplateImagenVariable>("logo_url")
   const [waRules, setWaRules] = useState<WhatsAppAtribucionRule[]>([])
@@ -449,10 +450,6 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
       const body = new FormData()
       body.append("file", file, file.name || "imagen.png")
       body.append("nombre", file.name || "Imagen de prospección")
-      if (form.campanaId) body.append("campana_id", form.campanaId)
-      body.append("canal", form.canal)
-      if (form.id) body.append("template_id", form.id)
-      body.append("template_slug", slugify(form.nombre || "plantilla", form.canal))
 
       const response = await fetch("/api/settings/logos", { method: "POST", body })
       const payload = await response.json().catch(() => ({}))
@@ -469,7 +466,27 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
       setLogoUploading(false)
       if (logoFileInputRef.current) logoFileInputRef.current.value = ""
     }
-  }, [form.campanaId, form.canal, form.id, form.nombre, selectedImageSlot])
+  }, [selectedImageSlot])
+
+  const handleLogoDelete = useCallback(async (logo: LogoAsset) => {
+    if (!window.confirm(`¿Eliminar la imagen "${logo.nombre}" de la biblioteca?`)) return
+    setDeletingLogoId(logo.id)
+    setError(null)
+    try {
+      const response = await fetch(`/api/settings/logos/${encodeURIComponent(logo.id)}`, { method: "DELETE" })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(typeof payload?.error === "string" ? payload.error : "No se pudo eliminar la imagen.")
+      }
+      setLogos((previous) => previous.filter((item) => item.id !== logo.id))
+      setImageIds((previous) => Object.fromEntries(Object.entries(previous).filter(([, value]) => value !== logo.id)))
+      setNotice("Imagen eliminada de la biblioteca.")
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo eliminar la imagen.")
+    } finally {
+      setDeletingLogoId(null)
+    }
+  }, [])
 
   const insertSelectedImage = useCallback(() => {
     const token = `{{${selectedImageSlot}}}`
@@ -1227,9 +1244,9 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
         </section>
       ) : null}
 
-      {!needsEmailCreationMode && form.canal !== "correo" ? <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      {(!needsEmailCreationMode || form.canal === "correo") ? <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <main className="min-w-0 space-y-6">
-          <Card>
+          <Card className={form.canal === "correo" ? "hidden" : undefined}>
             <CardHeader>
               <CardTitle className="text-base">Identidad de la plantilla</CardTitle>
               <CardDescription>Estos datos ayudan a reconocer y reutilizar la plantilla.</CardDescription>
@@ -1265,7 +1282,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={form.canal === "correo" ? "hidden" : undefined}>
             <CardHeader>
               <CardTitle className="text-base">Contenido</CardTitle>
               <CardDescription>
@@ -1305,7 +1322,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={form.canal === "correo" ? "hidden" : undefined}>
             <CardHeader>
               <CardTitle className="text-base">Personalización</CardTitle>
               <CardDescription>
@@ -1329,11 +1346,11 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
             </CardContent>
           </Card>
 
-          <Card className={form.emailCreationMode === "ai" ? "hidden" : undefined}>
+          <Card>
             <CardHeader>
-              <CardTitle className="text-base">Imágenes de la plantilla</CardTitle>
+              <CardTitle className="text-base">Biblioteca de imágenes</CardTitle>
               <CardDescription>
-                Sube imágenes, consulta la galería del tenant y asígnalas a una variable reutilizable.
+                Administra las imágenes del tenant. Los tres creadores de correo consumen estos recursos.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -1412,7 +1429,20 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                         </div>
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <span className="truncate text-xs font-medium">{logo.nombre}</span>
-                          {selected ? <Badge variant="secondary">Asignada</Badge> : null}
+                          <div className="flex items-center gap-1">
+                            {selected ? <Badge variant="secondary">Asignada</Badge> : null}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-destructive hover:text-destructive"
+                              aria-label={`Eliminar ${logo.nombre}`}
+                              disabled={deletingLogoId === logo.id}
+                              onClick={(event) => { event.stopPropagation(); void handleLogoDelete(logo) }}
+                            >
+                              {deletingLogoId === logo.id ? <IconLoader className="size-3 animate-spin" /> : <IconTrash className="size-3" />}
+                            </Button>
+                          </div>
                         </div>
                       </button>
                     )

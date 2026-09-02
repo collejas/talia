@@ -819,6 +819,13 @@ Cada avance debe registrar:
 - Se conservarán los endpoints, Supabase Storage, URLs, relaciones e identificación por tenant.
 - Editor visual, Código HTML y Asistente IA quedarán como consumidores del catálogo común y solo permitirán seleccionar imágenes existentes.
 
+## 2026-09-02 — Biblioteca independiente implementada
+
+- La tarjeta de administración se convirtió en la Biblioteca de imágenes y dejó de ocultarse según el modo de creación.
+- La carga ya no se asocia a campaña o plantilla; se guarda como recurso común del tenant.
+- Se agregó eliminación desde la biblioteca reutilizando `DELETE /api/settings/logos/{logo_id}` y se conservan las protecciones para imágenes en uso.
+- Los tres modos continúan recibiendo el catálogo común para seleccionar imágenes.
+
 ## 2026-09-02 — Generación asíncrona sin timeout artificial
 
 - La llamada al proveedor de IA ya no se cancela mediante el timeout de aplicación; la generación continúa en segundo plano y conserva los límites propios del SDK.

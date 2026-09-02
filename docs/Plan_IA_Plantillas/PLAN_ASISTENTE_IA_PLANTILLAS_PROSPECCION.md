@@ -1401,6 +1401,9 @@ La métrica de generación no debe confundirse con envíos de WhatsApp, envíos 
 - Retirar de los tres creadores los controles de carga y eliminación.
 - Reutilizar el catálogo común de imágenes desde Editor visual, Código HTML y
   Asistente IA.
+- Implementado inicialmente: la Biblioteca reutiliza los endpoints y el
+  almacenamiento existentes, permite cargar, consultar y eliminar imágenes, y
+  deja los recursos disponibles para los tres creadores.
 
 ### Fase 4: auditoría y optimización
 
