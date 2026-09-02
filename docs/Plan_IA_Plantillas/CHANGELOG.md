@@ -799,6 +799,12 @@ Cada avance debe registrar:
 - El paso de selección ya no muestra `canal_origen`, `email`, `telefono` ni `tracking_url`.
 - `tracking_url` permanece disponible en backend como variable implícita y automática para correos, sin requerir selección manual del usuario.
 
+## 2026-09-02 — Destinos configurables para enlaces del asistente IA
+
+- Al seleccionar `whatsapp_url`, el usuario puede elegir una regla/CTA de WhatsApp existente y se reutiliza su frase de atribución.
+- Al seleccionar `custom_url`, el usuario puede indicar la ruta o URL de una página del sitio del tenant.
+- El asistente no permite avanzar ni generar mientras falte configurar el destino seleccionado.
+
 ## 2026-09-02 — Generación asíncrona sin timeout artificial
 
 - La llamada al proveedor de IA ya no se cancela mediante el timeout de aplicación; la generación continúa en segundo plano y conserva los límites propios del SDK.

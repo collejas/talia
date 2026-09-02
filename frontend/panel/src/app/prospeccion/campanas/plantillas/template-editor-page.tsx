@@ -1193,6 +1193,13 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
                     imageSlots={IMAGE_SLOTS}
                     selectedImages={imageIds}
                     onImageSelectionChange={(slotKey, assetId) => setImageIds((current) => ({ ...current, [slotKey]: assetId }))}
+                    whatsappRules={waRules}
+                    whatsappRulesLoading={waRulesLoading}
+                    selectedWhatsappRuleId={selectedWaRuleId}
+                    onWhatsappRuleChange={setSelectedWaRuleId}
+                    websiteBaseUrl={form.websiteBaseUrl}
+                    customUrl={form.internalLinkUrl}
+                    onCustomUrlChange={(value) => setForm((previous) => ({ ...previous, internalLinkUrl: value }))}
                     onApply={applyDraft}
                   />
                   {form.cuerpoHtml.trim() ? (

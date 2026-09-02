@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -39,6 +40,12 @@ type ImageSlot = {
   label: string
 }
 
+type WhatsAppRule = {
+  id: string
+  nombre_regla?: string | null
+  frase_objetivo?: string | null
+}
+
 export type TemplateAiDraft = {
   nombre_sugerido: string
   descripcion: string
@@ -60,6 +67,13 @@ type Props = {
   imageSlots?: ImageSlot[]
   selectedImages?: Record<string, string | undefined>
   onImageSelectionChange?: (slotKey: string, assetId?: string) => void
+  whatsappRules?: WhatsAppRule[]
+  whatsappRulesLoading?: boolean
+  selectedWhatsappRuleId?: string
+  onWhatsappRuleChange?: (ruleId: string) => void
+  websiteBaseUrl?: string
+  customUrl?: string
+  onCustomUrlChange?: (value: string) => void
   onApply: (draft: TemplateAiDraft) => void
 }
 
@@ -77,6 +91,7 @@ const IMAGE_VARIABLE_KEYS = new Set([
   "warranty_image_url",
 ])
 const HIDDEN_VARIABLE_KEYS = new Set(["canal_origen", "email", "telefono", "tracking_url"])
+const LINK_VARIABLE_KEYS = new Set(["whatsapp_url", "custom_url"])
 
 function formatTemplateAiError(value: string) {
   if (value.startsWith("html_tag_not_allowed:")) {
@@ -98,7 +113,7 @@ function payloadError(payload: unknown, fallback: string) {
   return fallback
 }
 
-export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_VARIABLE_VALUES, assets = [], imageSlots = [], selectedImages = {}, onImageSelectionChange, onApply }: Props) {
+export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_VARIABLE_VALUES, assets = [], imageSlots = [], selectedImages = {}, onImageSelectionChange, whatsappRules = [], whatsappRulesLoading = false, selectedWhatsappRuleId = "", onWhatsappRuleChange, websiteBaseUrl = "", customUrl = "", onCustomUrlChange, onApply }: Props) {
   const [variables, setVariables] = useState<VariableItem[]>([])
   const [layouts, setLayouts] = useState<LayoutItem[]>([])
   const [designStyle, setDesignStyle] = useState("automatico")
@@ -145,10 +160,11 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
     () => variables.filter((variable) => !IMAGE_VARIABLE_KEYS.has(variable.clave) && !HIDDEN_VARIABLE_KEYS.has(variable.clave)),
     [variables],
   )
+  const selectedLinksConfigured = selected.every((key) => !LINK_VARIABLE_KEYS.has(key) || Boolean(variableValues[key]?.trim()))
 
   useEffect(() => {
     setSelected((current) =>
-      current.filter((key) => !(Object.hasOwn(variableValues, key) && !variableValues[key]?.trim())),
+      current.filter((key) => LINK_VARIABLE_KEYS.has(key) || !(Object.hasOwn(variableValues, key) && !variableValues[key]?.trim())),
     )
   }, [variableValues])
 
@@ -181,6 +197,10 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
     const selectedContentVariables = selected.filter((key) => !IMAGE_VARIABLE_KEYS.has(key) && !HIDDEN_VARIABLE_KEYS.has(key))
     if (selectedContentVariables.length === 0) {
       setError("Selecciona al menos una variable para generar la plantilla.")
+      return
+    }
+    if (!selectedLinksConfigured) {
+      setError("Configura el CTA o la página del enlace seleccionado antes de continuar.")
       return
     }
     if (instruction.trim().length < 10) {
@@ -260,11 +280,17 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
   }
 
   const maxStep = canal === "correo" ? 3 : 1
-  const canContinue = step === 0 ? selected.some((key) => !IMAGE_VARIABLE_KEYS.has(key) && !HIDDEN_VARIABLE_KEYS.has(key)) : step < maxStep || instruction.trim().length >= 10
+  const canContinue = step === 0
+    ? selected.some((key) => !IMAGE_VARIABLE_KEYS.has(key) && !HIDDEN_VARIABLE_KEYS.has(key)) && selectedLinksConfigured
+    : step < maxStep || instruction.trim().length >= 10
 
   const nextStep = () => {
     if (step === 0 && !selected.some((key) => !IMAGE_VARIABLE_KEYS.has(key) && !HIDDEN_VARIABLE_KEYS.has(key))) {
       setError("Selecciona al menos una variable para continuar.")
+      return
+    }
+    if (step === 0 && !selectedLinksConfigured) {
+      setError("Configura el CTA o la página del enlace seleccionado antes de continuar.")
       return
     }
     setError(null)
@@ -304,14 +330,33 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
           {contentVariables.length ? (
             <div className="grid gap-2 sm:grid-cols-2">
               {contentVariables.map((variable) => (
-                <label key={variable.clave} className="flex cursor-pointer items-start gap-2 rounded-md border bg-background/80 px-2.5 py-2 text-xs has-disabled:cursor-not-allowed has-disabled:opacity-50">
-                  <input type="checkbox" className="mt-0.5" checked={selectedSet.has(variable.clave)} disabled={Object.hasOwn(variableValues, variable.clave) && !variableValues[variable.clave]?.trim()} onChange={() => toggleVariable(variable.clave)} />
+                <div key={variable.clave} className="rounded-md border bg-background/80 px-2.5 py-2 text-xs">
+                  <label className="flex cursor-pointer items-start gap-2 has-disabled:cursor-not-allowed has-disabled:opacity-50">
+                  <input type="checkbox" className="mt-0.5" checked={selectedSet.has(variable.clave)} disabled={!LINK_VARIABLE_KEYS.has(variable.clave) && Object.hasOwn(variableValues, variable.clave) && !variableValues[variable.clave]?.trim()} onChange={() => toggleVariable(variable.clave)} />
                   <span>
                     <span className="block font-medium">{variable.etiqueta}</span>
                     {variable.descripcion ? <span className="block text-[10px] text-muted-foreground">{variable.descripcion}</span> : null}
-                    {Object.hasOwn(variableValues, variable.clave) && !variableValues[variable.clave]?.trim() ? <span className="block text-[10px] text-amber-700">Configura primero este enlace.</span> : null}
+                    {!LINK_VARIABLE_KEYS.has(variable.clave) && Object.hasOwn(variableValues, variable.clave) && !variableValues[variable.clave]?.trim() ? <span className="block text-[10px] text-amber-700">Configura primero este enlace.</span> : null}
                   </span>
-                </label>
+                  </label>
+                  {variable.clave === "whatsapp_url" && selectedSet.has(variable.clave) ? (
+                    <div className="mt-2 space-y-1 pl-5" onClick={(event) => event.stopPropagation()}>
+                      <Label htmlFor="template-ai-whatsapp-cta" className="text-[10px]">CTA de WhatsApp</Label>
+                      <select id="template-ai-whatsapp-cta" className="h-8 w-full rounded-md border bg-background px-2 text-[11px]" value={selectedWhatsappRuleId} onChange={(event) => onWhatsappRuleChange?.(event.target.value)}>
+                        <option value="">{whatsappRulesLoading ? "Cargando CTAs..." : "Selecciona un CTA"}</option>
+                        {whatsappRules.map((rule) => <option key={rule.id} value={rule.id}>{rule.nombre_regla || rule.frase_objetivo || "CTA de WhatsApp"}</option>)}
+                      </select>
+                      <p className="text-[10px] text-muted-foreground">La frase seleccionada se conservará para atribuir el origen en WhatsApp.</p>
+                    </div>
+                  ) : null}
+                  {variable.clave === "custom_url" && selectedSet.has(variable.clave) ? (
+                    <div className="mt-2 space-y-1 pl-5" onClick={(event) => event.stopPropagation()}>
+                      <Label htmlFor="template-ai-custom-url" className="text-[10px]">Página del sitio</Label>
+                      <Input id="template-ai-custom-url" value={customUrl} onChange={(event) => onCustomUrlChange?.(event.target.value)} placeholder="/servicios o https://..." className="h-8 text-[11px]" />
+                      <p className="text-[10px] text-muted-foreground">Puedes indicar una ruta interna del sitio{websiteBaseUrl ? ` (${websiteBaseUrl})` : ""}. El enlace recibirá seguimiento UTM.</p>
+                    </div>
+                  ) : null}
+                </div>
               ))}
             </div>
           ) : null}
