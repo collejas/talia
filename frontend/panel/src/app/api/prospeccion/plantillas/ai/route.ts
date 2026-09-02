@@ -19,5 +19,5 @@ export async function POST(request: Request) {
     body,
   })
   if (!response.ok) return NextResponse.json({ error: response.error }, { status: response.status ?? 400 })
-  return NextResponse.json(response.data)
+  return NextResponse.json(response.data, { status: 202 })
 }

@@ -567,7 +567,7 @@ class PlatformRepository:
             "GET",
             "/rest/v1/prospeccion_plantilla_ai_layouts",
             params={
-                "select": "id,organizacion_id,codigo,nombre,descripcion,instrucciones_composicion,canal,activo,orden,habilitado,predeterminado,actualizado_por,creado_en,actualizado_en",
+                "select": "id,organizacion_id,codigo,nombre,descripcion,instrucciones_composicion,logo_ancho_px,canal,activo,orden,habilitado,predeterminado,actualizado_por,creado_en,actualizado_en",
                 "canal": f"eq.{canal}",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "order": "orden.asc",
@@ -598,6 +598,7 @@ class PlatformRepository:
         nombre: str,
         descripcion: str,
         instrucciones_composicion: str,
+        logo_ancho_px: int,
         canal: str,
         orden: int,
         habilitado: bool,
@@ -613,6 +614,7 @@ class PlatformRepository:
                 "nombre": nombre,
                 "descripcion": descripcion,
                 "instrucciones_composicion": instrucciones_composicion,
+                "logo_ancho_px": logo_ancho_px,
                 "canal": canal,
                 "orden": orden,
                 "habilitado": habilitado,
@@ -693,6 +695,26 @@ class PlatformRepository:
             },
             json=payload,
             prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        return data[0]
+
+    async def get_prospeccion_template_ai_generation(
+        self,
+        *,
+        organizacion_id: UUID,
+        generation_id: UUID,
+    ) -> dict[str, Any] | None:
+        data = await self._rest(
+            "GET",
+            "/rest/v1/prospeccion_plantilla_ai_generaciones",
+            params={
+                "select": "id,organizacion_id,usuario_id,canal,resultado_estado,error_codigo,estilo_diseno_solicitado,estilo_diseno_aplicado,resultado_nombre_sugerido,resultado_descripcion,resultado_cuerpo_texto,resultado_asunto,resultado_cuerpo_html,resultado_variables_usadas,resultado_advertencias,resultado_meta_category_sugerida,resultado_language_code_sugerido,creado_en,finalizado_en",
+                "id": f"eq.{generation_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            },
         )
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             return None

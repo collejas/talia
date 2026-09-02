@@ -25,6 +25,7 @@ type LayoutItem = {
   nombre: string
   descripcion: string
   predeterminado: boolean
+  logo_ancho_px?: number
 }
 
 type ImageAsset = {
@@ -76,10 +77,22 @@ const IMAGE_VARIABLE_KEYS = new Set([
   "warranty_image_url",
 ])
 
+function formatTemplateAiError(value: string) {
+  if (value.startsWith("html_tag_not_allowed:")) {
+    const tagName = value.slice("html_tag_not_allowed:".length).trim()
+    return tagName
+      ? `La IA generó una etiqueta HTML no permitida: <${tagName}>.`
+      : "La IA generó una etiqueta HTML no permitida."
+  }
+  return value
+}
+
 function payloadError(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object" && "error" in payload) {
     const value = (payload as { error?: unknown }).error
-    if (typeof value === "string" && value.trim()) return value
+    if (typeof value === "string" && value.trim()) {
+      return formatTemplateAiError(value)
+    }
   }
   return fallback
 }
@@ -151,6 +164,15 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
     })
   }
 
+  const resolveSelectedImages = (html: string | undefined) => {
+    if (!html) return html
+    return imageSlots.reduce((result, slot) => {
+      const assetId = selectedImages[slot.key]
+      const asset = assets.find((item) => item.id === assetId)
+      return asset ? result.replaceAll(`{{${slot.key}}}`, asset.file_url) : result
+    }, html)
+  }
+
   const generate = async () => {
     setError(null)
     setWarning([])
@@ -172,6 +194,7 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
           canal,
           campana_id: campanaId,
           variables_seleccionadas: selectedContentVariables,
+          marcadores_imagenes_seleccionados: imageSlots.filter((slot) => selectedImages[slot.key]).map((slot) => slot.key),
           instruccion_usuario: instruction.trim(),
           tono: "profesional",
           idioma: "es-MX",
@@ -179,8 +202,22 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
         }),
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payloadError(payload, "No se pudo generar el borrador."))
-      const draft = payload?.resultado as TemplateAiDraft | undefined
+      if (!response.ok) throw new Error(payloadError(payload, "No se pudo iniciar la generación."))
+      const generationId = payload?.generation_id as string | undefined
+      if (!generationId) throw new Error("La respuesta no contiene el identificador de generación.")
+      let resultPayload: { status?: string; error?: string; resultado?: TemplateAiDraft } = payload
+      for (;;) {
+        await new Promise((resolve) => window.setTimeout(resolve, 2000))
+        const statusResponse = await fetch(`/api/prospeccion/plantillas/ai/generations/${encodeURIComponent(generationId)}`, { cache: "no-store" })
+        const statusPayload = await statusResponse.json()
+        if (!statusResponse.ok) throw new Error(payloadError(statusPayload, "No se pudo consultar la generación."))
+        resultPayload = statusPayload
+        if (statusPayload?.status === "generada" || statusPayload?.status === "error" || statusPayload?.status === "respuesta_invalida") break
+      }
+      if (resultPayload.status !== "generada") {
+        throw new Error(formatTemplateAiError(resultPayload.error || "La generación no produjo una plantilla válida."))
+      }
+      const draft = resultPayload.resultado as TemplateAiDraft | undefined
       if (!draft) throw new Error("La respuesta no contiene un borrador válido.")
       const resolveConfiguredVariables = (value: string | undefined) => {
         if (!value) return value
@@ -194,7 +231,7 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
         ...draft,
         asunto: resolveConfiguredVariables(draft.asunto),
         cuerpo_texto: resolveConfiguredVariables(draft.cuerpo_texto) ?? "",
-        cuerpo_html: resolveConfiguredVariables(draft.cuerpo_html),
+        cuerpo_html: resolveSelectedImages(resolveConfiguredVariables(draft.cuerpo_html)),
       }
       if (canal === "correo" && typeof resolvedDraft.estilo_diseno === "string" && resolvedDraft.estilo_diseno.trim()) {
         setDesignStyle(resolvedDraft.estilo_diseno.trim())
@@ -235,7 +272,12 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
         <p className="text-xs font-semibold uppercase tracking-wide text-violet-950">Asistente IA</p>
         <p className="mt-1 text-sm font-medium text-violet-950">Paso {step + 1} de {stepLabels.length}: {stepLabels[step]}</p>
         <div className="mt-3 grid gap-1" style={{ gridTemplateColumns: `repeat(${stepLabels.length}, minmax(0, 1fr))` }}>
-          {stepLabels.map((label, index) => <div key={label} className={`h-1 rounded-full ${index <= step ? "bg-violet-600" : "bg-violet-200"}`} aria-label={label} />)}
+          {stepLabels.map((label, index) => (
+            <button key={label} type="button" className="group h-5 disabled:cursor-default" onClick={() => { if (index < step) { setError(null); setStep(index) } }} disabled={index >= step} aria-label={`Ir al paso ${index + 1}: ${label}`}>
+              <span className={`block h-1 rounded-full transition-colors ${index <= step ? "bg-violet-600" : "bg-violet-200"} ${index < step ? "group-hover:bg-violet-800" : ""}`} />
+              <span className={`mt-1 block truncate text-[10px] ${index === step ? "font-semibold text-violet-950" : "text-muted-foreground"}`}>{label}</span>
+            </button>
+          ))}
         </div>
       </div>
 

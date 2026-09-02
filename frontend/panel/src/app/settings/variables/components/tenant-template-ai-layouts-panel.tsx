@@ -15,6 +15,7 @@ export type TemplateAiLayout = {
   nombre: string
   descripcion: string
   instrucciones_composicion: string
+  logo_ancho_px: number
   canal: "correo" | "whatsapp"
   activo: boolean
   orden: number
@@ -27,18 +28,18 @@ export type TemplateAiLayout = {
 
 type Props = { initialItems: TemplateAiLayout[] }
 type FormState = {
-  codigo: string
   nombre: string
   descripcion: string
   instrucciones_composicion: string
+  logo_ancho_px: string
   orden: string
 }
 
 const EMPTY_FORM: FormState = {
-  codigo: "",
   nombre: "",
   descripcion: "",
   instrucciones_composicion: "",
+  logo_ancho_px: "140",
   orden: "1000",
 }
 
@@ -76,10 +77,10 @@ export function TenantTemplateAiLayoutsPanel({ initialItems }: Props) {
   const startEdit = (item: TemplateAiLayout) => {
     setEditingId(item.id)
     setForm({
-      codigo: item.codigo,
       nombre: item.nombre,
       descripcion: item.descripcion,
       instrucciones_composicion: item.instrucciones_composicion,
+      logo_ancho_px: String(item.logo_ancho_px),
       orden: String(item.orden),
     })
     setMessage(null)
@@ -87,7 +88,7 @@ export function TenantTemplateAiLayoutsPanel({ initialItems }: Props) {
 
   const save = async () => {
     const name = form.nombre.trim()
-    const code = slugify(form.codigo.trim() || name)
+    const code = slugify(name)
     if (code.length < 2) return setMessage({ type: "error", text: "Define un nombre o código válido para el estilo." })
     if (name.length < 2) return setMessage({ type: "error", text: "El nombre del estilo es obligatorio." })
     if (form.instrucciones_composicion.trim().length < 10) return setMessage({ type: "error", text: "Escribe instrucciones de composición más detalladas." })
@@ -108,6 +109,7 @@ export function TenantTemplateAiLayoutsPanel({ initialItems }: Props) {
                   nombre: name,
                   descripcion: form.descripcion.trim(),
                   instrucciones_composicion: form.instrucciones_composicion.trim(),
+                  logo_ancho_px: Number(form.logo_ancho_px) || 140,
                   orden: Number(form.orden) || 1000,
                 }
               : {
@@ -115,6 +117,7 @@ export function TenantTemplateAiLayoutsPanel({ initialItems }: Props) {
                   nombre: name,
                   descripcion: form.descripcion.trim(),
                   instrucciones_composicion: form.instrucciones_composicion.trim(),
+                  logo_ancho_px: Number(form.logo_ancho_px) || 140,
                   canal: "correo",
                   orden: Number(form.orden) || 1000,
                   habilitado: true,
@@ -190,11 +193,11 @@ export function TenantTemplateAiLayoutsPanel({ initialItems }: Props) {
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
             <p className="font-medium">{editingId ? "Editar estilo" : "Crear estilo"}</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <div className="space-y-2"><Label htmlFor="ai-layout-code">Código interno</Label><Input id="ai-layout-code" value={form.codigo} disabled={Boolean(editingId)} onChange={(event) => setForm((current) => ({ ...current, codigo: event.target.value }))} placeholder="elegante_corporativo" /></div>
-              <div className="space-y-2"><Label htmlFor="ai-layout-name">Nombre</Label><Input id="ai-layout-name" value={form.nombre} onChange={(event) => setForm((current) => ({ ...current, nombre: event.target.value }))} placeholder="Elegante corporativo" /></div>
+              <div className="space-y-2 md:col-span-2"><Label htmlFor="ai-layout-name">Nombre</Label><Input id="ai-layout-name" value={form.nombre} onChange={(event) => setForm((current) => ({ ...current, nombre: event.target.value }))} placeholder="Elegante corporativo" /></div>
               <div className="space-y-2 md:col-span-2"><Label htmlFor="ai-layout-description">Descripción</Label><Input id="ai-layout-description" value={form.descripcion} onChange={(event) => setForm((current) => ({ ...current, descripcion: event.target.value }))} placeholder="Diseño sobrio para empresas B2B" maxLength={500} /></div>
               <div className="space-y-2 md:col-span-2"><Label htmlFor="ai-layout-instructions">Instrucciones de composición</Label><Textarea id="ai-layout-instructions" rows={5} value={form.instrucciones_composicion} onChange={(event) => setForm((current) => ({ ...current, instrucciones_composicion: event.target.value }))} placeholder="Usa encabezado limpio, espacio en blanco, tarjetas discretas y un CTA azul..." maxLength={6000} /></div>
               <div className="space-y-2"><Label htmlFor="ai-layout-order">Orden</Label><Input id="ai-layout-order" type="number" min={0} max={9999} value={form.orden} onChange={(event) => setForm((current) => ({ ...current, orden: event.target.value }))} /></div>
+              <div className="space-y-2"><Label htmlFor="ai-layout-logo-width">Ancho del logo (px)</Label><Input id="ai-layout-logo-width" type="number" min={80} max={240} value={form.logo_ancho_px} onChange={(event) => setForm((current) => ({ ...current, logo_ancho_px: event.target.value }))} /><p className="text-xs text-muted-foreground">Se aplica al logo cuando el asistente inserta la imagen. Usa entre 80 y 240 px.</p></div>
             </div>
             <div className="mt-4 flex gap-2"><Button type="button" onClick={() => void save()} disabled={saving}>{saving ? "Guardando…" : "Guardar estilo"}</Button><Button type="button" variant="ghost" onClick={() => setEditingId(null)}>Cancelar</Button></div>
           </div>
@@ -207,6 +210,7 @@ export function TenantTemplateAiLayoutsPanel({ initialItems }: Props) {
                 <code className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{item.codigo}</code>
               </div>
               <p className="mt-3 line-clamp-3 text-xs text-muted-foreground">{item.instrucciones_composicion}</p>
+              <p className="mt-2 text-xs text-muted-foreground">Logo: {item.logo_ancho_px} px</p>
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                 <label className="flex items-center gap-2"><input type="checkbox" checked={item.habilitado} onChange={(event) => void updateItem(item, { habilitado: event.target.checked })} /> Disponible</label>
                 <label className="flex items-center gap-2"><input type="radio" name="template-ai-default-layout" checked={item.predeterminado} onChange={() => void updateItem(item, { predeterminado: true })} /> Predeterminado</label>

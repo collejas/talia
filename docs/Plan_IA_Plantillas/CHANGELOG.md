@@ -12,6 +12,15 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
 
 **Última actualización:** 2026-08-31
 
+## 2026-09-01 — Aplicación efectiva del estilo elegido en generación IA
+
+- La generación de correo ahora resuelve desde el catálogo del tenant el registro completo del estilo elegido: código, nombre, descripción e instrucciones de composición.
+- El backend incluye esas instrucciones en la variable existente `instruccion_usuario` y en `layouts_permitidos`, evitando depender de una variable nueva que no esté declarada todavía en la versión activa del prompt.
+- La salida continúa validando que `estilo_diseno` coincida con un estilo habilitado; registrar el código correcto ya no se considera suficiente: el HTML debe recibir también las instrucciones de composición del estilo.
+- La incorporación de imágenes del asistente conserva los atributos `src`/`data-src` y la estructura HTML generada; solo los tokens independientes se convierten en bloques de imagen.
+- Cuando el modelo no incluye un token de imagen, el bloque pendiente se inserta como una fila dentro de la tabla principal del correo, nunca después de su cierre.
+- La ubicación se determina respetando tablas anidadas: logo en encabezado, imagen principal después del hero e imágenes de producto antes del CTA.
+
 ## 2026-08-31 — Tres modos de creación para correo
 
 ## 2026-09-01 — Destinos de botones del Editor visual
@@ -75,6 +84,11 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
   seleccionan únicamente en el paso de imágenes para evitar duplicidad.
 - Después de generar, el asistente muestra el HTML resultante en un editor y
   una vista previa para que el usuario pueda revisarlo antes de guardar.
+- Los pasos anteriores del asistente son accesibles desde el indicador superior
+  y mediante “Atrás”, conservando las selecciones realizadas.
+- Las imágenes seleccionadas en el paso de imágenes ahora se incorporan al
+  HTML generado, usando el asset real y su uso; si no existe un marcador, se
+  agregan al final del correo.
 
 ### Documentado
 
@@ -746,3 +760,40 @@ Cada avance debe registrar:
 - La vista previa de imágenes dentro de columnas ahora muestra el asset seleccionado y lo ajusta al ancho de la columna sin deformarlo ni desbordarse.
 - Se agregó el envío de prueba individual desde el constructor: el destinatario se captura manualmente, mientras las variables se renderizan con un prospecto aleatorio del tenant.
 - La prueba usa exclusivamente la configuración SMTP de `settings/variables` y `provider_preference="smtp"`; no crea envíos masivos ni pasa por Postmark.
+## 2026-09-02 — Ancho del logo controlado por estilo
+
+- Se agregó la columna explícita `logo_ancho_px` al catálogo `prospeccion_plantilla_ai_layouts`; los estilos base reciben anchos iniciales según su composición.
+- La API valida el ancho entre 80 y 240 px y aplica 140 px como valor predeterminado para estilos nuevos.
+- El asistente IA recibe el ancho dentro del estilo seleccionado y el postprocesado de imágenes lo aplica al logo, manteniendo las demás imágenes responsivas.
+- La pantalla `settings/variables` permite editar el ancho del logo de cada estilo.
+- Migración: `20260902_120000_prospeccion_plantilla_ai_layouts_logo_width.sql`.
+## 2026-09-02 — Corrección de creación de estilos
+
+- Se corrigió el proxy del panel para enviar la creación de estilos mediante `POST` al endpoint backend. Antes reenviaba la operación como `PUT`, provocando `405 Method Not Allowed`.
+## 2026-09-02 — Código interno oculto en estilos de diseño
+
+- Se retiró del formulario el campo técnico “Código interno”.
+- El código se genera automáticamente a partir del nombre al crear un estilo y permanece interno al editarlo.
+## 2026-09-02 — La IA conserva la composición HTML
+
+- Se eliminó la inserción automática de filas, imágenes y posiciones semánticas desde el asistente.
+- La generación informa a la IA qué marcadores de imagen fueron seleccionados y exige que los coloque dentro de la estructura de cada estilo.
+- Después de generar, el sistema solo reemplaza los marcadores por las URLs reales; si falta un marcador seleccionado, la generación se rechaza para evitar alterar el diseño.
+## 2026-09-02 — Validación de marcadores de imagen
+
+- Se corrigió la validación para que los marcadores de imagen seleccionados sean válidos dentro del HTML, sin tratarlos como variables de contenido no autorizadas.
+- Se habilitó la etiqueta segura `h3`, necesaria para los títulos de tarjetas de beneficios.
+## 2026-09-02 — Generación IA asíncrona
+
+- La solicitud de generación ahora responde inmediatamente con un identificador de generación y continúa el procesamiento en segundo plano.
+- El panel consulta el estado hasta recibir la plantilla generada y conserva el HTML producido por la IA.
+- El resultado se persiste en columnas explícitas de `prospeccion_plantilla_ai_generaciones` para evitar depender de una petición HTTP abierta durante el procesamiento.
+## 2026-09-02 — Diagnóstico detallado de etiquetas HTML
+
+- El sanitizador ahora identifica la etiqueta exacta que no está permitida y la registra como `html_tag_not_allowed:<tag>`.
+- El panel transforma ese código en un mensaje legible para facilitar la corrección del prompt y del catálogo de etiquetas seguras.
+
+## 2026-09-02 — Generación asíncrona sin timeout artificial
+
+- La llamada al proveedor de IA ya no se cancela mediante el timeout de aplicación; la generación continúa en segundo plano y conserva los límites propios del SDK.
+- El worker ya no guarda un `error_codigo` vacío cuando ocurre un timeout inesperado.

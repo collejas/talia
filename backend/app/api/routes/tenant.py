@@ -148,6 +148,7 @@ class ProspeccionTemplateAiLayout(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=120)
     descripcion: str = Field(..., max_length=500)
     instrucciones_composicion: str = Field(..., min_length=10, max_length=6000)
+    logo_ancho_px: int = Field(..., ge=80, le=240)
     canal: Literal["correo", "whatsapp"]
     activo: bool
     orden: int = Field(..., ge=0, le=9999)
@@ -169,6 +170,7 @@ class ProspeccionTemplateAiLayoutCreate(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=120)
     descripcion: str = Field(..., max_length=500)
     instrucciones_composicion: str = Field(..., min_length=10, max_length=6000)
+    logo_ancho_px: int = Field(default=140, ge=80, le=240)
     canal: Literal["correo"] = "correo"
     orden: int = Field(default=1000, ge=0, le=9999)
     habilitado: bool = True
@@ -181,6 +183,7 @@ class ProspeccionTemplateAiLayoutUpdate(BaseModel):
     nombre: str | None = Field(default=None, min_length=2, max_length=120)
     descripcion: str | None = Field(default=None, max_length=500)
     instrucciones_composicion: str | None = Field(default=None, min_length=10, max_length=6000)
+    logo_ancho_px: int | None = Field(default=None, ge=80, le=240)
     orden: int | None = Field(default=None, ge=0, le=9999)
     activo: bool | None = None
     habilitado: bool | None = None
@@ -1184,6 +1187,7 @@ async def create_prospeccion_template_ai_layout(
             nombre=payload.nombre.strip(),
             descripcion=payload.descripcion.strip(),
             instrucciones_composicion=payload.instrucciones_composicion.strip(),
+            logo_ancho_px=payload.logo_ancho_px,
             canal=payload.canal,
             orden=payload.orden if payload.orden else (max((int(item.get("orden") or 0) for item in rows), default=0) + 10),
             habilitado=payload.habilitado,

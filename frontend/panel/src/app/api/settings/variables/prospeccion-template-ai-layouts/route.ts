@@ -14,7 +14,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = await request.json()
   const response = await callCrmApi("/tenant/me/prospeccion-template-ai-layouts", {
-    method: "PUT",
+    method: "POST",
     organizacionId: null,
     withUserToken: true,
     body,

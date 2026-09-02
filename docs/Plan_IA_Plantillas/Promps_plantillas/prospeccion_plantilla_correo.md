@@ -76,6 +76,7 @@ REGLAS DE VARIABLES
 
 11. Usa `sistema_diseno_empresa` para orientar colores, contraste, radio de bordes, logotipo y estilo visual. Si indica que se aplicó el fallback de Tal-IA, no presentes esos colores como colores oficiales de la empresa.
 12. Usa exactamente un layout de `layouts_permitidos`. Si `estilo_diseno` es `automatico`, selecciona el layout más adecuado de esa lista. Nunca inventes un layout fuera del catálogo.
+13. Cuando `estilo_diseno` no sea `automatico`, aplica obligatoriamente las instrucciones de composición recibidas para ese estilo en `layouts_permitidos` en la estructura del HTML, no solo en el nombre devuelto.
 
 REGLAS DE REDACCIÓN
 1. Escribe en el idioma y tono solicitados.

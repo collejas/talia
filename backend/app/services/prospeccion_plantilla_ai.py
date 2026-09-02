@@ -15,7 +15,6 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.assistants.manager import AssistantConfig
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.crm import CRMRepository
 from app.repositories.platform_admin import PlatformRepository
@@ -30,6 +29,15 @@ _PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")
 _HTML_TAG_RE = re.compile(r"</?\s*([A-Za-z0-9]+)(?:\s[^>]*)?>")
 _FORBIDDEN_HTML_RE = re.compile(r"<(?:script|iframe|form|object|embed)|\son[a-z]+\s*=|javascript:", re.I)
 _CTA_URL_VARIABLES = {"tracking_url", "website_url", "booking_url", "whatsapp_url", "custom_url"}
+_IMAGE_MARKERS = {
+    "logo_url",
+    "hero_image_url",
+    "product_image_1_url",
+    "product_image_2_url",
+    "product_image_3_url",
+    "product_image_4_url",
+    "warranty_image_url",
+}
 _TALIA_VISUAL_FALLBACK = {
     "fondo_exterior": "#f4f6f8",
     "fondo_principal": "#ffffff",
@@ -38,7 +46,7 @@ _TALIA_VISUAL_FALLBACK = {
     "acento": "#2563eb",
     "bordes": "#e5e7eb",
 }
-_ALLOWED_HTML_TAGS = {"p", "br", "strong", "em", "ul", "ol", "li", "a", "h1", "h2", "table", "tr", "td", "img"}
+_ALLOWED_HTML_TAGS = {"p", "br", "strong", "em", "ul", "ol", "li", "a", "h1", "h2", "h3", "table", "tr", "td", "img"}
 _PLACEHOLDER_VALUE_RE = re.compile(r"^\{\{\s*[A-Za-z0-9_]+\s*\}\}$")
 _ALLOWED_STYLE_PROPERTIES = {
     "background",
@@ -119,6 +127,7 @@ class TemplateAiGenerationRequest(BaseModel):
     tono: str = Field(default="profesional", min_length=2, max_length=60)
     idioma: str = Field(default="es-MX", min_length=2, max_length=20)
     estilo_diseno: str = Field(default="automatico", min_length=2, max_length=80)
+    marcadores_imagenes_seleccionados: list[str] = Field(default_factory=list, max_length=7)
     borrador_actual: str | None = Field(default=None, max_length=40_000)
 
     @field_validator("variables_seleccionadas")
@@ -127,6 +136,15 @@ class TemplateAiGenerationRequest(BaseModel):
         normalized = list(dict.fromkeys(item.strip() for item in value if item.strip()))
         if not normalized:
             raise ValueError("variables_seleccionadas_required")
+        return normalized
+
+    @field_validator("marcadores_imagenes_seleccionados")
+    @classmethod
+    def validate_image_markers(cls, value: list[str]) -> list[str]:
+        normalized = list(dict.fromkeys(item.strip() for item in value if item.strip()))
+        invalid = set(normalized) - _IMAGE_MARKERS
+        if invalid:
+            raise ValueError("template_ai_image_marker_not_allowed")
         return normalized
 
     @field_validator("instruccion_usuario", "tono", "idioma", "estilo_diseno")
@@ -262,22 +280,24 @@ def _validate_html(value: str) -> str:
     if _FORBIDDEN_HTML_RE.search(value):
         raise ValueError("html_forbidden_content")
     for match in _HTML_TAG_RE.finditer(value):
-        if match.group(1).lower() not in _ALLOWED_HTML_TAGS:
-            raise ValueError("html_tag_not_allowed")
+        tag_name = match.group(1).lower()
+        if tag_name not in _ALLOWED_HTML_TAGS:
+            raise ValueError(f"html_tag_not_allowed:{tag_name}")
     sanitized = _sanitize_html(value)
     if not sanitized:
         raise ValueError("html_empty")
     return sanitized
 
 
-def _validate_placeholders(result: TemplateAiGenerationResult, selected: set[str], channel: Channel) -> None:
+def _validate_placeholders(result: TemplateAiGenerationResult, selected: set[str], channel: Channel, image_markers: list[str] | None = None) -> None:
     text_values = [result.cuerpo_texto]
     if channel == "correo" and isinstance(result, EmailTemplateAiResult):
         text_values.extend([result.asunto, result.cuerpo_html])
         result.cuerpo_html = _validate_html(result.cuerpo_html)
     used_in_text = {match.group(1) for value in text_values for match in _PLACEHOLDER_RE.finditer(value)}
     declared = set(result.variables_usadas)
-    unknown = used_in_text - selected
+    allowed_placeholders = selected | set(image_markers or [])
+    unknown = used_in_text - allowed_placeholders
     missing_selected_cta = (selected & _CTA_URL_VARIABLES) - used_in_text
     booking_text_without_url = "booking_link_text" in used_in_text and "booking_url" not in used_in_text
     if (
@@ -292,6 +312,10 @@ def _validate_placeholders(result: TemplateAiGenerationResult, selected: set[str
         if booking_text_without_url:
             raise ValueError("template_ai_booking_link_dependency")
         raise ValueError("template_ai_unknown_variable")
+    if channel == "correo" and image_markers:
+        missing_image_markers = [f"{{{{{key}}}}}" for key in image_markers if f"{{{{{key}}}}}" not in result.cuerpo_html]
+        if missing_image_markers:
+            raise ValueError("template_ai_selected_image_not_used")
 
 
 async def generate_template_draft(
@@ -301,6 +325,7 @@ async def generate_template_draft(
     usuario_id: UUID,
     crm_repo: CRMRepository,
     platform_repo: PlatformRepository,
+    generation_id: UUID | None = None,
 ) -> dict[str, Any]:
     configs = await platform_repo.list_prospeccion_template_ai_prompt_configs(organizacion_id=UUID("00000000-0000-0000-0000-000000000001"))
     config = next((row for row in configs if row.get("canal") == request.canal and row.get("activo") is True), None)
@@ -331,6 +356,10 @@ async def generate_template_draft(
         None,
     )
     resolved_layout_request = default_layout if requested_layout == "automatico" and default_layout else requested_layout
+    selected_layout = next(
+        (row for row in enabled_layouts if str(row.get("codigo") or "").strip().lower() == resolved_layout_request),
+        None,
+    )
     campaign = None
     if request.campana_id:
         campaign = await crm_repo.get_campaign(organizacion_id=organizacion_id, campana_id=request.campana_id)
@@ -370,23 +399,24 @@ async def generate_template_draft(
     prompt_version = str(config.get("prompt_version") or "").strip()
     if not prompt_id or not prompt_version:
         raise ValueError("template_ai_prompt_not_configured")
-    generation = await platform_repo.create_prospeccion_template_ai_generation(
-        payload={
-            "organizacion_id": str(organizacion_id),
-            "usuario_id": str(usuario_id),
-            "campana_id": str(request.campana_id) if request.campana_id else None,
-            "canal": request.canal,
-            "prompt_id": prompt_id,
-            "prompt_version": prompt_version,
-            "modelo": "prompt_configured",
-            "instruccion_usuario": request.instruccion_usuario,
-            "tono": request.tono,
-            "idioma": request.idioma,
-            "estilo_diseno_solicitado": resolved_layout_request if request.canal == "correo" else None,
-            "resultado_estado": "solicitada",
-        }
-    )
-    generation_id = UUID(str(generation["id"]))
+    if generation_id is None:
+        generation = await platform_repo.create_prospeccion_template_ai_generation(
+            payload={
+                "organizacion_id": str(organizacion_id),
+                "usuario_id": str(usuario_id),
+                "campana_id": str(request.campana_id) if request.campana_id else None,
+                "canal": request.canal,
+                "prompt_id": prompt_id,
+                "prompt_version": prompt_version,
+                "modelo": "prompt_configured",
+                "instruccion_usuario": request.instruccion_usuario,
+                "tono": request.tono,
+                "idioma": request.idioma,
+                "estilo_diseno_solicitado": resolved_layout_request if request.canal == "correo" else None,
+                "resultado_estado": "solicitada",
+            }
+        )
+        generation_id = UUID(str(generation["id"]))
     await platform_repo.create_prospeccion_template_ai_generation_variables(
         rows=[
             {"organizacion_id": str(organizacion_id), "generacion_id": str(generation_id), "variable_id": str(variable_map[key]["id"]), "seleccionada_por_usuario": True, "utilizada_por_modelo": False}
@@ -418,6 +448,13 @@ async def generate_template_draft(
             "restricciones_canal": json.dumps({"canal": request.canal, "max_body_chars": 4096}, ensure_ascii=False),
         }
         if request.canal == "correo":
+            selected_layout_brief = {
+                "codigo": selected_layout.get("codigo") if selected_layout else resolved_layout_request,
+                "nombre": selected_layout.get("nombre") if selected_layout else resolved_layout_request,
+                "descripcion": selected_layout.get("descripcion") if selected_layout else None,
+                "instrucciones_composicion": selected_layout.get("instrucciones_composicion") if selected_layout else None,
+                "logo_ancho_px": selected_layout.get("logo_ancho_px") if selected_layout else 140,
+            }
             prompt_variables.update(
                 {
                     "estilo_diseno": resolved_layout_request,
@@ -428,6 +465,7 @@ async def generate_template_draft(
                                 "nombre": row.get("nombre"),
                                 "descripcion": row.get("descripcion"),
                                 "instrucciones_composicion": row.get("instrucciones_composicion"),
+                                "logo_ancho_px": row.get("logo_ancho_px") or 140,
                             }
                             for row in enabled_layouts
                         ],
@@ -435,12 +473,22 @@ async def generate_template_draft(
                     ),
                 }
             )
-        response = await asyncio.wait_for(
-            client.responses.create(
-                prompt={"id": prompt_id, "version": prompt_version, "variables": prompt_variables},
-                text={"format": {"type": "json_schema", "name": f"prospeccion_plantilla_{request.canal}", "strict": True, "schema": _schema(request.canal)}},
-            ),
-            timeout=settings.prospeccion_template_ai_timeout_seconds,
+            # Reforzamos la instrucción ya declarada para que el prompt activo
+            # no descarte las reglas editadas por el tenant en settings.
+            prompt_variables["instruccion_usuario"] = (
+                f"{request.instruccion_usuario}\n\n"
+                "DIRECTIVA OBLIGATORIA DE COMPOSICIÓN (configurada en Estilo de diseño):\n"
+                f"{json.dumps(selected_layout_brief, ensure_ascii=False)}\n"
+                "Aplica estas instrucciones al HTML y al texto plano. No sustituyas este estilo por otro.\n\n"
+                "MARCADORES DE IMAGEN OBLIGATORIOS:\n"
+                f"{json.dumps([f'{{{{{key}}}}}' for key in request.marcadores_imagenes_seleccionados], ensure_ascii=False)}\n"
+                "Coloca cada marcador dentro del elemento HTML y la sección exacta que corresponda al diseño. No los dejes fuera de la estructura, no los agrupes al final y no reemplaces un marcador por una URL inventada."
+            )
+        # La generación corre en segundo plano; no cancelar la respuesta por
+        # un timeout de aplicación que ya no protege una petición HTTP abierta.
+        response = await client.responses.create(
+            prompt={"id": prompt_id, "version": prompt_version, "variables": prompt_variables},
+            text={"format": {"type": "json_schema", "name": f"prospeccion_plantilla_{request.canal}", "strict": True, "schema": _schema(request.canal)}},
         )
         response_payload = response.model_dump()
         await openai_usage_ledger.record_response_usage(
@@ -465,7 +513,7 @@ async def generate_template_draft(
                 raise ValueError("template_ai_layout_mismatch")
         else:
             applied_layout = None
-        _validate_placeholders(result, selected, request.canal)
+        _validate_placeholders(result, selected, request.canal, request.marcadores_imagenes_seleccionados)
         usage = await platform_repo.get_openai_usage_by_response_id(organizacion_id=organizacion_id, response_id=str(response_payload.get("id") or ""))
         update_payload: dict[str, Any] = {
             "resultado_estado": "generada",
@@ -473,7 +521,16 @@ async def generate_template_draft(
             "modelo": str(response_payload.get("model") or "unknown"),
             "openai_request_id": response_payload.get("id"),
             "estilo_diseno_aplicado": applied_layout,
+            "resultado_nombre_sugerido": result.nombre_sugerido,
+            "resultado_descripcion": result.descripcion,
+            "resultado_cuerpo_texto": result.cuerpo_texto,
+            "resultado_variables_usadas": result.variables_usadas,
+            "resultado_advertencias": result.advertencias,
         }
+        if request.canal == "correo":
+            update_payload.update({"resultado_asunto": result.asunto, "resultado_cuerpo_html": result.cuerpo_html})  # type: ignore[union-attr]
+        else:
+            update_payload.update({"resultado_meta_category_sugerida": result.meta_category_sugerida, "resultado_language_code_sugerido": result.language_code_sugerido})  # type: ignore[union-attr]
         if usage:
             update_payload.update({"openai_request_usage_id": usage.get("id"), "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens"), "costo_estimado": usage.get("estimated_total_cost_usd")})
         await platform_repo.update_prospeccion_template_ai_generation(organizacion_id=organizacion_id, generation_id=generation_id, payload=update_payload)
@@ -488,5 +545,5 @@ async def generate_template_draft(
         is_timeout = isinstance(exc, asyncio.TimeoutError)
         error_code = "template_ai_provider_timeout" if is_timeout else str(exc)[:120]
         await platform_repo.update_prospeccion_template_ai_generation(organizacion_id=organizacion_id, generation_id=generation_id, payload={"resultado_estado": "respuesta_invalida" if isinstance(exc, (ValueError, json.JSONDecodeError)) else "error", "error_codigo": error_code, "finalizado_en": datetime.now(timezone.utc).isoformat()})
-        logger.warning("template_ai_generation_failed", extra={"organizacion_id": str(organizacion_id), "generation_id": str(generation_id), "error": error_code, "timeout_seconds": settings.prospeccion_template_ai_timeout_seconds if is_timeout else None})
+        logger.warning("template_ai_generation_failed", extra={"organizacion_id": str(organizacion_id), "generation_id": str(generation_id), "error": error_code})
         raise

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from app.api.routes.admin import get_platform_repo
 from app.api.routes.crm import get_repository, require_organizacion_id, require_permission
@@ -16,6 +17,7 @@ from app.services.prospeccion_plantilla_ai import (
     TemplateAiGenerationRequest,
     generate_template_draft,
 )
+from app.services.tenant_runtime import MASTER_ORGANIZACION_ID
 
 router = APIRouter(prefix="/crm/prospeccion/plantillas/ai", tags=["prospeccion-plantillas-ai"])
 
@@ -75,10 +77,42 @@ async def list_template_ai_variables(
     return {"ok": True, "canal": canal, "items": items, "layouts": layouts}
 
 
-@router.post("/generate", status_code=status.HTTP_200_OK)
+async def _run_template_ai_generation(
+    *,
+    payload: TemplateAiGenerationRequest,
+    organizacion_id: UUID,
+    usuario_id: UUID,
+    generation_id: UUID,
+    crm_repo: CRMRepository,
+    platform_repo: PlatformRepository,
+) -> None:
+    try:
+        await generate_template_draft(
+            request=payload,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            crm_repo=crm_repo,
+            platform_repo=platform_repo,
+            generation_id=generation_id,
+        )
+    except Exception as exc:  # The service persists provider and validation failures.
+        error_code = "template_ai_provider_timeout" if isinstance(exc, (asyncio.TimeoutError, TimeoutError)) else (str(exc).strip()[:120] or "template_ai_generation_failed")
+        await platform_repo.update_prospeccion_template_ai_generation(
+            organizacion_id=organizacion_id,
+            generation_id=generation_id,
+            payload={
+                "resultado_estado": "respuesta_invalida" if isinstance(exc, ValueError) else "error",
+                "error_codigo": error_code,
+                "finalizado_en": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+
+@router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
 async def generate_template_ai_draft(
     payload: TemplateAiGenerationRequest,
     *,
+    background_tasks: BackgroundTasks,
     _: str = Depends(require_permission("ejecutar_busquedas")),
     organizacion_id: UUID = Depends(require_organizacion_id),
     crm_repo: CRMRepository = Depends(get_repository),
@@ -90,13 +124,39 @@ async def generate_template_ai_draft(
     except (CRMRepositoryError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=401, detail="auth_user_invalid") from exc
     try:
-        return await generate_template_draft(
-            request=payload,
+        configs = await platform_repo.list_prospeccion_template_ai_prompt_configs(
+            organizacion_id=MASTER_ORGANIZACION_ID,
+        )
+        config = next((row for row in configs if row.get("canal") == payload.canal and row.get("activo") is True), None)
+        if not config:
+            raise ValueError("template_ai_prompt_not_configured")
+        generation = await platform_repo.create_prospeccion_template_ai_generation(
+            payload={
+                "organizacion_id": str(organizacion_id),
+                "usuario_id": str(usuario_id),
+                "campana_id": str(payload.campana_id) if payload.campana_id else None,
+                "canal": payload.canal,
+                "prompt_id": str(config.get("prompt_id") or ""),
+                "prompt_version": str(config.get("prompt_version") or ""),
+                "modelo": "prompt_configured",
+                "instruccion_usuario": payload.instruccion_usuario,
+                "tono": payload.tono,
+                "idioma": payload.idioma,
+                "estilo_diseno_solicitado": payload.estilo_diseno if payload.canal == "correo" else None,
+                "resultado_estado": "solicitada",
+            }
+        )
+        generation_id = UUID(str(generation["id"]))
+        background_tasks.add_task(
+            _run_template_ai_generation,
+            payload=payload,
             organizacion_id=organizacion_id,
             usuario_id=usuario_id,
+            generation_id=generation_id,
             crm_repo=crm_repo,
             platform_repo=platform_repo,
         )
+        return {"ok": True, "status": "solicitada", "generation_id": str(generation_id)}
     except ValueError as exc:
         detail = str(exc)
         known = {
@@ -113,7 +173,7 @@ async def generate_template_ai_draft(
             "html_tag_not_allowed",
             "html_empty",
         }
-        if detail in known:
+        if detail in known or detail.startswith("html_tag_not_allowed:"):
             raise HTTPException(status_code=400, detail=detail) from exc
         raise HTTPException(status_code=502, detail="template_ai_invalid_provider_response") from exc
     except (CRMRepositoryError, PlatformRepositoryError) as exc:
@@ -126,3 +186,42 @@ async def generate_template_ai_draft(
         if "prompt_variable_unknown" in str(exc):
             raise HTTPException(status_code=400, detail="template_ai_prompt_variables_not_configured") from exc
         raise HTTPException(status_code=502, detail="template_ai_provider_unavailable") from exc
+
+
+@router.get("/generations/{generation_id}")
+async def get_template_ai_generation(
+    generation_id: UUID,
+    *,
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    platform_repo: PlatformRepository = Depends(get_platform_repo),
+) -> dict[str, Any]:
+    try:
+        row = await platform_repo.get_prospeccion_template_ai_generation(
+            organizacion_id=organizacion_id,
+            generation_id=generation_id,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="template_ai_generation_unavailable") from exc
+    if not row:
+        raise HTTPException(status_code=404, detail="template_ai_generation_not_found")
+    result = None
+    if row.get("resultado_estado") == "generada":
+        result = {
+            "nombre_sugerido": row.get("resultado_nombre_sugerido") or "",
+            "descripcion": row.get("resultado_descripcion") or "",
+            "cuerpo_texto": row.get("resultado_cuerpo_texto") or "",
+            "variables_usadas": row.get("resultado_variables_usadas") or [],
+            "advertencias": row.get("resultado_advertencias") or [],
+        }
+        if row.get("canal") == "correo":
+            result.update({"asunto": row.get("resultado_asunto") or "", "cuerpo_html": row.get("resultado_cuerpo_html") or "", "estilo_diseno": row.get("estilo_diseno_aplicado") or row.get("estilo_diseno_solicitado") or "automatico"})
+        else:
+            result.update({"meta_category_sugerida": row.get("resultado_meta_category_sugerida") or "no_determinada", "language_code_sugerido": row.get("resultado_language_code_sugerido") or "es_MX"})
+    return {
+        "ok": True,
+        "generation_id": str(row.get("id") or generation_id),
+        "status": row.get("resultado_estado") or "solicitada",
+        "error": row.get("error_codigo") if row.get("resultado_estado") in {"error", "respuesta_invalida"} else None,
+        "resultado": result,
+    }
