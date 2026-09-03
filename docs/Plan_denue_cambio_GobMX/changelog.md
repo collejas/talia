@@ -124,3 +124,29 @@ Implementado localmente. El valor persistido continúa siendo `denue`.
 - Probar una respuesta real de Prospectos y del pipeline para confirmar que no se muestra la etiqueta anterior.
 - Ejecutar lint y TypeScript del panel cuando se instalen sus dependencias.
 - Revisar visualmente las dos vistas en navegador.
+
+## 2026-09-03 — Normalización visual en mapa de conversión
+
+### Estado
+
+Implementado localmente. No se modificaron visitas, UTMs ni registros históricos.
+
+### Cambios realizados
+
+- El mapa traduce visualmente `denue`, `DENUE`, `GobMX` y variantes de prospección a `GobMX`.
+- Se actualizó el selector de origen de visita.
+- Se actualizó el resumen UTM y el detalle geográfico.
+- La tabla `Vistas Web` ahora normaliza `Origen contacto` y `Origen de la promoción`.
+- La etiqueta principal `Visita / sesión` también normaliza filas históricas cuyo encabezado era `Denue`.
+- La construcción de filas de `Vistas Web` también normaliza `type` (`Origen / ubicación`), que se alimenta de `contacto_origen`.
+- Los valores originales continúan utilizándose para filtros, consultas y trazabilidad.
+
+### Validación
+
+- `git diff --check`: correcto.
+- React Doctor sobre los cinco archivos modificados: 100/100, sin incidencias.
+
+### Pendientes
+
+- Validar visualmente la vista con datos históricos en navegador.
+- Auditar si existen copias históricas textuales en metadata de contactos u oportunidades que requieran backfill selectivo.

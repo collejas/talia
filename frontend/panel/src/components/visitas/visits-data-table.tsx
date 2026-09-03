@@ -9,6 +9,7 @@ import { DataTable, schema } from "@/components/data-table";
 import type { DataTableColumnLabels } from "@/components/data-table";
 import type { VisitDetailRaw, VisitTableRow } from "@/lib/visitas/data";
 import { formatWaLabel } from "@/lib/visitas/formatting";
+import { formatAcquisitionSourceLabel } from "@/lib/mapa-conversion/source-class";
 import { getActiveTimeZone } from "@/lib/timezone";
 
 type TableRow = z.infer<typeof schema>;
@@ -35,6 +36,8 @@ const DASH = <span className="text-muted-foreground">—</span>;
 function formatContactOrigin(value: unknown) {
   const cleaned = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (!cleaned) return DASH;
+  const acquisitionLabel = formatAcquisitionSourceLabel(cleaned);
+  if (acquisitionLabel === "GobMX") return acquisitionLabel;
   return cleaned
     .split(/[_\s]+/)
     .filter(Boolean)
@@ -214,7 +217,14 @@ const VISIT_FIELDS: VisitField[] = [
   { id: "referrer", key: "referrer", label: "Sitio de origen", type: "string" },
   { id: "referrer_host", key: "referrer_host", label: "Sitio que envió la visita", type: "string", defaultVisible: true },
   { id: "landing_url", key: "landing_url", label: "Página de entrada", type: "string" },
-  { id: "utm_source", key: "utm_source", label: "Origen de la promoción", type: "string", defaultVisible: true },
+  {
+    id: "utm_source",
+    key: "utm_source",
+    label: "Origen de la promoción",
+    type: "string",
+    defaultVisible: true,
+    format: (value) => formatAcquisitionSourceLabel(typeof value === "string" ? value : null),
+  },
   { id: "utm_medium", key: "utm_medium", label: "Medio de la promoción", type: "string", defaultVisible: true },
   { id: "utm_campaign", key: "utm_campaign", label: "Nombre de la promoción", type: "string", defaultVisible: true },
   { id: "template_nombre", key: "template_nombre", label: "Plantilla captada", type: "string", defaultVisible: true },
@@ -272,6 +282,10 @@ export function VisitsDataTable({
   columnLabels?: DataTableColumnLabels;
 }) {
   const [mounted, setMounted] = React.useState(false);
+  const displayData = React.useMemo(
+    () => data.map((row) => ({ ...row, header: formatAcquisitionSourceLabel(row.header) })),
+    [data],
+  );
 
   React.useEffect(() => {
     const frame = requestAnimationFrame(() => setMounted(true));
@@ -288,7 +302,7 @@ export function VisitsDataTable({
 
   return (
     <DataTable
-      data={data}
+      data={displayData}
       extraColumns={visitExtraColumns}
       initialVisibility={visitColumnVisibility}
       storageKey="visits-table-column-order"

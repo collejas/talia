@@ -21,7 +21,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { Separator } from "@/components/ui/separator";
 import type { DataTableRow } from "@/components/data-table";
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
-import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class";
+import { formatAcquisitionSourceLabel, formatSourceClassLabel } from "@/lib/mapa-conversion/source-class";
 import { formatWaLabel } from "@/lib/visitas/formatting";
 
 type Props = {
@@ -321,7 +321,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
                 className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2 text-sm"
               >
                 <span className="text-muted-foreground">
-                  {`${typeof utm.utm_source === "string" ? utm.utm_source : "(none)"} / ${
+                  {`${formatAcquisitionSourceLabel(typeof utm.utm_source === "string" ? utm.utm_source : "(none)")} / ${
                     typeof utm.utm_medium === "string" ? utm.utm_medium : "(none)"
                   } / ${typeof utm.utm_campaign === "string" ? utm.utm_campaign : "(none)"}`}
                 </span>

@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { SOURCE_CLASS_OPTIONS } from "@/lib/mapa-conversion/source-class";
+import { formatAcquisitionSourceLabel, SOURCE_CLASS_OPTIONS } from "@/lib/mapa-conversion/source-class";
 import { formatWaLabel } from "@/lib/visitas/formatting";
 import { cn } from "@/lib/utils";
 
@@ -520,11 +520,11 @@ export function DemografiaControls({
                     <SelectContent className="z-50">
                       <SelectItem value="all">Todos</SelectItem>
                       {utmSource && !utmSourceOptions.includes(utmSource) ? (
-                        <SelectItem value={utmSource}>{utmSource}</SelectItem>
+                        <SelectItem value={utmSource}>{formatAcquisitionSourceLabel(utmSource)}</SelectItem>
                       ) : null}
                       {utmSourceOptions.map((option) => (
                         <SelectItem key={`utm-source-${option}`} value={option}>
-                          {option}
+                          {formatAcquisitionSourceLabel(option)}
                         </SelectItem>
                       ))}
                     </SelectContent>

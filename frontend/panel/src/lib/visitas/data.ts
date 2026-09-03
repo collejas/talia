@@ -1,7 +1,10 @@
 "use server";
 
 import { callCrmApi, type CrmResult } from "@/lib/api/crm";
-import { normalizeAcquisitionSourceClass } from "@/lib/mapa-conversion/source-class";
+import {
+  formatAcquisitionSourceLabel,
+  normalizeAcquisitionSourceClass,
+} from "@/lib/mapa-conversion/source-class";
 
 type DashboardKpisResponse = {
   visitantes?: number;
@@ -1073,6 +1076,8 @@ function resolveSourceClass(row: VisitDetailRaw): string {
 function formatContactOrigin(value: string | null | undefined): string {
   const cleaned = (value || "").trim().toLowerCase();
   if (!cleaned) return "Sin origen";
+  const acquisitionLabel = formatAcquisitionSourceLabel(cleaned);
+  if (acquisitionLabel === "GobMX") return acquisitionLabel;
   return cleaned
     .split(/[_\s]+/)
     .filter(Boolean)

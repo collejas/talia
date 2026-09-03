@@ -8,6 +8,15 @@ const SOURCE_CLASS_LABELS: Record<string, string> = {
   unknown: "Sin identificar",
 }
 
+const GOBMX_SOURCE_VALUES = new Set([
+  "denue",
+  "gobmx",
+  "prospecciondenue",
+  "prospecciongobmx",
+  "prospeccióndenue",
+  "prospeccióngobmx",
+])
+
 export const SOURCE_CLASS_OPTIONS = [
   { value: "all", label: "Todos los orígenes" },
   { value: "ai_referral", label: SOURCE_CLASS_LABELS.ai_referral },
@@ -101,4 +110,12 @@ export function formatSourceClassLabel(value: string | null | undefined): string
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ")
+}
+
+export function formatAcquisitionSourceLabel(value: string | null | undefined): string {
+  const raw = (value || "").trim()
+  if (!raw) return SOURCE_CLASS_LABELS.unknown
+  const normalized = raw.toLowerCase().replace(/[\s_\-–—]+/g, "")
+  if (GOBMX_SOURCE_VALUES.has(normalized)) return "GobMX"
+  return raw
 }

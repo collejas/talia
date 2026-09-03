@@ -18,7 +18,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import type { DemografiaSummaryResponse } from "@/lib/mapa-conversion/api";
-import { formatSourceClassLabel } from "@/lib/mapa-conversion/source-class";
+import { formatAcquisitionSourceLabel, formatSourceClassLabel } from "@/lib/mapa-conversion/source-class";
 import { buildAcquisitionMetrics, type AcquisitionUtmBucket } from "@/lib/mapa-conversion/acquisition";
 import type { VisitsPayload } from "@/lib/visitas/data";
 import { cn } from "@/lib/utils";
@@ -461,6 +461,9 @@ function formatUtmValue(
 ): string {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return "Sin dato";
+
+  const acquisitionSourceLabel = formatAcquisitionSourceLabel(value);
+  if (acquisitionSourceLabel === "GobMX") return acquisitionSourceLabel;
 
   const campaignLabel =
     campaignLabels?.get(normalizeLookupKey(normalized)) ??
