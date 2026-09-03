@@ -61,7 +61,7 @@ def _describe_source(row: dict[str, Any]) -> str:
     if fuente == "google_places":
         return "Prospección – Búsqueda Google"
     if fuente == "denue":
-        return "Prospección – DENUE"
+        return "Prospección – GobMX"
     return "Prospección – Manual"
 
 
@@ -71,7 +71,7 @@ def _channel_label(row: dict[str, Any]) -> str:
     if fuente == "google_places":
         return "Google"
     if fuente == "denue":
-        return "Denue"
+        return "GobMX"
     if fuente_busqueda == "buscador":
         return "Web"
     return "Manual"

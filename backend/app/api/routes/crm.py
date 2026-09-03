@@ -8536,7 +8536,7 @@ def _describe_prospeccion_source(row: Mapping[str, Any]) -> str:
     if fuente == "google_places":
         return "Prospección – Búsqueda Google"
     if fuente == "denue":
-        return "Prospección – DENUE"
+        return "Prospección – GobMX"
     return "Prospección – Manual"
 
 
@@ -8548,7 +8548,7 @@ def _infer_prospeccion_canal_label(row: Mapping[str, Any]) -> str:
     if fuente == "google_places":
         return "Google"
     if fuente == "denue":
-        return "Denue"
+        return "GobMX"
     if fuente_busqueda == "buscador":
         return "Web"
     return "Manual"
@@ -10748,7 +10748,7 @@ def _build_contact_envios_entries(
         key = source_raw.strip().lower()
         labels = {
             "google_places": "Google",
-            "denue": "Denue",
+            "denue": "GobMX",
             "buscador": "Web",
             "manual": "Manual",
             "usuario": "Usuario",
@@ -32331,7 +32331,7 @@ async def crear_busqueda_denue(
     if not (denue_settings.token or "").strip():
         raise HTTPException(
             status_code=400,
-            detail="DENUE no está configurado para este tenant. Falta el token denue.token en settings/variables.",
+            detail="GobMX no está configurado para este tenant. Falta la configuración interna de la fuente.",
         )
     client = DenueClient(token=denue_settings.token, base_url=denue_settings.base_url)
     advanced_meta = await _build_advanced_meta(payload, repo)

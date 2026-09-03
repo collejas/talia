@@ -92,3 +92,35 @@ Implementado localmente. No se modificaron backend, base de datos, rutas API ni 
 - Ejecutar React Doctor y revisar sus hallazgos.
 - Actualizar la documentación de `docs/Busqueda_denue` y `docs/Prospeccion`.
 - Probar búsqueda, filtros, guardado, fuente GobMX y seguimiento end-to-end.
+
+## 2026-09-03 — Armonización de etiquetas generadas por backend
+
+### Estado
+
+Implementado localmente. El valor persistido continúa siendo `denue`.
+
+### Cambios realizados
+
+- `Prospección – DENUE` ahora se devuelve como `Prospección – GobMX`.
+- `Denue` ahora se devuelve como `GobMX` en la etiqueta corta de origen del pipeline.
+- `Denue` ahora se devuelve como `GobMX` en la resolución de `canal_origen` del flujo de prospectos.
+- El servicio de promoción automática también genera `Prospección – GobMX` y `GobMX` para los datos derivados de seguimiento.
+
+### Compatibilidad conservada
+
+- No se cambiaron los literales internos `fuente = "denue"`.
+- No se cambiaron rutas, endpoints, tablas, RPCs, tipos ni claves de configuración.
+- El cambio afecta únicamente etiquetas legibles derivadas para presentación y seguimiento.
+
+### Validación realizada
+
+- Los helpers backend devolvieron `Prospección – GobMX` y `GobMX` para una fila con `fuente = "denue"`.
+- `compileall` de `crm.py` y `prospeccion_auto_promoter.py`: correcto.
+- `git diff --check`: correcto.
+- La suite backend enfocada se ejecutó: 21 pruebas seleccionadas; hubo fallos preexistentes/no relacionados en cotizaciones, payloads de actualización y dobles de repositorio/logging.
+
+### Pendientes
+
+- Probar una respuesta real de Prospectos y del pipeline para confirmar que no se muestra la etiqueta anterior.
+- Ejecutar lint y TypeScript del panel cuando se instalen sus dependencias.
+- Revisar visualmente las dos vistas en navegador.
