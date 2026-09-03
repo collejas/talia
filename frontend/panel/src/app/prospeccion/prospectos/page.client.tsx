@@ -4648,7 +4648,7 @@ function ProspectosView() {
               </DropdownMenu>
             </div>
             </div>
-            <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_180px_180px_160px] lg:items-end">
+            <div className="grid gap-3 lg:grid-cols-[minmax(160px,260px)_180px_180px_160px_auto] lg:items-end">
             <div className="space-y-1">
               <Label>Buscar</Label>
               <div className="flex items-center gap-2">
@@ -4732,6 +4732,11 @@ function ProspectosView() {
                   <SelectItem value="nombre">Nombre (A-Z)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-end">
+              <Button type="button" variant="ghost" size="sm" onClick={handleClearFilters}>
+                Limpiar filtros
+              </Button>
             </div>
             </div>
           </div>
