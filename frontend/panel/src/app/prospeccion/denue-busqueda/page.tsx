@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "DENUE búsqueda · Prospección",
+  title: "GobMX búsqueda · Prospección",
 }
 
 export const dynamic = "force-dynamic"

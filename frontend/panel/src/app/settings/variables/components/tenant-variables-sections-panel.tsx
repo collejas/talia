@@ -384,7 +384,7 @@ const SECTIONS: SectionConfig[] = [
   },
   {
     title: "Búsqueda",
-    description: "URLs y límites para Denue y Google Places.",
+    description: "URLs y límites para GobMX y Google Places.",
     fields: [
       { label: "denue.base_url", path: "denue.base_url" },
       { label: "google_places.nearby_url", path: "google_places.nearby_url" },
@@ -425,7 +425,7 @@ const SECTIONS: SectionConfig[] = [
       },
     ],
     secrets: [
-      { clave: "denue.token", label: "denue.token (tier A)", tier: "A", placeholder: "Token Denue" },
+      { clave: "denue.token", label: "denue.token (tier A)", tier: "A", placeholder: "Token GobMX" },
       {
         clave: "google.places_api_key",
         label: "google.places_api_key (tier B)",

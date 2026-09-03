@@ -479,7 +479,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
         <DialogHeader className="space-y-1">
           <DialogTitle>Búsqueda avanzada</DialogTitle>
           <DialogDescription>
-            Combina filtros por texto, actividad, tamaño y geografía para acotar los resultados de DENUE.
+            Combina filtros por texto, actividad, tamaño y geografía para acotar los resultados de GobMX.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 max-h-[calc(90vh-10rem)] overflow-auto pr-1 text-[11px]">

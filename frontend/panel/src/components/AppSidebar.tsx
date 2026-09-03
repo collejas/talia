@@ -42,6 +42,7 @@ import { useCurrentUser } from "@/hooks/use-current-user"
 import { usePermissions } from "@/hooks/use-permissions"
 import { useTenantContext } from "@/hooks/use-tenant-context"
 import { isMasterTenantId } from "@/lib/auth/master-tenant"
+import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels"
 import { NavDocuments } from '@/components/nav-documents'
 import { NavMain } from '@/components/nav-main'
 import { NavSecondary } from '@/components/nav-secondary'
@@ -125,7 +126,7 @@ const NAVIGATION: {
           ownerAdminOnly: true,
           masterTenantOnly: true,
         },
-        { title: "Denue búsqueda", url: "/prospeccion/denue-busqueda", permission: "busquedas.view" },
+        { title: `${PROSPECCION_SOURCE_LABELS.denue} búsqueda`, url: "/prospeccion/denue-busqueda", permission: "busquedas.view" },
         { title: "Buscador web", url: "/prospeccion/buscador", permission: "busquedas.run" },
         { title: "Prospectos", url: "/prospeccion/prospectos", permission: "busquedas.run" },
         { title: "Contactos", url: "/prospeccion/contactos", permission: "contacts.read" },

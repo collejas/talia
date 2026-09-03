@@ -145,7 +145,7 @@ export function ProspeccionUsageSummary({
                 remaining={usage.credits.remaining}
               />
               <UsageMeter
-                label="Resultados crudos DENUE"
+                label="Resultados crudos GobMX"
                 consumed={usage.raw_results.consumed}
                 limit={usage.raw_results.limit}
                 remaining={usage.raw_results.remaining}

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { cn } from "@/lib/utils"
+import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels"
 
 type StageKey = "descubre" | "enriquecer" | "preparar" | "lanzar" | "evaluar"
 
@@ -20,7 +21,7 @@ const STAGES: StageConfig[] = [
   {
     key: "descubre",
     label: "Descubre",
-    description: "Búsquedas en Google, DENUE y webscraper.",
+    description: `Búsquedas en Google, ${PROSPECCION_SOURCE_LABELS.denue} y webscraper.`,
     href: "/prospeccion/google-busqueda",
     matches: ["/prospeccion/google-busqueda", "/prospeccion/denue-busqueda", "/prospeccion/buscador"],
   },

@@ -1,7 +1,7 @@
 # Plan de cambio de nomenclatura: DENUE → GobMX
 
-**Fecha de documentación:** 2026-09-03  
-**Estado:** Propuesta documentada; implementación pendiente  
+**Fecha de documentación:** 2026-09-03
+**Estado:** Fases 1 y 2 implementadas localmente; publicación pendiente
 **Alcance inicial:** Frontend del panel y etiquetas visibles de seguimiento de prospección
 
 ## 1. Idea de producto
@@ -265,7 +265,10 @@ El cambio podrá considerarse terminado cuando:
 ## 11. Estado actual
 
 - Revisión inicial completada.
-- Cambio de código aún no iniciado.
+- Fase 1 implementada localmente: catálogo central de etiqueta visible `GobMX`.
+- Fase 2 implementada localmente: actualización de vistas operativas y componentes de seguimiento del frontend.
+- Los contratos internos `denue` no fueron modificados.
 - Datos y contratos internos sin modificar.
 - Plan documentado.
 - Changelog inicial creado.
+- Validación de diff pendiente de completar en este cambio.

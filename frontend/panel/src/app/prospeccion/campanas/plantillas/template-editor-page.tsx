@@ -34,6 +34,7 @@ import {
   type ProspectoItem,
   type WhatsAppAtribucionRule,
 } from "@/lib/prospeccion/prospectos-client"
+import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels"
 
 type Props = { templateId?: string; initialCampaignId?: string }
 type Channel = "correo" | "whatsapp"
@@ -591,7 +592,12 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
       email: prospecto?.email?.trim() || prospecto?.correo_principal?.trim() || "contacto@ejemplo.com",
       telefono: prospecto?.phone_e164?.trim() || prospecto?.phone?.trim() || "5555555555",
       segmento: prospecto?.segmento?.trim() || prospecto?.actividad?.trim() || "su industria",
-      canal_origen: prospecto?.fuente === "google_places" ? "Google" : prospecto?.fuente === "denue" ? "DENUE" : "Manual",
+      canal_origen:
+        prospecto?.fuente === "google_places"
+          ? "Google"
+          : prospecto?.fuente === "denue"
+            ? PROSPECCION_SOURCE_LABELS.denue
+            : "Manual",
       tracking_url: tracking,
       website_url: website,
       booking_url: booking,

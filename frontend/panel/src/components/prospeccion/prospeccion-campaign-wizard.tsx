@@ -28,6 +28,7 @@ import {
   type ProspectoContactoResumen,
 } from "@/lib/prospeccion/prospectos-client"
 import { cn } from "@/lib/utils"
+import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels"
 
 type WizardSource = "selected" | "lista" | "filters"
 
@@ -733,7 +734,7 @@ export function ProspeccionCampaignWizard({
               <SelectContent>
                 <SelectItem value="__all__">Todas</SelectItem>
                 <SelectItem value="google_places">Google</SelectItem>
-                <SelectItem value="denue">DENUE</SelectItem>
+                <SelectItem value="denue">{PROSPECCION_SOURCE_LABELS.denue}</SelectItem>
                 <SelectItem value="usuario">Manual</SelectItem>
               </SelectContent>
             </Select>

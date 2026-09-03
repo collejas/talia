@@ -59,7 +59,7 @@ function PlanLimitsForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor={`raw-${plan.id}`}>Resultados crudos DENUE / mes</Label>
+          <Label htmlFor={`raw-${plan.id}`}>Resultados crudos GobMX / mes</Label>
           <Input
             id={`raw-${plan.id}`}
             name="denue_raw_results_month"

@@ -52,6 +52,7 @@ import {
   listProspectosQueryMetadata,
   type ProspeccionUsageResponse,
 } from "@/lib/prospeccion/prospectos-client";
+import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -1268,7 +1269,7 @@ export function DenueBusquedaView() {
       }
       if (typeof window !== "undefined") {
         const confirmed = window.confirm(
-          "¿Eliminar esta captura de DENUE? Se borrarán todos sus resultados.",
+          `¿Eliminar esta captura de ${PROSPECCION_SOURCE_LABELS.denue}? Se borrarán todos sus resultados.`,
         );
         if (!confirmed) {
           return;
@@ -1684,7 +1685,7 @@ export function DenueBusquedaView() {
           setActiveDenueJobStatus("queued");
           setFeedback({
             type: "info",
-            message: "Búsqueda DENUE en cola. Puedes seguir navegando; se actualizará automáticamente al terminar.",
+            message: `Búsqueda ${PROSPECCION_SOURCE_LABELS.denue} en cola. Puedes seguir navegando; se actualizará automáticamente al terminar.`,
           });
           setFeedbackDialog({
             open: true,
@@ -1711,14 +1712,14 @@ export function DenueBusquedaView() {
                     setFeedback({
                       type: quotaReached ? "info" : "success",
                       message: quotaReached
-                        ? `Búsqueda completada con la cuota de Resultados crudos DENUE alcanzada${total !== null ? ` (${numberFormatter.format(total)} registros guardados).` : "."}`
-                        : `Búsqueda DENUE completada${total !== null ? ` (${numberFormatter.format(total)} registros).` : "."}`,
+                        ? `Búsqueda completada con la cuota de Resultados crudos ${PROSPECCION_SOURCE_LABELS.denue} alcanzada${total !== null ? ` (${numberFormatter.format(total)} registros guardados).` : "."}`
+                        : `Búsqueda ${PROSPECCION_SOURCE_LABELS.denue} completada${total !== null ? ` (${numberFormatter.format(total)} registros).` : "."}`,
                     });
                   } else if (status === "canceled") {
-                    setFeedback({ type: "info", message: "Búsqueda DENUE cancelada." });
+                    setFeedback({ type: "info", message: `Búsqueda ${PROSPECCION_SOURCE_LABELS.denue} cancelada.` });
                   } else {
                     const error = jobResp.job.error ? String(jobResp.job.error) : "denue_job_failed";
-                    setFeedback({ type: "error", message: `Búsqueda DENUE falló: ${error}` });
+                    setFeedback({ type: "error", message: `Búsqueda ${PROSPECCION_SOURCE_LABELS.denue} falló: ${error}` });
                   }
                   await loadBusquedas();
                   await loadResultadosForBusqueda(jobResp.job.busqueda_id);
@@ -1736,7 +1737,7 @@ export function DenueBusquedaView() {
 
         setFeedback({
           type: "success",
-          message: `Se guardaron ${response.upserted ?? 0} resultados desde DENUE (${response.denue_results ?? response.upserted ?? 0} encontrados).`,
+          message: `Se guardaron ${response.upserted ?? 0} resultados desde ${PROSPECCION_SOURCE_LABELS.denue} (${response.denue_results ?? response.upserted ?? 0} encontrados).`,
         });
         setFeedbackDialog({
           open: true,
@@ -1750,7 +1751,7 @@ export function DenueBusquedaView() {
       } catch {
         setFeedback({
           type: "error",
-          message: "No fue posible iniciar la búsqueda DENUE. Intenta nuevamente.",
+          message: `No fue posible iniciar la búsqueda ${PROSPECCION_SOURCE_LABELS.denue}. Intenta nuevamente.`,
         });
         setFeedbackDialog({
           open: true,
@@ -1916,7 +1917,7 @@ export function DenueBusquedaView() {
         message:
           saveProspectosMode === "filtered"
             ? `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos desde todos los resultados filtrados (${numberFormatter.format(targetIds.length)} IDs procesados).`
-            : `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos desde DENUE. Continúa con la verificación en la vista Prospección.`,
+            : `Se guardaron ${numberFormatter.format(totalGuardados)} prospectos desde ${PROSPECCION_SOURCE_LABELS.denue}. Continúa con la verificación en la vista Prospección.`,
       });
     } catch (error) {
       setFeedback({
@@ -1955,7 +1956,7 @@ export function DenueBusquedaView() {
             <Target className="h-4 w-4" />
             Parámetros de búsqueda
           </CardTitle>
-          <CardDescription>Define el centro y el radio antes de consultar DENUE.</CardDescription>
+          <CardDescription>Define el centro y el radio antes de consultar {PROSPECCION_SOURCE_LABELS.denue}.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -1989,7 +1990,7 @@ export function DenueBusquedaView() {
                       <button
                         type="button"
                         className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                        aria-label="Instrucciones de búsqueda DENUE"
+                        aria-label={`Instrucciones de búsqueda ${PROSPECCION_SOURCE_LABELS.denue}`}
                       >
                         <Info className="h-4 w-4" />
                       </button>
@@ -2020,7 +2021,7 @@ export function DenueBusquedaView() {
                 aria-describedby={QUERY_TOOLTIP_ID}
               />
               <p className="text-xs text-muted-foreground">
-                DENUE buscará negocios cuyo nombre o actividad coincida con este texto.
+                {PROSPECCION_SOURCE_LABELS.denue} buscará negocios cuyo nombre o actividad coincida con este texto.
               </p>
             </div>
             <div className="space-y-2">
@@ -2109,7 +2110,7 @@ export function DenueBusquedaView() {
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                   <span>
-                    Procesando búsqueda DENUE{activeDenueJobStatus ? ` (${activeDenueJobStatus})` : ""}…
+                    Procesando búsqueda {PROSPECCION_SOURCE_LABELS.denue}{activeDenueJobStatus ? ` (${activeDenueJobStatus})` : ""}…
                   </span>
                   {canRunBusquedas ? (
                     <Button
@@ -2317,7 +2318,7 @@ export function DenueBusquedaView() {
                     <DrawerHeader>
                       <DrawerTitle>Clase de actividad</DrawerTitle>
                       <DrawerDescription>
-                        Selecciona una o varias clases del DENUE para filtrar los resultados mostrados.
+                        Selecciona una o varias clases de {PROSPECCION_SOURCE_LABELS.denue} para filtrar los resultados mostrados.
                       </DrawerDescription>
                     </DrawerHeader>
                     <div className="flex flex-1 flex-col gap-4 overflow-hidden px-4">

@@ -4,6 +4,7 @@ import type {
   PipelineBoardCard,
   PipelineBoardStage,
 } from "@/lib/embudo/data";
+import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels";
 
 export type WhatsappCtaAttribution = {
   campaign: string | null;
@@ -222,7 +223,7 @@ function normalizeContactOrigin(value: unknown): string | null {
   if (!trimmed) return null;
   const lower = trimmed.toLowerCase();
   const aliases: Record<string, string> = {
-    denue: "DENUE",
+    denue: PROSPECCION_SOURCE_LABELS.denue,
     "google_places": "Google",
     google: "Google",
     manual_panel_contactos: "Manual",

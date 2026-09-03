@@ -59,6 +59,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { canalLabel, contactHistoryDetail, contactStatusLabel, contactStatusVariant } from "@/lib/prospeccion/contact-utils"
+import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels"
 import {
   actualizarProspecto,
   contactarProspectos,
@@ -659,7 +660,7 @@ const getDateFilterChipLabel = (
 
 const FUENTE_LABELS: Record<string, string> = {
   google_places: "Google Places",
-  denue: "DENUE",
+  denue: PROSPECCION_SOURCE_LABELS.denue,
   usuario: "Usuario",
 }
 
@@ -3997,7 +3998,7 @@ function ProspectosView() {
               <Input
                 value={savedViewName}
                 onChange={(event) => setSavedViewName(event.target.value)}
-                placeholder="Ej. Prospectos DENUE Norte"
+                placeholder="Ej. Prospectos GobMX Norte"
                 maxLength={120}
               />
             </div>
@@ -4044,7 +4045,7 @@ function ProspectosView() {
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
                   <SelectItem value="google_places">Google Places</SelectItem>
-                  <SelectItem value="denue">DENUE</SelectItem>
+                  <SelectItem value="denue">{PROSPECCION_SOURCE_LABELS.denue}</SelectItem>
                   <SelectItem value="usuario">Usuario</SelectItem>
                 </SelectContent>
               </Select>

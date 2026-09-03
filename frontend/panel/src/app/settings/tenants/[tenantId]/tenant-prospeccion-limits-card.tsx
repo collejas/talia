@@ -53,7 +53,7 @@ export function TenantProspeccionLimitsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Prospección DENUE</CardTitle>
+        <CardTitle>Prospección GobMX</CardTitle>
         <CardDescription>
           Hereda los límites de {settings.plan.name}. Usa excepciones sólo cuando exista un acuerdo comercial
           particular.
@@ -90,7 +90,7 @@ export function TenantProspeccionLimitsCard({
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Cada usuario define la calidad del lote con los filtros de DENUE. Sólo se guardan registros que tengan
+            Cada usuario define la calidad del lote con los filtros de GobMX. Sólo se guardan registros que tengan
             al menos correo o teléfono, y cada prospecto nuevo consume 1 crédito.
           </p>
 

@@ -6,7 +6,7 @@ import { DenueBusquedaView } from "./denue-busqueda-view"
 
 export default function DenueBusquedaClientPage() {
   return (
-    <ProspeccionViewLayout title="Prospección · Denue búsqueda">
+    <ProspeccionViewLayout title="Prospección · GobMX búsqueda">
       <DenueBusquedaView />
     </ProspeccionViewLayout>
   )

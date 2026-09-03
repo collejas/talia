@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels"
 import { TemplateAiAssistant, type TemplateAiDraft } from "./components/template-ai-assistant"
 import {
   createCrmCampaign,
@@ -427,7 +428,7 @@ export function CampanasMetricsClient() {
     const key = raw.toLowerCase()
     const labels: Record<string, string> = {
       google_places: "Google",
-      denue: "Denue",
+      denue: PROSPECCION_SOURCE_LABELS.denue,
       buscador: "Web",
       manual: "Manual",
       usuario: "Usuario",
