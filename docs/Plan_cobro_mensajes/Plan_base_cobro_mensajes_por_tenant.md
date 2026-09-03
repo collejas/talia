@@ -787,6 +787,29 @@ Debe conservarse:
 
 No se deben editar ni borrar cargos de periodos cerrados. Las correcciones deben ser movimientos compensatorios.
 
+### Borrado operativo independiente del cobro
+
+El tenant puede eliminar desde Inbox los datos operativos de un mensaje o hilo cuando esa acción esté autorizada. Esto puede incluir:
+
+- el mensaje y la conversación;
+- adjuntos y eventos de entrega;
+- contacto, identidad de canal y demás datos CRM relacionados, según las reglas de limpieza vigentes.
+
+Ese borrado no debe eliminar, modificar ni recalcular el historial financiero. `cobro_mensajes`, `cobro_hilos_resumen`, `cobro_periodos`, `cobro_ajustes` y las evidencias necesarias para la auditoría pertenecen a un dominio independiente.
+
+Reglas de integridad:
+
+- ninguna tabla financiera tendrá `ON DELETE CASCADE` hacia `mensajes` o `conversaciones`;
+- las referencias a registros operativos serán históricas y no impedirán conservar el cargo si el origen fue eliminado;
+- el ledger conservará columnas explícitas suficientes para identificar el proveedor, tenant, periodo, fecha, dirección, tarifa, categoría y monto;
+- los cargos y resúmenes financieros no se eliminarán como efecto secundario de una limpieza de Inbox;
+- si se conservan `mensaje_id` o `conversacion_id`, deberán ser referencias opcionales o históricas, no dependencias de vida útil;
+- los cargos no tendrán un endpoint de borrado para tenants; las correcciones se harán mediante ajustes compensatorios auditables.
+
+La implementación preferida es desacoplar las referencias operativas del ledger financiero y conservar en `cobro_mensajes` un snapshot explícito de la información necesaria para cobro y auditoría. Como mínimo, no se deberá usar `ON DELETE SET NULL` para perder información necesaria del cargo: los datos financieros deben permanecer completos aunque se elimine el mensaje operativo.
+
+La baja física de una organización completa es un caso distinto. Mientras exista historial financiero, no se permitirá que la eliminación de `organizaciones` cascade sobre las tablas de cobro. Se preferirá la baja lógica o un archivo financiero permanente.
+
 ### Controles de consumo y alertas
 
 El tenant maestro podrá configurar por tenant, mediante columnas explícitas:
@@ -934,6 +957,9 @@ El plan estará listo para operar cuando:
 - el precio Meta de $0.5614 MXN pueda modificarse por vigencia sin cambiar código;
 - las estadísticas separen costo Meta, cargo de GEOACTIV y costo combinado;
 - el costo Meta no se agregue al cobro de GEOACTIV mientras siga siendo un costo directo del tenant.
+- la eliminación operativa desde Inbox no elimine cargos, periodos, ajustes ni historial financiero;
+- las FK del dominio financiero no tengan cascadas destructivas hacia mensajes o conversaciones;
+- exista una prueba funcional que elimine un hilo autorizado y confirme que el ledger y sus totales permanecen.
 
 ## Estado del documento
 

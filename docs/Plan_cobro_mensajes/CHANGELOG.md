@@ -2,6 +2,19 @@
 
 Este archivo registra el avance del diseño e implementación del sistema de cobro por tenant.
 
+## 2026-09-03
+
+### Decisión de arquitectura — Borrado operativo separado del historial de cobro — Aprobado
+
+- El tenant podrá eliminar mensajes, conversaciones y los datos operativos relacionados desde Inbox cuando tenga autorización.
+- Esa acción nunca podrá eliminar ni modificar `cobro_mensajes`, `cobro_hilos_resumen`, `cobro_periodos`, `cobro_ajustes` ni las evidencias financieras.
+- El dominio financiero debe ser independiente del ciclo de vida de `mensajes` y `conversaciones`; no se permitirán FK con `ON DELETE CASCADE` desde las tablas de cobro hacia esas tablas operativas.
+- Las referencias operativas del ledger serán históricas y opcionales, o se eliminarán como dependencia referencial, pero el ledger conservará snapshots explícitos de tenant, proveedor, fecha, tarifa, categoría, dirección e importe.
+- Los cargos no tendrán borrado para tenants. Una corrección se registrará mediante un ajuste compensatorio con motivo, usuario y fecha.
+- La eliminación física de una organización completa tampoco podrá borrar el historial financiero; se preferirá baja lógica o archivo financiero permanente.
+- La validación obligatoria será funcional: eliminar un hilo autorizado desde Inbox y confirmar que sus cargos, periodo, ajustes, totales e historial permanecen consultables.
+- Esta decisión corrige el defecto detectado en las FK actuales de `cobro_mensajes` y `cobro_hilos_resumen`, que propagan el borrado operativo mediante cascada.
+
 ## Estados utilizados
 
 - **Propuesto:** pendiente de aprobación.
