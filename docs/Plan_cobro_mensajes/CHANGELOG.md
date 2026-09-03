@@ -587,3 +587,12 @@ Pendiente de API:
 - `Enviados` cuenta mensajes aceptados por Meta y `Entregados` solo mensajes con estado `entregado`/`leido` o callback de entrega confirmado.
 - La campaña `WHATSAPP` del tenant maestro quedó con `424` enviados y `401` entregados; `23` permanecen únicamente como enviados.
 - El cargo GEOACTIV de `$0.09` continúa aplicando a los mensajes aceptados; no depende de que el KPI de entrega sea 100%.
+## 2026-09-03 — Identidad histórica y etiqueta de borrado operativo
+
+- Se agregaron snapshots explícitos de nombre, teléfono y correo en el ledger de cobro.
+- Los cargos cuyo mensaje o conversación fue eliminado quedan marcados como `Eliminado`.
+- Triggers de base de datos capturan la identidad y marcan el borrado antes de eliminar los datos operativos.
+## 2026-09-03 — Unificación visual de categorías Meta
+
+- `unknown` y `conversacion_sin_tarifa_meta` se presentan como una sola categoría: `Sin categoría Meta`.
+- La clasificación interna se conserva únicamente como dato técnico de auditoría.

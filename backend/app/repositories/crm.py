@@ -8092,7 +8092,9 @@ class CRMRepository:
             "billable_meta,estado_proveedor,aceptado_proveedor_en,facturable,"
             "motivo_no_facturable,origen_tarifa_app,cargo_app_unitario,cargo_app_importe,"
             "costo_meta_aplica,costo_meta_unitario,costo_meta_importe,costo_total_mensaje,"
-            "tipo_cargo,fuente_registro,conciliacion_estado,creado_en,mensaje_creado_en"
+            "tipo_cargo,fuente_registro,conciliacion_estado,creado_en,mensaje_creado_en,"
+            "contacto_nombre_historico,contacto_telefono_historico,contacto_correo_historico,"
+            "operativo_eliminado,operativo_eliminado_en"
         )
         # La fecha original vive en el ledger para que el cobro sobreviva al
         # borrado autorizado del mensaje operativo.
@@ -8188,14 +8190,24 @@ class CRMRepository:
             start = str(period.get("fecha_inicio") or "")[:10]
             end = str(period.get("fecha_fin") or "")[:10]
             row["periodo_label"] = f"{start} a {end}" if start and end else "Periodo no disponible"
+            contacto_nombre_historico = row.get("contacto_nombre_historico")
+            contacto_telefono_historico = row.get("contacto_telefono_historico")
+            contacto_correo_historico = row.get("contacto_correo_historico")
+            eliminado = bool(row.get("operativo_eliminado"))
             row["contacto_nombre"] = (
-                person.get("nombre_completo")
+                contacto_nombre_historico
+                or person.get("nombre_completo")
                 or conversation.get("nombre_remitente")
                 or conversation.get("correo_remitente")
-                or "Contacto no identificado"
+                or ("Contacto eliminado" if eliminado else "Contacto no identificado")
             )
-            row["contacto_telefono"] = person.get("telefono_principal_e164")
-            row["contacto_correo"] = person.get("correo_principal") or person.get("correo") or conversation.get("correo_remitente")
+            row["contacto_telefono"] = contacto_telefono_historico or person.get("telefono_principal_e164")
+            row["contacto_correo"] = (
+                contacto_correo_historico
+                or person.get("correo_principal")
+                or person.get("correo")
+                or conversation.get("correo_remitente")
+            )
 
     async def export_billing_messages(
         self,

@@ -96,11 +96,14 @@ class BillingMessageItem(BaseModel):
     fuente_registro: str
     conciliacion_estado: str
     creado_en: datetime
+    mensaje_creado_en: datetime
     organizacion_nombre: str | None = None
     periodo_label: str | None = None
     contacto_nombre: str | None = None
     contacto_telefono: str | None = None
     contacto_correo: str | None = None
+    operativo_eliminado: bool = False
+    operativo_eliminado_en: datetime | None = None
 
 
 class BillingMessageListResponse(BaseModel):
@@ -563,7 +566,7 @@ def _billing_messages_csv(rows: list[dict[str, Any]]) -> str:
     writer = csv.writer(output)
     writer.writerow([
         "fecha", "tenant", "periodo", "contacto", "telefono", "correo", "proveedor", "canal",
-        "direccion", "categoria_meta", "clasificacion_interna", "estado_proveedor", "facturable", "cargo_geoactiv_mxn",
+        "direccion", "categoria_meta", "clasificacion_interna", "estado_operativo", "estado_proveedor", "facturable", "cargo_geoactiv_mxn",
         "costo_meta_mxn", "total_consumo_mxn", "conciliacion_estado", "fuente_registro",
         "mensaje_id_ref", "conversacion_id_ref", "periodo_id_ref", "tenant_id_ref",
     ])
@@ -572,8 +575,9 @@ def _billing_messages_csv(rows: list[dict[str, Any]]) -> str:
             row.get("creado_en"), row.get("organizacion_nombre") or "Tenant no identificado",
             row.get("periodo_label") or "Periodo no disponible", row.get("contacto_nombre") or "Contacto no identificado",
             row.get("contacto_telefono") or "", row.get("contacto_correo") or "", row.get("proveedor"), row.get("canal"),
-            row.get("direccion"), row.get("categoria_meta"),
+            row.get("direccion"), "Sin categoría Meta" if row.get("categoria_meta") == "unknown" else row.get("categoria_meta"),
             "Conversación sin tarifa Meta" if row.get("categoria_interna_cobro") == "conversacion_sin_tarifa_meta" else "",
+            "Eliminado" if row.get("operativo_eliminado") else "Activo",
             row.get("estado_proveedor"), row.get("facturable"),
             row.get("cargo_app_importe"), row.get("costo_meta_importe"), row.get("costo_total_mensaje"),
             row.get("conciliacion_estado"), row.get("fuente_registro"), row.get("mensaje_id"),

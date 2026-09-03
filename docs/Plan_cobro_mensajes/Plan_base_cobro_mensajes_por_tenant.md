@@ -808,6 +808,8 @@ Reglas de integridad:
 
 La implementación preferida es desacoplar las referencias operativas del ledger financiero y conservar en `cobro_mensajes` un snapshot explícito de la información necesaria para cobro y auditoría. Como mínimo, no se deberá usar `ON DELETE SET NULL` para perder información necesaria del cargo: los datos financieros deben permanecer completos aunque se elimine el mensaje operativo.
 
+El ledger conservará además `contacto_nombre_historico`, `contacto_telefono_historico` y `contacto_correo_historico`. Cuando desaparezca el mensaje o la conversación operativa, el cargo se marcará con `operativo_eliminado = true` y el panel mostrará la etiqueta `Eliminado`. La etiqueta identifica el estado del dato operativo; no cancela, revierte ni modifica el cargo.
+
 La baja física de una organización completa es un caso distinto. Mientras exista historial financiero, no se permitirá que la eliminación de `organizaciones` cascade sobre las tablas de cobro. Se preferirá la baja lógica o un archivo financiero permanente.
 
 ### Controles de consumo y alertas
