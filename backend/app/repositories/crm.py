@@ -8092,13 +8092,10 @@ class CRMRepository:
             "billable_meta,estado_proveedor,aceptado_proveedor_en,facturable,"
             "motivo_no_facturable,origen_tarifa_app,cargo_app_unitario,cargo_app_importe,"
             "costo_meta_aplica,costo_meta_unitario,costo_meta_importe,costo_total_mensaje,"
-            "tipo_cargo,fuente_registro,conciliacion_estado,creado_en"
+            "tipo_cargo,fuente_registro,conciliacion_estado,creado_en,mensaje_creado_en"
         )
-        # El ledger histórico puede haberse insertado después del mensaje
-        # original. Los periodos operativos deben filtrar por mensajes.creado_en
-        # para no hacer aparecer backfills antiguos en "Hoy".
-        if fecha_desde or fecha_hasta:
-            select_fields += ",mensaje:mensajes!cobro_mensajes_org_message_fk(creado_en)"
+        # La fecha original vive en el ledger para que el cobro sobreviva al
+        # borrado autorizado del mensaje operativo.
         params: dict[str, Any] = {
             "select": select_fields,
             "order": "creado_en.desc",
@@ -8110,9 +8107,9 @@ class CRMRepository:
         if periodo_id:
             params["periodo_id"] = f"eq.{periodo_id}"
         if fecha_desde:
-            params["mensaje.creado_en"] = f"gte.{fecha_desde.isoformat()}"
+            params["mensaje_creado_en"] = f"gte.{fecha_desde.isoformat()}"
         if fecha_hasta:
-            params["mensaje.creado_en"] = f"lt.{fecha_hasta.isoformat()}"
+            params["mensaje_creado_en"] = f"lt.{fecha_hasta.isoformat()}"
         if categoria_meta == "conversacion_sin_tarifa_meta":
             params["categoria_interna_cobro"] = f"eq.{categoria_meta}"
         elif categoria_meta:
