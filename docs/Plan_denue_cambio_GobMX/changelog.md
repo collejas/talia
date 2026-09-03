@@ -139,6 +139,7 @@ Implementado localmente. No se modificaron visitas, UTMs ni registros histórico
 - La tabla `Vistas Web` ahora normaliza `Origen contacto` y `Origen de la promoción`.
 - La etiqueta principal `Visita / sesión` también normaliza filas históricas cuyo encabezado era `Denue`.
 - La construcción de filas de `Vistas Web` también normaliza `type` (`Origen / ubicación`), que se alimenta de `contacto_origen`.
+- La capa final de `VisitsDataTable` normaliza nuevamente `header` y `type` antes de renderizar, cubriendo respuestas históricas o cacheadas.
 - Los valores originales continúan utilizándose para filtros, consultas y trazabilidad.
 
 ### Validación

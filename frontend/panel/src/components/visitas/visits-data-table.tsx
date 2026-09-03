@@ -283,7 +283,11 @@ export function VisitsDataTable({
 }) {
   const [mounted, setMounted] = React.useState(false);
   const displayData = React.useMemo(
-    () => data.map((row) => ({ ...row, header: formatAcquisitionSourceLabel(row.header) })),
+    () => data.map((row) => ({
+      ...row,
+      header: formatAcquisitionSourceLabel(row.header),
+      type: formatAcquisitionSourceLabel(row.type),
+    })),
     [data],
   );
 
