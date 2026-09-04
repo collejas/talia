@@ -11,6 +11,11 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - (Sin pendientes inmediatos en este bloque).
 
 3. Campañas y contacto
+- Separación estricta entre envíos:
+  - estado actual: la programación de `programado_en` sí usa la separación configurada, pero el worker procesa con concurrencia y no garantiza el intervalo real.
+  - implementar rate limiter durable por organización/canal, con coordinación entre procesos y réplicas.
+  - agregar timestamps explícitos de despacho iniciado y aceptación del proveedor.
+  - validar con lote controlado de correo y WhatsApp, comparando `estado=enviado`, `creado_en` e IDs externos.
 - Asistente IA especializado en prospección:
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.
 - Correo de prospección (Brevo):

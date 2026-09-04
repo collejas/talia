@@ -1,7 +1,9 @@
 # Plan de personas, empresa y contactos
 
 Fecha: 2026-04-11 (UTC)
-Estado: Borrador técnico
+Estado: Referencia histórica; runtime principal cerrado. Mantener este documento
+para contexto del modelo y consultar `resumen_ejecutivo_cierre.md` para el estado
+vigente.
 
 ## Estado actual (2026-04-12)
 

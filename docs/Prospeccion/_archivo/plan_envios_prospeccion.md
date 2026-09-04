@@ -1,5 +1,9 @@
 # Plan: Ejecución real de envíos de prospección (correo · WhatsApp · voz)
 
+> Documento histórico. El flujo descrito aquí fue implementado en sus partes
+> principales. Para el comportamiento vigente del worker y la separación entre
+> envíos, consultar `../envios_y_separacion.md`.
+
 ## Contexto actual
 - La vista `/prospeccion/prospectos` ya permite seleccionar prospectos verificados y mandar un payload a `POST /crm/prospeccion/prospectos/contactar`, pero hoy todo sucede de forma síncrona dentro del request. El correo usa `send_email`, WhatsApp delega a `_send_whatsapp_reply` y las llamadas quedan como registros “pendientes” en `prospeccion_contactos_log` sin iniciar una llamada real.
 - Existen tablas/utilidades previas:

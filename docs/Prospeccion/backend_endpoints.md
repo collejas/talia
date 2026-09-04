@@ -123,6 +123,15 @@ Repositorio principal: `backend/app/repositories/crm.py`
 - `prospeccion_contact_sender.py`: worker de envíos por canal.
 - `prospeccion_auto_promoter.py`: promoción automática a CRM según señales.
 
+### Worker y separación temporal
+
+- `POST /crm/prospeccion/prospectos/contactar` sólo crea el lote y sus envíos; no debe interpretarse como confirmación de entrega inmediata.
+- `prospeccion_contacto_envio.programado_en` representa la hora objetivo de elegibilidad del envío.
+- `contact_sender` reclama envíos vencidos en lotes y puede ejecutar varios en paralelo.
+- La configuración actual tiene concurrencia predeterminada `2`; la separación de 5 segundos se materializa en la programación, no como espera obligatoria antes de cada llamada al proveedor.
+- Para comprobar el despacho inicial, consultar `prospeccion_contactos_log` por `batch_id`, `envio_id`, `canal`, `estado=enviado`, `creado_en` y el ID de proveedor.
+- No usar `procesado_en` como único timestamp de despacho: los callbacks pueden actualizarlo después.
+
 ## 6) Inbox reutilizado para prospección (en curso)
 
 - Endpoint base: `GET /crm/inbox/threads`

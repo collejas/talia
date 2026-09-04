@@ -81,3 +81,18 @@ Para cambios nuevos:
 - Detalle cronológico de cambios: `docs/Prospeccion/CHANGELOG.md`.
 - Pendientes reales actuales: `docs/Prospeccion/siguiente_pasos.md`.
 - Refactor de columnarización y snapshot al convertir resultados: `docs/Prospeccion/plan_columnarizacion_resultados_direccion.md` y `docs/Prospeccion/plan_resultado_a_prospecto_snapshot.md`.
+
+## 9) Programación y separación de envíos
+
+- La vista `/prospeccion/prospectos` valida una separación de `5` a `3600` segundos.
+- El backend guarda cada envío en `prospeccion_contacto_envio.programado_en` con la separación solicitada.
+- El worker `prospeccion_contact_sender` procesa los envíos vencidos desde el `lifespan` de FastAPI.
+- El worker usa concurrencia (`2` por defecto) y procesa tareas en paralelo. La programación de `programado_en` no constituye una garantía de separación real entre llamadas al proveedor.
+- El control operativo vigente limita volumen por minuto y aplica backpressure ante errores; no existe todavía un rate limiter de intervalo mínimo por despacho.
+- `procesado_en` puede cambiar posteriormente por callbacks de entrega, lectura, rebote o respuesta. Para auditar el despacho inicial deben usarse los primeros logs `estado=enviado` y los IDs del proveedor.
+
+Estado validado el 2026-09-04:
+
+- La separación programada se genera correctamente cada 5 segundos.
+- La separación real no es estricta: se observaron intervalos menores a 5 segundos en lotes reales de correo y WhatsApp.
+- La garantía de separación estricta queda pendiente de un rate limiter durable, coordinado por organización/canal y no sólo en memoria.

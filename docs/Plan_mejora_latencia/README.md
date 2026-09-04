@@ -2,11 +2,16 @@
 
 - [Workspace de oportunidad en Inbox](06_workspace_oportunidad_inbox.md)
 - [Plan transversal de consolidación de métricas](../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md)
+- [Auditoría de separación de envíos de prospección](../Prospeccion/envios_y_separacion.md)
 
 Documentación generada para diagnóstico y plan de mejora de rendimiento en backend CRM.
 
 La consolidación de métricas debe reutilizar agregados canónicos y eliminar
 consultas repetidas entre vistas antes de introducir nuevas cachés o tablas.
+
+La latencia del panel y la cadencia del sender son problemas distintos. La
+optimización de consultas no garantiza la separación entre despachos; esa
+separación debe auditarse con los timestamps del worker y del proveedor.
 
 ## Archivos
 

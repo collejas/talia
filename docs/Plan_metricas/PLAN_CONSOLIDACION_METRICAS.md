@@ -80,6 +80,25 @@ los logs disponibles. Por ello, el BFF y la ruta backend fueron retirados el
 
 ## 2. Diagnóstico validado
 
+### 2.0 Separación entre programación y despacho
+
+La métrica `programado_en` describe cuándo un envío queda elegible para el
+worker; no demuestra el instante en que se llamó al proveedor. El sender actual
+procesa con concurrencia y puede producir intervalos reales menores a la
+separación configurada. Las métricas de ejecución deben distinguir:
+
+- programación (`programado_en`),
+- despacho inicial (`prospeccion_contactos_log` con `estado=enviado`),
+- aceptación del proveedor (SID/message ID),
+- entrega, lectura, rebote o respuesta.
+
+`procesado_en` no debe utilizarse como sustituto universal del despacho inicial,
+porque los callbacks de correo y WhatsApp pueden actualizarlo posteriormente.
+
+La separación estricta entre despachos queda como pendiente operativo y debe
+resolverse con un rate limiter durable por organización/canal antes de presentar
+el intervalo como KPI garantizado.
+
 ### 2.1 Correo
 
 El flujo activo de correo usa principalmente:

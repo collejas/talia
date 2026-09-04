@@ -6,6 +6,18 @@ Formato recomendado por entrada:
 - `Base de datos`
 - `Operación/Notas`
 
+## 2026-09-04
+
+### Documentación
+- Se actualizó la documentación activa de prospección para reflejar el flujo vigente de batches, worker, correo y WhatsApp.
+- Se agregó `envios_y_separacion.md` con el contrato actual de `programado_en`, las fuentes correctas para auditar el despacho y el pendiente de rate limiting estricto.
+- Se aclaró que la separación de 5 segundos se programa en los registros, pero no está garantizada en el despacho real mientras el worker opere con concurrencia.
+- Se actualizaron las responsabilidades de `prospeccion/contactos`, `prospeccion/metricas` y los planes de latencia/métricas para distinguir programación, despacho, entrega y respuesta.
+
+### Operación/Notas
+- Auditoría real ejecutada el 2026-09-04: se observaron intervalos menores a 5 segundos en lotes de correo y WhatsApp.
+- No se modificaron código, esquema ni datos durante esta actualización documental.
+
 ## 2026-04-25
 
 ### Documentación

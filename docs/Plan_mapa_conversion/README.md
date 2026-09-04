@@ -81,3 +81,11 @@ El mapa de conversión combina varias fuentes de datos, pero esta documentación
 - lectura de negocio,
 - backlog operativo,
 - historial de cambios.
+
+## Nota operativa vigente (2026-09-04)
+
+La atribución y las métricas de ejecución deben conservar separados el momento
+programado del envío, el despacho inicial, la aceptación del proveedor, la
+entrega y la respuesta. Para auditar intervalos de prospección se debe usar
+`docs/Prospeccion/envios_y_separacion.md`; `procesado_en` puede cambiar por
+callbacks posteriores y no representa siempre el despacho inicial.

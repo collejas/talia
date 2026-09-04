@@ -1,6 +1,6 @@
 # Prospección · Documentación vigente
 
-Última actualización: 2026-04-25.
+Última actualización: 2026-09-04.
 
 Esta carpeta quedó organizada así:
 
@@ -14,7 +14,9 @@ Esta carpeta quedó organizada así:
 - `plan_columnarizacion_resultados_direccion.md`: refactor completado para mover más lectura a columnas y desglosar dirección DENUE/Google.
 - `plan_resultado_a_prospecto_snapshot.md`: snapshot comercial completado al convertir resultados en prospectos.
 - `runbook_metricas_brevo.md`: guia operativa de diagnostico para metricas de correo (Brevo + app).
+- `envios_y_separacion.md`: comportamiento vigente del scheduler/worker, auditoría de intervalos y límites conocidos.
 - `inbox_prospeccion_plan.md`: plan y avance de operación de conversaciones de prospección reutilizando `/inbox`.
 - `_archivo/`: documentos históricos que ya no reflejan el estado actual.
 
 Si vas a definir cambios nuevos, parte de `prospeccion.md` y cruza con `backend_endpoints.md` + `base_datos.md`.
+Para revisar la separación temporal entre envíos, usa `envios_y_separacion.md`; el plan histórico de ejecución queda en `_archivo/plan_envios_prospeccion.md`.
