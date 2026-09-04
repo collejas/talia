@@ -11,6 +11,7 @@ Formato recomendado por entrada:
 ### Documentación
 - Se actualizó la documentación activa de prospección para reflejar el flujo vigente de batches, worker, correo y WhatsApp.
 - Se agregó `envios_y_separacion.md` con el contrato actual de `programado_en`, las fuentes correctas para auditar el despacho y el pendiente de rate limiting estricto.
+- Se agregó `propuesta_separacion_estricta.md` con el diseño de rate limiter durable, reserva atómica, timestamps, reintentos y criterios de aceptación.
 - Se aclaró que la separación de 5 segundos se programa en los registros, pero no está garantizada en el despacho real mientras el worker opere con concurrencia.
 - Se actualizaron las responsabilidades de `prospeccion/contactos`, `prospeccion/metricas` y los planes de latencia/métricas para distinguir programación, despacho, entrega y respuesta.
 

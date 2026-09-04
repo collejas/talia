@@ -16,6 +16,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
   - implementar rate limiter durable por organización/canal, con coordinación entre procesos y réplicas.
   - agregar timestamps explícitos de despacho iniciado y aceptación del proveedor.
   - validar con lote controlado de correo y WhatsApp, comparando `estado=enviado`, `creado_en` e IDs externos.
+  - propuesta técnica detallada: `docs/Prospeccion/propuesta_separacion_estricta.md`.
 - Asistente IA especializado en prospección:
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.
 - Correo de prospección (Brevo):

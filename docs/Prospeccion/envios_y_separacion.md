@@ -2,6 +2,8 @@
 
 Última revisión: 2026-09-04 (UTC)
 
+Propuesta de implementación: `propuesta_separacion_estricta.md`.
+
 ## Estado actual
 
 El flujo de contacto es asíncrono:
@@ -84,7 +86,8 @@ order by creado_en asc;
 
 ## Pendiente para garantía estricta
 
-Para presentar los 5 segundos como garantía de producto se requiere:
+Para presentar los 5 segundos como garantía de producto se requiere aplicar la
+propuesta técnica documentada en `propuesta_separacion_estricta.md`, que incluye:
 
 - rate limiter durable por organización y canal;
 - coordinación entre procesos y réplicas;
