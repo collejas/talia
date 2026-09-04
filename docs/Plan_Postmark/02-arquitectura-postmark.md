@@ -108,6 +108,21 @@ Panel/API
   -> ledger + métricas + supresiones
 ```
 
+### Separación temporal en prospección
+
+El correo de prospección tiene dos etapas distintas y ambas deben respetar el
+contrato operativo:
+
+1. `prospeccion_contact_sender` prepara y encola el mensaje localmente.
+2. `postmark-worker` reclama la cola y realiza la llamada real a Postmark.
+
+La separación mínima de la campaña no se considera cumplida sólo por espaciar
+la cola local. Antes de la llamada real a Postmark, el worker obtiene la reserva
+transaccional compartida de `organizacion_id + canal` mediante
+`reserve_prospeccion_envio_dispatch`. El `MessageID` interno de la cola no es
+aceptación del proveedor; `proveedor_aceptado_en` sólo se completa con el ID
+externo devuelto por Postmark.
+
 ## Flujo de dominio
 
 ```text

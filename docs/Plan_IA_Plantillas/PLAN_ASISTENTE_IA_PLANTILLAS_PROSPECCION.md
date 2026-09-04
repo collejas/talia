@@ -335,7 +335,12 @@ principal.
 
 ### 3.3 La IA genera borradores, no envía mensajes
 
-La generación será una operación de preparación. El asistente no enviará correos, no enviará WhatsApp y no publicará plantillas en Meta.
+La generación será una operación de preparación. El asistente no enviará
+correos, no enviará WhatsApp y no publicará plantillas en Meta. El envío real
+se ejecuta posteriormente desde el flujo de prospección, con la separación
+temporal y el proveedor de correo definidos por la operación; para Postmark,
+la aceptación sólo ocurre cuando `postmark-worker` recibe el `MessageID`
+externo.
 
 El usuario deberá revisar y confirmar el resultado mediante una acción explícita como `Usar resultado` o `Guardar plantilla`.
 

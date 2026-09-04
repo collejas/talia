@@ -14,8 +14,8 @@ Esta carpeta quedó organizada así:
 - `plan_columnarizacion_resultados_direccion.md`: refactor completado para mover más lectura a columnas y desglosar dirección DENUE/Google.
 - `plan_resultado_a_prospecto_snapshot.md`: snapshot comercial completado al convertir resultados en prospectos.
 - `runbook_metricas_brevo.md`: guia operativa de diagnostico para metricas de correo (Brevo + app).
-- `envios_y_separacion.md`: comportamiento vigente del scheduler/worker, auditoría de intervalos y límites conocidos.
-- `propuesta_separacion_estricta.md`: diseño pendiente para garantizar el intervalo real entre despachos.
+- `envios_y_separacion.md`: comportamiento vigente del scheduler/worker, control durable y auditoría de intervalos.
+- `propuesta_separacion_estricta.md`: diseño implementado para garantizar el intervalo mínimo entre despachos.
 - `inbox_prospeccion_plan.md`: plan y avance de operación de conversaciones de prospección reutilizando `/inbox`.
 - `_archivo/`: documentos históricos que ya no reflejan el estado actual.
 

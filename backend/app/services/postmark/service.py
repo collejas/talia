@@ -138,7 +138,11 @@ class PostmarkService:
                 "p_error_message": result.error_message,
             }
         )
-        return {"provider_accepted": result.accepted, "state": finish.get("message_status")}
+        return {
+            "provider_accepted": result.accepted,
+            "provider_message_id": str(result.provider_message_id) if result.provider_message_id else None,
+            "state": finish.get("message_status"),
+        }
 
     async def validate_send(
         self,

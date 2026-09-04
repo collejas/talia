@@ -1766,6 +1766,7 @@ class ProspeccionContactSender:
         )
 
         throttle_key: tuple[str, str, str] | None = None
+        postmark_queue_dispatch = False
         if canal in {"correo", "whatsapp", "llamada"}:
             throttle_key = self._throttle_key_for_envio(
                 organizacion_id=org_uuid,
@@ -1808,6 +1809,18 @@ class ProspeccionContactSender:
                     )
                     return
 
+        if canal == "correo" and org_uuid:
+            try:
+                postmark_queue_dispatch = await _postmark_enabled_for_tenant(organizacion_id=org_uuid)
+            except Exception as exc:  # pragma: no cover - configuración externa del tenant
+                log_event(
+                    logger,
+                    "prospeccion.postmark_dispatch_detection_failed",
+                    organizacion_id=str(org_uuid),
+                    envio_id=str(envio_id),
+                    error=str(exc),
+                )
+
         if org_uuid and canal in {"correo", "whatsapp", "llamada"}:
             suppression = await repo.worker_find_active_contact_suppression(
                 organizacion_id=org_uuid,
@@ -1829,33 +1842,56 @@ class ProspeccionContactSender:
                     error=None,
                     retryable=False,
                 )
-            elif canal == "correo":
-                result = await _run_envio_correo(
-                    correo_context,
-                    payload,
-                    organizacion_id=org_uuid,
-                )
-            elif canal == "whatsapp":
-                result = await _run_envio_whatsapp(
-                    detalle,
-                    payload,
-                    organizacion_id=org_uuid,
-                )
             else:
-                result = await _run_envio_llamada(detalle, payload)
+                if not postmark_queue_dispatch:
+                    reservation = await repo.worker_reserve_envio_dispatch(envio_id=envio_id)
+                    if not reservation.get("permitido"):
+                        log_event(
+                            logger,
+                            "prospeccion.sender_dispatch_deferred",
+                            envio_id=str(envio_id),
+                            canal=canal,
+                            organizacion_id=str(org_uuid),
+                            espera_segundos=reservation.get("espera_segundos"),
+                            motivo=reservation.get("motivo"),
+                        )
+                        return
+                if canal == "correo":
+                    result = await _run_envio_correo(
+                        correo_context,
+                        payload,
+                        organizacion_id=org_uuid,
+                    )
+                elif canal == "whatsapp":
+                    result = await _run_envio_whatsapp(
+                        detalle,
+                        payload,
+                        organizacion_id=org_uuid,
+                    )
+                else:
+                    result = await _run_envio_llamada(detalle, payload)
         elif canal == "correo":
+            reservation = await repo.worker_reserve_envio_dispatch(envio_id=envio_id)
+            if not reservation.get("permitido"):
+                return
             result = await _run_envio_correo(
                 correo_context,
                 payload,
                 organizacion_id=org_uuid,
             )
         elif canal == "whatsapp":
+            reservation = await repo.worker_reserve_envio_dispatch(envio_id=envio_id)
+            if not reservation.get("permitido"):
+                return
             result = await _run_envio_whatsapp(
                 detalle,
                 payload,
                 organizacion_id=org_uuid,
             )
         elif canal == "llamada":
+            reservation = await repo.worker_reserve_envio_dispatch(envio_id=envio_id)
+            if not reservation.get("permitido"):
+                return
             result = await _run_envio_llamada(detalle, payload)
         else:
             result = ContactEnvioResult(
@@ -2001,6 +2037,8 @@ class ProspeccionContactSender:
             payload["mensaje_id"] = result.mensaje_id
         if result.mensaje_id_interno:
             payload["mensaje_id_interno"] = result.mensaje_id_interno
+        if result.mensaje_id:
+            payload["proveedor_aceptado_en"] = now_iso
 
         should_retry = result.estado == "error" and result.retryable and intento < max_reintentos
         if should_retry:

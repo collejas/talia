@@ -115,7 +115,11 @@ async def test_deliver_queued_message_finishes_provider_attempt():
         client=DeliveryClient(),
     )
 
-    assert result == {"provider_accepted": True, "state": "submitted"}
+    assert result == {
+        "provider_accepted": True,
+        "provider_message_id": "11111111-1111-1111-1111-111111111111",
+        "state": "submitted",
+    }
 
 
 @pytest.mark.asyncio
@@ -188,7 +192,7 @@ async def test_queue_message_reserves_with_stream_selected_by_kind():
     )
 
     assert repository.payload["p_message_kind"] == "broadcast"
-    assert repository.payload["p_stream_name"] == "broadcasts"
+    assert repository.payload["p_stream_name"] == "broadcast"
     assert repository.payload["p_idempotency_key"] == "campaign-1-recipient-1"
     assert result["message_status"] == "queued"
-    assert result["stream_name"] == "broadcasts"
+    assert result["stream_name"] == "broadcast"

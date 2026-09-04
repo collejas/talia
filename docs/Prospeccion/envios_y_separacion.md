@@ -2,7 +2,7 @@
 
 Última revisión: 2026-09-04 (UTC)
 
-Propuesta de implementación: `propuesta_separacion_estricta.md`.
+Diseño e implementación: `propuesta_separacion_estricta.md`.
 
 ## Estado actual
 
@@ -14,13 +14,22 @@ El flujo de contacto es asíncrono:
 4. `contact_sender` consulta envíos vencidos y los ejecuta desde el `lifespan` de FastAPI.
 5. El worker actualiza el envío, registra `prospeccion_contactos_log` y sincroniza el estado del lote.
 
+Cuando el tenant usa Postmark, el correo tiene una segunda cola:
+`contact_sender` crea el mensaje local y `postmark-worker` realiza después la
+llamada externa. Por eso la reserva del intervalo se hace en el worker que
+realmente llama al proveedor.
+
 El correo puede usar Brevo o Postmark según la configuración del tenant. WhatsApp usa el transporte Meta configurado para prospección. Los estados posteriores llegan mediante webhooks/callbacks.
 
 ## Qué significa la separación de 5 segundos
 
-La separación de 5 segundos actualmente garantiza la secuencia de `programado_en`, no el intervalo real entre llamadas al proveedor.
+La separación configurada ahora también se aplica al despacho real mediante una
+reserva transaccional durable por `organizacion_id + canal`.
 
-El worker tiene concurrencia predeterminada `2` y crea tareas para varios envíos vencidos. No existe una espera obligatoria de 5 segundos antes de cada despacho. El control vigente es de volumen por minuto y backpressure por errores, no de intervalo mínimo.
+El worker conserva concurrencia para no bloquear correo y WhatsApp entre sí, pero
+cada tarea debe obtener turno antes de llamar al proveedor. La reserva usa la
+RPC `reserve_prospeccion_envio_dispatch`, bloquea la fila del reloj del tenant y
+reprograma el envío si todavía no corresponde.
 
 Por eso pueden ocurrir ambas situaciones:
 
@@ -48,10 +57,12 @@ La evidencia de despacho inicial debe calcularse con el primer evento `estado=en
 | `prospeccion_contactos_log.creado_en` con `estado=enviado` | Primer registro del despacho | medir intervalo inicial |
 | SID/message ID del proveedor | Identificador externo aceptado | reconciliar con Meta, Brevo o Postmark |
 | `mensajes.creado_en` | Persistencia local del mensaje saliente | corroborar WhatsApp |
+| `despacho_iniciado_en` | Inicio de la llamada real al proveedor | medir separación mínima |
+| `proveedor_aceptado_en` | Recepción del ID externo del proveedor | conciliar aceptación |
 | `procesado_en` | Última actualización operativa del envío | no usarlo solo para medir despacho |
 | estado `entregado`, `leido`, `fallido` o `respondido` | Resultado posterior | medir entregabilidad y respuesta |
 
-`procesado_en` puede cambiar cuando llega un callback de entrega, lectura, rebote o respuesta. En Postmark, el estado inicial `enviado` significa que el mensaje fue encolado; no equivale necesariamente a entrega final.
+`procesado_en` puede cambiar cuando llega un callback de entrega, lectura, rebote o respuesta. En Postmark, el estado inicial `enviado` significa que el mensaje fue encolado localmente; `proveedor_aceptado_en` sólo se completa después de la llamada real y del `MessageID` externo. Ninguno equivale necesariamente a entrega final.
 
 ## Auditoría recomendada
 
@@ -84,10 +95,10 @@ from primeros_despachos
 order by creado_en asc;
 ```
 
-## Pendiente para garantía estricta
+## Implementación y validación pendiente
 
-Para presentar los 5 segundos como garantía de producto se requiere aplicar la
-propuesta técnica documentada en `propuesta_separacion_estricta.md`, que incluye:
+La migración `20260922_100000_prospeccion_envio_separacion_estricta.sql` ya fue
+aplicada y el servicio API fue reiniciado. La implementación incluye:
 
 - rate limiter durable por organización y canal;
 - coordinación entre procesos y réplicas;
@@ -96,4 +107,8 @@ propuesta técnica documentada en `propuesta_separacion_estricta.md`, que incluy
 - métrica de violaciones y alerta operativa;
 - prueba funcional repetible con correo y WhatsApp.
 
-Hasta completar ese cambio, la documentación y la UI deben describir la configuración como separación programada, no como separación real garantizada.
+Queda la prueba funcional controlada con destinatarios de prueba. La medición
+debe usar `despacho_iniciado_en` como fuente primaria; `proveedor_aceptado_en`
+sirve para separar inicio local de aceptación externa. La garantía es mínima:
+un despacho posterior no inicia antes del intervalo configurado; la latencia
+del proveedor puede hacer que el intervalo sea mayor.

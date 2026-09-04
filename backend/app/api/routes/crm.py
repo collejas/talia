@@ -10523,6 +10523,7 @@ def _build_contact_batch_payload(
     canales: list[str],
     total: int,
     payload: ProspectoContactarPayload,
+    organizacion_id: UUID | None,
     usuario_id: UUID | None,
     filtros: dict[str, Any],
     canales_config: dict[str, dict[str, Any]] | None,
@@ -10531,6 +10532,7 @@ def _build_contact_batch_payload(
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "iniciado_por": str(usuario_id) if usuario_id else None,
+        "organizacion_id": str(organizacion_id) if organizacion_id else None,
         "canales": canales,
         "total_prospectos": total,
         "estado": "pendiente",
@@ -10801,6 +10803,7 @@ def _build_contact_envios_entries(
                 "batch_id": batch_value,
                 "prospecto_id": prospecto_id_text,
                 "canal": canal,
+                "separacion_segundos": separacion_val,
                 "payload": canal_payload,
                 "detalle": detalle,
             }
@@ -39302,6 +39305,7 @@ async def contactar_prospectos_legacy(
                     canales=list(canales_config.keys()),
                     total=total_prospectos,
                     payload=payload,
+                    organizacion_id=organizacion_id,
                     usuario_id=usuario_id,
                     filtros=selector_filtros,
                     canales_config=canales_config,

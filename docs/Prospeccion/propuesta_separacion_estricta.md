@@ -1,7 +1,7 @@
 # Propuesta: separación estricta entre envíos de prospección
 
 Fecha: 2026-09-04 (UTC)
-Estado: propuesta técnica, pendiente de implementación
+Estado: implementada en código y migración; pendiente de aplicar en producción y validar con lote controlado
 
 ## 1. Objetivo
 
@@ -10,8 +10,10 @@ la separación configurada entre llamadas a los proveedores. Con una separación
 de 5 segundos, el siguiente despacho del mismo ámbito no debe iniciar antes de
 que transcurran 5 segundos desde el anterior.
 
-La garantía aplica al despacho desde Talia hacia el proveedor. No significa que
-el proveedor entregue el mensaje exactamente cinco segundos después.
+La garantía aplica al despacho desde Talia hacia el proveedor. En Postmark,
+esto significa la llamada de `postmark-worker`, no sólo la inserción en la
+cola `tenant_email_messages`. No significa que el proveedor entregue el
+mensaje exactamente cinco segundos después.
 
 ## 2. Ámbito recomendado
 
@@ -37,7 +39,6 @@ Crear una tabla explícita `prospeccion_envio_rate_limit` con:
 
 - `organizacion_id`;
 - `canal`;
-- `separacion_segundos`;
 - `siguiente_despacho_permitido_en`;
 - `ultimo_envio_id`;
 - `ultimo_despacho_iniciado_en`;
@@ -56,8 +57,11 @@ Crear una RPC transaccional que:
 4. reserve el turno y avance el siguiente instante si corresponde;
 5. devuelva un identificador de reserva.
 
-La lectura, comparación y actualización deben ocurrir en una misma transacción.
-No debe implementarse con un GET seguido de un PATCH desde Python.
+La migración `20260922_100000_prospeccion_envio_separacion_estricta.sql` agrega
+la separación como columna explícita en cada envío y crea la RPC
+`reserve_prospeccion_envio_dispatch(uuid)`. La lectura, comparación y
+actualización ocurren en una misma transacción con `FOR UPDATE`; Python no hace
+un GET seguido de un PATCH para decidir el turno.
 
 ## 5. Cambios del worker
 
@@ -69,7 +73,8 @@ Si no hay turno disponible:
 - el envío permanece `pendiente`;
 - `programado_en` se mueve al instante devuelto;
 - se registra `rate_limited`;
-- no se incrementa el intento del proveedor;
+- no se realiza ninguna llamada al proveedor; el contador operativo puede
+  avanzar al reclamar el registro, pero no representa un intento externo;
 - no se mantiene una tarea bloqueada durante todo el intervalo.
 
 La reserva durable debe ser la garantía principal. El lock `asyncio` actual sólo
@@ -81,7 +86,7 @@ Agregar o documentar claramente estos momentos:
 
 - `programado_en`: hora objetivo;
 - `despacho_iniciado_en`: justo antes de llamar al proveedor;
-- `proveedor_aceptado_en`: recepción del SID o confirmación de encolamiento;
+- `proveedor_aceptado_en`: recepción del ID externo del proveedor;
 - `procesado_en`: última actualización operativa compatible;
 - `entregado_en` y `leido_en`: callbacks posteriores cuando existan.
 
@@ -112,7 +117,9 @@ Postmark/Brevo, la aceptación o encolamiento no equivale a entrega final.
 ### Backend
 
 - Servicio dedicado `prospeccion_send_rate_limiter.py`.
-- Reserva previa a `_run_envio_correo` y `_run_envio_whatsapp`.
+- Reserva previa a `_run_envio_whatsapp` y a la llamada real de correo; cuando
+  el tenant usa Postmark, la reserva definitiva ocurre en `postmark-worker`,
+  justo antes de `PostmarkClient.send_message`.
 - Reprogramación sin incrementar intento cuando sólo espera turno.
 - Métricas de reservas concedidas, diferidas y violaciones.
 
@@ -139,10 +146,11 @@ Postmark/Brevo, la aceptación o encolamiento no equivale a entrega final.
 - Ejecutar correo y WhatsApp simultáneamente y comprobar su secuencia propia.
 - Reiniciar el servicio durante un lote y verificar recuperación sin duplicados.
 
-## 10. Decisión pendiente
+## 10. Decisión aplicada
 
-1. **Recomendada:** separación de 5 segundos por organización y canal.
-2. **Más conservadora:** separación global de 5 segundos entre correo y WhatsApp.
+1. **Aplicada:** separación mínima por organización y canal.
+2. Correo y WhatsApp pueden avanzar en paralelo; cada canal tiene un reloj
+   durable independiente.
 
-La propuesta soporta ambas políticas; cambia únicamente la clave de
-coordinación del rate limiter.
+La política global entre canales queda como evolución explícita, no como
+comportamiento implícito.

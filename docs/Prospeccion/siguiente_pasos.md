@@ -12,10 +12,9 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 
 3. Campañas y contacto
 - Separación estricta entre envíos:
-  - estado actual: la programación de `programado_en` sí usa la separación configurada, pero el worker procesa con concurrencia y no garantiza el intervalo real.
-  - implementar rate limiter durable por organización/canal, con coordinación entre procesos y réplicas.
-  - agregar timestamps explícitos de despacho iniciado y aceptación del proveedor.
-  - validar con lote controlado de correo y WhatsApp, comparando `estado=enviado`, `creado_en` e IDs externos.
+  - implementado en código: rate limiter durable por organización/canal mediante RPC transaccional y lock de fila.
+  - cada envío conserva `separacion_segundos` y registra `despacho_iniciado_en` y `proveedor_aceptado_en`.
+  - pendiente operativo: aplicar la migración y validar con lote controlado de correo y WhatsApp, comparando los timestamps explícitos e IDs externos.
   - propuesta técnica detallada: `docs/Prospeccion/propuesta_separacion_estricta.md`.
 - Asistente IA especializado en prospección:
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.

@@ -237,6 +237,13 @@ Modificar `prospeccion_contact_sender.py` para:
 - no repetir un envío aceptado por Postmark;
 - marcar por separado `queued`, `submitted`, `delivered`, `bounced`, `failed` y `suppressed`.
 
+Para la separación temporal, no basta con espaciar la creación de filas en
+`tenant_email_messages`: el envío externo ocurre en `postmark-worker`. Ese
+worker debe reservar el turno justo antes de `PostmarkClient.send_message` y
+reencolar el mensaje si el reloj de `organizacion_id + canal` todavía no lo
+permite. El identificador local de la cola y el `MessageID` externo deben
+permanecer diferenciados.
+
 La Bulk API está orientada a broadcast y requiere confirmación/aprobación de Postmark para la cuenta. La API batch admite hasta 500 mensajes por llamada, pero el límite de la llamada no sustituye la cuota del tenant.
 
 ## Fase 7: webhooks e inbound

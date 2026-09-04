@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
+from uuid import UUID
 
 from app.integrations.postmark.client import PostmarkClient
 from app.integrations.postmark.errors import PostmarkError
+from app.repositories.crm import CRMRepository, CRMRepositoryError
 
 from .repository import PostmarkRepository, PostmarkRepositoryError
 from .service import PostmarkService
@@ -38,13 +41,41 @@ class PostmarkWorker:
                 if not message_id:
                     continue
                 try:
-                    await service.deliver_queued_message(
+                    message_uuid = UUID(str(message_id))
+                    idempotency_key = await repository.get_message_idempotency_key(message_id=message_uuid)
+                    envio_id = self._prospeccion_envio_id(idempotency_key)
+                    if envio_id:
+                        reservation = await CRMRepository().worker_reserve_envio_dispatch(envio_id=envio_id)
+                        if not reservation.get("permitido"):
+                            await repository.defer_message(message_id=message_uuid)
+                            continue
+
+                    delivery = await service.deliver_queued_message(
                         organizacion_id=organizacion_id,
-                        message_id=message_id,
+                        message_id=message_uuid,
                         client=client,
                     )
+                    if envio_id:
+                        crm_repo = CRMRepository()
+                        if delivery.get("provider_accepted") and delivery.get("provider_message_id"):
+                            await crm_repo.worker_complete_envio(
+                                envio_id=envio_id,
+                                payload={
+                                    "mensaje_id": delivery["provider_message_id"],
+                                    "proveedor_aceptado_en": datetime.now(timezone.utc).isoformat(),
+                                },
+                            )
+                        elif not delivery.get("provider_accepted"):
+                            await crm_repo.worker_complete_envio(
+                                envio_id=envio_id,
+                                payload={
+                                    "estado": "error",
+                                    "error": "postmark_provider_rejected",
+                                    "procesado_en": datetime.now(timezone.utc).isoformat(),
+                                },
+                            )
                     processed += 1
-                except (PostmarkError, PostmarkRepositoryError) as exc:
+                except (PostmarkError, PostmarkRepositoryError, CRMRepositoryError, ValueError) as exc:
                     logger.exception(
                         "postmark.worker_message_failed",
                         extra={
@@ -54,6 +85,16 @@ class PostmarkWorker:
                         },
                     )
         return processed
+
+    @staticmethod
+    def _prospeccion_envio_id(idempotency_key: str | None) -> UUID | None:
+        prefix = "prospeccion-envio:"
+        if not idempotency_key or not idempotency_key.startswith(prefix):
+            return None
+        try:
+            return UUID(idempotency_key[len(prefix) :])
+        except ValueError:
+            return None
 
     async def start(self) -> None:
         if self._task and not self._task.done():

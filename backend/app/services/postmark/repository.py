@@ -219,6 +219,25 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("claim_invalid_response")
         return [row for row in data if isinstance(row, dict)]
 
+    async def get_message_idempotency_key(self, *, message_id: UUID) -> str | None:
+        row = await self._get_one(
+            "/rest/v1/tenant_email_messages",
+            params={
+                "select": "id,idempotency_key",
+                "id": f"eq.{message_id}",
+                "limit": "1",
+            },
+        )
+        value = row.get("idempotency_key") if row else None
+        return str(value).strip() if value else None
+
+    async def defer_message(self, *, message_id: UUID) -> None:
+        await self._rest_patch(
+            "/rest/v1/tenant_email_messages",
+            params={"id": f"eq.{message_id}", "status": "eq.processing"},
+            payload={"status": "queued", "updated_at": datetime.now(timezone.utc).isoformat()},
+        )
+
     async def list_enabled_organizations(self) -> list[UUID]:
         data = await self._get_many(
             "/rest/v1/tenant_email_migrations",

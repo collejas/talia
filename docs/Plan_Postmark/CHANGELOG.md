@@ -2,6 +2,15 @@
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-09-04]
+
+### Coordinación con prospección
+
+- Se revisó la separación estricta de envíos a la luz de la cola propia de Postmark.
+- Se documentó que la reserva debe ocurrir también en `postmark-worker`, justo antes de la llamada externa; espaciar únicamente el encolamiento local no garantiza el intervalo real.
+- Se distinguió el ID interno de `tenant_email_messages` del `MessageID` externo de Postmark.
+- `proveedor_aceptado_en` queda reservado para la aceptación real del proveedor; la creación de la fila local se considera sólo `queued`.
+
 ## [2026-08-27]
 
 ### Cambios

@@ -8,6 +8,16 @@ Formato recomendado por entrada:
 
 ## 2026-09-04
 
+### Separación estricta de envíos
+- Se corrigió la coordinación para que Postmark no consuma la separación sólo al encolar: `postmark-worker` reserva el turno antes de llamar al proveedor.
+- Se separó el identificador interno de la cola Postmark del `MessageID` externo.
+- `proveedor_aceptado_en` ahora representa aceptación real del proveedor.
+- Se implementó la reserva transaccional `reserve_prospeccion_envio_dispatch`.
+- Se agregó el reloj durable por `organizacion_id + canal` y la columna explícita `separacion_segundos` por envío.
+- El worker registra `despacho_iniciado_en` justo antes del proveedor y `proveedor_aceptado_en` al recibir el ID/confirmación de aceptación.
+- Correo y WhatsApp mantienen relojes independientes; no se bloquean entre sí.
+- Queda pendiente aplicar la migración en la base activa y ejecutar la prueba controlada de intervalos reales.
+
 ### Documentación
 - Se actualizó la documentación activa de prospección para reflejar el flujo vigente de batches, worker, correo y WhatsApp.
 - Se agregó `envios_y_separacion.md` con el contrato actual de `programado_en`, las fuentes correctas para auditar el despacho y el pendiente de rate limiting estricto.

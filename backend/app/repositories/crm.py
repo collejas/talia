@@ -24300,6 +24300,27 @@ class CRMRepository:
         data = resp.json() or []
         return isinstance(data, list) and bool(data)
 
+    async def worker_reserve_envio_dispatch(
+        self,
+        *,
+        envio_id: UUID,
+    ) -> dict[str, Any]:
+        """Reserva el siguiente despacho respetando el reloj persistente de tenant/canal."""
+
+        result = await self._rpc(
+            "reserve_prospeccion_envio_dispatch",
+            {"p_envio_id": str(envio_id)},
+        )
+        if isinstance(result, list):
+            row = result[0] if result else {}
+        elif isinstance(result, dict):
+            row = result
+        else:
+            raise CRMRepositoryError(f"worker_dispatch_reservation_invalid:{result!r}")
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_dispatch_reservation_invalid:{row!r}")
+        return row
+
     async def worker_complete_envio(
         self,
         *,
