@@ -10,7 +10,56 @@ Este archivo registra los avances, decisiones y cambios relevantes del plan docu
 
 **Estado:** Migración aplicada e integración inicial en curso
 
-**Última actualización:** 2026-08-31
+**Última actualización:** 2026-09-04
+
+## 2026-09-04 — Reapertura por versión, publicación y eliminación segura
+
+### Correcciones del ciclo de edición
+
+- La edición de una plantilla de correo ahora conserva la versión seleccionada:
+  primero usa `version_id` explícito de la URL, después la versión activa y,
+  como compatibilidad para plantillas históricas sin versión activa, la primera
+  versión registrada.
+- Cuando la versión fue creada con el Editor visual, se reconstruye su árbol de
+  bloques y se vuelve a abrir en el Editor visual; ya no se decide el editor
+  únicamente desde la plantilla padre ni se convierte el HTML renderizado en
+  texto editable.
+- El modo Código HTML y el Editor visual permanecen separados. El HTML generado
+  por el Editor visual continúa guardándose como resultado de envío, mientras
+  que los bloques son la fuente de edición visual.
+
+### Corrección de publicación
+
+- Se agregó el BFF específico para
+  `/api/prospeccion/contacto/templates/{templateId}/versions/{versionId}/publish`.
+- La publicación conserva la operación tenant-safe del backend y deja de caer
+  en la página 404 HTML de Next.js por una ruta BFF inexistente.
+
+### Trazabilidad y eliminación de versiones
+
+- `prospeccion_contacto_envio.version_id` identifica explícitamente la versión
+  utilizada por los nuevos envíos reales de correo.
+- El envío de prueba permanece separado del ledger de envíos reales y no crea un
+  registro que impida eliminar una versión sin envíos operativos.
+- Se agregó la eliminación tenant-safe de versiones desde el historial. Una
+  versión no puede eliminarse si está publicada, activa o tiene envíos reales.
+- Los envíos históricos sin `version_id` que no permiten determinar la versión
+  usada bloquean la eliminación de forma conservadora; no se infiere una
+  asociación desde datos incompletos.
+- La eliminación de una versión permite que sus bloques visuales se eliminen
+  por la relación existente, sin tocar envíos, mensajes, conversaciones,
+  oportunidades, personas ni relaciones de empresa.
+- Las migraciones aplicadas son
+  `20260904214107_prospeccion_template_version_deletion` y
+  `20260904214331_revoke_anon_template_version_delete`.
+
+### Validación y estado
+
+- La migración fue aplicada en Supabase y la ejecución del RPC quedó restringida
+  a usuarios autenticados con validación de organización.
+- Se validó la compilación Python, `git diff --check` y React Doctor 100/100.
+- Falta desplegar backend y panel y ejecutar el flujo autenticado en el entorno
+  productivo antes de marcar este ciclo como cerrado.
 
 ## 2026-09-01 — Aplicación efectiva del estilo elegido en generación IA
 

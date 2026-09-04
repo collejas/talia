@@ -1484,3 +1484,69 @@ Confirmación manual y guardado
 ```
 
 OpenAI centraliza la inteligencia editorial de cada canal. GEOACTIV conserva el control del contrato, los datos, los permisos, el tenant, la seguridad, la validación y la operación.
+
+## 17. Refactor implementado del ciclo de versiones de correo
+
+El ciclo operativo de correo quedó separado en tres responsabilidades:
+
+1. La plantilla define la identidad, el canal y la versión activa.
+2. Cada versión conserva su método de creación, contenido de envío y, cuando
+   corresponde, su árbol estructurado del Editor visual.
+3. El ledger de envíos reales identifica la versión usada mediante la columna
+   explícita `prospeccion_contacto_envio.version_id`.
+
+### Reapertura en el editor
+
+Al editar una plantilla, el panel resuelve la versión en este orden:
+
+1. `version_id` solicitado explícitamente.
+2. `version_activa_id` de la plantilla.
+3. La primera versión registrada, únicamente como compatibilidad para datos
+   históricos sin versión activa.
+
+El modo de edición se toma de `metodo_creacion` de la versión seleccionada.
+Cuando es `visual`, el backend entrega el árbol de bloques y el panel monta el
+Editor visual. El `cuerpo_html` se conserva como representación renderizada para
+envío y vista previa; no sustituye al árbol editable.
+
+### Publicación
+
+La publicación es una operación explícita y tenant-safe. El BFF del panel
+expone la ruta anidada de publicación y la reenvía al endpoint FastAPI
+correspondiente. La operación actualiza la versión activa mediante la función
+transaccional existente y no publica desde el guardado ordinario.
+
+### Pruebas y envíos reales
+
+El envío de prueba usa el renderizador y el SMTP operativo, pero no registra un
+envío en `prospeccion_contacto_envio`. Por ello, una prueba no cuenta como envío
+real para las métricas ni impide eliminar una versión sin uso operativo.
+
+Los nuevos envíos reales de correo guardan `version_id` además del contenido y
+los identificadores históricos necesarios. Los registros históricos sin esta
+columna se conservan y se consultan solo como compatibilidad; no se modifican
+automáticamente.
+
+### Eliminación segura
+
+El historial permite solicitar la eliminación de una versión que aún no tenga
+envíos reales. La autorización se valida en backend y en una función
+`SECURITY DEFINER` con `search_path` fijo:
+
+- valida usuario autenticado y organización propietaria;
+- valida plantilla y versión relacionadas;
+- rechaza versiones publicadas o activas;
+- rechaza versiones con `version_id` asociado a envíos reales;
+- rechaza versiones cuyo historial legacy no permita conocer con certeza la
+  versión utilizada;
+- elimina únicamente la versión y sus bloques dependientes.
+
+No se eliminan envíos, mensajes, conversaciones, oportunidades, personas,
+cuentas ni relaciones de empresa como consecuencia de esta acción.
+
+### Estado de despliegue
+
+La migración y la corrección de privilegios ya están aplicadas en Supabase. El
+código local fue validado estáticamente y con React Doctor; todavía requiere
+despliegue de backend y panel, seguido de una prueba autenticada de edición
+visual, publicación y eliminación bloqueada por envío real.
