@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import { IconBuilding, IconPackage, IconSearch } from "@tabler/icons-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export type CatalogPriceProduct = {
@@ -47,74 +47,48 @@ function normalize(value: string | null | undefined) {
   return (value ?? "").trim().toLocaleLowerCase("es-MX");
 }
 
-function ProductCard({ item }: { item: CatalogPriceProduct }) {
-  const hierarchy = [item.lineaNombre, item.familiaNombre, item.modeloNombre].filter(Boolean).join(" · ");
+function ProductTable({ items }: { items: CatalogPriceProduct[] }) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="truncate text-base">{item.nombre}</CardTitle>
-            <CardDescription className="mt-1">{hierarchy || item.codigo || "Producto del catálogo"}</CardDescription>
-          </div>
-          <Badge variant="outline">{item.tipo}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Precio base</p>
-            <p className="text-xl font-semibold">{formatMoney(item.precioBase, item.moneda)}</p>
-          </div>
-          <span className="text-sm text-muted-foreground">por {item.unidad}</span>
-        </div>
-        {item.preciosLista.length ? (
-          <div className="border-t pt-3">
-            <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Precios por lista</p>
-            <div className="grid gap-1.5 text-sm">
-              {item.preciosLista.map((price) => (
-                <div className="flex justify-between gap-3" key={`${item.id}-${price.nombre}`}>
-                  <span className="truncate text-muted-foreground">{price.nombre}</span>
-                  <span className="font-medium">{formatMoney(price.precio, price.moneda)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+    <div className="overflow-x-auto rounded-lg border">
+      <Table className="min-w-[900px]">
+        <TableHeader><TableRow>
+          <TableHead>Producto / servicio</TableHead><TableHead>Tipo</TableHead><TableHead>Clasificación</TableHead>
+          <TableHead>Unidad</TableHead><TableHead className="text-right">Precio base</TableHead><TableHead>Precios por lista</TableHead>
+        </TableRow></TableHeader>
+        <TableBody>{items.map((item) => {
+          const hierarchy = [item.lineaNombre, item.familiaNombre, item.modeloNombre].filter(Boolean).join(" · ");
+          return <TableRow key={item.id}>
+            <TableCell className="font-medium"><div>{item.nombre}</div>{item.codigo ? <div className="text-xs text-muted-foreground">{item.codigo}</div> : null}</TableCell>
+            <TableCell><Badge variant="outline">{item.tipo}</Badge></TableCell>
+            <TableCell className="max-w-[260px] truncate text-muted-foreground">{hierarchy || "—"}</TableCell>
+            <TableCell>{item.unidad}</TableCell>
+            <TableCell className="text-right font-medium">{formatMoney(item.precioBase, item.moneda)}</TableCell>
+            <TableCell><div className="min-w-[190px] space-y-1">{item.preciosLista.length ? item.preciosLista.map((price) => <div className="flex justify-between gap-3" key={`${item.id}-${price.nombre}`}><span className="truncate text-muted-foreground">{price.nombre}</span><span>{formatMoney(price.precio, price.moneda)}</span></div>) : <span className="text-muted-foreground">—</span>}</div></TableCell>
+          </TableRow>;
+        })}</TableBody>
+      </Table>
+    </div>
   );
 }
 
-function PropertyCard({ item }: { item: CatalogPriceProperty }) {
-  const location = [item.desarrollo, item.capa, item.manzana].filter(Boolean).join(" · ");
-  const total = item.precioTipo.toLowerCase() === "m2" && item.precioM2 !== null && item.areaM2 !== null
-    ? item.precioM2 * item.areaM2
-    : item.precio;
+function PropertyTable({ items }: { items: CatalogPriceProperty[] }) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="truncate text-base">{item.nombre}</CardTitle>
-            <CardDescription className="mt-1 truncate">{location}</CardDescription>
-          </div>
-          {item.status ? <Badge variant="outline">{item.status}</Badge> : null}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-2 text-sm">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Precio</p>
-            <p className="text-xl font-semibold">{formatMoney(total)}</p>
-          </div>
-          {item.unidad ? <span className="text-muted-foreground">{item.unidad}</span> : null}
-        </div>
-        {item.precioTipo.toLowerCase() === "m2" && item.precioM2 !== null ? (
-          <p className="text-muted-foreground">{formatMoney(item.precioM2)} por m²{item.areaM2 !== null ? ` · ${item.areaM2.toLocaleString("es-MX")} m²` : ""}</p>
-        ) : null}
-      </CardContent>
-    </Card>
+    <div className="overflow-x-auto rounded-lg border">
+      <Table className="min-w-[900px]"><TableHeader><TableRow>
+        <TableHead>Propiedad / unidad</TableHead><TableHead>Desarrollo</TableHead><TableHead>Nivel</TableHead><TableHead>Manzana</TableHead>
+        <TableHead>Estado</TableHead><TableHead className="text-right">Precio total</TableHead><TableHead className="text-right">Precio por m²</TableHead><TableHead className="text-right">Área</TableHead>
+      </TableRow></TableHeader><TableBody>{items.map((item) => {
+        const total = item.precioTipo.toLowerCase() === "m2" && item.precioM2 !== null && item.areaM2 !== null ? item.precioM2 * item.areaM2 : item.precio;
+        return <TableRow key={item.id}>
+          <TableCell className="font-medium"><div>{item.nombre}</div>{item.unidad && item.unidad !== item.nombre ? <div className="text-xs text-muted-foreground">{item.unidad}</div> : null}</TableCell>
+          <TableCell>{item.desarrollo}</TableCell><TableCell>{item.capa || "—"}</TableCell><TableCell>{item.manzana || "—"}</TableCell>
+          <TableCell>{item.status ? <Badge variant="outline">{item.status}</Badge> : "—"}</TableCell>
+          <TableCell className="text-right font-medium">{formatMoney(total)}</TableCell>
+          <TableCell className="text-right">{item.precioM2 !== null ? formatMoney(item.precioM2) : "—"}</TableCell>
+          <TableCell className="text-right">{item.areaM2 !== null ? `${item.areaM2.toLocaleString("es-MX")} m²` : "—"}</TableCell>
+        </TableRow>;
+      })}</TableBody></Table>
+    </div>
   );
 }
 
@@ -171,10 +145,10 @@ export function CatalogPricesWorkspace({
           <TabsTrigger value="propiedades"><IconBuilding className="mr-2 size-4" />Propiedades ({filteredProperties.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="productos">
-          {filteredProducts.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filteredProducts.map((item) => <ProductCard item={item} key={item.id} />)}</div> : <EmptyState text="No hay productos que coincidan con la búsqueda." />}
+          {filteredProducts.length ? <ProductTable items={filteredProducts} /> : <EmptyState text="No hay productos que coincidan con la búsqueda." />}
         </TabsContent>
         <TabsContent value="propiedades">
-          {filteredProperties.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filteredProperties.map((item) => <PropertyCard item={item} key={item.id} />)}</div> : <EmptyState text="No hay propiedades que coincidan con la búsqueda." />}
+          {filteredProperties.length ? <PropertyTable items={filteredProperties} /> : <EmptyState text="No hay propiedades que coincidan con la búsqueda." />}
         </TabsContent>
       </Tabs>
     </div>
