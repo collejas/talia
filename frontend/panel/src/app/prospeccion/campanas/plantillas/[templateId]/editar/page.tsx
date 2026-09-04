@@ -9,13 +9,17 @@ export default async function EditarPlantillaPage({
   searchParams,
 }: {
   params: Promise<{ templateId: string }>
-  searchParams: Promise<{ campana_id?: string }>
+  searchParams: Promise<{ campana_id?: string; version_id?: string }>
 }) {
   const routeParams = await params
   const queryParams = await searchParams
   return (
     <ProspeccionViewLayout title="Prospección · Editar plantilla">
-      <TemplateEditorPage templateId={routeParams.templateId} initialCampaignId={queryParams.campana_id} />
+      <TemplateEditorPage
+        templateId={routeParams.templateId}
+        initialCampaignId={queryParams.campana_id}
+        initialVersionId={queryParams.version_id}
+      />
     </ProspeccionViewLayout>
   )
 }

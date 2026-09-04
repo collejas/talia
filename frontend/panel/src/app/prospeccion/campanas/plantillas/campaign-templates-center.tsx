@@ -124,7 +124,7 @@ export function CampaignTemplatesCenter({ campaignId }: Props) {
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={() => router.push(`/prospeccion/campanas/plantillas/${template.id}/editar?campana_id=${encodeURIComponent(campaignId ?? "")}`)}><IconEdit className="mr-2 size-3.5" /> Editar</Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => setExpandedTemplateId((current) => current === template.id ? null : template.id)}><IconVersions className="mr-2 size-3.5" /> {expandedTemplateId === template.id ? "Ocultar versiones" : "Ver versiones"}</Button>
-                  {latest?.estado === "borrador" ? <Button type="button" size="sm" onClick={() => router.push(`/prospeccion/campanas/plantillas/${template.id}/editar?campana_id=${encodeURIComponent(campaignId ?? "")}`)}><IconRocket className="mr-2 size-3.5" /> Revisar y publicar</Button> : null}
+                  {latest?.estado === "borrador" ? <Button type="button" size="sm" onClick={() => router.push(`/prospeccion/campanas/plantillas/${template.id}/editar?campana_id=${encodeURIComponent(campaignId ?? "")}&version_id=${encodeURIComponent(latest.id)}`)}><IconRocket className="mr-2 size-3.5" /> Revisar y publicar</Button> : null}
                 </div>
                 {expandedTemplateId === template.id ? <div className="space-y-3 border-t pt-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Historial de versiones</p>
@@ -132,7 +132,10 @@ export function CampaignTemplatesCenter({ campaignId }: Props) {
                   {templateVersions.map((version) => <div key={version.id} className="rounded-lg border p-3">
                     <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-medium">Versión {version.numero}</p><p className="text-xs text-muted-foreground">{version.metodo_creacion === "visual" ? "Editor visual" : version.metodo_creacion === "ai" ? "Asistente IA" : "Código HTML"}</p></div><Badge variant={version.estado === "publicada" ? "default" : "outline"}>{statusLabel(version)}</Badge></div>
                     {version.cuerpo_html ? <iframe title={`Vista previa versión ${version.numero}`} sandbox="" srcDoc={version.cuerpo_html} className="mt-3 h-48 w-full rounded border bg-white" /> : <p className="mt-3 whitespace-pre-wrap rounded bg-muted/30 p-3 text-xs">{version.cuerpo_texto || "Sin contenido"}</p>}
-                    {version.estado === "borrador" ? <Button type="button" size="sm" className="mt-3" onClick={() => void publishVersion(template.id, version.id)} disabled={publishingVersionId === version.id}>{publishingVersionId === version.id ? <IconLoader className="mr-2 size-3.5 animate-spin" /> : <IconRocket className="mr-2 size-3.5" />} Publicar esta versión</Button> : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => router.push(`/prospeccion/campanas/plantillas/${template.id}/editar?campana_id=${encodeURIComponent(campaignId ?? "")}&version_id=${encodeURIComponent(version.id)}`)}>Editar esta versión</Button>
+                      {version.estado === "borrador" ? <Button type="button" size="sm" onClick={() => void publishVersion(template.id, version.id)} disabled={publishingVersionId === version.id}>{publishingVersionId === version.id ? <IconLoader className="mr-2 size-3.5 animate-spin" /> : <IconRocket className="mr-2 size-3.5" />} Publicar esta versión</Button> : null}
+                    </div>
                   </div>)}
                 </div> : null}
               </CardContent>

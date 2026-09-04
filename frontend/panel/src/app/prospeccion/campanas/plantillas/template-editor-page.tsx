@@ -36,7 +36,7 @@ import {
 } from "@/lib/prospeccion/prospectos-client"
 import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels"
 
-type Props = { templateId?: string; initialCampaignId?: string }
+type Props = { templateId?: string; initialCampaignId?: string; initialVersionId?: string }
 type Channel = "correo" | "whatsapp"
 type EmailFormat = "html" | "texto"
 type EmailCreationMode = "visual" | "html" | "ai"
@@ -157,7 +157,23 @@ function formFromTemplate(template: ContactoTemplate, campaignId: string): FormS
   }
 }
 
-export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
+function formFromTemplateVersion(
+  template: ContactoTemplate,
+  campaignId: string,
+  version: ContactoTemplateVersion,
+): FormState {
+  const form = formFromTemplate(template, campaignId)
+  return {
+    ...form,
+    asunto: version.asunto ?? "",
+    cuerpoTexto: version.cuerpo_texto ?? "",
+    cuerpoHtml: version.cuerpo_html ?? "",
+    emailCreationMode: version.metodo_creacion,
+    emailFormat: version.cuerpo_html?.trim() ? "html" : "texto",
+  }
+}
+
+export function TemplateEditorPage({ templateId, initialCampaignId, initialVersionId }: Props) {
   const router = useRouter()
   const logoFileInputRef = useRef<HTMLInputElement>(null)
   const subjectInputRef = useRef<HTMLInputElement>(null)
@@ -264,11 +280,18 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
       if (templateId) {
         const template = items.find((item) => item.id === templateId)
         if (!template) throw new Error("No se encontró la plantilla dentro de la campaña seleccionada.")
-        setForm(formFromTemplate(template, campaign.id))
         const versionsResponse = await listContactoTemplateVersions(template.id)
-        setVersions(Array.isArray(versionsResponse?.items) ? versionsResponse.items : [])
-        if (template.version_activa_id) {
-          const treeResponse = await getContactoTemplateVersionTree(template.id, template.version_activa_id)
+        const templateVersions = Array.isArray(versionsResponse?.items) ? versionsResponse.items : []
+        setVersions(templateVersions)
+        const selectedVersion =
+          (initialVersionId ? templateVersions.find((version) => version.id === initialVersionId) : undefined) ??
+          (template.version_activa_id
+            ? templateVersions.find((version) => version.id === template.version_activa_id)
+            : undefined) ??
+          [...templateVersions].sort((left, right) => left.numero - right.numero)[0]
+        setForm(selectedVersion ? formFromTemplateVersion(template, campaign.id, selectedVersion) : formFromTemplate(template, campaign.id))
+        if (selectedVersion?.metodo_creacion === "visual") {
+          const treeResponse = await getContactoTemplateVersionTree(template.id, selectedVersion.id)
           const structure = (treeResponse.bloques ?? []).map((block) => {
             const row = block as Record<string, unknown>
             return {
@@ -315,7 +338,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [initialCampaignId, templateId])
+  }, [initialCampaignId, initialVersionId, templateId])
 
   useEffect(() => {
     void load()
