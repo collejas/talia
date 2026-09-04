@@ -10181,6 +10181,9 @@ def _resolve_contact_channels(
                 entry["metadata"] = entry_metadata
 
             if canal == "correo":
+                active_version_id = _clean_text(template_row.get("version_activa_id")) if template_row else ""
+                if active_version_id:
+                    entry["version_id"] = active_version_id
                 email_message_kind = _clean_text(
                     template_row.get("email_message_kind") if template_row else None
                 )
@@ -10801,6 +10804,10 @@ def _build_contact_envios_entries(
                 "payload": canal_payload,
                 "detalle": detalle,
             }
+            if canal == "correo" and isinstance(canal_payload, dict):
+                version_id = _clean_text(canal_payload.get("version_id"))
+                if version_id:
+                    entry["version_id"] = version_id
             if canal == "whatsapp" and isinstance(canal_payload, dict):
                 whatsapp_template_id = _clean_text(
                     canal_payload.get("whatsapp_template_id")
@@ -35763,6 +35770,39 @@ async def publicar_version_template_prospeccion_contacto(
             raise HTTPException(status_code=403, detail="contact_template_version_forbidden") from exc
         raise HTTPException(status_code=502, detail="contact_template_version_publish_failed") from exc
     return {"ok": True, "version": version}
+
+
+@router.delete("/prospeccion/contacto/templates/{template_id}/versions/{version_id}")
+async def eliminar_version_template_prospeccion_contacto(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    template_id: UUID,
+    version_id: UUID,
+) -> Response:
+    try:
+        await repo.delete_contact_template_version(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+            version_id=version_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "not_found" in detail:
+            raise HTTPException(status_code=404, detail="contact_template_version_not_found") from exc
+        if "organization_forbidden" in detail:
+            raise HTTPException(status_code=403, detail="contact_template_version_forbidden") from exc
+        if "active_or_published" in detail:
+            raise HTTPException(status_code=409, detail="contact_template_version_active_or_published") from exc
+        if "has_real_sends" in detail:
+            raise HTTPException(status_code=409, detail="contact_template_version_has_real_sends") from exc
+        if "history_unknown" in detail:
+            raise HTTPException(status_code=409, detail="contact_template_version_send_history_unknown") from exc
+        raise HTTPException(status_code=502, detail="contact_template_version_delete_failed") from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/prospeccion/contacto/templates/{template_id}/versions/{version_id}")

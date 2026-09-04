@@ -22586,6 +22586,36 @@ class CRMRepository:
             raise CRMRepositoryError("contact_template_version_publish_failed")
         return data
 
+    async def delete_contact_template_version(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        template_id: UUID,
+        version_id: UUID,
+    ) -> UUID:
+        """Elimina una versión únicamente si el RPC confirma que no tiene envíos reales."""
+
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/eliminar_prospeccion_plantilla_version",
+            token=usuario_token,
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_template_id": str(template_id),
+                "p_version_id": str(version_id),
+            },
+        )
+        data = resp.json()
+        if isinstance(data, str):
+            try:
+                return UUID(data)
+            except ValueError as exc:
+                raise CRMRepositoryError("contact_template_version_delete_failed") from exc
+        if isinstance(data, dict) and data.get("id"):
+            return UUID(str(data["id"]))
+        raise CRMRepositoryError("contact_template_version_delete_failed")
+
     async def create_contact_template(
         self,
         *,

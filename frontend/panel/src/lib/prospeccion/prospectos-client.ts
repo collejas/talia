@@ -1886,6 +1886,13 @@ export async function publishContactoTemplateVersion(templateId: string, version
   )
 }
 
+export async function deleteContactoTemplateVersion(templateId: string, versionId: string) {
+  await requestJson(
+    `/api/prospeccion/contacto/templates/${templateId}/versions/${versionId}`,
+    { method: "DELETE" },
+  )
+}
+
 export async function getContactoTemplateVersionTree(templateId: string, versionId: string) {
   return requestJson<{
     ok: boolean

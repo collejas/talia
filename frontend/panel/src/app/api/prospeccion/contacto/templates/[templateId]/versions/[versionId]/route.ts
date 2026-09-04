@@ -10,3 +10,12 @@ export async function GET(request: Request, context: RouteContext) {
     forwardSearch: false,
   })
 }
+
+export async function DELETE(request: Request, context: RouteContext) {
+  const { templateId, versionId } = await context.params
+  return proxyProspeccionRequest(request, {
+    method: "DELETE",
+    backendPath: `/crm/prospeccion/contacto/templates/${templateId}/versions/${versionId}`,
+    forwardSearch: false,
+  })
+}

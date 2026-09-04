@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { IconArrowLeft, IconEdit, IconLoader, IconPlus, IconRocket, IconVersions } from "@tabler/icons-react"
+import { IconArrowLeft, IconEdit, IconLoader, IconPlus, IconRocket, IconTrash, IconVersions } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,6 +10,7 @@ import {
   listContactoTemplateVersions,
   listContactoTemplates,
   listCrmCampaigns,
+  deleteContactoTemplateVersion,
   publishContactoTemplateVersion,
   type ContactoTemplate,
   type ContactoTemplateVersion,
@@ -35,6 +36,7 @@ export function CampaignTemplatesCenter({ campaignId }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null)
   const [publishingVersionId, setPublishingVersionId] = useState<string | null>(null)
+  const [deletingVersionId, setDeletingVersionId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!campaignId) {
@@ -81,6 +83,31 @@ export function CampaignTemplatesCenter({ campaignId }: Props) {
       setError(reason instanceof Error ? reason.message : "No se pudo publicar la versión.")
     } finally {
       setPublishingVersionId(null)
+    }
+  }
+
+  const deleteVersion = async (templateId: string, version: ContactoTemplateVersion) => {
+    if (version.estado === "publicada") return
+    if (!window.confirm(`¿Eliminar la versión ${version.numero}? Esta acción no se puede deshacer.`)) return
+
+    setDeletingVersionId(version.id)
+    setError(null)
+    try {
+      await deleteContactoTemplateVersion(templateId, version.id)
+      await load()
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "No se pudo eliminar la versión."
+      if (message.includes("contact_template_version_has_real_sends")) {
+        setError("No se puede eliminar: esta versión tiene envíos reales.")
+      } else if (message.includes("contact_template_version_send_history_unknown")) {
+        setError("No se puede eliminar: no es posible determinar con certeza la versión usada por envíos históricos.")
+      } else if (message.includes("contact_template_version_active_or_published")) {
+        setError("No se puede eliminar una versión publicada o activa.")
+      } else {
+        setError(message)
+      }
+    } finally {
+      setDeletingVersionId(null)
     }
   }
 
@@ -134,7 +161,8 @@ export function CampaignTemplatesCenter({ campaignId }: Props) {
                     {version.cuerpo_html ? <iframe title={`Vista previa versión ${version.numero}`} sandbox="" srcDoc={version.cuerpo_html} className="mt-3 h-48 w-full rounded border bg-white" /> : <p className="mt-3 whitespace-pre-wrap rounded bg-muted/30 p-3 text-xs">{version.cuerpo_texto || "Sin contenido"}</p>}
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => router.push(`/prospeccion/campanas/plantillas/${template.id}/editar?campana_id=${encodeURIComponent(campaignId ?? "")}&version_id=${encodeURIComponent(version.id)}`)}>Editar esta versión</Button>
-                      {version.estado === "borrador" ? <Button type="button" size="sm" onClick={() => void publishVersion(template.id, version.id)} disabled={publishingVersionId === version.id}>{publishingVersionId === version.id ? <IconLoader className="mr-2 size-3.5 animate-spin" /> : <IconRocket className="mr-2 size-3.5" />} Publicar esta versión</Button> : null}
+                      {version.estado === "borrador" ? <Button type="button" size="sm" onClick={() => void publishVersion(template.id, version.id)} disabled={publishingVersionId === version.id || deletingVersionId === version.id}>{publishingVersionId === version.id ? <IconLoader className="mr-2 size-3.5 animate-spin" /> : <IconRocket className="mr-2 size-3.5" />} Publicar esta versión</Button> : null}
+                      {version.estado !== "publicada" ? <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => void deleteVersion(template.id, version)} disabled={deletingVersionId === version.id || publishingVersionId === version.id}>{deletingVersionId === version.id ? <IconLoader className="mr-2 size-3.5 animate-spin" /> : <IconTrash className="mr-2 size-3.5" />} Eliminar versión</Button> : null}
                     </div>
                   </div>)}
                 </div> : null}
