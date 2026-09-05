@@ -17652,6 +17652,28 @@ class CRMRecoverySummary(BaseModel):
     offset: int
 
 
+class CRMFollowUpConfiguration(BaseModel):
+    organizacion_id: UUID
+    dias_activo_hasta: int = Field(..., ge=0, le=365)
+    dias_en_riesgo_hasta: int = Field(..., ge=1, le=365)
+    dias_estancado_hasta: int = Field(..., ge=2, le=730)
+    dias_dormido_desde: int = Field(..., ge=3, le=1095)
+    ventana_reactivacion_dias: int = Field(..., ge=1, le=365)
+    ventana_universo_reactivacion_dias: int = Field(..., ge=1, le=365)
+    max_intentos_reactivacion: int = Field(..., ge=0, le=20)
+    updated_at: datetime | None = None
+
+
+class CRMFollowUpConfigurationUpdate(BaseModel):
+    dias_activo_hasta: int = Field(..., ge=0, le=365)
+    dias_en_riesgo_hasta: int = Field(..., ge=1, le=365)
+    dias_estancado_hasta: int = Field(..., ge=2, le=730)
+    dias_dormido_desde: int = Field(..., ge=3, le=1095)
+    ventana_reactivacion_dias: int = Field(..., ge=1, le=365)
+    ventana_universo_reactivacion_dias: int = Field(..., ge=1, le=365)
+    max_intentos_reactivacion: int = Field(..., ge=0, le=20)
+
+
 class CRMScoringProfile(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -42145,6 +42167,59 @@ async def pipeline_recovery(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="No se pudo cargar la recuperación de oportunidades.") from exc
     return _build_recovery_summary(rows=rows, limit=limit, offset=offset)
+
+
+@router.get("/pipeline/recovery/configuration", response_model=CRMFollowUpConfiguration)
+async def get_pipeline_recovery_configuration(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_any_permission(["reports.view", "pipeline.view"])),
+) -> CRMFollowUpConfiguration:
+    try:
+        row = await repo.get_oportunidad_seguimiento_configuracion(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="No se pudo cargar la configuración de seguimiento.") from exc
+    if not row:
+        try:
+            row = await repo.upsert_oportunidad_seguimiento_configuracion(
+                organizacion_id=organizacion_id,
+                payload={
+                    "dias_activo_hasta": 7,
+                    "dias_en_riesgo_hasta": 15,
+                    "dias_estancado_hasta": 30,
+                    "dias_dormido_desde": 31,
+                    "ventana_reactivacion_dias": 30,
+                    "ventana_universo_reactivacion_dias": 30,
+                    "max_intentos_reactivacion": 3,
+                },
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="No se pudo inicializar la configuración de seguimiento.") from exc
+    return CRMFollowUpConfiguration(**row)
+
+
+@router.put("/pipeline/recovery/configuration", response_model=CRMFollowUpConfiguration)
+async def update_pipeline_recovery_configuration(
+    payload: CRMFollowUpConfigurationUpdate,
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+) -> CRMFollowUpConfiguration:
+    if not (
+        payload.dias_activo_hasta < payload.dias_en_riesgo_hasta
+        < payload.dias_estancado_hasta < payload.dias_dormido_desde
+    ):
+        raise HTTPException(status_code=422, detail="Los umbrales deben aumentar en orden: activo, riesgo, estancado y dormido.")
+    try:
+        row = await repo.upsert_oportunidad_seguimiento_configuracion(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="No se pudo guardar la configuración de seguimiento.") from exc
+    return CRMFollowUpConfiguration(**row)
 
 
 @router.get("/pipeline/board", response_model=CRMPipelineBoard)

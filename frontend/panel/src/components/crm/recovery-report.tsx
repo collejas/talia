@@ -72,6 +72,16 @@ type FilterState = {
   q: string
 }
 
+type FollowUpConfig = {
+  dias_activo_hasta: number
+  dias_en_riesgo_hasta: number
+  dias_estancado_hasta: number
+  dias_dormido_desde: number
+  ventana_reactivacion_dias: number
+  ventana_universo_reactivacion_dias: number
+  max_intentos_reactivacion: number
+}
+
 const EMPTY_FILTERS: FilterState = { estado: "todos", temperatura: "todas", estrategia: "todas", q: "" }
 
 const stateLabels: Record<string, string> = {
@@ -117,6 +127,9 @@ export function RecoveryReport() {
   const [data, setData] = useState<RecoveryResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [config, setConfig] = useState<FollowUpConfig | null>(null)
+  const [configDraft, setConfigDraft] = useState<FollowUpConfig | null>(null)
+  const [savingConfig, setSavingConfig] = useState(false)
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ limit: "500" })
@@ -144,6 +157,27 @@ export function RecoveryReport() {
   }, [query])
 
   useEffect(() => { void load() }, [load])
+
+  useEffect(() => {
+    void fetch("/api/crm/pipeline/recovery/configuration", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<FollowUpConfig> : null)
+      .then((value) => { if (value) { setConfig(value); setConfigDraft(value) } })
+      .catch(() => undefined)
+  }, [])
+
+  const saveConfig = async () => {
+    if (!configDraft) return
+    setSavingConfig(true)
+    try {
+      const response = await fetch("/api/crm/pipeline/recovery/configuration", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(configDraft) })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(payload?.error ?? "No se pudo guardar la configuración")
+      setConfig(payload as FollowUpConfig)
+      setConfigDraft(payload as FollowUpConfig)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar la configuración")
+    } finally { setSavingConfig(false) }
+  }
 
   const updateFilter = (key: keyof FilterState, value: string) => setFilters((current) => ({ ...current, [key]: value }))
 
@@ -184,6 +218,17 @@ export function RecoveryReport() {
             <HealthMetric label="Seguimiento a tiempo" value={data?.seguimiento_a_tiempo_pct} />
             <HealthMetric label="Ausencia de dormidas" value={data?.ausencia_dormidas_pct} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base">Configuración de seguimiento</CardTitle>
+          <CardDescription>Estos umbrales se aplican únicamente a este tenant.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {configDraft ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{([ ["dias_activo_hasta", "Activo hasta (días)"], ["dias_en_riesgo_hasta", "En riesgo hasta (días)"], ["dias_estancado_hasta", "Estancado hasta (días)"], ["dias_dormido_desde", "Dormido desde (días)"], ["ventana_reactivacion_dias", "Ventana de reactivación"], ["ventana_universo_reactivacion_dias", "Ventana del universo"], ["max_intentos_reactivacion", "Máximo de intentos"] ] as const).map(([key, label]) => <label key={key} className="space-y-1 text-sm"><span className="text-muted-foreground">{label}</span><Input type="number" min={0} value={configDraft[key]} onChange={(event) => setConfigDraft({ ...configDraft, [key]: Number(event.target.value) })} /></label>)}</div> : <p className="text-sm text-muted-foreground">Cargando configuración...</p>}
+          {configDraft ? <div className="mt-4 flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">La clasificación automática usará estos valores cuando se active.</p><Button onClick={() => void saveConfig()} disabled={savingConfig || JSON.stringify(config) === JSON.stringify(configDraft)}>{savingConfig ? "Guardando..." : "Guardar configuración"}</Button></div> : null}
         </CardContent>
       </Card>
 

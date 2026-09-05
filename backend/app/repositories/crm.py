@@ -26819,6 +26819,32 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inválida al actualizar configuración de organización: {row!r}")
         return row
 
+    async def get_oportunidad_seguimiento_configuracion(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/oportunidad_seguimiento_configuracion",
+            params={"organizacion_id": f"eq.{organizacion_id}", "limit": "1"},
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        return data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
+
+    async def upsert_oportunidad_seguimiento_configuracion(
+        self, *, organizacion_id: UUID, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/oportunidad_seguimiento_configuracion",
+            params={"on_conflict": "organizacion_id"},
+            json={"organizacion_id": str(organizacion_id), **payload},
+            prefer="resolution=merge-duplicates,return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("seguimiento_configuracion_update_failed")
+        return data[0]
+
     @staticmethod
     def _extract_total_count(content_range: str | None) -> int | None:
         if not content_range or "/" not in content_range:
