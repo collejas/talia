@@ -282,6 +282,96 @@ El motor de recomendación debe ser explicable y auditable. Cada recomendación 
 
 Durante la primera fase, Tal-IA recomienda y el vendedor confirma. La ejecución automática solo debe habilitarse después de validar consentimiento, límites de frecuencia, reglas del tenant y resultados reales de reactivación.
 
+## Arquitectura de vistas y navegación
+
+No se debe crear un segundo Dashboard ni colocar cada informe como una opción independiente del menú lateral. El Dashboard actual ya concentra información de leads, ventas, conversaciones, pipeline, agenda, marketing y catálogo; debe conservarse como el resumen general del negocio y evolucionar progresivamente hacia una vista ejecutiva-operativa.
+
+La navegación recomendada es:
+
+```text
+Dashboard
+└── Resumen general
+
+CRM
+├── Embudo
+├── Contactos
+├── Oportunidades
+├── Actividades
+└── Informes
+    ├── Salud comercial
+    ├── Recuperación
+    └── Analítica
+```
+
+### Dashboard general
+
+Debe responder:
+
+> ¿Cómo está el negocio y qué necesita atención?
+
+Debe mostrar de forma resumida:
+
+- Valor del pipeline.
+- Oportunidades activas, en riesgo, estancadas y dormidas.
+- Oportunidades sin próxima actividad.
+- Valor detenido.
+- Alertas y recomendaciones de Tal-IA.
+- Acciones pendientes.
+
+No debe convertirse en una pantalla con todas las tablas históricas y análisis detallados.
+
+### Hub de Informes
+
+**Informes** debe ser una entrada única dentro del CRM, con navegación interna, filtros de periodo, filtros por vendedor o etapa y opciones de exportación cuando aplique.
+
+#### Salud comercial
+
+Vista ejecutiva para conocer la calidad del pipeline:
+
+- Pipeline activo.
+- Valor detenido.
+- Distribución por estado de seguimiento.
+- Aging del pipeline.
+- Próximas actividades.
+- Tendencia del pipeline.
+- Índice de salud comercial, cuando sus factores sean visibles y explicables.
+
+#### Recuperación
+
+Vista operativa para trabajar oportunidades estancadas y dormidas:
+
+- Oportunidades dormidas y estancadas.
+- Temperatura.
+- Días desde la última interacción del prospecto.
+- Valor recuperable.
+- Estrategia recomendada por Tal-IA.
+- Acciones de contactar, crear tarea, nutrir, posponer o no contactar.
+
+#### Analítica
+
+Vista histórica para estudiar resultados y optimizar reglas:
+
+- Reactivación por canal.
+- Reactivación por antigüedad.
+- Reactivación por etapa.
+- Rendimiento por vendedor.
+- Motivos de pérdida.
+- Embudo de recuperación.
+- Valor reactivado.
+- Valor ganado proveniente de reactivación.
+
+### Accesos contextuales
+
+El acceso principal debe ser **CRM → Informes**, pero pueden existir botones contextuales para reducir pasos:
+
+- Dashboard: **Ver informes**.
+- Embudo: **Ver oportunidades estancadas**.
+- Recuperación: **Ver análisis de reactivación**.
+
+Estos accesos deben conservar los filtros relevantes cuando el usuario navegue entre vistas.
+
+El **Mapa de Conversión** puede permanecer como informe especializado de marketing en su ubicación actual. En una fase posterior se podrá integrar dentro de **Analítica**, pero no es necesario moverlo en el primer refactor.
+
 ## Lead score y prioridad
 
 En una segunda etapa, Tal-IA puede calcular un score de 0 a 100 usando señales positivas y negativas.
