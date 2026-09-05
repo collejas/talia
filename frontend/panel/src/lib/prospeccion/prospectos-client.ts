@@ -2006,6 +2006,25 @@ export type BrevoQuotaSnapshot = {
   warnings?: string[]
 }
 
+export type EmailCapacitySnapshot = {
+  ok: boolean
+  configured: boolean
+  available: boolean
+  period_kind: "daily" | "monthly" | null
+  period_start?: string | null
+  period_end?: string | null
+  sent: number | null
+  scheduled: number | null
+  projected: number | null
+  limit: number | null
+  remaining: number | null
+  usage_pct: number | null
+  timezone?: string | null
+  date_local?: string | null
+  date_utc?: string | null
+  warnings?: string[]
+}
+
 export type ProspeccionMetricasCampanaSummary = {
   envios_totales: number
   envios_enviados: number
@@ -2267,6 +2286,10 @@ export type LandingCtaEventsResponse = {
 
 export async function getBrevoQuota() {
   return requestJson<BrevoQuotaSnapshot>("/api/prospeccion/contacto/brevo-quota")
+}
+
+export async function getEmailCapacity() {
+  return requestJson<EmailCapacitySnapshot>("/api/prospeccion/contacto/email-capacity")
 }
 
 export async function getProspeccionMetricas(params: {

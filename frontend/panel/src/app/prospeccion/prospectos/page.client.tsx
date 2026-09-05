@@ -70,7 +70,7 @@ import {
   convertirProspectoAContacto,
   type ConvertirProspectoPayload,
   listContactoTemplates,
-  getBrevoQuota,
+  getEmailCapacity,
   listCrmCampaigns,
   listProspectos,
   listProspectosQueryMetadata,
@@ -90,7 +90,7 @@ import {
   type ProspectoContactIndicators,
   type ContactoLog,
   type ContactoTemplate,
-  type BrevoQuotaSnapshot,
+  type EmailCapacitySnapshot,
   type ProspectosTablePreferences,
   type ProspectosSavedView,
   type ProspectoQueryOption,
@@ -1073,8 +1073,8 @@ function ProspectosView() {
   }>({ correo: [], whatsapp: [], llamada: [] })
   const [plannerExecuting, setPlannerExecuting] = useState(false)
   const [plannerError, setPlannerError] = useState<string | null>(null)
-  const [plannerBrevoQuota, setPlannerBrevoQuota] = useState<BrevoQuotaSnapshot | null>(null)
-  const [plannerBrevoQuotaLoading, setPlannerBrevoQuotaLoading] = useState(false)
+  const [plannerEmailCapacity, setPlannerEmailCapacity] = useState<EmailCapacitySnapshot | null>(null)
+  const [plannerEmailCapacityLoading, setPlannerEmailCapacityLoading] = useState(false)
   const [convertDialogOpen, setConvertDialogOpen] = useState(false)
   const [convertProspect, setConvertProspect] = useState<ProspectoItem | null>(null)
   const [convertForm, setConvertForm] = useState<{
@@ -1165,15 +1165,13 @@ function ProspectosView() {
     [plannerTemplateSelection, selectedPlannerCanal]
   )
   const selectedPlannerTemplateAll = selectedPlannerTemplateIds.includes(PLANNER_ALL_TEMPLATES_VALUE)
-  const plannerBrevoRemaining =
-    plannerBrevoQuota?.remaining_after_scheduled ?? plannerBrevoQuota?.remaining ?? null
-  const plannerBrevoLimitZero = (plannerBrevoQuota?.daily_limit ?? null) === 0
-  const plannerBrevoQuotaBlocked =
+  const plannerEmailRemaining = plannerEmailCapacity?.remaining ?? null
+  const plannerEmailCapacityBlocked =
     selectedPlannerCanal === "correo" &&
-    plannerBrevoQuota?.configured === true &&
-    plannerBrevoQuota?.available === true &&
-    plannerBrevoRemaining !== null &&
-    plannerBrevoRemaining <= 0
+    plannerEmailCapacity?.configured === true &&
+    plannerEmailCapacity?.available === true &&
+    plannerEmailRemaining !== null &&
+    plannerEmailRemaining <= 0
   const orderSelectedByOptions = (selection: Set<string>, options: string[]) => {
     const ordered: string[] = []
     const seen = new Set<string>()
@@ -3098,7 +3096,7 @@ function ProspectosView() {
     setPlannerTemplates([])
     setPlannerTemplateSelection({ correo: [], whatsapp: [], llamada: [] })
     setPlannerError(null)
-    setPlannerBrevoQuota(null)
+    setPlannerEmailCapacity(null)
     setPlannerOpen(true)
   }, [])
 
@@ -3136,29 +3134,34 @@ function ProspectosView() {
 
   useEffect(() => {
     if (!plannerOpen) return
+    if (selectedPlannerCanal !== "correo") {
+      setPlannerEmailCapacity(null)
+      setPlannerEmailCapacityLoading(false)
+      return
+    }
     let cancelled = false
-    const loadBrevoQuota = async () => {
-      setPlannerBrevoQuotaLoading(true)
+    const loadEmailCapacity = async () => {
+      setPlannerEmailCapacityLoading(true)
       try {
-        const response = await getBrevoQuota()
+        const response = await getEmailCapacity()
         if (!cancelled) {
-          setPlannerBrevoQuota(response)
+          setPlannerEmailCapacity(response)
         }
       } catch {
         if (!cancelled) {
-          setPlannerBrevoQuota(null)
+          setPlannerEmailCapacity(null)
         }
       } finally {
         if (!cancelled) {
-          setPlannerBrevoQuotaLoading(false)
+          setPlannerEmailCapacityLoading(false)
         }
       }
     }
-    void loadBrevoQuota()
+    void loadEmailCapacity()
     return () => {
       cancelled = true
     }
-  }, [plannerOpen])
+  }, [plannerOpen, selectedPlannerCanal])
 
   const fetchPlannerTemplates = useCallback(async (campanaId: string) => {
     setPlannerTemplatesLoading(true)
@@ -3202,7 +3205,7 @@ function ProspectosView() {
         setPlannerBatchIntervalMinutes("")
         setPlannerTemplates([])
         setPlannerTemplateSelection({ correo: [], whatsapp: [], llamada: [] })
-        setPlannerBrevoQuota(null)
+        setPlannerEmailCapacity(null)
       }
     },
     []
@@ -3222,8 +3225,8 @@ function ProspectosView() {
       setPlannerError("La campaña seleccionada no tiene un canal válido.")
       return
     }
-    if (plannerBrevoQuotaBlocked) {
-      setPlannerError("Se alcanzó la cuota diaria de Brevo para correo. Intenta mañana o reduce envíos.")
+    if (plannerEmailCapacityBlocked) {
+      setPlannerError("No hay capacidad disponible para programar este lote de correo en el periodo actual.")
       return
     }
     const separacion = Number.parseInt(plannerSeparationSeconds || "5", 10)
@@ -3359,7 +3362,7 @@ function ProspectosView() {
     plannerBatchIntervalMinutes,
     selectedCount,
     selectedIds,
-    plannerBrevoQuotaBlocked,
+    plannerEmailCapacityBlocked,
   ])
 
   const openPlannerDatePicker = useCallback(() => {
@@ -4987,42 +4990,32 @@ function ProspectosView() {
                 ) : null}
               </div>
               {selectedPlannerCanal === "correo" ? <div className="rounded-lg border bg-background p-4">
-                <p className="text-sm font-semibold">Cuota de correo</p>
+                <p className="text-sm font-semibold">Capacidad de correo</p>
                 <div className="mt-2">
-                  {plannerBrevoQuotaLoading ? (
-                    <p className="text-xs text-muted-foreground">Consultando cuota...</p>
-                  ) : plannerBrevoQuota?.configured === false ? (
-                    <p className="text-xs text-muted-foreground">La cuota se validará según el servicio de correo del tenant.</p>
-                  ) : plannerBrevoQuota?.available ? (
+                  {plannerEmailCapacityLoading ? (
+                    <p className="text-xs text-muted-foreground">Consultando capacidad...</p>
+                  ) : plannerEmailCapacity?.configured === false ? (
+                    <p className="text-xs text-muted-foreground">El servicio de correo no está configurado para este tenant.</p>
+                  ) : plannerEmailCapacity?.available ? (
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">
-                        Corte diario del servicio ({plannerBrevoQuota.date_brevo_utc ?? plannerBrevoQuota.date_local ?? "N/D"}): enviados{" "}
-                        {plannerBrevoQuota.sent_today ?? 0}
-                        {plannerBrevoQuota.scheduled_today ? ` + programados ${plannerBrevoQuota.scheduled_today}` : ""}
-                        {plannerBrevoQuota.projected_today !== null && plannerBrevoQuota.projected_today !== undefined
-                          ? ` = ${plannerBrevoQuota.projected_today}`
+                        {plannerEmailCapacity.period_kind === "monthly" ? "Periodo mensual" : "Corte diario"}: enviados{" "}
+                        {plannerEmailCapacity.sent ?? 0}
+                        {plannerEmailCapacity.scheduled ? ` + programados ${plannerEmailCapacity.scheduled}` : ""}
+                        {plannerEmailCapacity.projected !== null && plannerEmailCapacity.projected !== undefined
+                          ? ` = ${plannerEmailCapacity.projected}`
                           : ""}
-                        {!plannerBrevoLimitZero && plannerBrevoQuota.daily_limit !== null
-                          ? ` / ${plannerBrevoQuota.daily_limit}`
-                          : ""} enviados.
-                        {plannerBrevoLimitZero ? " (Brevo reporta límite diario 0)." : ""}
+                        {plannerEmailCapacity.limit !== null ? ` / ${plannerEmailCapacity.limit}` : ""}.
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Restantes disponibles:
                         {" "}
-                        <span className="font-semibold text-foreground">{plannerBrevoRemaining ?? "N/D"}</span>
-                        {plannerBrevoQuota.remaining_after_scheduled !== null &&
-                        plannerBrevoQuota.remaining_after_scheduled !== undefined &&
-                        plannerBrevoQuota.remaining !== null &&
-                        plannerBrevoQuota.remaining !== undefined &&
-                        plannerBrevoQuota.remaining_after_scheduled !== plannerBrevoQuota.remaining
-                          ? ` (base ${plannerBrevoQuota.remaining})`
-                          : ""}
-                        {plannerBrevoQuota.usage_pct !== null ? ` · Uso ${plannerBrevoQuota.usage_pct}%` : ""}
+                        <span className="font-semibold text-foreground">{plannerEmailRemaining ?? "N/D"}</span>
+                        {plannerEmailCapacity.usage_pct !== null ? ` · Uso ${plannerEmailCapacity.usage_pct}%` : ""}
                       </p>
-                      {plannerBrevoQuotaBlocked ? (
+                      {plannerEmailCapacityBlocked ? (
                         <Badge variant="destructive" className="text-[10px]">
-                          Sin cupo para correos hoy
+                          Sin capacidad para correos en este periodo
                         </Badge>
                       ) : null}
                     </div>
@@ -5053,7 +5046,7 @@ function ProspectosView() {
             </Button>
             <Button
               onClick={() => void handlePlannerContinue()}
-              disabled={plannerExecuting || plannerCampaignsLoading || !selectedCount || plannerBrevoQuotaBlocked}
+              disabled={plannerExecuting || plannerCampaignsLoading || !selectedCount || plannerEmailCapacityBlocked}
             >
               <>
                 {plannerExecuting ? <IconLoader className="mr-2 size-4 animate-spin" /> : <IconTargetArrow className="mr-2 size-4" />}

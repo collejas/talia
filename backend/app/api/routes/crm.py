@@ -147,6 +147,7 @@ from app.services.google_trends import (
 from app.services.openai_catalog_sync import sync_openai_catalogs
 from app.services.openai_reconciliation import sync_openai_cost_reconciliation
 from app.services.email_validation import validate_email_address
+from app.services.email_capacity import resolve_prospeccion_email_capacity
 from app.services.phone_utils import normalize_phone, normalize_phone_digits
 from app.services.ui_realtime_hub import (
     inbox_topic_for_org,
@@ -39896,6 +39897,30 @@ async def obtener_brevo_quota_diaria(
         "plan_credits": snapshot.plan_credits,
         "warnings": snapshot.warnings,
     }
+
+
+@router.get("/prospeccion/contacto/email-capacity")
+async def obtener_capacidad_correo_prospeccion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> dict[str, Any]:
+    """Devuelve la capacidad efectiva del servicio de correo del tenant."""
+
+    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        usuario_id=usuario_id,
+    )
+    return await resolve_prospeccion_email_capacity(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        user_token=user_token,
+        timezone_name=effective_timezone,
+    )
 
 
 @router.post("/prospeccion/contacto/brevo/webhook", include_in_schema=False)

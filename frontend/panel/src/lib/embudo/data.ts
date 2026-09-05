@@ -321,7 +321,10 @@ function adaptPipelineBoard(
             }
             continue;
           }
-          stageMap.set(dedupeKey, { ...adapted, id: dedupeKey });
+          // `id` se usa como etapa_id en los filtros y movimientos. El código
+          // terminal solo sirve como clave de consolidación; no puede sustituir
+          // al UUID que exige oportunidades.etapa_id.
+          stageMap.set(dedupeKey, adapted);
         }
 
         return [...stageMap.values()].sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"));

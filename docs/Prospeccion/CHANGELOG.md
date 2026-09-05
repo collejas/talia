@@ -8,6 +8,12 @@ Formato recomendado por entrada:
 
 ## 2026-09-05
 
+### Capacidad de correo en programación
+- El planificador ahora consulta un contrato neutral de capacidad de correo.
+- Brevo se representa con capacidad diaria; Postmark con capacidad mensual del tenant.
+- WhatsApp no consulta ni muestra cuota de correo.
+- La validación definitiva continúa en backend y la interfaz solo presenta disponibilidad y uso.
+
 ### Programación por sublotes
 - Se implementó un lote principal con sublotes configurables por cantidad e intervalo.
 - Se aumentó la selección manual máxima de prospección a 500 prospectos.
