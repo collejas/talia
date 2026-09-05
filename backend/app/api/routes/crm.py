@@ -17604,6 +17604,49 @@ class CRMPipelineScoringKpis(BaseModel):
     opportunity_latest_based: dict[str, Any] | None = None
 
 
+class CRMRecoveryOpportunity(BaseModel):
+    id: UUID
+    codigo_oportunidad: str | None = None
+    titulo: str
+    etapa_id: UUID
+    etapa_nombre: str | None = None
+    etapa_codigo: str | None = None
+    asignado_a_usuario_id: UUID | None = None
+    asignado_nombre: str | None = None
+    monto_estimado: float | None = None
+    moneda: str | None = None
+    estado_seguimiento: Literal["activo", "en_riesgo", "estancado", "dormido"]
+    temperatura: Literal["caliente", "tibio", "frio"] | None = None
+    estrategia_seguimiento: Literal[
+        "seguimiento_normal", "reactivacion", "nurturing", "no_contactar"
+    ]
+    ultima_actividad_en: datetime | None = None
+    ultima_interaccion_contacto_en: datetime | None = None
+    ultimo_contacto_saliente_en: datetime | None = None
+    proxima_actividad_en: datetime | None = None
+    etapa_cambiada_en: datetime | None = None
+    dias_sin_interaccion: int | None = None
+    prioridad_reactivacion: float | None = None
+
+
+class CRMRecoverySummary(BaseModel):
+    generado_en: datetime
+    total_abiertas: int
+    pipeline_abierto: float
+    pipeline_activo: float
+    valor_detenido: float
+    activas: int
+    en_riesgo: int
+    estancadas: int
+    dormidas: int
+    sin_proxima_actividad: int
+    cobertura_seguimiento_pct: float
+    items: list[CRMRecoveryOpportunity]
+    total_items: int
+    limit: int
+    offset: int
+
+
 class CRMScoringProfile(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -42042,6 +42085,63 @@ async def pipeline_overview(
     return overview
 
 
+@router.get("/pipeline/recovery", response_model=CRMRecoverySummary)
+async def pipeline_recovery(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("reports.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0, le=100000)] = 0,
+    asignado_id: UUID | None = Query(default=None),
+    estado_seguimiento: Literal["activo", "en_riesgo", "estancado", "dormido"] | None = Query(default=None),
+    temperatura: Literal["caliente", "tibio", "frio"] | None = Query(default=None),
+    estrategia_seguimiento: Literal[
+        "seguimiento_normal", "reactivacion", "nurturing", "no_contactar"
+    ] | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=120),
+) -> CRMRecoverySummary:
+    """Devuelve el estado operativo de recuperación para oportunidades abiertas."""
+    effective_asignado_id = asignado_id
+    try:
+        context = await repo.get_permission_context()
+    except CRMRepositoryError:
+        context = {}
+    roles = context.get("roles") if isinstance(context, dict) else []
+    roles = roles if isinstance(roles, list) else []
+    is_admin = bool(context.get("es_admin")) if isinstance(context, dict) else False
+    is_privileged = is_admin or any(
+        isinstance(role, str)
+        and (
+            role.strip().lower() in {"admin", "0002", "supervisor"}
+            or "admin" in role.strip().lower()
+            or "supervisor" in role.strip().lower()
+        )
+        for role in roles
+    )
+    if not is_privileged:
+        context_user_id = context.get("usuario_id") if isinstance(context, dict) else None
+        effective_asignado_id = _safe_uuid(context_user_id) or usuario_id
+
+    try:
+        rows, _ = await repo.list_pipeline_opportunities(
+            organizacion_id=organizacion_id,
+            limit=5000,
+            asignado_id=effective_asignado_id,
+            estado="abierta",
+            estado_seguimiento=estado_seguimiento,
+            temperatura=temperatura,
+            estrategia_seguimiento=estrategia_seguimiento,
+            q=q,
+            include_contact_rows=False,
+            count_exact=False,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="No se pudo cargar la recuperación de oportunidades.") from exc
+    return _build_recovery_summary(rows=rows, limit=limit, offset=offset)
+
+
 @router.get("/pipeline/board", response_model=CRMPipelineBoard)
 async def pipeline_board(
     *,
@@ -49762,6 +49862,113 @@ def _build_pipeline_overview(
     chart = _build_pipeline_chart(rows, days_range, timezone_name=timezone_name)
     table = _build_pipeline_table(rows, table_limit)
     return CRMPipelineOverview(cards=cards, chart=chart, table=table, total_rows=total_rows)
+
+
+def _build_recovery_summary(
+    *,
+    rows: list[dict[str, Any]],
+    limit: int,
+    offset: int,
+) -> CRMRecoverySummary:
+    """Construye la lectura operativa de recuperación desde el estado actual."""
+    now = datetime.now(timezone.utc)
+    items: list[CRMRecoveryOpportunity] = []
+    pipeline_abierto = 0.0
+    pipeline_activo = 0.0
+    valor_detenido = 0.0
+    activas = en_riesgo = estancadas = dormidas = sin_proxima_actividad = 0
+
+    for row in rows:
+        if str(row.get("estado") or "").strip().lower() in {"ganada", "perdida"}:
+            continue
+        estado_seguimiento = str(row.get("estado_seguimiento") or "activo").strip().lower()
+        if estado_seguimiento not in {"activo", "en_riesgo", "estancado", "dormido"}:
+            estado_seguimiento = "activo"
+        temperatura = row.get("temperatura")
+        if temperatura is not None:
+            temperatura = str(temperatura).strip().lower()
+            if temperatura not in {"caliente", "tibio", "frio"}:
+                temperatura = None
+        estrategia = str(row.get("estrategia_seguimiento") or "seguimiento_normal").strip().lower()
+        if estrategia not in {"seguimiento_normal", "reactivacion", "nurturing", "no_contactar"}:
+            estrategia = "seguimiento_normal"
+
+        amount = 0.0
+        try:
+            amount = max(0.0, float(row.get("monto_estimado") or 0))
+        except (TypeError, ValueError):
+            amount = 0.0
+        pipeline_abierto += amount
+        if estado_seguimiento == "activo":
+            activas += 1
+            pipeline_activo += amount
+        elif estado_seguimiento == "en_riesgo":
+            en_riesgo += 1
+        elif estado_seguimiento == "estancado":
+            estancadas += 1
+            valor_detenido += amount
+        elif estado_seguimiento == "dormido":
+            dormidas += 1
+            valor_detenido += amount
+        if not row.get("proxima_actividad_en"):
+            sin_proxima_actividad += 1
+
+        last_interaction = _parse_datetime(row.get("ultima_interaccion_contacto_en"))
+        days_without_interaction = None
+        if last_interaction:
+            if last_interaction.tzinfo is None:
+                last_interaction = last_interaction.replace(tzinfo=timezone.utc)
+            days_without_interaction = max(0, (now - last_interaction.astimezone(timezone.utc)).days)
+        etapa = row.get("etapa") if isinstance(row.get("etapa"), dict) else {}
+        assigned = row.get("asignado") if isinstance(row.get("asignado"), dict) else {}
+        items.append(
+            CRMRecoveryOpportunity(
+                id=UUID(str(row["id"])),
+                codigo_oportunidad=_clean_text(row.get("codigo_oportunidad")),
+                titulo=str(row.get("titulo") or "Sin título"),
+                etapa_id=UUID(str(row["etapa_id"])),
+                etapa_nombre=_clean_text(etapa.get("nombre")),
+                etapa_codigo=_clean_text(etapa.get("codigo")),
+                asignado_a_usuario_id=_safe_uuid(row.get("asignado_a_usuario_id")),
+                asignado_nombre=_clean_text(assigned.get("nombre_completo")),
+                monto_estimado=amount if row.get("monto_estimado") is not None else None,
+                moneda=_clean_text(row.get("moneda")),
+                estado_seguimiento=estado_seguimiento,
+                temperatura=temperatura,
+                estrategia_seguimiento=estrategia,
+                ultima_actividad_en=_parse_datetime(row.get("ultima_actividad_en")),
+                ultima_interaccion_contacto_en=last_interaction,
+                ultimo_contacto_saliente_en=_parse_datetime(row.get("ultimo_contacto_saliente_en")),
+                proxima_actividad_en=_parse_datetime(row.get("proxima_actividad_en")),
+                etapa_cambiada_en=_parse_datetime(row.get("etapa_cambiada_en")),
+                dias_sin_interaccion=days_without_interaction,
+                prioridad_reactivacion=(
+                    float(row["prioridad_reactivacion"])
+                    if row.get("prioridad_reactivacion") is not None
+                    else None
+                ),
+            )
+        )
+
+    total_abiertas = len(items)
+    coverage = ((total_abiertas - sin_proxima_actividad) / total_abiertas * 100) if total_abiertas else 0.0
+    return CRMRecoverySummary(
+        generado_en=now,
+        total_abiertas=total_abiertas,
+        pipeline_abierto=round(pipeline_abierto, 2),
+        pipeline_activo=round(pipeline_activo, 2),
+        valor_detenido=round(valor_detenido, 2),
+        activas=activas,
+        en_riesgo=en_riesgo,
+        estancadas=estancadas,
+        dormidas=dormidas,
+        sin_proxima_actividad=sin_proxima_actividad,
+        cobertura_seguimiento_pct=round(coverage, 2),
+        items=items[offset : offset + limit],
+        total_items=total_abiertas,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def _extract_visitas_sin_chat(payload: dict[str, Any] | None) -> int:

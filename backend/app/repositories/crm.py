@@ -1233,6 +1233,19 @@ class CRMRepository:
             "creado_en",
             "actualizado_en",
             "cerrado_en",
+            "ultima_actividad_en",
+            "ultima_interaccion_contacto_en",
+            "ultimo_contacto_saliente_en",
+            "proxima_actividad_en",
+            "etapa_cambiada_en",
+            "estado_seguimiento",
+            "temperatura",
+            "estrategia_seguimiento",
+            "reactivada_en",
+            "numero_reactivaciones",
+            "ultimo_intento_reactivacion_en",
+            "intentos_reactivacion",
+            "prioridad_reactivacion",
             "asignado:usuarios!oportunidades_asignado_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "propietario:usuarios!oportunidades_propietario_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
             "etapa:etapas_pipeline!oportunidades_etapa_org_fkey(id,nombre,codigo,categoria,orden,metadata)",
@@ -9435,6 +9448,9 @@ class CRMRepository:
         correo: str | None = None,
         etapa_ids: str | None = None,
         tiene_cita: str | None = None,
+        estado_seguimiento: str | None = None,
+        temperatura: str | None = None,
+        estrategia_seguimiento: str | None = None,
         include_contact_rows: bool = True,
         count_exact: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -9468,6 +9484,12 @@ class CRMRepository:
                 params["etapa_id"] = _postgrest_in_clause(raw_values)
         if estado:
             params["estado"] = f"eq.{_postgrest_eq_literal(estado)}"
+        if estado_seguimiento:
+            params["estado_seguimiento"] = f"eq.{_postgrest_eq_literal(estado_seguimiento)}"
+        if temperatura:
+            params["temperatura"] = f"eq.{_postgrest_eq_literal(temperatura)}"
+        if estrategia_seguimiento:
+            params["estrategia_seguimiento"] = f"eq.{_postgrest_eq_literal(estrategia_seguimiento)}"
         if canal:
             params["canal"] = f"eq.{_postgrest_eq_literal(canal.strip().lower())}"
         if and_filters:
