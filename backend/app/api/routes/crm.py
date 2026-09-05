@@ -42166,7 +42166,11 @@ async def pipeline_recovery(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="No se pudo cargar la recuperación de oportunidades.") from exc
-    return _build_recovery_summary(rows=rows, limit=limit, offset=offset)
+    try:
+        followup_config = await repo.get_oportunidad_seguimiento_configuracion(organizacion_id=organizacion_id)
+    except CRMRepositoryError:
+        followup_config = None
+    return _build_recovery_summary(rows=rows, limit=limit, offset=offset, followup_config=followup_config)
 
 
 @router.get("/pipeline/recovery/configuration", response_model=CRMFollowUpConfiguration)
@@ -49949,6 +49953,7 @@ def _build_recovery_summary(
     rows: list[dict[str, Any]],
     limit: int,
     offset: int,
+    followup_config: dict[str, Any] | None = None,
 ) -> CRMRecoverySummary:
     """Construye la lectura operativa de recuperación desde el estado actual."""
     now = datetime.now(timezone.utc)
@@ -49974,6 +49979,22 @@ def _build_recovery_summary(
         if estrategia not in {"seguimiento_normal", "reactivacion", "nurturing", "no_contactar"}:
             estrategia = "seguimiento_normal"
 
+        last_interaction = _parse_datetime(row.get("ultima_interaccion_contacto_en"))
+        days_without_interaction = None
+        if last_interaction:
+            if last_interaction.tzinfo is None:
+                last_interaction = last_interaction.replace(tzinfo=timezone.utc)
+            days_without_interaction = max(0, (now - last_interaction.astimezone(timezone.utc)).days)
+        if days_without_interaction is not None and followup_config:
+            if days_without_interaction <= int(followup_config.get("dias_activo_hasta", 7)):
+                estado_seguimiento = "activo"
+            elif days_without_interaction <= int(followup_config.get("dias_en_riesgo_hasta", 15)):
+                estado_seguimiento = "en_riesgo"
+            elif days_without_interaction <= int(followup_config.get("dias_estancado_hasta", 30)):
+                estado_seguimiento = "estancado"
+            else:
+                estado_seguimiento = "dormido"
+
         amount = 0.0
         try:
             amount = max(0.0, float(row.get("monto_estimado") or 0))
@@ -49998,12 +50019,6 @@ def _build_recovery_summary(
             if next_activity and (next_activity if next_activity.tzinfo else next_activity.replace(tzinfo=timezone.utc)) >= now:
                 seguimiento_a_tiempo += 1
 
-        last_interaction = _parse_datetime(row.get("ultima_interaccion_contacto_en"))
-        days_without_interaction = None
-        if last_interaction:
-            if last_interaction.tzinfo is None:
-                last_interaction = last_interaction.replace(tzinfo=timezone.utc)
-            days_without_interaction = max(0, (now - last_interaction.astimezone(timezone.utc)).days)
         etapa = row.get("etapa") if isinstance(row.get("etapa"), dict) else {}
         assigned = row.get("asignado") if isinstance(row.get("asignado"), dict) else {}
         items.append(
