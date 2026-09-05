@@ -130,6 +130,7 @@ export function RecoveryReport() {
   const [config, setConfig] = useState<FollowUpConfig | null>(null)
   const [configDraft, setConfigDraft] = useState<FollowUpConfig | null>(null)
   const [savingConfig, setSavingConfig] = useState(false)
+  const [configError, setConfigError] = useState<string | null>(null)
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ limit: "500" })
@@ -167,6 +168,11 @@ export function RecoveryReport() {
 
   const saveConfig = async () => {
     if (!configDraft) return
+    if (!(configDraft.dias_activo_hasta < configDraft.dias_en_riesgo_hasta && configDraft.dias_en_riesgo_hasta < configDraft.dias_estancado_hasta && configDraft.dias_estancado_hasta < configDraft.dias_dormido_desde)) {
+      setConfigError("Los valores deben quedar en orden: Activo < En riesgo < Estancado < Dormido.")
+      return
+    }
+    setConfigError(null)
     setSavingConfig(true)
     try {
       const response = await fetch("/api/crm/pipeline/recovery/configuration", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(configDraft) })
@@ -175,7 +181,7 @@ export function RecoveryReport() {
       setConfig(payload as FollowUpConfig)
       setConfigDraft(payload as FollowUpConfig)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo guardar la configuración")
+      setConfigError(err instanceof Error ? err.message : "No se pudo guardar la configuración")
     } finally { setSavingConfig(false) }
   }
 
@@ -228,7 +234,8 @@ export function RecoveryReport() {
         </CardHeader>
         <CardContent>
           {configDraft ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{([ ["dias_activo_hasta", "Activo hasta (días)"], ["dias_en_riesgo_hasta", "En riesgo hasta (días)"], ["dias_estancado_hasta", "Estancado hasta (días)"], ["dias_dormido_desde", "Dormido desde (días)"], ["ventana_reactivacion_dias", "Ventana de reactivación"], ["ventana_universo_reactivacion_dias", "Ventana del universo"], ["max_intentos_reactivacion", "Máximo de intentos"] ] as const).map(([key, label]) => <label key={key} className="space-y-1 text-sm"><span className="text-muted-foreground">{label}</span><Input type="number" min={0} value={configDraft[key]} onChange={(event) => setConfigDraft({ ...configDraft, [key]: Number(event.target.value) })} /></label>)}</div> : <p className="text-sm text-muted-foreground">Cargando configuración...</p>}
-          {configDraft ? <div className="mt-4 flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">La clasificación automática usará estos valores cuando se active.</p><Button onClick={() => void saveConfig()} disabled={savingConfig || JSON.stringify(config) === JSON.stringify(configDraft)}>{savingConfig ? "Guardando..." : "Guardar configuración"}</Button></div> : null}
+          {configError ? <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{configError}</div> : null}
+          {configDraft ? <div className="mt-4 flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Los rangos deben aumentar: Activo &lt; En riesgo &lt; Estancado &lt; Dormido.</p><Button onClick={() => void saveConfig()} disabled={savingConfig || JSON.stringify(config) === JSON.stringify(configDraft)}>{savingConfig ? "Guardando..." : "Guardar configuración"}</Button></div> : null}
         </CardContent>
       </Card>
 
