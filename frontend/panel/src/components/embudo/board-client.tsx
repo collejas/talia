@@ -1766,7 +1766,8 @@ export function EmbudoBoardClient({
               </Label>
               <div className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border/60 bg-background/50 p-3">
                 {boardState.stages.map((stage) => {
-                  const checked = draftEtapaIds.includes(stage.id);
+                  const filterEtapaIds = stage.filterEtapaIds.length ? stage.filterEtapaIds : [stage.id];
+                  const checked = filterEtapaIds.some((id) => draftEtapaIds.includes(id));
                   return (
                     <label key={stage.id} className="flex cursor-pointer items-center gap-2 text-sm">
                       <input
@@ -1777,9 +1778,9 @@ export function EmbudoBoardClient({
                           const nextChecked = event.target.checked;
                           setDraftEtapaIds((prev) => {
                             if (nextChecked) {
-                              return prev.includes(stage.id) ? prev : [...prev, stage.id];
+                              return Array.from(new Set([...prev, ...filterEtapaIds]));
                             }
-                            return prev.filter((value) => value !== stage.id);
+                            return prev.filter((value) => !filterEtapaIds.includes(value));
                           });
                         }}
                       />

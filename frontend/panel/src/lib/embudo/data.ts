@@ -21,6 +21,7 @@ const DEFAULT_LIMIT = 200;
 
 export type EmbudoStage = {
   id: string;
+  filterEtapaIds: string[];
   nombre: string;
   codigo: string;
   categoria: string;
@@ -163,6 +164,7 @@ export type PipelineBoardCard = {
 
 export type PipelineBoardStage = {
   id: string;
+  filter_etapa_ids?: string[] | null;
   nombre: string;
   codigo: string;
   categoria: string;
@@ -315,6 +317,9 @@ function adaptPipelineBoard(
           const existing = stageMap.get(dedupeKey);
           if (existing) {
             existing.tarjetas.push(...adapted.tarjetas);
+            existing.filterEtapaIds = Array.from(
+              new Set([...existing.filterEtapaIds, ...adapted.filterEtapaIds]),
+            );
             existing.orden = Math.min(existing.orden, adapted.orden);
             if (!existing.tableroId && adapted.tableroId) {
               existing.tableroId = adapted.tableroId;

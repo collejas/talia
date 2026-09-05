@@ -17571,6 +17571,7 @@ class CRMPipelineBoardCard(BaseModel):
 
 class CRMPipelineBoardStage(BaseModel):
     id: UUID
+    filter_etapa_ids: list[UUID] = Field(default_factory=list)
     nombre: str
     codigo: str
     categoria: str
@@ -50131,10 +50132,12 @@ def _build_pipeline_board(
                 )
             if tablero_filter and stage.tablero_id != tablero_filter:
                 continue
+            stage.filter_etapa_ids = [stage.id]
             dedup_key = _stage_dedup_key(stage.codigo or "")
             if dedup_key:
                 existing = canonical_stage_by_code.get(dedup_key)
                 if existing is not None:
+                    existing.filter_etapa_ids = list(dict.fromkeys([*existing.filter_etapa_ids, stage.id]))
                     stage_lookup_by_id[stage.id] = existing
                     continue
                 canonical_stage_by_code[dedup_key] = stage
@@ -50173,6 +50176,9 @@ def _build_pipeline_board(
                 if dedup_key:
                     existing = canonical_stage_by_code.get(dedup_key)
                     if existing is not None:
+                        existing.filter_etapa_ids = list(
+                            dict.fromkeys([*existing.filter_etapa_ids, stage.id])
+                        )
                         stage_lookup_by_id[stage.id] = existing
                         stage = existing
                     else:

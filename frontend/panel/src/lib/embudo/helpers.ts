@@ -375,6 +375,10 @@ export function adaptStage(stage: PipelineBoardStage, metadatos: Record<string, 
 
   return {
     id: stage.id,
+    filterEtapaIds:
+      Array.isArray(stage.filter_etapa_ids) && stage.filter_etapa_ids.length
+        ? Array.from(new Set(stage.filter_etapa_ids.filter((value) => typeof value === "string" && value.trim())))
+        : [stage.id],
     nombre: stage.codigo === "demo" ? "Cita agendada" : stage.nombre,
     codigo: stage.codigo,
     categoria: stage.categoria,
