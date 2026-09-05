@@ -6,11 +6,12 @@ Las oportunidades que pasan mucho tiempo sin actividad no deben permanecer indef
 
 Tal-IA debe conservar esas oportunidades y su historial, pero moverlas a un flujo de seguimiento y recuperación que permita reactivarlas cuando vuelvan a mostrar interés.
 
-La regla principal es no confundir tres conceptos distintos:
+La regla principal es no confundir cuatro conceptos distintos:
 
 - **Etapa comercial:** dónde se encuentra la oportunidad dentro del proceso de venta.
 - **Estado de seguimiento:** qué tan recientemente se ha trabajado la oportunidad.
 - **Temperatura:** qué tan activa o prometedora parece la oportunidad.
+- **Estrategia:** qué acción o tratamiento corresponde aplicar.
 
 Una oportunidad puede estar en etapa **Propuesta enviada**, tener estado **Dormida** y temperatura **Fría** al mismo tiempo.
 
@@ -38,7 +39,7 @@ El estado **Dormido** no debe convertirse en una etapa adicional del embudo, por
 
 ### Estado de seguimiento
 
-Se propone un estado independiente, calculado principalmente con la última actividad y la próxima actividad programada:
+Se propone un estado independiente, calculado principalmente con la última interacción del prospecto, la actividad saliente y la próxima actividad programada:
 
 | Estado | Significado | Comportamiento |
 |---|---|---|
@@ -46,10 +47,8 @@ Se propone un estado independiente, calculado principalmente con la última acti
 | En riesgo | Está por exceder el tiempo esperado de seguimiento | Alerta al vendedor |
 | Estancado | Superó el tiempo recomendado sin avance | Crea una tarea de revisión |
 | Dormido | Lleva demasiado tiempo sin interacción | Sale visualmente del embudo activo |
-| Reactivado | Volvió a mostrar interés después de estar dormido | Regresa al flujo activo |
-| Perdido | Existe una razón comercial confirmada | Sale del flujo activo de forma definitiva |
 
-El estado **Perdido** no debe asignarse automáticamente solo por antigüedad o inactividad.
+El resultado comercial **Perdido** pertenece a la resolución de la oportunidad, no al estado de seguimiento. No debe asignarse automáticamente solo por antigüedad o inactividad.
 
 ### Temperatura
 
@@ -58,7 +57,6 @@ La temperatura es una señal de prioridad y puede calcularse automáticamente. T
 - Caliente
 - Tibio
 - Frío
-- Dormido
 
 Cada tenant debe poder configurar:
 
@@ -83,13 +81,35 @@ Los valores deben ser configurables por tenant. Como configuración inicial suge
 | 8 a 15 días | En riesgo | Notificar al vendedor |
 | 16 a 30 días | Estancado | Crear tarea de revisión |
 | 31 a 60 días | Dormido | Ocultar del embudo activo y enviar a recuperación |
-| Más de 60 días | Reciclaje | Considerar nutrición o campaña periódica |
+| Más de 60 días | Dormido | Aplicar estrategia de reciclaje o nurturing |
 
 Estos rangos no deben estar hardcodeados en la lógica de negocio. Cada tenant debe poder definirlos según su ciclo comercial.
 
-## Qué se considera actividad
+## Estrategia de seguimiento
 
-La fecha de última actividad debe actualizarse únicamente con eventos relevantes. Puede incluir:
+La estrategia representa qué debe hacer Tal-IA o el vendedor con la oportunidad. No es una etapa ni un estado de seguimiento.
+
+Valores iniciales sugeridos:
+
+- Seguimiento normal.
+- Reactivación.
+- Nurturing.
+- No contactar.
+
+Una oportunidad dormida puede tener estrategia **Reactivación** o **Nurturing** según su valor, temperatura, historial y preferencias de contacto. Una solicitud de no contacto debe tener prioridad sobre cualquier estrategia automática.
+
+## Actividad e interacción del prospecto
+
+El modelo debe separar la actividad interna o saliente de la interacción real del prospecto. Esto evita que un intento del vendedor haga parecer activa una oportunidad que lleva meses sin responder.
+
+Campos conceptuales mínimos:
+
+- `ultima_actividad_en`: última actividad relevante de cualquier tipo.
+- `ultima_interaccion_contacto_en`: última respuesta o acción atribuible al prospecto.
+- `ultimo_contacto_saliente_en`: último mensaje, llamada o intento realizado por el equipo.
+- `proxima_actividad_en`: siguiente acción programada.
+
+La última actividad puede incluir:
 
 - Respuesta del contacto.
 - Mensaje enviado por WhatsApp o correo.
@@ -101,6 +121,8 @@ La fecha de última actividad debe actualizarse únicamente con eventos relevant
 - Visita o interacción digital identificable, cuando exista evidencia suficiente.
 
 Las consultas internas o cambios que no representen interacción comercial no deberían reactivar una oportunidad por sí solos.
+
+Un contacto saliente tampoco debe considerarse automáticamente una interacción del prospecto. Por ejemplo, si el vendedor envía un WhatsApp después de 65 días sin respuesta, la oportunidad puede mantener `estado_seguimiento = Dormido` hasta que exista una respuesta o señal válida del prospecto.
 
 ## Vista de oportunidades dormidas
 
@@ -114,8 +136,11 @@ Debe incluir:
 - Vendedor asignado.
 - Valor estimado.
 - Última actividad.
+- Última interacción del prospecto.
+- Último contacto saliente.
 - Días sin actividad.
 - Temperatura.
+- Estrategia.
 - Score o prioridad de recuperación.
 - Motivo de la recomendación.
 - Próxima acción sugerida.
@@ -149,7 +174,9 @@ Antes de automatizar envíos, Tal-IA debe ayudar al vendedor a decidir qué hace
 Oportunidad: Constructora ABC
 Etapa: Propuesta enviada
 Estado: Dormida
-Sin actividad: 38 días
+Sin interacción del prospecto: 38 días
+Último intento del vendedor: 5 días
+Estrategia: Reactivación
 Valor: $250,000
 Prioridad: Alta
 Recomendación: contactar por WhatsApp
@@ -167,11 +194,14 @@ Acciones posibles:
 Si el contacto responde, realiza una acción comercial o vuelve a mostrar interés, el sistema debe:
 
 1. Registrar el evento de reactivación.
-2. Actualizar la última actividad.
-3. Cambiar el estado a **Reactivado** o **Activo**.
+2. Actualizar la última interacción del prospecto y la última actividad.
+3. Cambiar el estado de **Dormido** a **Activo**.
 4. Regresar la oportunidad al embudo principal.
-5. Crear una siguiente actividad.
-6. Notificar al vendedor asignado.
+5. Incrementar el contador de reactivaciones.
+6. Crear una siguiente actividad.
+7. Notificar al vendedor asignado.
+
+**Reactivado** debe ser un evento histórico (`OPORTUNIDAD_REACTIVADA`), no un estado permanente. La interfaz puede mostrar temporalmente “Reactivado hace 2 días”, pero el estado operativo debe ser **Activo**.
 
 Las comunicaciones automáticas deben respetar consentimiento, preferencias de contacto, exclusiones y límites configurados por tenant.
 
@@ -197,11 +227,15 @@ La información central debe almacenarse en columnas explícitas y no dentro de 
 Campos funcionales sugeridos para la oportunidad:
 
 - `ultima_actividad_en`
+- `ultima_interaccion_contacto_en`
+- `ultimo_contacto_saliente_en`
 - `proxima_actividad_en`
 - `estado_seguimiento`
 - `temperatura`
-- `dias_sin_actividad` o cálculo equivalente en consulta
+- `estrategia_seguimiento`
+- `dias_sin_interaccion` o cálculo equivalente en consulta
 - `reactivada_en`
+- `numero_reactivaciones`
 - `ultimo_intento_reactivacion_en`
 - `intentos_reactivacion`
 - `prioridad_reactivacion`
@@ -209,12 +243,13 @@ Campos funcionales sugeridos para la oportunidad:
 
 La configuración por tenant debe definir explícitamente los umbrales de días, las reglas de transición del estado de seguimiento, los niveles y fórmula de temperatura, los límites de intentos, los canales autorizados y las reglas de exclusión.
 
-El sistema debe registrar un historial de cambios de estado para poder responder:
+El sistema debe registrar un historial de cambios y eventos para poder responder:
 
 - Cuándo se volvió dormida una oportunidad.
 - Qué regla la cambió.
 - Qué intentos de recuperación se hicieron.
 - Qué evento produjo la reactivación.
+- Cuántas veces fue reactivada.
 - Qué usuario o automatización realizó cada acción.
 
 ## Implementación por fases
@@ -222,7 +257,9 @@ El sistema debe registrar un historial de cambios de estado para poder responder
 ### Fase 1: visibilidad y clasificación
 
 - Agregar el estado de seguimiento independiente de la etapa.
-- Calcular días sin actividad.
+- Separar última actividad, última interacción del prospecto y último contacto saliente.
+- Calcular días sin interacción del prospecto.
+- Agregar la estrategia de seguimiento.
 - Crear reglas configurables por tenant.
 - Incorporar filtros y vista de oportunidades dormidas.
 - Mostrar alertas y tareas de seguimiento.
@@ -232,6 +269,7 @@ El sistema debe registrar un historial de cambios de estado para poder responder
 
 - Agregar temperatura calculada.
 - Implementar score de prioridad.
+- Registrar eventos de reactivación y contador histórico.
 - Mostrar el valor económico detenido.
 - Recomendar canal y siguiente acción.
 - Incorporar métricas de reactivación.
@@ -258,14 +296,17 @@ El sistema debe registrar un historial de cambios de estado para poder responder
 - Una oportunidad dormida deja de ocupar visualmente el embudo activo.
 - El vendedor puede consultar, filtrar y recuperar oportunidades dormidas.
 - Una respuesta o interacción válida reactiva la oportunidad y conserva su historial.
+- Un intento saliente del vendedor no se interpreta por sí solo como respuesta del prospecto.
+- La reactivación cambia el estado a **Activo** y registra un evento histórico.
 - Cada cambio automático registra fecha, regla y origen.
 - Los umbrales pueden configurarse por tenant.
 - La fórmula de temperatura, sus señales, pesos y rangos pueden configurarse por tenant.
+- La estrategia de seguimiento puede configurarse por tenant.
 - Se respetan las preferencias de contacto y las exclusiones.
 - Los indicadores distinguen oportunidades activas, dormidas, reactivadas y perdidas.
 
 ## Decisión recomendada
 
-Implementar primero la separación entre **etapa comercial** y **estado de seguimiento**, junto con la vista de oportunidades dormidas y las tareas de recuperación.
+Implementar primero la separación entre **etapa comercial**, **estado de seguimiento**, **temperatura** y **estrategia**, junto con la distinción entre interacción del prospecto y actividad del vendedor.
 
-La temperatura, el score y las campañas automáticas deben construirse sobre esa base. Esto permite limpiar el embudo sin perder oportunidades y evita automatizar mensajes antes de contar con reglas, historial y controles suficientes.
+La temperatura, el score, los eventos de reactivación y las campañas automáticas deben construirse sobre esa base. Esto permite limpiar el embudo sin perder oportunidades y evita automatizar mensajes antes de contar con reglas, historial y controles suficientes.
