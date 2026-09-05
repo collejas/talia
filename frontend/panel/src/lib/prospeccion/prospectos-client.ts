@@ -127,6 +127,7 @@ export type ProspectoFiltroInput = {
 export type ProspeccionCanalConfigInput = {
   canal: "correo" | "whatsapp" | "llamada"
   template_id?: string
+  template_ids?: string[]
   subject?: string | null
   body?: string | null
   body_html?: string | null
@@ -385,6 +386,8 @@ export type ContactarProspectosPayload = {
   campana_id?: string
   batch_titulo?: string
   separacion_segundos?: number
+  envios_por_lote?: number
+  intervalo_entre_lotes_segundos?: number
 }
 
 export type ProspectoContactoResumen = {
@@ -498,6 +501,10 @@ export type ContactoBatch = {
   totales?: Record<string, number> | null
   total_envios?: number | null
   envios_enviados?: number | null
+  envios_por_lote?: number | null
+  intervalo_entre_lotes_segundos?: number | null
+  total_lotes?: number | null
+  estrategia_plantillas?: string | null
 }
 
 export type ContactoEnvio = {
@@ -511,6 +518,9 @@ export type ContactoEnvio = {
   sesiones_utm?: number | null
   programado_en?: string | null
   procesado_en?: string | null
+  numero_lote?: number | null
+  lote_programado_en?: string | null
+  plantilla_id?: string | null
 }
 
 export type ContactoLog = {

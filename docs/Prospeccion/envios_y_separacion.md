@@ -1,6 +1,6 @@
 # Envíos de prospección y separación temporal
 
-Última revisión: 2026-09-04 (UTC)
+Última revisión: 2026-09-05 (UTC)
 
 Diseño e implementación: `propuesta_separacion_estricta.md`.
 
@@ -20,6 +20,50 @@ llamada externa. Por eso la reserva del intervalo se hace en el worker que
 realmente llama al proveedor.
 
 El correo puede usar Brevo o Postmark según la configuración del tenant. WhatsApp usa el transporte Meta configurado para prospección. Los estados posteriores llegan mediante webhooks/callbacks.
+
+## Programación por sublotes
+
+Un lote principal puede dividirse en ventanas de envío sin crear campañas
+independientes. La configuración se conserva en `prospeccion_contacto_batch` y
+cada envío conserva su ventana y plantilla exactas:
+
+- `envios_por_lote`: cantidad máxima de envíos en cada ventana;
+- `intervalo_entre_lotes_segundos`: separación entre el inicio planificado de
+  cada ventana;
+- `total_lotes`: número calculado de ventanas;
+- `numero_lote` y `lote_programado_en`: auditoría por envío;
+- `plantilla_id`: plantilla efectiva usada por el envío.
+
+El intervalo entre ventanas debe ser igual o mayor que
+`(envios_por_lote - 1) * separacion_segundos`; así se evita que una ventana se
+solape con la siguiente. La distribución de varias plantillas es round-robin y
+se realiza antes de dividir las ventanas. Por ejemplo, 500 prospectos, 50 por
+ventana y tres plantillas producen aproximadamente 167/167/166 envíos por
+plantilla dentro de un único lote principal.
+
+El limitador durable por `organizacion_id + canal` continúa siendo la última
+garantía en el despacho real. La programación sólo define elegibilidad; el
+worker aún puede reprogramar un envío si otra campaña del mismo tenant ocupa el
+turno del canal.
+
+## Cuotas por proveedor
+
+Las cuotas se aplican únicamente a `correo`. WhatsApp no usa la cuota diaria o
+mensual de correo; conserva únicamente su separación y las reglas propias del
+transporte configurado.
+
+- Brevo: se valida la cuota diaria que reporta la cuenta. El límite de 300
+  diarios no se aplica a Postmark ni a WhatsApp. Si los envíos proyectados
+  superan el saldo diario disponible, la creación se rechaza para evitar dejar
+  envíos en un estado que el proveedor no pueda aceptar; el usuario puede
+  programar el siguiente sublote en otro día.
+- Postmark: el límite efectivo es la cuota mensual contratada por el tenant y
+  administrada por el tenant maestro. La reserva atómica de la cola Postmark
+  bloquea el envío cuando se agota el periodo.
+
+La ruta de prospección no consulta la cuota de Brevo para un tenant que ya está
+habilitado en Postmark. No se debe convertir ninguna de estas cuotas en un
+límite global del sistema.
 
 ## Qué significa la separación de 5 segundos
 

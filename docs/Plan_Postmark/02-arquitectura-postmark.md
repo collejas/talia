@@ -143,3 +143,4 @@ Tenant registra dominio
 - Las llamadas batch tienen límite de 500 mensajes y 50 MB.
 - Postmark puede devolver HTTP 200 con errores individuales en operaciones batch.
 - El límite comercial del tenant lo impone Talia, no Postmark.
+- La cuota mensual comercial se configura por el tenant maestro según lo contratado. La programación de prospección no debe aplicar el límite diario de Brevo a un tenant habilitado en Postmark.

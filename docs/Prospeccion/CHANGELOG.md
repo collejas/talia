@@ -6,6 +6,26 @@ Formato recomendado por entrada:
 - `Base de datos`
 - `Operación/Notas`
 
+## 2026-09-05
+
+### Programación por sublotes
+- Se implementó un lote principal con sublotes configurables por cantidad e intervalo.
+- Se aumentó la selección manual máxima de prospección a 500 prospectos.
+- La separación entre mensajes permanece independiente de la separación entre sublotes y se valida para evitar solapamientos.
+- Varias plantillas se distribuyen en round-robin dentro de un único lote principal.
+- Cada envío conserva `numero_lote`, `lote_programado_en` y `plantilla_id` para monitorización y métricas.
+
+### Cuotas por proveedor
+- La cuota se aplica únicamente al canal correo.
+- Brevo conserva su cuota diaria; Postmark usa la cuota mensual del tenant administrada por el tenant maestro.
+- WhatsApp no consume la cuota de correo.
+- La validación previa de Brevo se omite cuando el tenant está habilitado en Postmark; la cola Postmark mantiene su reserva atómica mensual.
+
+### Base de datos
+- Nueva migración aplicada en la base activa: `20260905_120000_prospeccion_sub-lotes.sql`.
+- Verificación PostgREST realizada: las columnas de sublotes y de plantilla por envío ya están disponibles.
+- Pendiente operativo: repetir un envío controlado desde el tenant y comprobar los timestamps reales de despacho.
+
 ## 2026-09-04
 
 ### Separación estricta de envíos

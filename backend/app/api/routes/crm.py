@@ -123,6 +123,7 @@ from app.services.brevo_templates import (
     list_brevo_smtp_templates,
 )
 from app.services.brevo_quota import fetch_brevo_daily_quota
+from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
 from app.services.banxico import BanxicoError, BanxicoTipoCambio, fetch_banxico_tipo_cambio, fetch_banxico_tipo_cambio_at_date
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.services.catalog_fraccionamientos import (
@@ -4191,6 +4192,7 @@ class ProspeccionCanalConfig(BaseModel):
 
     canal: Literal["correo", "whatsapp", "llamada"]
     template_id: UUID | None = None
+    template_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=20)
     subject: str | None = Field(default=None, max_length=200)
     body: str | None = Field(default=None, max_length=4000)
     body_html: str | None = Field(default=None, max_length=32_000)
@@ -4476,6 +4478,8 @@ class ProspeccionCampanaUpdatePayload(BaseModel):
     filtros: ProspectoFiltroPayload | None = None
     canales: list[ProspeccionCanalConfig] | None = None
     separacion_segundos: int | None = Field(default=None, ge=MIN_PROSPECCION_SEPARACION_SEGUNDOS, le=3600)
+    envios_por_lote: int | None = Field(default=None, ge=1, le=500)
+    intervalo_entre_lotes_segundos: int | None = Field(default=None, ge=0, le=604800)
 
 
 class ProspeccionCampanaDeletePayload(BaseModel):
@@ -4514,7 +4518,7 @@ class ProspectoContactarPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prospecto_ids: list[UUID] | None = Field(
-        default=None, min_length=1, max_length=300, description="Prospectos seleccionados manualmente."
+        default=None, min_length=1, max_length=500, description="Prospectos seleccionados manualmente."
     )
     correo_asunto: str | None = Field(default=None, max_length=200)
     correo_cuerpo: str | None = Field(default=None, max_length=4000)
@@ -4526,6 +4530,8 @@ class ProspectoContactarPayload(BaseModel):
     campana_id: UUID | None = None
     batch_titulo: str | None = Field(default=None, max_length=160)
     separacion_segundos: int | None = Field(default=None, ge=MIN_PROSPECCION_SEPARACION_SEGUNDOS, le=3600)
+    envios_por_lote: int | None = Field(default=None, ge=1, le=500)
+    intervalo_entre_lotes_segundos: int | None = Field(default=None, ge=0, le=604800)
 
     @field_validator("prospecto_ids")
     @classmethod
@@ -4545,6 +4551,21 @@ class ProspectoContactarPayload(BaseModel):
     def _ensure_selector(self) -> "ProspectoContactarPayload":
         if not self.prospecto_ids and not self.lista_id and not self.filtros:
             raise ValueError("selector_required")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_sub_lot_schedule(self) -> "ProspectoContactarPayload":
+        if self.envios_por_lote is None:
+            if self.intervalo_entre_lotes_segundos not in (None, 0):
+                raise ValueError("interval_between_lots_requires_batch_size")
+            return self
+        separation = self.separacion_segundos or MIN_PROSPECCION_SEPARACION_SEGUNDOS
+        interval = self.intervalo_entre_lotes_segundos
+        if interval is None or interval <= 0:
+            raise ValueError("interval_between_lots_required")
+        required = max(0, self.envios_por_lote - 1) * separation
+        if interval < required:
+            raise ValueError("interval_between_lots_too_short")
         return self
 
 
@@ -10110,7 +10131,22 @@ def _resolve_contact_channels(
     templates = template_map or {}
 
     if payload.canales:
+        expanded_configs: list[ProspeccionCanalConfig] = []
         for canal_config in payload.canales:
+            selected_template_ids = canal_config.template_ids or (
+                [canal_config.template_id] if canal_config.template_id else []
+            )
+            if not selected_template_ids:
+                expanded_configs.append(canal_config)
+                continue
+            for selected_template_id in selected_template_ids:
+                expanded_configs.append(
+                    canal_config.model_copy(
+                        update={"template_id": selected_template_id, "template_ids": None}
+                    )
+                )
+
+        for canal_config in expanded_configs:
             canal = canal_config.canal
             entry: dict[str, Any] = {}
             template_name_value: str | None = None
@@ -10233,7 +10269,17 @@ def _resolve_contact_channels(
 
             if canal_config.programado_en:
                 programacion[canal] = canal_config.programado_en.isoformat()
-            canales[canal] = entry
+            existing_channel = canales.get(canal)
+            if existing_channel is None:
+                canales[canal] = entry
+            else:
+                variants = existing_channel.get("template_variants")
+                if not isinstance(variants, list):
+                    base_variant = dict(existing_channel)
+                    base_variant.pop("template_variants", None)
+                    variants = [base_variant]
+                variants.append(entry)
+                existing_channel["template_variants"] = variants
 
         return canales, programacion
 
@@ -10546,6 +10592,11 @@ def _build_contact_batch_payload(
         body["titulo"] = payload.batch_titulo
     if programacion:
         body["programacion"] = programacion
+    if payload.envios_por_lote is not None:
+        body["envios_por_lote"] = payload.envios_por_lote
+        body["intervalo_entre_lotes_segundos"] = payload.intervalo_entre_lotes_segundos or 0
+        body["total_lotes"] = max(1, math.ceil(total / payload.envios_por_lote))
+        body["estrategia_plantillas"] = "round_robin"
 
     metadata = {
         "correo_asunto": payload.correo_asunto,
@@ -10714,6 +10765,8 @@ def _build_contact_envios_entries(
     canales: dict[str, dict[str, Any]],
     programacion: dict[str, str] | None = None,
     separacion_segundos: int | None = None,
+    envios_por_lote: int | None = None,
+    intervalo_entre_lotes_segundos: int | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
     entries: list[dict[str, Any]] = []
     suppressed_by_channel: dict[str, list[str]] = {}
@@ -10723,7 +10776,7 @@ def _build_contact_envios_entries(
         int(separacion_segundos or MIN_PROSPECCION_SEPARACION_SEGUNDOS),
     )
     base_now = datetime.now(UTC)
-    envio_index = 0
+    envio_index_by_channel: dict[str, int] = {}
 
     def _parse_programmed(value: str | None) -> datetime | None:
         if not value:
@@ -10788,7 +10841,7 @@ def _build_contact_envios_entries(
             "canal_origen": _resolve_prospecto_canal_origen(prospecto, metadata),
             "stage": metadata.get("stage"),
         }
-        for canal, canal_payload in canales.items():
+        for canal, channel_config in canales.items():
             suppression_map = metadata.get("prospeccion_suppressions")
             if isinstance(suppression_map, dict):
                 blocked = bool(
@@ -10799,14 +10852,33 @@ def _build_contact_envios_entries(
                 if blocked:
                     suppressed_by_channel.setdefault(canal, []).append(prospecto_id_text)
                     continue
+            variants = channel_config.get("template_variants") if isinstance(channel_config, dict) else None
+            if not isinstance(variants, list) or not variants:
+                variants = [channel_config]
+            channel_index = envio_index_by_channel.get(canal, 0)
+            canal_payload = variants[channel_index % len(variants)]
+            if not isinstance(canal_payload, dict):
+                canal_payload = channel_config
+            lote_size = envios_por_lote or max(1, len(prospectos))
+            lote_numero = (channel_index // lote_size) + 1
+            intervalo_lotes = intervalo_entre_lotes_segundos or 0
+            base_programado = _parse_programmed(programacion.get(canal) if programacion else None)
+            base_dt = base_programado or base_now
+            lote_dt = base_dt + timedelta(seconds=(lote_numero - 1) * intervalo_lotes)
+            posicion_en_lote = channel_index % lote_size
             entry = {
                 "batch_id": batch_value,
                 "prospecto_id": prospecto_id_text,
                 "canal": canal,
                 "separacion_segundos": separacion_val,
+                "numero_lote": lote_numero,
+                "lote_programado_en": lote_dt.isoformat(),
                 "payload": canal_payload,
                 "detalle": detalle,
             }
+            template_id_value = _clean_text(canal_payload.get("template_id"))
+            if template_id_value:
+                entry["plantilla_id"] = template_id_value
             if canal == "correo" and isinstance(canal_payload, dict):
                 version_id = _clean_text(canal_payload.get("version_id"))
                 if version_id:
@@ -10842,11 +10914,11 @@ def _build_contact_envios_entries(
                 )
                 if display_name_snapshot:
                     entry["whatsapp_template_display_name_snapshot"] = display_name_snapshot
-            base_programado = _parse_programmed(programacion.get(canal) if programacion else None)
-            base_dt = base_programado or base_now
-            entry["programado_en"] = (base_dt + timedelta(seconds=envio_index * separacion_val)).isoformat()
+            entry["programado_en"] = (
+                lote_dt + timedelta(seconds=posicion_en_lote * separacion_val)
+            ).isoformat()
             entries.append(entry)
-            envio_index += 1
+            envio_index_by_channel[canal] = channel_index + 1
     return entries, suppressed_by_channel
 
 
@@ -37555,6 +37627,8 @@ async def prospeccion_campana_update(
             payload.lista_id,
             payload.filtros,
             payload.canales,
+            payload.envios_por_lote,
+            payload.intervalo_entre_lotes_segundos,
         )
     )
 
@@ -37594,7 +37668,12 @@ async def prospeccion_campana_update(
 
     template_map: dict[str, dict[str, Any]] = {}
     if payload.canales:
-        template_ids = {config.template_id for config in payload.canales if config.template_id}
+        template_ids = {
+            template_id
+            for config in payload.canales
+            for template_id in (config.template_ids or ([config.template_id] if config.template_id else []))
+            if template_id
+        }
         if template_ids:
             template_map = await _fetch_contact_templates(
                 repo=repo,
@@ -37722,6 +37801,25 @@ async def prospeccion_campana_update(
         except (TypeError, ValueError):
             separacion_segundos = MIN_PROSPECCION_SEPARACION_SEGUNDOS
 
+    envios_por_lote = payload.envios_por_lote
+    if envios_por_lote is None:
+        raw_batch_size = target_batch.get("envios_por_lote")
+        try:
+            envios_por_lote = int(raw_batch_size) if raw_batch_size is not None else None
+        except (TypeError, ValueError):
+            envios_por_lote = None
+    intervalo_entre_lotes_segundos = payload.intervalo_entre_lotes_segundos
+    if intervalo_entre_lotes_segundos is None:
+        raw_batch_interval = target_batch.get("intervalo_entre_lotes_segundos")
+        try:
+            intervalo_entre_lotes_segundos = int(raw_batch_interval or 0)
+        except (TypeError, ValueError):
+            intervalo_entre_lotes_segundos = 0
+    if envios_por_lote is not None:
+        required_interval = max(0, envios_por_lote - 1) * separacion_segundos
+        if intervalo_entre_lotes_segundos <= 0 or intervalo_entre_lotes_segundos < required_interval:
+            raise HTTPException(status_code=400, detail="interval_between_lots_too_short")
+
     existing_envios = await _list_batch_envios_all(repo=repo, user_token=user_token, batch_id=batch_id)
     for envio in existing_envios:
         envio_id_raw = envio.get("id")
@@ -37772,6 +37870,8 @@ async def prospeccion_campana_update(
         canales=canales_config,
         programacion=programacion or None,
         separacion_segundos=separacion_segundos,
+        envios_por_lote=envios_por_lote,
+        intervalo_entre_lotes_segundos=intervalo_entre_lotes_segundos,
     )
     created_envios = await repo.insert_contact_envios(usuario_token=user_token, entries=new_entries)
 
@@ -37793,6 +37893,11 @@ async def prospeccion_campana_update(
         "estado": "pendiente",
         "metadata": metadata_existing,
     }
+    if envios_por_lote is not None:
+        batch_patch["envios_por_lote"] = envios_por_lote
+        batch_patch["intervalo_entre_lotes_segundos"] = intervalo_entre_lotes_segundos
+        batch_patch["total_lotes"] = max(1, math.ceil(len(prospectos) / envios_por_lote))
+        batch_patch["estrategia_plantillas"] = "round_robin"
     whatsapp_payload = canales_config.get("whatsapp") if isinstance(canales_config.get("whatsapp"), dict) else None
     if isinstance(whatsapp_payload, dict):
         batch_patch["whatsapp_template_id"] = _clean_text(
@@ -39068,12 +39173,17 @@ async def contactar_prospectos_legacy(
     if not payload.canales:
         raise HTTPException(status_code=400, detail="contact_templates_required")
     for channel in payload.canales:
-        if channel.template_id is None:
+        if channel.template_id is None and not channel.template_ids:
             raise HTTPException(status_code=400, detail=f"contact_template_required:{channel.canal}")
 
     template_map: dict[str, dict[str, Any]] = {}
     if payload.canales:
-        template_ids = {config.template_id for config in payload.canales if config.template_id}
+        template_ids = {
+            template_id
+            for config in payload.canales
+            for template_id in (config.template_ids or ([config.template_id] if config.template_id else []))
+            if template_id
+        }
         if template_ids:
             try:
                 template_map = await _fetch_contact_templates(
@@ -39236,6 +39346,8 @@ async def contactar_prospectos_legacy(
         canales=canales_config,
         programacion=programacion,
         separacion_segundos=payload.separacion_segundos,
+        envios_por_lote=payload.envios_por_lote,
+        intervalo_entre_lotes_segundos=payload.intervalo_entre_lotes_segundos,
     )
     projected_email_by_utc_day: dict[date, int] = {}
     for entry in preview_entries:
@@ -39248,6 +39360,23 @@ async def contactar_prospectos_legacy(
             programmed = programmed.replace(tzinfo=timezone.utc)
         quota_day_utc = programmed.astimezone(timezone.utc).date()
         projected_email_by_utc_day[quota_day_utc] = projected_email_by_utc_day.get(quota_day_utc, 0) + 1
+
+    if projected_email_by_utc_day:
+        postmark_enabled = False
+        try:
+            migration = await PostmarkRepository().get_migration(organizacion_id=organizacion_id)
+            postmark_enabled = bool(
+                migration
+                and migration.get("feature_enabled") is True
+                and migration.get("status") in {"active", "validated", "migrated"}
+            )
+        except PostmarkRepositoryError as exc:
+            logger.warning(
+                "prospeccion.contactar.postmark_provider_check_failed",
+                extra={"error": str(exc)},
+            )
+        if postmark_enabled:
+            projected_email_by_utc_day = {}
 
     if projected_email_by_utc_day:
         brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
@@ -39327,6 +39456,8 @@ async def contactar_prospectos_legacy(
         canales=canales_config,
         programacion=programacion,
         separacion_segundos=payload.separacion_segundos,
+        envios_por_lote=payload.envios_por_lote,
+        intervalo_entre_lotes_segundos=payload.intervalo_entre_lotes_segundos,
     )
     if suppressed_by_channel:
         for canal, ids in suppressed_by_channel.items():

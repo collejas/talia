@@ -438,6 +438,12 @@ export default function ContactosPageClient() {
               <span className="text-xs text-muted-foreground">
                 Enviados: {countSuccessfulEnvios(batchSummary.totales)}/{batchSummary.total_envios}
               </span>
+              {selectedBatch?.total_lotes && selectedBatch.total_lotes > 1 ? (
+                <span className="text-xs text-muted-foreground">
+                  Sublotes: {selectedBatch.envios_por_lote ?? "—"} cada{" "}
+                  {Math.round((selectedBatch.intervalo_entre_lotes_segundos ?? 0) / 60)} min
+                </span>
+              ) : null}
             </div>
           ) : null}
           {envioError ? (
@@ -453,6 +459,7 @@ export default function ContactosPageClient() {
                 <TableRow>
                   <TableHead>Prospecto</TableHead>
                   <TableHead>Canal</TableHead>
+                  <TableHead>Sublote</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Detalle</TableHead>
                   <TableHead className="text-right">Procesado</TableHead>
@@ -462,14 +469,14 @@ export default function ContactosPageClient() {
                 <TableBody>
                   {envioLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                         <IconLoader className="mr-2 inline size-4 animate-spin" /> Cargando envíos...
                       </TableCell>
                     </TableRow>
                   ) : null}
                   {!envioLoading && !envios.length ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                         El lote aún no tiene envíos registrados.
                       </TableCell>
                     </TableRow>
@@ -483,6 +490,11 @@ export default function ContactosPageClient() {
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{canalLabel[envio.canal] ?? envio.canal}</Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {envio.numero_lote && selectedBatch?.total_lotes
+                              ? `${envio.numero_lote}/${selectedBatch.total_lotes}`
+                              : envio.numero_lote ?? "—"}
                           </TableCell>
                           <TableCell>
                             <Badge variant={envioEstadoVariant[envio.estado] ?? "default"}>

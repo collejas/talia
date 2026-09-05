@@ -14,7 +14,7 @@ Este archivo sirve para capturar próximos requerimientos sin mezclar historial 
 - Separación estricta entre envíos:
   - implementado en código: rate limiter durable por organización/canal mediante RPC transaccional y lock de fila.
   - cada envío conserva `separacion_segundos` y registra `despacho_iniciado_en` y `proveedor_aceptado_en`.
-  - pendiente operativo: aplicar la migración y validar con lote controlado de correo y WhatsApp, comparando los timestamps explícitos e IDs externos.
+  - migración aplicada en la base activa; pendiente operativo: validar con lote controlado de correo y WhatsApp, comparando los timestamps explícitos e IDs externos.
   - propuesta técnica detallada: `docs/Prospeccion/propuesta_separacion_estricta.md`.
 - Asistente IA especializado en prospección:
   - Mantener assistant operativo actual para conversaciones no comerciales de prospección.

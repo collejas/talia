@@ -32,6 +32,7 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 - Contratar el plan que permita dominios de envío personalizados ilimitados si el número de tenants supera el límite del plan inferior.
 - Mantener separación entre streams transaccionales y Broadcast.
 - Mantener la cuota de cada tenant en PostgreSQL, no inferirla desde el consumo global de Postmark.
+- La cuota mensual efectiva de cada tenant la define el tenant maestro según el contrato comercial y se administra desde la configuración comercial del tenant; la cola Postmark sólo ejecuta esa regla de forma atómica.
 - Usar la API de Postmark desde backend; ninguna API key debe llegar al panel.
 - Construir Postmark con código, contratos y tablas propias; no reutilizar la implementación de Brevo.
 - Mantener la implementación en carpetas propias de Postmark, separadas del código de Brevo y del servicio de correo anterior siempre que la arquitectura lo permita.

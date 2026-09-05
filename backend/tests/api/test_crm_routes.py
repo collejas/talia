@@ -2009,6 +2009,40 @@ def test_build_contact_envios_entries_includes_person_fields() -> None:
     assert detalle["segundo_apellido"] == "Garcia"
 
 
+def test_build_contact_envios_entries_creates_sublots_and_balances_templates() -> None:
+    prospectos = [{"id": str(uuid.uuid4()), "email": f"persona{index}@ejemplo.com"} for index in range(5)]
+    entries, suppressed = crm_routes._build_contact_envios_entries(
+        batch_id=uuid.uuid4(),
+        prospectos=prospectos,
+        canales={
+            "correo": {
+                "template_variants": [
+                    {"template_id": "00000000-0000-0000-0000-000000000001", "body": "A"},
+                    {"template_id": "00000000-0000-0000-0000-000000000002", "body": "B"},
+                    {"template_id": "00000000-0000-0000-0000-000000000003", "body": "C"},
+                ]
+            }
+        },
+        programacion={"correo": "2026-09-05T12:00:00+00:00"},
+        separacion_segundos=10,
+        envios_por_lote=2,
+        intervalo_entre_lotes_segundos=60,
+    )
+
+    assert suppressed == {}
+    assert [entry["numero_lote"] for entry in entries] == [1, 1, 2, 2, 3]
+    assert [entry["plantilla_id"] for entry in entries] == [
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000002",
+        "00000000-0000-0000-0000-000000000003",
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000002",
+    ]
+    assert entries[0]["programado_en"] == "2026-09-05T12:00:00+00:00"
+    assert entries[1]["programado_en"] == "2026-09-05T12:00:10+00:00"
+    assert entries[2]["programado_en"] == "2026-09-05T12:01:00+00:00"
+
+
 class _FrozenCampaignScheduleDateTime(crm_routes.datetime):
     @classmethod
     def now(cls, tz=None):  # type: ignore[override]
@@ -4445,15 +4479,27 @@ async def test_list_audit_logs(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_contactar_prospectos_allows_300_ids() -> None:
-    prospecto_ids = [str(uuid.uuid4()) for _ in range(300)]
+async def test_contactar_prospectos_allows_500_ids() -> None:
+    prospecto_ids = [str(uuid.uuid4()) for _ in range(500)]
 
     payload = crm_routes.ProspectoContactarPayload.model_validate({"prospecto_ids": prospecto_ids})
 
-    assert len(payload.prospecto_ids or []) == 300
+    assert len(payload.prospecto_ids or []) == 500
 
     with pytest.raises(crm_routes.ValidationError):
         crm_routes.ProspectoContactarPayload.model_validate({"prospecto_ids": prospecto_ids + [str(uuid.uuid4())]})
+
+
+def test_contactar_prospectos_rejects_overlapping_sublots() -> None:
+    with pytest.raises(crm_routes.ValidationError, match="interval_between_lots_too_short"):
+        crm_routes.ProspectoContactarPayload.model_validate(
+            {
+                "prospecto_ids": [str(uuid.uuid4()) for _ in range(50)],
+                "separacion_segundos": 10,
+                "envios_por_lote": 50,
+                "intervalo_entre_lotes_segundos": 300,
+            }
+        )
 
 @pytest.mark.asyncio
 async def test_prospect_lookup_batches_allow_300_ids() -> None:

@@ -1055,6 +1055,8 @@ function ProspectosView() {
   const [plannerScheduleDate, setPlannerScheduleDate] = useState("")
   const [plannerScheduleTime, setPlannerScheduleTime] = useState("10:00")
   const [plannerSeparationSeconds, setPlannerSeparationSeconds] = useState("5")
+  const [plannerBatchSize, setPlannerBatchSize] = useState("")
+  const [plannerBatchIntervalMinutes, setPlannerBatchIntervalMinutes] = useState("")
   const [campaignFilterOptions, setCampaignFilterOptions] = useState<CampaignOption[]>([])
   const [campaignFilterLoading, setCampaignFilterLoading] = useState(false)
   const [templateFilterOptions, setTemplateFilterOptions] = useState<ContactoTemplate[]>([])
@@ -3091,6 +3093,8 @@ function ProspectosView() {
     setPlannerScheduleTime("10:00")
     setPlannerScheduleMode("ahora")
     setPlannerSeparationSeconds("5")
+    setPlannerBatchSize("")
+    setPlannerBatchIntervalMinutes("")
     setPlannerTemplates([])
     setPlannerTemplateSelection({ correo: [], whatsapp: [], llamada: [] })
     setPlannerError(null)
@@ -3194,6 +3198,8 @@ function ProspectosView() {
         setPlannerScheduleTime("10:00")
         setPlannerScheduleMode("ahora")
         setPlannerSeparationSeconds("5")
+        setPlannerBatchSize("")
+        setPlannerBatchIntervalMinutes("")
         setPlannerTemplates([])
         setPlannerTemplateSelection({ correo: [], whatsapp: [], llamada: [] })
         setPlannerBrevoQuota(null)
@@ -3223,6 +3229,25 @@ function ProspectosView() {
     const separacion = Number.parseInt(plannerSeparationSeconds || "5", 10)
     if (Number.isNaN(separacion) || separacion < 5 || separacion > 3600) {
       setPlannerError("La separación debe estar entre 5 y 3600 segundos.")
+      return
+    }
+    const enviosPorLote = plannerBatchSize.trim() ? Number.parseInt(plannerBatchSize, 10) : selectedCount
+    const intervaloMinutos = plannerBatchIntervalMinutes.trim()
+      ? Number.parseInt(plannerBatchIntervalMinutes, 10)
+      : 0
+    if (Number.isNaN(enviosPorLote) || enviosPorLote < 1 || enviosPorLote > selectedCount) {
+      setPlannerError("El tamaño de cada lote debe estar entre 1 y el total seleccionado.")
+      return
+    }
+    if (plannerBatchSize.trim() && (Number.isNaN(intervaloMinutos) || intervaloMinutos <= 0)) {
+      setPlannerError("Captura el intervalo entre lotes en minutos.")
+      return
+    }
+    const intervaloEntreLotes = intervaloMinutos * 60
+    if (plannerBatchSize.trim() && intervaloEntreLotes < (enviosPorLote - 1) * separacion) {
+      setPlannerError(
+        `El intervalo entre lotes debe ser de al menos ${Math.ceil(((enviosPorLote - 1) * separacion) / 60)} minutos para evitar solapamientos.`
+      )
       return
     }
     setPlannerExecuting(true)
@@ -3272,76 +3297,38 @@ function ProspectosView() {
         return
       }
 
-      if (canalTemplates.length > 1) {
-        const prospectosPorTemplate = canalTemplates.map(() => [] as string[])
-        selectedIds.forEach((prospectoId, index) => {
-          prospectosPorTemplate[index % canalTemplates.length].push(prospectoId)
-        })
-
-        const aggregatedResults: ProspeccionContactResult[] = []
-        const aggregatedOmitidos: ProspeccionOmitido[] = []
-        const createdBatchIds: string[] = []
-        for (let index = 0; index < canalTemplates.length; index += 1) {
-          const prospectosLote = prospectosPorTemplate[index]
-          if (!prospectosLote.length) continue
-          const template = canalTemplates[index]
-          const response = await contactarProspectos({
-            prospecto_ids: prospectosLote,
-            campana_id: plannerCampaignId,
-            canales: [buildCanalPayload(canal, template)],
-            separacion_segundos: separacion,
-          })
-          if (response.batch_id) {
-            createdBatchIds.push(response.batch_id)
-          }
-          aggregatedResults.push(
-            ...(response.contactos ?? []).map((resumen) => ({
-              ...resumen,
-              display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
-            }))
-          )
-          if (Array.isArray(response.omitidos) && response.omitidos.length) {
-            aggregatedOmitidos.push(...response.omitidos)
-          }
-        }
-
-        if (aggregatedResults.length) {
-          openContactDrawer({
-            batchId: null,
-            results: aggregatedResults,
-            omitidos: aggregatedOmitidos,
-          })
-        }
-        setBanner({
-          type: "success",
-          message: `Se crearon ${createdBatchIds.length} lotes con ${aggregatedResults.length} envíos repartidos entre ${canalTemplates.length} plantillas.`,
-        })
-      } else {
-        const template = canalTemplates[0]
-        const response = await contactarProspectos({
-          prospecto_ids: selectedIds,
-          campana_id: plannerCampaignId,
-          canales: [buildCanalPayload(canal, template)],
-          separacion_segundos: separacion,
-        })
-        const enrichedResults = (response.contactos ?? []).map((resumen) => ({
-          ...resumen,
-          display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
-        }))
-        if (enrichedResults.length) {
-          openContactDrawer({
-            batchId: response.batch_id ?? null,
-            results: enrichedResults,
-            omitidos: response.omitidos,
-          })
-        }
-        setBanner({
-          type: "success",
-          message: response.batch_id
-            ? `Lote ${response.batch_id} ejecutado con ${enrichedResults.length} envíos.`
-            : "Lote ejecutado.",
+      const template = canalTemplates[0]
+      const canalPayload = buildCanalPayload(canal, template)
+      if (canalTemplates.length > 1) canalPayload.template_ids = canalTemplates.map((item) => item.id)
+      const response = await contactarProspectos({
+        prospecto_ids: selectedIds,
+        campana_id: plannerCampaignId,
+        canales: [canalPayload],
+        separacion_segundos: separacion,
+        ...(plannerBatchSize.trim()
+          ? {
+              envios_por_lote: enviosPorLote,
+              intervalo_entre_lotes_segundos: intervaloEntreLotes,
+            }
+          : {}),
+      })
+      const enrichedResults = (response.contactos ?? []).map((resumen) => ({
+        ...resumen,
+        display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
+      }))
+      if (enrichedResults.length) {
+        openContactDrawer({
+          batchId: response.batch_id ?? null,
+          results: enrichedResults,
+          omitidos: response.omitidos,
         })
       }
+      setBanner({
+        type: "success",
+        message: response.batch_id
+          ? `Lote principal creado con ${enrichedResults.length} envíos en ${Math.ceil(selectedCount / enviosPorLote)} sublotes.`
+          : "Lote ejecutado.",
+      })
       handlePlannerOpenChange(false)
       await fetchProspectos(offset)
       void fetchRecentBatches()
@@ -3368,6 +3355,8 @@ function ProspectosView() {
     plannerTemplateSelection,
     plannerTemplates,
     plannerSeparationSeconds,
+    plannerBatchSize,
+    plannerBatchIntervalMinutes,
     selectedCount,
     selectedIds,
     plannerBrevoQuotaBlocked,
@@ -4873,13 +4862,12 @@ function ProspectosView() {
                     </div>
                     {selectedPlannerCanal && selectedPlannerTemplateAll && selectedPlannerTemplatesByCanal.length ? (
                       <p className="text-xs text-muted-foreground">
-                        Se crearán hasta {Math.min(selectedCount, selectedPlannerTemplatesByCanal.length)} lotes: uno por
-                        plantilla, repartiendo prospectos sin repetir.
+                        Se creará un lote principal y las plantillas se repartirán de forma equilibrada, sin repetir
+                        prospectos.
                       </p>
                     ) : selectedPlannerCanal && selectedPlannerTemplateIds.length > 1 ? (
                       <p className="text-xs text-muted-foreground">
-                        Se crearán hasta {Math.min(selectedCount, selectedPlannerTemplateIds.length)} lotes repartiendo
-                        prospectos entre las plantillas seleccionadas.
+                        Se creará un lote principal con distribución equilibrada entre las plantillas seleccionadas.
                       </p>
                     ) : null}
                   </div>
@@ -4961,19 +4949,54 @@ function ProspectosView() {
                       }}
                     />
                   </div>
+                  <div className="space-y-1">
+                    <Label>Envíos por sublote (opcional)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={Math.max(1, selectedCount)}
+                      step={1}
+                      placeholder={`Todos (${selectedCount || 0})`}
+                      value={plannerBatchSize}
+                      onChange={(event) => setPlannerBatchSize(event.target.value.replace(/[^0-9]/g, ""))}
+                    />
+                    <p className="text-xs text-muted-foreground">Déjalo vacío para enviar en un solo lote.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Separación entre sublotes (minutos)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      placeholder="Ej. 10"
+                      value={plannerBatchIntervalMinutes}
+                      onChange={(event) => setPlannerBatchIntervalMinutes(event.target.value.replace(/[^0-9]/g, ""))}
+                      disabled={!plannerBatchSize.trim()}
+                    />
+                    <p className="text-xs text-muted-foreground">Se mide entre el inicio de cada sublote.</p>
+                  </div>
                 </div>
+                {plannerBatchSize.trim() && Number.parseInt(plannerBatchSize, 10) > 0 ? (
+                  <div className="mt-3 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                    Vista previa: {selectedCount.toLocaleString("es-MX")} prospectos en{" "}
+                    {Math.ceil(selectedCount / Number.parseInt(plannerBatchSize, 10))} sublotes de hasta{" "}
+                    {Number.parseInt(plannerBatchSize, 10)}. Cada sublote inicia cada{" "}
+                    {plannerBatchIntervalMinutes || "0"} minutos y cada envío conserva la separación de{" "}
+                    {plannerSeparationSeconds} segundos.
+                  </div>
+                ) : null}
               </div>
-              <div className="rounded-lg border bg-background p-4">
-                <p className="text-sm font-semibold">Cuota Correo</p>
+              {selectedPlannerCanal === "correo" ? <div className="rounded-lg border bg-background p-4">
+                <p className="text-sm font-semibold">Cuota de correo</p>
                 <div className="mt-2">
                   {plannerBrevoQuotaLoading ? (
                     <p className="text-xs text-muted-foreground">Consultando cuota...</p>
                   ) : plannerBrevoQuota?.configured === false ? (
-                    <p className="text-xs text-muted-foreground">Brevo no configurado para esta organización.</p>
+                    <p className="text-xs text-muted-foreground">La cuota se validará según el servicio de correo del tenant.</p>
                   ) : plannerBrevoQuota?.available ? (
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">
-                        Corte Brevo UTC ({plannerBrevoQuota.date_brevo_utc ?? plannerBrevoQuota.date_local ?? "N/D"}): enviados{" "}
+                        Corte diario del servicio ({plannerBrevoQuota.date_brevo_utc ?? plannerBrevoQuota.date_local ?? "N/D"}): enviados{" "}
                         {plannerBrevoQuota.sent_today ?? 0}
                         {plannerBrevoQuota.scheduled_today ? ` + programados ${plannerBrevoQuota.scheduled_today}` : ""}
                         {plannerBrevoQuota.projected_today !== null && plannerBrevoQuota.projected_today !== undefined
@@ -4993,7 +5016,7 @@ function ProspectosView() {
                         plannerBrevoQuota.remaining !== null &&
                         plannerBrevoQuota.remaining !== undefined &&
                         plannerBrevoQuota.remaining_after_scheduled !== plannerBrevoQuota.remaining
-                          ? ` (base Brevo ${plannerBrevoQuota.remaining})`
+                          ? ` (base ${plannerBrevoQuota.remaining})`
                           : ""}
                         {plannerBrevoQuota.usage_pct !== null ? ` · Uso ${plannerBrevoQuota.usage_pct}%` : ""}
                       </p>
@@ -5007,7 +5030,7 @@ function ProspectosView() {
                     <p className="text-xs text-muted-foreground">No se pudo consultar la cuota en este momento.</p>
                   )}
                 </div>
-              </div>
+              </div> : null}
               <div className="rounded-lg border bg-muted/20 p-4 text-sm">
                 <p className="font-semibold">4) Ejecutar lote</p>
                 <p className="mt-1 text-muted-foreground">
