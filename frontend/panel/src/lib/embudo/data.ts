@@ -9,6 +9,9 @@ export type LoadEmbudoOptions = {
   limit?: number;
   asignadoId?: string | null;
   days?: number | null;
+  rango?: string | null;
+  desde?: string | null;
+  hasta?: string | null;
   canal?: string | null;
   estado?: string | null;
   q?: string | null;
@@ -205,6 +208,9 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
   console.info("[embudo:load] start", {
     limit,
     days,
+    rango: options.rango ?? null,
+    desde: options.desde ?? null,
+    hasta: options.hasta ?? null,
     asignadoId: options.asignadoId ?? null,
     canal: options.canal ?? null,
     estado: options.estado ?? null,
@@ -226,6 +232,9 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
       ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
       ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
       ...(days !== null ? { days: String(days) } : {}),
+      ...(options.rango ? { rango: options.rango } : {}),
+      ...(options.desde ? { desde: options.desde } : {}),
+      ...(options.hasta ? { hasta: options.hasta } : {}),
     },
     withUserToken: true,
   }).then((result) => {
@@ -247,6 +256,9 @@ export async function loadEmbudoData(options: LoadEmbudoOptions = {}): Promise<E
       ...(options.q ? { q: options.q } : {}),
       ...(options.correo ? { correo: options.correo } : {}),
       ...(etapaIds.length ? { etapa_ids: etapaIds.join(",") } : {}),
+      ...(options.rango ? { rango: options.rango } : {}),
+      ...(options.desde ? { desde: options.desde } : {}),
+      ...(options.hasta ? { hasta: options.hasta } : {}),
       ...(options.tieneCita ? { tiene_cita: options.tieneCita } : {}),
     },
     withUserToken: true,

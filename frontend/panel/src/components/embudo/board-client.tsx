@@ -303,13 +303,17 @@ export function EmbudoBoardClient({
   });
   const [selectedWonQuoteId, setSelectedWonQuoteId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [appliedDays, setAppliedDays] = useState<number | null>(null);
+  const [appliedRango, setAppliedRango] = useState("");
+  const [appliedDesde, setAppliedDesde] = useState("");
+  const [appliedHasta, setAppliedHasta] = useState("");
   const [appliedCanal, setAppliedCanal] = useState("");
   const [appliedEstado, setAppliedEstado] = useState("");
   const [appliedCorreo, setAppliedCorreo] = useState("");
   const [appliedTieneCita, setAppliedTieneCita] = useState("");
   const [appliedEtapaIds, setAppliedEtapaIds] = useState<string[]>([]);
-  const [draftDays, setDraftDays] = useState<number | null>(null);
+  const [draftRango, setDraftRango] = useState("");
+  const [draftDesde, setDraftDesde] = useState("");
+  const [draftHasta, setDraftHasta] = useState("");
   const [draftCanal, setDraftCanal] = useState("");
   const [draftEstado, setDraftEstado] = useState("");
   const [draftTieneCita, setDraftTieneCita] = useState("");
@@ -522,9 +526,9 @@ export function EmbudoBoardClient({
       if (asignadoId) {
         params.set("asignado_id", asignadoId);
       }
-      if (appliedDays !== null) {
-        params.set("days", String(appliedDays));
-      }
+      if (appliedRango.trim()) params.set("rango", appliedRango);
+      if (appliedDesde) params.set("desde", appliedDesde);
+      if (appliedHasta) params.set("hasta", appliedHasta);
       if (appliedCanal) {
         params.set("canal", appliedCanal);
       }
@@ -570,7 +574,7 @@ export function EmbudoBoardClient({
         }
       }
     }
-  }, [appliedDays, appliedCanal, appliedEstado, appliedCorreo, appliedTieneCita, appliedEtapaIds]);
+  }, [appliedRango, appliedDesde, appliedHasta, appliedCanal, appliedEstado, appliedCorreo, appliedTieneCita, appliedEtapaIds]);
 
   const fetchSupervisedVendors = useCallback(async () => {
     if (!showVendorFilter) return;
@@ -633,7 +637,7 @@ export function EmbudoBoardClient({
       return;
     }
     void fetchBoardData(selectedVendedorId || undefined);
-  }, [selectedVendedorId, appliedDays, appliedCanal, appliedEstado, appliedCorreo, appliedTieneCita, appliedEtapaIds, fetchBoardData]);
+  }, [selectedVendedorId, appliedRango, appliedDesde, appliedHasta, appliedCanal, appliedEstado, appliedCorreo, appliedTieneCita, appliedEtapaIds, fetchBoardData]);
 
   useEffect(() => {
     const refresh = () => {
@@ -1588,15 +1592,19 @@ export function EmbudoBoardClient({
     (appliedCorreo.trim() ? 1 : 0) +
     (appliedTieneCita ? 1 : 0) +
     (appliedEtapaIds.length ? 1 : 0) +
-    (appliedDays !== null ? 1 : 0);
+    (appliedRango ? 1 : 0);
 
   const clearFilters = () => {
-    setDraftDays(null);
+    setDraftRango("");
+    setDraftDesde("");
+    setDraftHasta("");
     setDraftCanal("");
     setDraftEstado("");
     setDraftTieneCita("");
     setDraftEtapaIds([]);
-    setAppliedDays(null);
+    setAppliedRango("");
+    setAppliedDesde("");
+    setAppliedHasta("");
     setAppliedCanal("");
     setAppliedEstado("");
     setAppliedCorreo("");
@@ -1647,7 +1655,9 @@ export function EmbudoBoardClient({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                setDraftDays(appliedDays);
+                  setDraftRango(appliedRango);
+                  setDraftDesde(appliedDesde);
+                  setDraftHasta(appliedHasta);
                   setDraftCanal(appliedCanal);
                   setDraftEstado(appliedEstado);
                   setDraftTieneCita(appliedTieneCita);
@@ -1689,32 +1699,38 @@ export function EmbudoBoardClient({
           <div className="mt-4 max-h-[70vh] space-y-4 overflow-auto pr-1">
             <div className="space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Ventana KPIs
+                Periodo
               </Label>
               <Select
-                value={draftDays === null ? "all" : String(draftDays)}
-                onValueChange={(value) => {
-                  if (value === "all") {
-                    setDraftDays(null);
-                    return;
-                  }
-                  const parsed = Number(value);
-                  setDraftDays(Number.isFinite(parsed) && parsed > 0 ? parsed : 7);
-                }}
+                value={draftRango || "all"}
+                onValueChange={(value) => setDraftRango(value === "all" ? "" : value)}
               >
                 <SelectTrigger className="h-10 w-full">
                   <SelectValue placeholder="Sin rango" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
                   <SelectItem value="all">Sin rango</SelectItem>
-                  <SelectItem value="1">1 día</SelectItem>
-                  <SelectItem value="7">7 días</SelectItem>
-                  <SelectItem value="15">15 días</SelectItem>
-                  <SelectItem value="30">30 días</SelectItem>
-                  <SelectItem value="60">60 días</SelectItem>
-                  <SelectItem value="90">90 días</SelectItem>
+                  <SelectItem value="hoy">Hoy</SelectItem>
+                  <SelectItem value="ayer">Ayer</SelectItem>
+                  <SelectItem value="7d">Últimos 7 días</SelectItem>
+                  <SelectItem value="30d">Últimos 30 días</SelectItem>
+                  <SelectItem value="trimestre_actual">Trimestre actual</SelectItem>
+                  <SelectItem value="ano_actual">Año actual</SelectItem>
+                  <SelectItem value="fechas">Periodo personalizado</SelectItem>
                 </SelectContent>
               </Select>
+              {draftRango === "fechas" ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="embudo-fecha-desde" className="text-xs">Desde</Label>
+                    <Input id="embudo-fecha-desde" type="date" value={draftDesde} onChange={(event) => setDraftDesde(event.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="embudo-fecha-hasta" className="text-xs">Hasta</Label>
+                    <Input id="embudo-fecha-hasta" type="date" value={draftHasta} onChange={(event) => setDraftHasta(event.target.value)} />
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1847,7 +1863,17 @@ export function EmbudoBoardClient({
             <Button
               type="button"
               onClick={() => {
-                setAppliedDays(draftDays);
+                if (draftRango === "fechas" && (!draftDesde || !draftHasta)) {
+                  toast.error("Selecciona las fechas de inicio y fin.");
+                  return;
+                }
+                if (draftRango === "fechas" && draftDesde > draftHasta) {
+                  toast.error("La fecha inicial no puede ser posterior a la fecha final.");
+                  return;
+                }
+                setAppliedRango(draftRango);
+                setAppliedDesde(draftRango === "fechas" ? draftDesde : "");
+                setAppliedHasta(draftRango === "fechas" ? draftHasta : "");
                 setAppliedCanal(draftCanal === "all" ? "" : draftCanal);
                 setAppliedEstado(draftEstado === "all" ? "" : draftEstado);
                 setAppliedTieneCita(draftTieneCita === "all" ? "" : draftTieneCita);

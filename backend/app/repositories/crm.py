@@ -7071,6 +7071,7 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         created_from: datetime | None = None,
+        created_to: datetime | None = None,
         limit: int = 1000,
         asignado_id: UUID | None = None,
         canal: str | None = None,
@@ -7086,8 +7087,15 @@ class CRMRepository:
             "order": "created_at.desc",
             "limit": str(max(1, min(limit, 5000))),
         }
-        if created_from:
+        if created_from and created_to:
+            params["and"] = (
+                f"(created_at.gte.{created_from.isoformat()},"
+                f"created_at.lte.{created_to.isoformat()})"
+            )
+        elif created_from:
             params["created_at"] = f"gte.{created_from.isoformat()}"
+        elif created_to:
+            params["created_at"] = f"lte.{created_to.isoformat()}"
         opportunity_ids: list[str] | None = None
         should_filter_by_opportunity = any([asignado_id, canal, estado, q, correo, etapa_ids, tiene_cita])
         if should_filter_by_opportunity:

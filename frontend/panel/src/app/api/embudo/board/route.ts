@@ -15,6 +15,9 @@ export async function GET(request: Request) {
   const tieneCita = url.searchParams.get("tiene_cita")
   const daysParam = Number(url.searchParams.get("days"))
   const days = Number.isFinite(daysParam) && daysParam > 0 ? daysParam : undefined
+  const rango = url.searchParams.get("rango")
+  const desde = url.searchParams.get("desde")
+  const hasta = url.searchParams.get("hasta")
   try {
     const data = await loadEmbudoData({
       limit,
@@ -26,6 +29,9 @@ export async function GET(request: Request) {
       etapaIds,
       tieneCita: tieneCita || undefined,
       days,
+      rango: rango || undefined,
+      desde: desde || undefined,
+      hasta: hasta || undefined,
     })
     return NextResponse.json(data)
   } catch (error) {

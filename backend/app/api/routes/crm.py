@@ -42060,6 +42060,9 @@ async def pipeline_board(
     etapa_ids: str | None = Query(default=None),
     tiene_cita: str | None = Query(default=None),
     days: Annotated[int | None, Query(ge=1, le=365)] = None,
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
 ) -> CRMPipelineBoard:
     """Construir el board del pipeline filtrando opcionalmente por tablero."""
     request_started = time.perf_counter()
@@ -42084,11 +42087,16 @@ async def pipeline_board(
             organizacion_id=organizacion_id,
             usuario_id=usuario_id,
         )
-        created_from = (
-            _resolve_recent_days_created_from_utc(days=days, timezone_name=effective_timezone)
-            if days is not None
-            else None
-        )
+        created_from: datetime | None = None
+        created_to: datetime | None = None
+        if rango or desde or hasta:
+            created_from, created_to = _resolve_date_range(
+                rango, desde, hasta, timezone_name=effective_timezone
+            )
+        elif days is not None:
+            created_from = _resolve_recent_days_created_from_utc(
+                days=days, timezone_name=effective_timezone
+            )
         try:
             stage_started = time.perf_counter()
             await repo.ensure_prospeccion_stage(organizacion_id=organizacion_id)
@@ -42111,6 +42119,7 @@ async def pipeline_board(
             limit=limit,
             tablero_id=tablero_id,
             created_from=created_from,
+            created_to=created_to,
             asignado_id=asignado_id,
             canal=canal,
             estado=estado,
@@ -42178,17 +42187,25 @@ async def pipeline_scoring_kpis(
     correo: str | None = Query(default=None),
     etapa_ids: str | None = Query(default=None),
     tiene_cita: str | None = Query(default=None),
+    rango: str | None = Query(default=None),
+    desde: str | None = Query(default=None),
+    hasta: str | None = Query(default=None),
 ) -> CRMPipelineScoringKpis:
     effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
         repo=repo,
         organizacion_id=organizacion_id,
         usuario_id=usuario_id,
     )
-    created_from = (
-        _resolve_recent_days_created_from_utc(days=days, timezone_name=effective_timezone)
-        if days is not None
-        else None
-    )
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+    if rango or desde or hasta:
+        created_from, created_to = _resolve_date_range(
+            rango, desde, hasta, timezone_name=effective_timezone
+        )
+    elif days is not None:
+        created_from = _resolve_recent_days_created_from_utc(
+            days=days, timezone_name=effective_timezone
+        )
     # Si no se pasa asignado_id explícitamente, y el usuario es vendedor (no admin),
     # forzamos KPIs a su propio alcance para evitar que vea métricas globales
     # (los KPIs se calculan con service role para telemetría).
@@ -42256,6 +42273,7 @@ async def pipeline_scoring_kpis(
         rows = await repo.list_opportunity_scoring_events(
             organizacion_id=organizacion_id,
             created_from=created_from,
+            created_to=created_to,
             limit=limit,
             asignado_id=asignado_id,
             canal=canal,
@@ -42276,7 +42294,13 @@ async def pipeline_scoring_kpis(
             "days": days,
         },
     )
-    return _build_scoring_kpis(rows=rows, window_days=days if days is not None else 0)
+    if created_from and created_to:
+        window_days = max(1, (created_to.date() - created_from.date()).days + 1)
+    elif days is not None:
+        window_days = days
+    else:
+        window_days = 0
+    return _build_scoring_kpis(rows=rows, window_days=window_days)
 
 
 @router.get("/pipeline/scoring/config", response_model=CRMScoringConfigBundle)
