@@ -42090,7 +42090,7 @@ async def pipeline_recovery(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("reports.view")),
+    _: str = Depends(require_any_permission(["reports.view", "pipeline.view"])),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0, le=100000)] = 0,

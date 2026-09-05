@@ -105,7 +105,7 @@ const NAVIGATION: {
         { title: "Clientes", url: "/clientes", icon: IconUsersGroup, permission: "clientes.view" },
         { title: "Catálogo de precios", url: "/crm/catalogo-precios", icon: IconCoin, permission: ["propuesta.view", "propiedades.view"] },
         { title: "Actividades", url: "/crm/actividades", icon: IconActivity, permission: "activities.view" },
-        { title: "Informes", url: "/crm/informes", icon: IconReport, permission: "reports.view" },
+        { title: "Informes", url: "/crm/informes", icon: IconReport, permission: ["reports.view", "pipeline.view"] },
         { title: "Tickets", url: "/crm/tickets", icon: IconTicket, permission: "tickets.view", masterTenantOnly: true },
         { title: "Notas", url: "/crm/notas", icon: IconNotes, permission: "notes.view" },
         { title: "Auditoría reasignaciones", url: "/crm/asignaciones-vendedores", icon: IconShieldCheck, permission: ["audit.view", "audit.view_all"] },
