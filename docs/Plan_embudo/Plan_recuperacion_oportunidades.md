@@ -397,6 +397,7 @@ Campos funcionales sugeridos para la oportunidad:
 - `ultima_interaccion_contacto_en`
 - `ultimo_contacto_saliente_en`
 - `proxima_actividad_en`
+- `etapa_cambiada_en`
 - `estado_seguimiento`
 - `temperatura`
 - `estrategia_seguimiento`
@@ -512,14 +513,16 @@ El Dashboard puede mostrar adicionalmente el porcentaje por cantidad de oportuni
 
 ### Tasa de reactivación sobre oportunidades trabajadas
 
-Mide la efectividad de los intentos realizados:
+Mide la efectividad de los intentos realizados utilizando atribución por cohorte. La reactivación no tiene que ocurrir dentro del mismo periodo calendario del intento.
 
 ```text
-Tasa sobre trabajadas = Oportunidades reactivadas /
-                        Oportunidades con intento de recuperación × 100
+Tasa sobre trabajadas = Oportunidades que se reactivaron después de un intento /
+                        Oportunidades que recibieron un intento de recuperación × 100
 ```
 
-El denominador cuenta oportunidades únicas con al menos un evento `INTENTO_REACTIVACION` dentro del periodo. El numerador cuenta oportunidades únicas con `OPORTUNIDAD_REACTIVADA` dentro del mismo periodo.
+La ventana inicial de atribución será de 30 días y debe ser configurable por tenant. Para una cohorte de intentos realizada en agosto, el numerador cuenta las oportunidades que respondieron o se reactivaron dentro de los 30 días siguientes, aunque el evento ocurra en septiembre.
+
+El denominador cuenta oportunidades únicas con al menos un evento `INTENTO_REACTIVACION` en la cohorte. El numerador cuenta oportunidades únicas con `OPORTUNIDAD_REACTIVADA` atribuible a esa cohorte y dentro de la ventana configurada. Si existen varios intentos, debe aplicarse una regla de atribución única y documentada para no duplicar oportunidades.
 
 ### Tasa de recuperación del universo dormido
 
@@ -534,13 +537,22 @@ El denominador cuenta oportunidades únicas que cumplieron las reglas del tenant
 
 ### Valor reactivado
 
-Suma del valor estimado de oportunidades que pasaron de **Dormido** a **Activo** durante el periodo, usando el valor guardado en el evento `OPORTUNIDAD_REACTIVADA`:
+Debe distinguir entre el valor generado por cada evento y el valor de oportunidades únicas.
+
+**Valor de reactivaciones**: suma el valor de cada evento `OPORTUNIDAD_REACTIVADA`. Puede contar varias reactivaciones de una misma oportunidad.
 
 ```text
-Valor reactivado = SUM(valor_oportunidad en eventos de reactivación)
+Valor de reactivaciones = SUM(valor_oportunidad en todos los eventos de reactivación)
 ```
 
-Esto representa valor comercial recuperado al flujo activo; no representa dinero ganado.
+**Valor único reactivado**: cuenta cada oportunidad una sola vez dentro del periodo analizado. Debe ser el KPI principal del Dashboard comercial.
+
+```text
+Valor único reactivado = SUM(valor_oportunidad de oportunidades distintas
+                              reactivadas en el periodo)
+```
+
+La analítica debe mostrar ambos valores junto con la cantidad de eventos y de oportunidades únicas. Esto permite detectar oportunidades que se duermen y reactivan repetidamente. Ninguno de estos indicadores representa dinero ganado.
 
 ### Valor ganado proveniente de reactivación
 
@@ -584,20 +596,39 @@ Porcentaje de oportunidades abiertas que no tienen una siguiente acción program
 
 También debe mostrarse el valor económico asociado a esas oportunidades.
 
+### Cobertura de seguimiento
+
+Es el complemento del porcentaje sin próxima actividad y debe ser uno de los KPI principales del Dashboard:
+
+```text
+Cobertura de seguimiento = Oportunidades abiertas con proxima_actividad_en /
+                           Oportunidades abiertas × 100
+```
+
+Debe mostrarse junto con la cantidad y el valor de las oportunidades abiertas sin siguiente acción. Responde si el equipo tiene controlado qué debe ocurrir después con cada oportunidad.
+
 ### Índice de salud comercial
 
-Es un indicador compuesto de 0 a 100. Como fórmula inicial, todos los componentes se expresan en porcentaje y se limitan al rango 0–100:
+Es un indicador compuesto de 0 a 100. Como fórmula inicial, todos los componentes se expresan como subíndices de 0 a 100:
 
 ```text
 Salud comercial =
-  0.30 × % abiertas con próxima actividad
-  + 0.25 × (100 - % valor detenido)
-  + 0.20 × (100 - % valor con seguimiento vencido)
-  + 0.15 × (100 - % valor dormido)
-  + 0.10 × tasa de reactivación sobre trabajadas
+  0.30 × cobertura de seguimiento
+  0.25 × pipeline activo
+  0.20 × seguimiento en tiempo
+  0.15 × ausencia de oportunidades dormidas
+  0.10 × efectividad de recuperación
 ```
 
-Los pesos y la inclusión de componentes deben poder configurarse por tenant. La interfaz debe mostrar los factores que produjeron el resultado y no presentar el índice como una calificación opaca.
+Definiciones iniciales de los subíndices:
+
+- **Cobertura de seguimiento:** porcentaje de oportunidades abiertas con próxima actividad.
+- **Pipeline activo:** porcentaje del valor del pipeline abierto que está en estado Activo.
+- **Seguimiento en tiempo:** porcentaje de oportunidades abiertas sin actividad de seguimiento vencida.
+- **Ausencia de oportunidades dormidas:** 100 menos el porcentaje de oportunidades abiertas en estado Dormido, ponderado por valor.
+- **Efectividad de recuperación:** tasa de reactivación sobre oportunidades trabajadas, limitada a 100.
+
+Los pesos, la inclusión de componentes y sus umbrales deben poder configurarse por tenant. La interfaz debe mostrar cada factor, su puntuación y su contribución al resultado; nunca debe presentar el índice como una calificación opaca.
 
 ## Implementación por fases
 
