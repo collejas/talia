@@ -75,7 +75,7 @@ Debe mostrarse como información complementaria, no reemplazar la etapa ni el es
 
 Los valores deben ser configurables por tenant. Como configuración inicial sugerida:
 
-| Tiempo sin actividad | Estado sugerido | Acción |
+| Tiempo sin interacción del prospecto | Estado sugerido | Acción |
 |---:|---|---|
 | 0 a 7 días | Activo | Seguimiento normal |
 | 8 a 15 días | En riesgo | Notificar al vendedor |
@@ -529,11 +529,13 @@ El denominador cuenta oportunidades únicas con al menos un evento `INTENTO_REAC
 Mide cuánto del universo elegible fue recuperado:
 
 ```text
-Tasa del universo = Oportunidades reactivadas /
-                    Oportunidades elegibles para recuperación × 100
+Tasa del universo = Oportunidades de una cohorte que se reactivaron dentro de la ventana /
+                    Oportunidades que entraron en esa cohorte elegible × 100
 ```
 
-El denominador cuenta oportunidades únicas que cumplieron las reglas del tenant para recuperación durante el periodo, aunque no hayan sido trabajadas.
+El denominador cuenta oportunidades únicas que entraron al universo elegible durante la cohorte. La ventana inicial será de 30 días, con opciones configurables de 60 y 90 días por tenant. La reactivación puede ocurrir en un periodo calendario posterior al de entrada a la cohorte.
+
+Este KPI debe analizarse por cohortes de entrada al universo recuperable. Por ejemplo, una cohorte de agosto puede seguir madurando durante septiembre. La interfaz debe distinguir entre cohortes cerradas y cohortes todavía inmaduras, para no interpretar un resultado parcial como definitivo.
 
 ### Valor reactivado
 
@@ -614,7 +616,7 @@ Es un indicador compuesto de 0 a 100. Como fórmula inicial, todos los component
 ```text
 Salud comercial =
   0.30 × cobertura de seguimiento
-  0.25 × pipeline activo
+  0.25 × % pipeline activo
   0.20 × seguimiento en tiempo
   0.15 × ausencia de oportunidades dormidas
   0.10 × efectividad de recuperación
@@ -623,7 +625,7 @@ Salud comercial =
 Definiciones iniciales de los subíndices:
 
 - **Cobertura de seguimiento:** porcentaje de oportunidades abiertas con próxima actividad.
-- **Pipeline activo:** porcentaje del valor del pipeline abierto que está en estado Activo.
+- **% pipeline activo:** porcentaje del valor del pipeline abierto que está en estado Activo.
 - **Seguimiento en tiempo:** porcentaje de oportunidades abiertas sin actividad de seguimiento vencida.
 - **Ausencia de oportunidades dormidas:** 100 menos el porcentaje de oportunidades abiertas en estado Dormido, ponderado por valor.
 - **Efectividad de recuperación:** tasa de reactivación sobre oportunidades trabajadas, limitada a 100.
