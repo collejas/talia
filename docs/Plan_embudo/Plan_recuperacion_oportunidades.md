@@ -10,7 +10,7 @@ La regla principal es no confundir cuatro conceptos distintos:
 
 - **Etapa comercial:** dónde se encuentra la oportunidad dentro del proceso de venta.
 - **Estado de seguimiento:** qué tan recientemente se ha trabajado la oportunidad.
-- **Temperatura:** qué tan activa o prometedora parece la oportunidad.
+- **Temperatura:** qué tan alto es el nivel de intención, interés o potencial comercial mostrado por el prospecto.
 - **Estrategia:** qué acción o tratamiento corresponde aplicar.
 
 Una oportunidad puede estar en etapa **Propuesta enviada**, tener estado **Dormida** y temperatura **Fría** al mismo tiempo.
@@ -138,7 +138,7 @@ Debe incluir:
 - Última actividad.
 - Última interacción del prospecto.
 - Último contacto saliente.
-- Días sin actividad.
+- Días sin interacción.
 - Temperatura.
 - Estrategia.
 - Score o prioridad de recuperación.
@@ -147,11 +147,11 @@ Debe incluir:
 
 Filtros iniciales:
 
-- Más de 7 días sin actividad.
-- Más de 15 días.
-- Más de 30 días.
-- Más de 60 días.
-- Más de 90 días.
+- Más de 7 días sin interacción.
+- Más de 15 días sin interacción.
+- Más de 30 días sin interacción.
+- Más de 60 días sin interacción.
+- Más de 90 días sin interacción.
 - Vendedor.
 - Etapa.
 - Temperatura.
@@ -343,7 +343,7 @@ Vista operativa para trabajar oportunidades estancadas y dormidas:
 - Oportunidades dormidas y estancadas.
 - Temperatura.
 - Días desde la última interacción del prospecto.
-- Valor recuperable.
+- Valor en recuperación.
 - Estrategia recomendada por Tal-IA.
 - Acciones de contactar, crear tarea, nutrir, posponer o no contactar.
 
@@ -418,6 +418,186 @@ El sistema debe registrar un historial de cambios y eventos para poder responder
 - Qué evento produjo la reactivación.
 - Cuántas veces fue reactivada.
 - Qué usuario o automatización realizó cada acción.
+
+Los informes históricos no deben construirse únicamente con el estado actual de la oportunidad. El estado actual sirve para la operación; los eventos y snapshots sirven para reconstruir la evolución del negocio.
+
+### Historial de eventos de oportunidad
+
+Se propone una tabla explícita `oportunidad_eventos`, con alcance obligatorio por tenant:
+
+| Columna | Propósito |
+|---|---|
+| `id` | Identificador del evento |
+| `tenant_id` | Tenant propietario |
+| `oportunidad_id` | Oportunidad relacionada |
+| `tipo_evento` | Tipo de evento de negocio |
+| `etapa_anterior` | Etapa previa, cuando aplique |
+| `etapa_nueva` | Etapa nueva, cuando aplique |
+| `estado_anterior` | Estado de seguimiento previo |
+| `estado_nuevo` | Estado de seguimiento nuevo |
+| `temperatura_anterior` | Temperatura previa, cuando aplique |
+| `temperatura_nueva` | Temperatura nueva, cuando aplique |
+| `estrategia_anterior` | Estrategia previa, cuando aplique |
+| `estrategia_nueva` | Estrategia nueva, cuando aplique |
+| `valor_oportunidad` | Valor vigente al momento del evento |
+| `usuario_id` | Usuario que provocó la acción, cuando aplique |
+| `automatizacion_id` | Automatización que provocó la acción, cuando aplique |
+| `created_at` | Momento del evento |
+
+Eventos iniciales:
+
+```text
+OPORTUNIDAD_ESTANCADA
+OPORTUNIDAD_DORMIDA
+INTENTO_REACTIVACION
+OPORTUNIDAD_REACTIVADA
+CAMBIO_ETAPA
+OPORTUNIDAD_GANADA
+OPORTUNIDAD_PERDIDA
+```
+
+La tabla debe tener foreign keys para tenant y oportunidad, índices para `(tenant_id, created_at)`, `(tenant_id, oportunidad_id, created_at)` y `(tenant_id, tipo_evento, created_at)`, además de las políticas de acceso por tenant correspondientes.
+
+### Snapshots del pipeline
+
+Para gráficas históricas y dashboards de consulta frecuente se propone una tabla `pipeline_snapshots` con un snapshot diario por tenant:
+
+| Columna | Propósito |
+|---|---|
+| `id` | Identificador del snapshot |
+| `tenant_id` | Tenant propietario |
+| `fecha` | Día del snapshot en la zona horaria del tenant |
+| `pipeline_valor` | Valor total del pipeline abierto |
+| `oportunidades_abiertas` | Cantidad de oportunidades abiertas |
+| `activas` | Cantidad activas |
+| `en_riesgo` | Cantidad en riesgo |
+| `estancadas` | Cantidad estancadas |
+| `dormidas` | Cantidad dormidas |
+| `valor_detenido` | Valor de oportunidades estancadas o dormidas |
+| `valor_sin_proxima_actividad` | Valor sin siguiente actividad |
+| `created_at` | Momento de generación |
+
+Debe existir una restricción única por `(tenant_id, fecha)`. Los eventos permiten auditoría y análisis profundo; los snapshots hacen rápidas las tendencias del Dashboard y de Salud comercial.
+
+## Definición y cálculo de KPIs
+
+Todos los KPIs deben utilizar la misma zona horaria del tenant, el mismo filtro de periodo y el mismo universo de oportunidades. Las oportunidades ganadas y perdidas no forman parte del pipeline abierto, salvo cuando el KPI indique explícitamente un resultado histórico.
+
+### Pipeline activo
+
+Valor estimado de oportunidades abiertas cuyo `estado_seguimiento` es **Activo**:
+
+```text
+Pipeline activo = SUM(valor_oportunidad de oportunidades abiertas y Activo)
+```
+
+### Valor detenido
+
+Valor estimado de oportunidades abiertas con estado **Estancado** o **Dormido**:
+
+```text
+Valor detenido = SUM(valor_oportunidad de oportunidades abiertas y
+                     estado Estancado o Dormido)
+```
+
+### Porcentaje de pipeline saludable
+
+Porcentaje del valor del pipeline abierto que está activo:
+
+```text
+% pipeline saludable = Pipeline activo / Pipeline abierto × 100
+```
+
+El Dashboard puede mostrar adicionalmente el porcentaje por cantidad de oportunidades, pero el KPI comercial principal debe ser ponderado por valor.
+
+### Tasa de reactivación sobre oportunidades trabajadas
+
+Mide la efectividad de los intentos realizados:
+
+```text
+Tasa sobre trabajadas = Oportunidades reactivadas /
+                        Oportunidades con intento de recuperación × 100
+```
+
+El denominador cuenta oportunidades únicas con al menos un evento `INTENTO_REACTIVACION` dentro del periodo. El numerador cuenta oportunidades únicas con `OPORTUNIDAD_REACTIVADA` dentro del mismo periodo.
+
+### Tasa de recuperación del universo dormido
+
+Mide cuánto del universo elegible fue recuperado:
+
+```text
+Tasa del universo = Oportunidades reactivadas /
+                    Oportunidades elegibles para recuperación × 100
+```
+
+El denominador cuenta oportunidades únicas que cumplieron las reglas del tenant para recuperación durante el periodo, aunque no hayan sido trabajadas.
+
+### Valor reactivado
+
+Suma del valor estimado de oportunidades que pasaron de **Dormido** a **Activo** durante el periodo, usando el valor guardado en el evento `OPORTUNIDAD_REACTIVADA`:
+
+```text
+Valor reactivado = SUM(valor_oportunidad en eventos de reactivación)
+```
+
+Esto representa valor comercial recuperado al flujo activo; no representa dinero ganado.
+
+### Valor ganado proveniente de reactivación
+
+Suma del valor de oportunidades que fueron reactivadas y posteriormente llegaron a **Ganado**:
+
+```text
+Valor ganado por reactivación = SUM(valor de oportunidades con
+                                   reactivación previa y resultado Ganado)
+```
+
+Debe existir una ventana de atribución configurable por tenant para definir cuánto tiempo después de la reactivación una venta sigue considerándose proveniente de recuperación.
+
+### Aging del pipeline
+
+Clasifica las oportunidades abiertas según los días desde el último cambio de etapa, no según la última actividad del vendedor:
+
+```text
+Días de aging = fecha de corte - última fecha de cambio de etapa
+```
+
+Los rangos iniciales son 0–7, 8–15, 16–30, 31–60, 61–90 y más de 90 días. Cada tenant podrá ajustar los rangos.
+
+### Tiempo sin interacción
+
+Tiempo transcurrido desde la última respuesta o acción atribuible al prospecto:
+
+```text
+Tiempo sin interacción = fecha de corte - ultima_interaccion_contacto_en
+```
+
+Se recomienda mostrar la mediana y el promedio, identificando aparte oportunidades que nunca han tenido interacción registrada.
+
+### Porcentaje sin próxima actividad
+
+Porcentaje de oportunidades abiertas que no tienen una siguiente acción programada:
+
+```text
+% sin próxima actividad = Oportunidades abiertas sin proxima_actividad_en /
+                         Oportunidades abiertas × 100
+```
+
+También debe mostrarse el valor económico asociado a esas oportunidades.
+
+### Índice de salud comercial
+
+Es un indicador compuesto de 0 a 100. Como fórmula inicial, todos los componentes se expresan en porcentaje y se limitan al rango 0–100:
+
+```text
+Salud comercial =
+  0.30 × % abiertas con próxima actividad
+  + 0.25 × (100 - % valor detenido)
+  + 0.20 × (100 - % valor con seguimiento vencido)
+  + 0.15 × (100 - % valor dormido)
+  + 0.10 × tasa de reactivación sobre trabajadas
+```
+
+Los pesos y la inclusión de componentes deben poder configurarse por tenant. La interfaz debe mostrar los factores que produjeron el resultado y no presentar el índice como una calificación opaca.
 
 ## Implementación por fases
 
