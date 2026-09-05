@@ -56,6 +56,11 @@ type RecoveryResponse = {
   dormidas: number
   sin_proxima_actividad: number
   cobertura_seguimiento_pct: number
+  pipeline_activo_pct: number
+  seguimiento_a_tiempo_pct: number
+  ausencia_dormidas_pct: number
+  efectividad_recuperacion_pct: number
+  indice_salud_comercial: number
   items: RecoveryItem[]
   total_items: number
 }
@@ -165,6 +170,25 @@ export function RecoveryReport() {
 
       <Card>
         <CardHeader className="pb-4">
+          <CardTitle className="text-base">Salud comercial</CardTitle>
+          <CardDescription>Índice explicable con la información operativa disponible.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-5 lg:grid-cols-[180px_1fr] lg:items-center">
+          <div className="rounded-xl border bg-muted/20 p-5 text-center">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Índice actual</p>
+            <p className="mt-2 text-4xl font-semibold text-primary">{data ? data.indice_salud_comercial.toFixed(0) : "—"}<span className="text-lg text-muted-foreground">/100</span></p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <HealthMetric label="Cobertura de seguimiento" value={data?.cobertura_seguimiento_pct} />
+            <HealthMetric label="% pipeline activo" value={data?.pipeline_activo_pct} />
+            <HealthMetric label="Seguimiento a tiempo" value={data?.seguimiento_a_tiempo_pct} />
+            <HealthMetric label="Ausencia de dormidas" value={data?.ausencia_dormidas_pct} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-base"><IconTargetArrow className="size-5 text-primary" /> Oportunidades para revisar</CardTitle>
           <CardDescription>Los filtros consultan el estado operativo actual de tu organización.</CardDescription>
         </CardHeader>
@@ -192,4 +216,8 @@ export function RecoveryReport() {
 function KpiCard({ label, value, description, tone = "default" }: { label: string; value: string; description: string; tone?: "default" | "warning" | "info" | "success" }) {
   const accent = tone === "warning" ? "text-amber-700" : tone === "info" ? "text-blue-700" : tone === "success" ? "text-emerald-700" : "text-foreground"
   return <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">{label}</p><p className={`mt-2 text-2xl font-semibold tracking-tight ${accent}`}>{value}</p><p className="mt-1 text-xs text-muted-foreground">{description}</p></CardContent></Card>
+}
+
+function HealthMetric({ label, value }: { label: string; value?: number }) {
+  return <div className="rounded-lg border p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{label}</span><span className="text-sm font-semibold">{value == null ? "—" : `${value.toFixed(1)}%`}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, Math.max(0, value ?? 0))}%` }} /></div></div>
 }

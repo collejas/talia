@@ -17641,6 +17641,11 @@ class CRMRecoverySummary(BaseModel):
     dormidas: int
     sin_proxima_actividad: int
     cobertura_seguimiento_pct: float
+    pipeline_activo_pct: float
+    seguimiento_a_tiempo_pct: float
+    ausencia_dormidas_pct: float
+    efectividad_recuperacion_pct: float
+    indice_salud_comercial: float
     items: list[CRMRecoveryOpportunity]
     total_items: int
     limit: int
@@ -49877,6 +49882,7 @@ def _build_recovery_summary(
     pipeline_activo = 0.0
     valor_detenido = 0.0
     activas = en_riesgo = estancadas = dormidas = sin_proxima_actividad = 0
+    seguimiento_a_tiempo = 0
 
     for row in rows:
         if str(row.get("estado") or "").strip().lower() in {"ganada", "perdida"}:
@@ -49912,6 +49918,10 @@ def _build_recovery_summary(
             valor_detenido += amount
         if not row.get("proxima_actividad_en"):
             sin_proxima_actividad += 1
+        else:
+            next_activity = _parse_datetime(row.get("proxima_actividad_en"))
+            if next_activity and (next_activity if next_activity.tzinfo else next_activity.replace(tzinfo=timezone.utc)) >= now:
+                seguimiento_a_tiempo += 1
 
         last_interaction = _parse_datetime(row.get("ultima_interaccion_contacto_en"))
         days_without_interaction = None
@@ -49952,6 +49962,18 @@ def _build_recovery_summary(
 
     total_abiertas = len(items)
     coverage = ((total_abiertas - sin_proxima_actividad) / total_abiertas * 100) if total_abiertas else 0.0
+    pipeline_activo_pct = (pipeline_activo / pipeline_abierto * 100) if pipeline_abierto else 0.0
+    seguimiento_a_tiempo_pct = (seguimiento_a_tiempo / total_abiertas * 100) if total_abiertas else 0.0
+    dormant_value = sum(float(item.monto_estimado or 0) for item in items if item.estado_seguimiento == "dormido")
+    ausencia_dormidas_pct = max(0.0, 100.0 - ((dormant_value / pipeline_abierto * 100) if pipeline_abierto else 0.0))
+    efectividad_recuperacion_pct = 0.0
+    indice_salud = (
+        coverage * 0.30
+        + pipeline_activo_pct * 0.25
+        + seguimiento_a_tiempo_pct * 0.20
+        + ausencia_dormidas_pct * 0.15
+        + efectividad_recuperacion_pct * 0.10
+    )
     return CRMRecoverySummary(
         generado_en=now,
         total_abiertas=total_abiertas,
@@ -49964,6 +49986,11 @@ def _build_recovery_summary(
         dormidas=dormidas,
         sin_proxima_actividad=sin_proxima_actividad,
         cobertura_seguimiento_pct=round(coverage, 2),
+        pipeline_activo_pct=round(pipeline_activo_pct, 2),
+        seguimiento_a_tiempo_pct=round(seguimiento_a_tiempo_pct, 2),
+        ausencia_dormidas_pct=round(ausencia_dormidas_pct, 2),
+        efectividad_recuperacion_pct=round(efectividad_recuperacion_pct, 2),
+        indice_salud_comercial=round(indice_salud, 2),
         items=items[offset : offset + limit],
         total_items=total_abiertas,
         limit=limit,
