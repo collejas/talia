@@ -205,6 +205,83 @@ Si el contacto responde, realiza una acción comercial o vuelve a mostrar inter�
 
 Las comunicaciones automáticas deben respetar consentimiento, preferencias de contacto, exclusiones y límites configurados por tenant.
 
+## Motor de recomendación de estrategia
+
+Tal-IA debe recomendar la estrategia combinando varias señales, no tomando una decisión únicamente por temperatura o por días de inactividad.
+
+La lógica debe separar estas preguntas:
+
+- **Seguimiento:** ¿qué tan urgente es intervenir?
+- **Temperatura:** ¿qué tanta intención o potencial ha mostrado el prospecto?
+- **Etapa:** ¿qué tipo de conversación corresponde?
+- **Valor:** ¿qué impacto tiene recuperar esta oportunidad?
+- **Historial:** ¿cuántos intentos se hicieron y qué funcionó antes?
+- **Preferencias:** ¿qué canales están permitidos y cuáles deben excluirse?
+
+### Reglas de recomendación iniciales
+
+| Condición | Estrategia sugerida | Acción para el vendedor |
+|---|---|---|
+| Activo + Caliente | Seguimiento normal prioritario | Atender la siguiente actividad pendiente |
+| En riesgo + Caliente o Tibio | Seguimiento preventivo | Contactar pronto por el canal con mejor respuesta histórica |
+| Estancado + Caliente | Reactivación personalizada | Crear contacto directo y revisar el contexto antes de escribir |
+| Dormido + Caliente | Reactivación de alta prioridad | Proponer mensaje personalizado y aprobación del vendedor |
+| Dormido + Tibio | Reactivación moderada | Hacer un intento contextual y programar revisión |
+| Dormido + Frío | Nurturing | Incluir en contenido o campaña de baja frecuencia |
+| Muchos intentos sin respuesta | Nurturing o revisión manual | Reducir frecuencia y evitar mensajes repetitivos |
+| Solicitud de no contacto | No contactar | Bloquear comunicaciones automáticas |
+
+Estas reglas son una primera configuración. Cada tenant debe poder ajustar la estrategia, los umbrales, los canales y el número máximo de intentos.
+
+### Qué debe recibir el vendedor
+
+La recomendación debe presentarse como una decisión explicada y accionable:
+
+```text
+Estrategia recomendada: Reactivación personalizada
+Prioridad: Muy alta
+
+Motivos:
+- Propuesta enviada.
+- Temperatura actual: Tibia.
+- Mostró alta intención en la última reunión.
+- Lleva 43 días sin respuesta.
+- La oportunidad vale $380,000.
+
+Siguiente acción:
+Contactar por WhatsApp hoy y mencionar la propuesta anterior.
+
+Mensaje sugerido:
+Hola, Juan. Retomo la propuesta que revisamos para el proyecto de iluminación.
+¿Sigue vigente la fecha estimada de inicio o cambió el calendario?
+
+Confianza de la recomendación: Alta
+```
+
+La IA debe mostrar siempre el motivo de la recomendación, el momento sugerido, el canal recomendado y si requiere aprobación. El vendedor debe poder aceptar, editar, posponer, cambiar la estrategia o descartarla indicando una razón.
+
+### Prioridad de recuperación
+
+La prioridad puede calcularse con una combinación configurable de:
+
+- Temperatura actual.
+- Temperatura o intención histórica relevante.
+- Días desde la última interacción del prospecto.
+- Valor estimado de la oportunidad.
+- Etapa comercial.
+- Probabilidad o score.
+- Número y resultado de intentos anteriores.
+- Canal con mejor respuesta histórica.
+- Existencia de una próxima actividad vencida.
+
+La falta de respuesta del prospecto debe pesar más que la fecha del último intento del vendedor. Un mensaje saliente reciente no reinicia por sí solo el contador de inactividad de interacción.
+
+### Límites y control
+
+El motor de recomendación debe ser explicable y auditable. Cada recomendación debe guardar la configuración, señales consideradas, estrategia propuesta, resultado y decisión final del vendedor.
+
+Durante la primera fase, Tal-IA recomienda y el vendedor confirma. La ejecución automática solo debe habilitarse después de validar consentimiento, límites de frecuencia, reglas del tenant y resultados reales de reactivación.
+
 ## Lead score y prioridad
 
 En una segunda etapa, Tal-IA puede calcular un score de 0 a 100 usando señales positivas y negativas.
