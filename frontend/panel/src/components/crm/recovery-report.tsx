@@ -67,6 +67,21 @@ type RecoveryResponse = {
   total_items: number
 }
 
+type ActionResult = {
+  oportunidad_id: string
+  ok: boolean
+  accion: string
+  estado: string
+  detalle?: string | null
+}
+
+type ActionResponse = {
+  total: number
+  ejecutadas: number
+  fallidas: number
+  items: ActionResult[]
+}
+
 type FilterState = {
   estado: string
   temperatura: string
@@ -143,6 +158,7 @@ export function RecoveryReport() {
   const [savingAttempt, setSavingAttempt] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
+  const [actionSummary, setActionSummary] = useState<ActionResponse | null>(null)
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ limit: "500" })
@@ -214,6 +230,7 @@ export function RecoveryReport() {
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok) throw new Error(payload?.error ?? "No se pudo registrar el intento")
+      setActionSummary(payload as ActionResponse)
       setAttemptItem(null)
       setActionMessage("")
       setActionSubject("")
@@ -232,6 +249,7 @@ export function RecoveryReport() {
       const response = await fetch("/api/crm/pipeline/recovery/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ oportunidad_ids: selectedIds, accion: actionChannel, mensaje: actionMessage.trim(), asunto: actionSubject.trim() || null }) })
       const payload = await response.json().catch(() => null)
       if (!response.ok) throw new Error(payload?.error ?? "No se pudieron registrar los intentos")
+      setActionSummary(payload as ActionResponse)
       setBulkDialogOpen(false)
       setSelectedIds([])
       setActionMessage("")
@@ -347,6 +365,14 @@ export function RecoveryReport() {
             {attemptError ? <p className="text-sm text-red-700">{attemptError}</p> : null}
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cancelar</Button><Button onClick={() => void saveBulkAttempt()} disabled={savingAttempt || selectedIds.length === 0}>{savingAttempt ? "Ejecutando..." : "Ejecutar acción"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(actionSummary)} onOpenChange={(open) => !open && setActionSummary(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Resultado de la ejecución</DialogTitle><DialogDescription>La acción terminó y cada oportunidad fue procesada por separado.</DialogDescription></DialogHeader>
+          {actionSummary ? <div className="space-y-4 py-2"><div className="grid grid-cols-3 gap-3"><div className="rounded-lg border p-3 text-center"><p className="text-xs text-muted-foreground">Procesadas</p><p className="mt-1 text-xl font-semibold">{actionSummary.total}</p></div><div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center"><p className="text-xs text-emerald-700">Ejecutadas</p><p className="mt-1 text-xl font-semibold text-emerald-700">{actionSummary.ejecutadas}</p></div><div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center"><p className="text-xs text-red-700">Fallidas</p><p className="mt-1 text-xl font-semibold text-red-700">{actionSummary.fallidas}</p></div></div><div className="max-h-64 space-y-2 overflow-y-auto">{actionSummary.items.map((item) => { const opportunity = data?.items.find((candidate) => candidate.id === item.oportunidad_id); return <div key={item.oportunidad_id} className="flex items-start justify-between gap-3 rounded-md border p-3 text-sm"><div className="min-w-0"><p className="truncate font-medium">{opportunity?.titulo ?? opportunity?.codigo_oportunidad ?? item.oportunidad_id}</p>{item.detalle ? <p className="mt-1 text-xs text-muted-foreground">{item.detalle}</p> : null}</div><Badge variant="outline" className={item.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}>{item.ok ? "Ejecutada" : "Fallida"}</Badge></div> })}</div></div> : null}
+          <DialogFooter><Button onClick={() => setActionSummary(null)}>Cerrar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
