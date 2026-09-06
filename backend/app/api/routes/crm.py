@@ -17693,6 +17693,17 @@ class CRMRecoveryAttempt(BaseModel):
     reactivada: bool = False
 
 
+class CRMRecoveryAttemptBatchCreate(CRMRecoveryAttemptCreate):
+    oportunidad_ids: list[UUID] = Field(..., min_length=1, max_length=100)
+
+
+class CRMRecoveryAttemptBatch(BaseModel):
+    total: int
+    procesadas: int
+    fallidas: int
+    items: list[dict[str, Any]]
+
+
 class CRMScoringProfile(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -42190,6 +42201,33 @@ async def pipeline_recovery(
     except CRMRepositoryError:
         followup_config = None
     return _build_recovery_summary(rows=rows, limit=limit, offset=offset, followup_config=followup_config)
+
+
+@router.post("/pipeline/recovery/attempts/bulk", response_model=CRMRecoveryAttemptBatch, status_code=201)
+async def register_pipeline_recovery_attempts_bulk(
+    payload: CRMRecoveryAttemptBatchCreate,
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMRecoveryAttemptBatch:
+    """Registra hasta 100 acciones manuales de recuperación en una sola operación."""
+    try:
+        result = await CRMRepository().registrar_intentos_reactivacion_lote(
+            organizacion_id=organizacion_id,
+            oportunidad_ids=payload.oportunidad_ids,
+            usuario_id=usuario_id,
+            canal=payload.canal,
+            resultado=payload.resultado,
+            motivo=payload.motivo,
+            intentado_en=payload.intentado_en,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "empty_opportunity_batch" in detail or "opportunity_batch_too_large" in detail:
+            raise HTTPException(status_code=422, detail="El lote debe contener entre 1 y 100 oportunidades.") from exc
+        raise HTTPException(status_code=502, detail="No se pudieron registrar los intentos en lote.") from exc
+    return CRMRecoveryAttemptBatch.model_validate(result)
 
 
 @router.post("/pipeline/recovery/{oportunidad_id}/attempts", response_model=CRMRecoveryAttempt, status_code=201)

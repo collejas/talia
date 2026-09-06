@@ -27495,6 +27495,33 @@ class CRMRepository:
             raise CRMRepositoryError("Respuesta inválida al registrar el intento de reactivación")
         return result
 
+    async def registrar_intentos_reactivacion_lote(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_ids: list[UUID],
+        usuario_id: UUID | None,
+        canal: str,
+        resultado: str,
+        motivo: str | None = None,
+        intentado_en: datetime | None = None,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "registrar_intentos_reactivacion_lote",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_oportunidad_ids": [str(item) for item in oportunidad_ids],
+                "p_usuario_id": str(usuario_id) if usuario_id else None,
+                "p_canal": canal,
+                "p_resultado": resultado,
+                "p_motivo": motivo,
+                "p_intentado_en": intentado_en.isoformat() if intentado_en else None,
+            },
+        )
+        if not isinstance(result, dict):
+            raise CRMRepositoryError("Respuesta inválida al registrar intentos en lote")
+        return result
+
     async def refresh_analytics_leads_por_dia(self) -> None:
         await self._rpc("api_refresh_analytics_leads_por_dia", {})
 

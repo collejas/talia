@@ -13,6 +13,9 @@ Historial de avances del plan definido en [Plan_recuperacion_oportunidades.md](/
 - Se agregó el endpoint `POST /crm/pipeline/recovery/{oportunidad_id}/attempts` y su proxy del panel.
 - La vista CRM → Informes ahora permite registrar el intento desde cada oportunidad.
 - La acción es manual y auditable; no envía WhatsApp, correo ni otro mensaje.
+- Se agregó selección múltiple en la vista y la acción “Registrar intento en bloque”.
+- El lote admite hasta 100 oportunidades y devuelve el resultado individual de cada una, incluyendo fallos parciales.
+- Se agregó el RPC `registrar_intentos_reactivacion_lote` y el endpoint `POST /crm/pipeline/recovery/attempts/bulk`.
 
 ### Validación
 
@@ -22,6 +25,7 @@ Historial de avances del plan definido en [Plan_recuperacion_oportunidades.md](/
 - React Doctor: `92/100`; conserva una advertencia de JSX duplicado en la tabla, sin error funcional.
 - Release del panel: `20260906_003619`; `talia-api.service` y `talia-panel.service` activos.
 - El endpoint publicado respondió `401` sin sesión, confirmando que la ruta existe detrás de autenticación.
+- El endpoint de lote publicado respondió `401` sin sesión, confirmando que la nueva ruta está protegida.
 
 ## 2026-09-06 — Estados de seguimiento automáticos
 

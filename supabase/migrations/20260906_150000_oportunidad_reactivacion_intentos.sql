@@ -1,7 +1,7 @@
 BEGIN;
 
 -- Registro explícito de acciones manuales de recuperación. No envía mensajes.
-CREATE TABLE public.oportunidad_reactivacion_intentos (
+CREATE TABLE IF NOT EXISTS public.oportunidad_reactivacion_intentos (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     organizacion_id uuid NOT NULL,
     oportunidad_id uuid NOT NULL,
@@ -24,11 +24,11 @@ CREATE TABLE public.oportunidad_reactivacion_intentos (
         CHECK (motivo IS NULL OR char_length(motivo) <= 1000)
 );
 
-CREATE INDEX oportunidad_reactivacion_intentos_org_opp_fecha_idx
+CREATE INDEX IF NOT EXISTS oportunidad_reactivacion_intentos_org_opp_fecha_idx
     ON public.oportunidad_reactivacion_intentos (organizacion_id, oportunidad_id, intentado_en DESC);
-CREATE INDEX oportunidad_reactivacion_intentos_org_canal_fecha_idx
+CREATE INDEX IF NOT EXISTS oportunidad_reactivacion_intentos_org_canal_fecha_idx
     ON public.oportunidad_reactivacion_intentos (organizacion_id, canal, intentado_en DESC);
-CREATE INDEX oportunidad_reactivacion_intentos_org_resultado_fecha_idx
+CREATE INDEX IF NOT EXISTS oportunidad_reactivacion_intentos_org_resultado_fecha_idx
     ON public.oportunidad_reactivacion_intentos (organizacion_id, resultado, intentado_en DESC);
 
 ALTER TABLE public.oportunidad_reactivacion_intentos ENABLE ROW LEVEL SECURITY;
@@ -133,7 +133,75 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.registrar_intentos_reactivacion_lote(
+    p_organizacion_id uuid,
+    p_oportunidad_ids uuid[],
+    p_usuario_id uuid,
+    p_canal text,
+    p_resultado text DEFAULT 'registrado',
+    p_motivo text DEFAULT NULL,
+    p_intentado_en timestamptz DEFAULT now()
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_oportunidad_id uuid;
+    v_items jsonb := '[]'::jsonb;
+    v_procesadas integer := 0;
+    v_fallidas integer := 0;
+    v_resultado jsonb;
+BEGIN
+    IF auth.role() <> 'service_role' THEN
+        RAISE EXCEPTION 'not authorized';
+    END IF;
+    IF p_oportunidad_ids IS NULL OR cardinality(p_oportunidad_ids) = 0 THEN
+        RAISE EXCEPTION 'empty_opportunity_batch';
+    END IF;
+    IF cardinality(p_oportunidad_ids) > 100 THEN
+        RAISE EXCEPTION 'opportunity_batch_too_large';
+    END IF;
+
+    FOREACH v_oportunidad_id IN ARRAY p_oportunidad_ids LOOP
+        BEGIN
+            v_resultado := public.registrar_intento_reactivacion(
+                p_organizacion_id, v_oportunidad_id, p_usuario_id, p_canal,
+                p_resultado, p_motivo, p_intentado_en
+            );
+            v_items := v_items || jsonb_build_array(jsonb_build_object(
+                'oportunidad_id', v_oportunidad_id,
+                'ok', true,
+                'intento', v_resultado
+            ));
+            v_procesadas := v_procesadas + 1;
+        EXCEPTION WHEN OTHERS THEN
+            v_items := v_items || jsonb_build_array(jsonb_build_object(
+                'oportunidad_id', v_oportunidad_id,
+                'ok', false,
+                'error', CASE SQLERRM
+                    WHEN 'opportunity_not_found' THEN 'La oportunidad no existe en este tenant.'
+                    WHEN 'opportunity_not_open' THEN 'La oportunidad ya no está abierta.'
+                    ELSE 'No se pudo registrar el intento.'
+                END
+            ));
+            v_fallidas := v_fallidas + 1;
+        END;
+    END LOOP;
+
+    RETURN jsonb_build_object(
+        'total', cardinality(p_oportunidad_ids),
+        'procesadas', v_procesadas,
+        'fallidas', v_fallidas,
+        'items', v_items
+    );
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.registrar_intento_reactivacion(uuid, uuid, uuid, text, text, text, timestamptz) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.registrar_intento_reactivacion(uuid, uuid, uuid, text, text, text, timestamptz) TO service_role;
+REVOKE ALL ON FUNCTION public.registrar_intentos_reactivacion_lote(uuid, uuid[], uuid, text, text, text, timestamptz) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.registrar_intentos_reactivacion_lote(uuid, uuid[], uuid, text, text, text, timestamptz) TO service_role;
 
 COMMIT;
