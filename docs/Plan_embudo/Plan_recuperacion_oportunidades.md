@@ -634,6 +634,19 @@ Los pesos, la inclusión de componentes y sus umbrales deben poder configurarse 
 
 ## Implementación por fases
 
+### Visibilidad compacta en el CRM operativo
+
+La información de recuperación no debe vivir únicamente en CRM → Informes. También debe acompañar a la oportunidad cuando el vendedor la consulta desde el Embudo, el detalle de oportunidad o el Inbox.
+
+En esas vistas se mostrará de forma compacta, sin agregar otro dashboard ni saturar la interfaz:
+
+- **Temperatura:** etiqueta o icono para Caliente, Tibio o Frío.
+- **Seguimiento:** etiqueta o icono para Activo, En riesgo, Estancado o Dormido.
+- **Inactividad:** días sin interacción del prospecto.
+- **Estrategia:** etiqueta o icono para Seguimiento normal, Reactivación, Nurturing o No contactar.
+
+El detalle completo, las recomendaciones de Tal-IA, el historial y las métricas permanecerán en Informes y en la vista detallada de la oportunidad. Las tres vistas operativas deben utilizar el mismo componente y contrato de datos para evitar diferencias.
+
 ### Fase 1: visibilidad y clasificación
 
 - Agregar el estado de seguimiento independiente de la etapa.
@@ -642,6 +655,7 @@ Los pesos, la inclusión de componentes y sus umbrales deben poder configurarse 
 - Agregar la estrategia de seguimiento.
 - Crear reglas configurables por tenant.
 - Incorporar filtros y vista de oportunidades dormidas.
+- Mostrar las etiquetas compactas de temperatura, seguimiento, inactividad y estrategia en Embudo, detalle e Inbox.
 - Mostrar alertas y tareas de seguimiento.
 - Mantener el cambio reversible y auditable.
 
