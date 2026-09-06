@@ -872,6 +872,24 @@ class Settings(BaseSettings):
             "TALIA_ACTIVITY_REMINDER_RUNNER_INTERVAL_SECONDS",
         ),
     )
+    opportunity_followup_state_queue_enabled: bool = Field(
+        default=True,
+        description="Activa la evaluación automática de estados de seguimiento de oportunidades.",
+        validation_alias=AliasChoices(
+            "OPPORTUNITY_FOLLOWUP_STATE_QUEUE_ENABLED",
+            "TALIA_OPPORTUNITY_FOLLOWUP_STATE_QUEUE_ENABLED",
+        ),
+    )
+    opportunity_followup_state_runner_interval_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Intervalo del worker para evaluar estados de seguimiento por tenant.",
+        validation_alias=AliasChoices(
+            "OPPORTUNITY_FOLLOWUP_STATE_RUNNER_INTERVAL_SECONDS",
+            "TALIA_OPPORTUNITY_FOLLOWUP_STATE_RUNNER_INTERVAL_SECONDS",
+        ),
+    )
     sales_notification_queue_enabled: bool = Field(
         default=True,
         description="Activa la cola asíncrona de notificaciones críticas al vendedor.",

@@ -2,6 +2,26 @@
 
 Historial de avances del plan definido en [Plan_recuperacion_oportunidades.md](/var/www/talia/docs/Plan_embudo/Plan_recuperacion_oportunidades.md).
 
+## 2026-09-06 — Estados de seguimiento automáticos
+
+### Completado
+
+- Se creó y aplicó la migración [`20260906_130000_oportunidad_estados_seguimiento_automaticos.sql`](/var/www/talia/supabase/migrations/20260906_130000_oportunidad_estados_seguimiento_automaticos.sql).
+- Se agregó el evaluador `evaluar_oportunidades_seguimiento(uuid)` para aplicar los umbrales configurados por organización.
+- El evaluador solo procesa oportunidades abiertas con `ultima_interaccion_contacto_en` registrada.
+- Se agregaron eventos específicos `OPORTUNIDAD_ESTANCADA` y `OPORTUNIDAD_DORMIDA`.
+- Se agregó un worker periódico de backend para ejecutar la evaluación automática.
+- El intervalo y la activación del worker pueden controlarse mediante configuración del backend.
+- La ejecución es idempotente: una oportunidad no genera eventos repetidos si su estado no cambió.
+
+### Validación
+
+- Primera evaluación: `218` oportunidades actualizadas en `9` organizaciones.
+- Estados resultantes en oportunidades abiertas: `174` Activo, `5` En riesgo, `73` Estancado y `140` Dormido.
+- Segunda evaluación inmediata: `0` oportunidades actualizadas.
+- Eventos generados: `218` cambios de estado, `73` eventos Estancado y `140` eventos Dormido.
+- Las funciones internas quedaron restringidas a `service_role`.
+
 ## 2026-09-06 — Sincronización de interacción y backfill
 
 ### Completado

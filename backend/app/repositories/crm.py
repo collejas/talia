@@ -26845,6 +26845,17 @@ class CRMRepository:
             raise CRMRepositoryError("seguimiento_configuracion_update_failed")
         return data[0]
 
+    async def worker_evaluar_oportunidades_seguimiento(
+        self, *, organizacion_id: UUID | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if organizacion_id is not None:
+            payload["p_organizacion_id"] = str(organizacion_id)
+        result = await self._rpc("evaluar_oportunidades_seguimiento", payload)
+        if not isinstance(result, dict):
+            raise CRMRepositoryError("seguimiento_evaluation_invalid_response")
+        return result
+
     @staticmethod
     def _extract_total_count(content_range: str | None) -> int | None:
         if not content_range or "/" not in content_range:
