@@ -27468,6 +27468,33 @@ class CRMRepository:
     async def reprocess_lead(self, *, lead_id: UUID) -> None:
         await self._rpc("reprocesar_lead", {"p_lead": str(lead_id)})
 
+    async def registrar_intento_reactivacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+        usuario_id: UUID | None,
+        canal: str,
+        resultado: str,
+        motivo: str | None = None,
+        intentado_en: datetime | None = None,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "registrar_intento_reactivacion",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_oportunidad_id": str(oportunidad_id),
+                "p_usuario_id": str(usuario_id) if usuario_id else None,
+                "p_canal": canal,
+                "p_resultado": resultado,
+                "p_motivo": motivo,
+                "p_intentado_en": intentado_en.isoformat() if intentado_en else None,
+            },
+        )
+        if not isinstance(result, dict):
+            raise CRMRepositoryError("Respuesta inválida al registrar el intento de reactivación")
+        return result
+
     async def refresh_analytics_leads_por_dia(self) -> None:
         await self._rpc("api_refresh_analytics_leads_por_dia", {})
 

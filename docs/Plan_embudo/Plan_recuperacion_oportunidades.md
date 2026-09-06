@@ -649,7 +649,8 @@ Los pesos, la inclusión de componentes y sus umbrales deben poder configurarse 
 
 - Agregar temperatura calculada.
 - Implementar score de prioridad.
-- Registrar eventos de reactivación y contador histórico.
+- Registrar cada intento manual de reactivación con tenant, oportunidad, usuario, canal, resultado, fecha y nota.
+- Registrar eventos de intento y reactivación, y mantener el contador histórico.
 - Mostrar el valor económico detenido.
 - Recomendar canal y siguiente acción.
 - Incorporar métricas de reactivación.
@@ -676,6 +677,8 @@ Los pesos, la inclusión de componentes y sus umbrales deben poder configurarse 
 - Una oportunidad dormida deja de ocupar visualmente el embudo activo.
 - El vendedor puede consultar, filtrar y recuperar oportunidades dormidas.
 - Una respuesta o interacción válida reactiva la oportunidad y conserva su historial.
+- El vendedor puede registrar un intento de recuperación sin que el CRM envíe mensajes automáticamente.
+- Un intento puede registrar resultado sin respuesta, respuesta, reactivación, rechazo o no contactar.
 - Un intento saliente del vendedor no se interpreta por sí solo como respuesta del prospecto.
 - La reactivación cambia el estado a **Activo** y registra un evento histórico.
 - Cada cambio automático registra fecha, regla y origen.

@@ -2,6 +2,27 @@
 
 Historial de avances del plan definido en [Plan_recuperacion_oportunidades.md](/var/www/talia/docs/Plan_embudo/Plan_recuperacion_oportunidades.md).
 
+## 2026-09-06 — Registro manual de intentos de reactivación
+
+### Completado
+
+- Se creó y aplicó la migración [`20260906_150000_oportunidad_reactivacion_intentos.sql`](/var/www/talia/supabase/migrations/20260906_150000_oportunidad_reactivacion_intentos.sql).
+- Se agregó `oportunidad_reactivacion_intentos` con tenant, oportunidad, usuario, canal, resultado, fecha y motivo como columnas explícitas.
+- Se agregó el RPC transaccional `registrar_intento_reactivacion`, protegido para `service_role` y con validación de tenant y oportunidad abierta.
+- Una reactivación confirmada actualiza el estado a Activo, incrementa el contador y registra `OPORTUNIDAD_REACTIVADA`.
+- Se agregó el endpoint `POST /crm/pipeline/recovery/{oportunidad_id}/attempts` y su proxy del panel.
+- La vista CRM → Informes ahora permite registrar el intento desde cada oportunidad.
+- La acción es manual y auditable; no envía WhatsApp, correo ni otro mensaje.
+
+### Validación
+
+- Migración aplicada correctamente en Supabase/PostgreSQL.
+- Prueba transaccional del RPC ejecutada y revertida, sin datos ficticios persistidos.
+- `compileall`, pruebas de recuperación (`2 passed`), TypeScript y ESLint sin errores.
+- React Doctor: `92/100`; conserva una advertencia de JSX duplicado en la tabla, sin error funcional.
+- Release del panel: `20260906_003619`; `talia-api.service` y `talia-panel.service` activos.
+- El endpoint publicado respondió `401` sin sesión, confirmando que la ruta existe detrás de autenticación.
+
 ## 2026-09-06 — Estados de seguimiento automáticos
 
 ### Completado

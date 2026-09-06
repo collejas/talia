@@ -17674,6 +17674,25 @@ class CRMFollowUpConfigurationUpdate(BaseModel):
     max_intentos_reactivacion: int = Field(..., ge=0, le=20)
 
 
+class CRMRecoveryAttemptCreate(BaseModel):
+    canal: Literal["whatsapp", "correo", "llamada", "sms", "webchat", "otro"]
+    resultado: Literal[
+        "registrado", "sin_respuesta", "respondio", "reactivada", "rechazado", "no_contactar"
+    ] = "registrado"
+    motivo: str | None = Field(default=None, max_length=1000)
+    intentado_en: datetime | None = None
+
+
+class CRMRecoveryAttempt(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    oportunidad_id: UUID
+    canal: str
+    resultado: str
+    intentado_en: datetime
+    reactivada: bool = False
+
+
 class CRMScoringProfile(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -42171,6 +42190,37 @@ async def pipeline_recovery(
     except CRMRepositoryError:
         followup_config = None
     return _build_recovery_summary(rows=rows, limit=limit, offset=offset, followup_config=followup_config)
+
+
+@router.post("/pipeline/recovery/{oportunidad_id}/attempts", response_model=CRMRecoveryAttempt, status_code=201)
+async def register_pipeline_recovery_attempt(
+    oportunidad_id: UUID,
+    payload: CRMRecoveryAttemptCreate,
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMRecoveryAttempt:
+    """Registra una acción manual de recuperación; no envía mensajes."""
+    try:
+        result = await CRMRepository().registrar_intento_reactivacion(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            usuario_id=usuario_id,
+            canal=payload.canal,
+            resultado=payload.resultado,
+            motivo=payload.motivo,
+            intentado_en=payload.intentado_en,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "opportunity_not_found" in detail:
+            raise HTTPException(status_code=404, detail="La oportunidad no existe en este tenant.") from exc
+        if "opportunity_not_open" in detail:
+            raise HTTPException(status_code=409, detail="Solo se pueden registrar intentos en oportunidades abiertas.") from exc
+        raise HTTPException(status_code=502, detail="No se pudo registrar el intento de reactivación.") from exc
+    return CRMRecoveryAttempt.model_validate(result)
 
 
 @router.get("/pipeline/recovery/configuration", response_model=CRMFollowUpConfiguration)
