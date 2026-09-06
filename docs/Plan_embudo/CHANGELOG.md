@@ -27,6 +27,25 @@ Historial de avances del plan definido en [Plan_recuperacion_oportunidades.md](/
 - El endpoint publicado respondió `401` sin sesión, confirmando que la ruta existe detrás de autenticación.
 - El endpoint de lote publicado respondió `401` sin sesión, confirmando que la nueva ruta está protegida.
 
+## 2026-09-06 — Ejecución real de acciones de recuperación
+
+### Completado
+
+- Se reemplazó el flujo que solo registraba una intención por `Ejecutar acción`.
+- WhatsApp utiliza el servicio de envío manual existente y requiere una conversación disponible.
+- Correo utiliza el servicio de correo y la configuración del tenant existente.
+- Llamada crea una actividad pendiente asignada al vendedor correspondiente.
+- La operación individual y la operación en bloque ejecutan acciones reales.
+- Cada oportunidad se procesa por separado y devuelve éxito o error individual.
+- La ejecución queda auditada automáticamente como intento de reactivación.
+
+### Validación
+
+- TypeScript, ESLint y pruebas de recuperación sin errores.
+- Panel desplegado en release `20260906_013100`.
+- API y panel activos después del reinicio.
+- El endpoint publicado respondió `401` sin sesión, confirmando que la acción está protegida.
+
 ## 2026-09-06 — Estados de seguimiento automáticos
 
 ### Completado

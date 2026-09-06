@@ -651,6 +651,8 @@ Los pesos, la inclusión de componentes y sus umbrales deben poder configurarse 
 - Implementar score de prioridad.
 - Registrar cada intento manual de reactivación con tenant, oportunidad, usuario, canal, resultado, fecha y nota.
 - Permitir registrar intentos de recuperación en bloque sobre hasta 100 oportunidades seleccionadas.
+- Ejecutar acciones reales de recuperación: WhatsApp, correo o creación de llamada pendiente.
+- Procesar acciones masivas individualmente y devolver el resultado de cada oportunidad.
 - Registrar eventos de intento y reactivación, y mantener el contador histórico.
 - Mostrar el valor económico detenido.
 - Recomendar canal y siguiente acción.

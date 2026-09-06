@@ -17704,6 +17704,29 @@ class CRMRecoveryAttemptBatch(BaseModel):
     items: list[dict[str, Any]]
 
 
+class CRMRecoveryActionCreate(BaseModel):
+    oportunidad_ids: list[UUID] = Field(..., min_length=1, max_length=100)
+    accion: Literal["whatsapp", "correo", "llamada"]
+    mensaje: str = Field(..., min_length=1, max_length=4000)
+    asunto: str | None = Field(default=None, max_length=255)
+    fecha_vencimiento: datetime | None = None
+
+
+class CRMRecoveryActionResult(BaseModel):
+    oportunidad_id: UUID
+    ok: bool
+    accion: str
+    estado: str
+    detalle: str | None = None
+
+
+class CRMRecoveryActionResponse(BaseModel):
+    total: int
+    ejecutadas: int
+    fallidas: int
+    items: list[CRMRecoveryActionResult]
+
+
 class CRMScoringProfile(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -42228,6 +42251,115 @@ async def register_pipeline_recovery_attempts_bulk(
             raise HTTPException(status_code=422, detail="El lote debe contener entre 1 y 100 oportunidades.") from exc
         raise HTTPException(status_code=502, detail="No se pudieron registrar los intentos en lote.") from exc
     return CRMRecoveryAttemptBatch.model_validate(result)
+
+
+async def _execute_recovery_action(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+    usuario_id: UUID | None,
+    payload: CRMRecoveryActionCreate,
+) -> CRMRecoveryActionResult:
+    opportunity = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id, oportunidad_id=oportunidad_id
+    )
+    if not opportunity:
+        return CRMRecoveryActionResult(oportunidad_id=oportunidad_id, ok=False, accion=payload.accion, estado="fallida", detalle="La oportunidad no existe en este tenant.")
+    if str(opportunity.get("estado") or "").lower() != "abierta":
+        return CRMRecoveryActionResult(oportunidad_id=oportunidad_id, ok=False, accion=payload.accion, estado="fallida", detalle="La oportunidad ya no está abierta.")
+
+    persona_id = opportunity.get("persona_id") or opportunity.get("contacto_principal_id")
+    contacto = opportunity.get("contacto") if isinstance(opportunity.get("contacto"), dict) else {}
+    if not persona_id:
+        return CRMRecoveryActionResult(oportunidad_id=oportunidad_id, ok=False, accion=payload.accion, estado="fallida", detalle="La oportunidad no tiene contacto.")
+
+    if payload.accion == "llamada":
+        due_at = payload.fecha_vencimiento or (datetime.now(timezone.utc) + timedelta(days=1))
+        await repo.create_activity(organizacion_id=organizacion_id, payload={
+            "tipo": "llamada",
+            "canal": "llamada",
+            "asunto": payload.asunto or f"Reactivar: {opportunity.get('titulo') or 'oportunidad'}",
+            "descripcion": payload.mensaje,
+            "estado": "pendiente",
+            "prioridad": "alta",
+            "fecha_vencimiento": due_at.isoformat(),
+            "cuenta_id": opportunity.get("cuenta_id"),
+            "persona_id": persona_id,
+            "contacto_id": persona_id,
+            "oportunidad_id": str(oportunidad_id),
+            "creado_por_usuario_id": str(usuario_id) if usuario_id else None,
+            "asignado_a_usuario_id": str(opportunity.get("asignado_a_usuario_id") or usuario_id) if (opportunity.get("asignado_a_usuario_id") or usuario_id) else None,
+            "metadata": {"origen": "recuperacion_oportunidades", "accion": "llamada"},
+        })
+    elif payload.accion == "whatsapp":
+        conversation = await repo.get_latest_whatsapp_conversation(persona_id=str(persona_id))
+        if not conversation or not conversation.get("id"):
+            return CRMRecoveryActionResult(oportunidad_id=oportunidad_id, ok=False, accion=payload.accion, estado="fallida", detalle="No existe una conversación de WhatsApp disponible para este contacto.")
+        await _send_manual_whatsapp_message(
+            conversation_id=str(conversation["id"]),
+            contact_id=str(persona_id),
+            content=payload.mensaje,
+            metadata={"source": "crm_recovery", "oportunidad_id": str(oportunidad_id)},
+        )
+    else:
+        recipient = _clean_text(contacto.get("correo_principal") or contacto.get("correo"))
+        if not recipient:
+            try:
+                persona_row = await storage.fetch_persona(str(persona_id))
+            except StorageError as exc:
+                raise CRMRepositoryError("contact_email_lookup_failed") from exc
+            recipient = _clean_text(persona_row.get("correo"))
+        if not recipient:
+            return CRMRecoveryActionResult(oportunidad_id=oportunidad_id, ok=False, accion=payload.accion, estado="fallida", detalle="El contacto no tiene correo electrónico.")
+        mail_settings, brevo_settings = await asyncio.gather(
+            tenant_runtime.get_mail_runtime_settings(organizacion_id=organizacion_id),
+            tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id),
+        )
+        send_email_detailed(
+            subject=payload.asunto or f"Seguimiento: {opportunity.get('titulo') or 'oportunidad'}",
+            body_text=payload.mensaje,
+            recipients=[recipient],
+            mail_settings=mail_settings,
+            brevo_settings=brevo_settings,
+            flow="crm_recovery",
+        )
+
+    await CRMRepository().registrar_intento_reactivacion(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        usuario_id=usuario_id,
+        canal=payload.accion,
+        resultado="registrado",
+        motivo=payload.mensaje,
+    )
+    return CRMRecoveryActionResult(oportunidad_id=oportunidad_id, ok=True, accion=payload.accion, estado="ejecutada")
+
+
+@router.post("/pipeline/recovery/actions", response_model=CRMRecoveryActionResponse, status_code=201)
+async def execute_pipeline_recovery_actions(
+    payload: CRMRecoveryActionCreate,
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("pipeline.view")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMRecoveryActionResponse:
+    """Ejecuta una acción real de recuperación por oportunidad, hasta 100 por lote."""
+    items: list[CRMRecoveryActionResult] = []
+    for oportunidad_id in payload.oportunidad_ids:
+        try:
+            items.append(await _execute_recovery_action(
+                repo=repo, organizacion_id=organizacion_id, oportunidad_id=oportunidad_id,
+                usuario_id=usuario_id, payload=payload,
+            ))
+        except (CRMRepositoryError, EmailSendError, HTTPException) as exc:
+            detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+            items.append(CRMRecoveryActionResult(oportunidad_id=oportunidad_id, ok=False, accion=payload.accion, estado="fallida", detalle=str(detail)))
+    return CRMRecoveryActionResponse(
+        total=len(items), ejecutadas=sum(1 for item in items if item.ok),
+        fallidas=sum(1 for item in items if not item.ok), items=items,
+    )
 
 
 @router.post("/pipeline/recovery/{oportunidad_id}/attempts", response_model=CRMRecoveryAttempt, status_code=201)

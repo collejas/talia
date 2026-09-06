@@ -106,8 +106,7 @@ const strategyLabels: Record<string, string> = {
   no_contactar: "No contactar",
 }
 
-const recoveryChannels = { whatsapp: "WhatsApp", correo: "Correo", llamada: "Llamada", sms: "SMS", webchat: "Webchat", otro: "Otro" }
-const recoveryResults = { registrado: "Intento realizado", sin_respuesta: "Sin respuesta", respondio: "Respondió", reactivada: "Reactivada", rechazado: "Rechazó", no_contactar: "No contactar" }
+const recoveryActions = { whatsapp: "Enviar WhatsApp", correo: "Enviar correo", llamada: "Crear llamada pendiente" }
 
 function formatCurrency(value: number, currency = "MXN") {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency, maximumFractionDigits: 0 }).format(value)
@@ -137,9 +136,9 @@ export function RecoveryReport() {
   const [savingConfig, setSavingConfig] = useState(false)
   const [configError, setConfigError] = useState<string | null>(null)
   const [attemptItem, setAttemptItem] = useState<RecoveryItem | null>(null)
-  const [attemptChannel, setAttemptChannel] = useState<keyof typeof recoveryChannels>("whatsapp")
-  const [attemptResult, setAttemptResult] = useState<keyof typeof recoveryResults>("registrado")
-  const [attemptReason, setAttemptReason] = useState("")
+  const [actionChannel, setActionChannel] = useState<keyof typeof recoveryActions>("whatsapp")
+  const [actionMessage, setActionMessage] = useState("")
+  const [actionSubject, setActionSubject] = useState("")
   const [attemptError, setAttemptError] = useState<string | null>(null)
   const [savingAttempt, setSavingAttempt] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -204,18 +203,20 @@ export function RecoveryReport() {
 
   const saveAttempt = async () => {
     if (!attemptItem) return
+    if (!actionMessage.trim()) { setAttemptError("Escribe el mensaje o las instrucciones de la acción."); return }
     setSavingAttempt(true)
     setAttemptError(null)
     try {
       const response = await fetch(`/api/crm/pipeline/recovery/${attemptItem.id}/attempts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ canal: attemptChannel, resultado: attemptResult, motivo: attemptReason.trim() || null }),
+        body: JSON.stringify({ oportunidad_ids: [attemptItem.id], accion: actionChannel, mensaje: actionMessage.trim(), asunto: actionSubject.trim() || null }),
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok) throw new Error(payload?.error ?? "No se pudo registrar el intento")
       setAttemptItem(null)
-      setAttemptReason("")
+      setActionMessage("")
+      setActionSubject("")
       await load()
     } catch (err) {
       setAttemptError(err instanceof Error ? err.message : "No se pudo registrar el intento")
@@ -224,15 +225,17 @@ export function RecoveryReport() {
 
   const saveBulkAttempt = async () => {
     if (selectedIds.length === 0) return
+    if (!actionMessage.trim()) { setAttemptError("Escribe el mensaje o las instrucciones de la acción."); return }
     setSavingAttempt(true)
     setAttemptError(null)
     try {
-      const response = await fetch("/api/crm/pipeline/recovery/attempts/bulk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ oportunidad_ids: selectedIds, canal: attemptChannel, resultado: attemptResult, motivo: attemptReason.trim() || null }) })
+      const response = await fetch("/api/crm/pipeline/recovery/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ oportunidad_ids: selectedIds, accion: actionChannel, mensaje: actionMessage.trim(), asunto: actionSubject.trim() || null }) })
       const payload = await response.json().catch(() => null)
       if (!response.ok) throw new Error(payload?.error ?? "No se pudieron registrar los intentos")
       setBulkDialogOpen(false)
       setSelectedIds([])
-      setAttemptReason("")
+      setActionMessage("")
+      setActionSubject("")
       await load()
     } catch (err) {
       setAttemptError(err instanceof Error ? err.message : "No se pudieron registrar los intentos")
@@ -308,9 +311,9 @@ export function RecoveryReport() {
             <Select value={filters.estrategia} onValueChange={(value) => updateFilter("estrategia", value)}><SelectTrigger><SelectValue placeholder="Estrategia" /></SelectTrigger><SelectContent><SelectItem value="todas">Todas las estrategias</SelectItem>{Object.entries(strategyLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
           </div>
 
-          {selectedIds.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/20 bg-primary/5 p-3"><p className="text-sm font-medium">{selectedIds.length} oportunidades seleccionadas</p><Button size="sm" onClick={() => { setAttemptError(null); setBulkDialogOpen(true) }}>Registrar intento en bloque</Button></div> : null}
+          {selectedIds.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary/20 bg-primary/5 p-3"><p className="text-sm font-medium">{selectedIds.length} oportunidades seleccionadas</p><Button size="sm" onClick={() => { setAttemptError(null); setBulkDialogOpen(true) }}>Ejecutar acción en bloque</Button></div> : null}
 
-          {!loading && !error && data && data.items.length > 0 ? <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="w-10"><input aria-label="Seleccionar todas las oportunidades visibles" type="checkbox" checked={allVisibleSelected} onChange={() => setSelectedIds(allVisibleSelected ? [] : visibleIds)} /></TableHead><TableHead>Oportunidad</TableHead><TableHead>Etapa</TableHead><TableHead>Valor</TableHead><TableHead>Seguimiento</TableHead><TableHead>Temperatura</TableHead><TableHead>Sin interacción</TableHead><TableHead>Próxima actividad</TableHead><TableHead>Acción</TableHead></TableRow></TableHeader><TableBody>{data.items.map((item) => <TableRow key={item.id}><TableCell className="w-10"><input aria-label={`Seleccionar ${item.titulo}`} type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} /></TableCell><TableCell><div className="font-medium">{item.titulo}</div><div className="text-xs text-muted-foreground">{item.codigo_oportunidad ?? "Sin código"}</div></TableCell><TableCell>{item.etapa_nombre ?? "Sin etapa"}</TableCell><TableCell>{item.monto_estimado == null ? "—" : formatCurrency(item.monto_estimado, item.moneda ?? "MXN")}</TableCell><TableCell><Badge variant="outline" className={badgeClass(item.estado_seguimiento)}>{stateLabels[item.estado_seguimiento]}</Badge><div className="mt-1 text-xs text-muted-foreground">{strategyLabels[item.estrategia_seguimiento]}</div></TableCell><TableCell>{item.temperatura ? <Badge variant="outline" className={badgeClass(item.temperatura)}>{temperatureLabels[item.temperatura]}</Badge> : <span className="text-xs text-muted-foreground">Sin definir</span>}</TableCell><TableCell>{item.dias_sin_interaccion == null ? <span className="text-xs text-muted-foreground">Sin registro</span> : <div><span className="font-medium">{item.dias_sin_interaccion} días</span><div className="text-xs text-muted-foreground">{formatDate(item.ultima_interaccion_contacto_en)}</div></div>}</TableCell><TableCell>{item.proxima_actividad_en ? formatDate(item.proxima_actividad_en) : <span className="text-xs text-amber-700">Sin programar</span>}</TableCell><TableCell><Button size="sm" variant="outline" onClick={() => { setAttemptItem(item); setAttemptError(null) }}>Registrar intento</Button></TableCell></TableRow>)}</TableBody></Table></div> : null}
+          {!loading && !error && data && data.items.length > 0 ? <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="w-10"><input aria-label="Seleccionar todas las oportunidades visibles" type="checkbox" checked={allVisibleSelected} onChange={() => setSelectedIds(allVisibleSelected ? [] : visibleIds)} /></TableHead><TableHead>Oportunidad</TableHead><TableHead>Etapa</TableHead><TableHead>Valor</TableHead><TableHead>Seguimiento</TableHead><TableHead>Temperatura</TableHead><TableHead>Sin interacción</TableHead><TableHead>Próxima actividad</TableHead><TableHead>Acción</TableHead></TableRow></TableHeader><TableBody>{data.items.map((item) => <TableRow key={item.id}><TableCell className="w-10"><input aria-label={`Seleccionar ${item.titulo}`} type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} /></TableCell><TableCell><div className="font-medium">{item.titulo}</div><div className="text-xs text-muted-foreground">{item.codigo_oportunidad ?? "Sin código"}</div></TableCell><TableCell>{item.etapa_nombre ?? "Sin etapa"}</TableCell><TableCell>{item.monto_estimado == null ? "—" : formatCurrency(item.monto_estimado, item.moneda ?? "MXN")}</TableCell><TableCell><Badge variant="outline" className={badgeClass(item.estado_seguimiento)}>{stateLabels[item.estado_seguimiento]}</Badge><div className="mt-1 text-xs text-muted-foreground">{strategyLabels[item.estrategia_seguimiento]}</div></TableCell><TableCell>{item.temperatura ? <Badge variant="outline" className={badgeClass(item.temperatura)}>{temperatureLabels[item.temperatura]}</Badge> : <span className="text-xs text-muted-foreground">Sin definir</span>}</TableCell><TableCell>{item.dias_sin_interaccion == null ? <span className="text-xs text-muted-foreground">Sin registro</span> : <div><span className="font-medium">{item.dias_sin_interaccion} días</span><div className="text-xs text-muted-foreground">{formatDate(item.ultima_interaccion_contacto_en)}</div></div>}</TableCell><TableCell>{item.proxima_actividad_en ? formatDate(item.proxima_actividad_en) : <span className="text-xs text-amber-700">Sin programar</span>}</TableCell><TableCell><Button size="sm" variant="outline" onClick={() => { setAttemptItem(item); setAttemptError(null) }}>Ejecutar acción</Button></TableCell></TableRow>)}</TableBody></Table></div> : null}
 
           {error ? <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800"><IconAlertTriangle className="mt-0.5 size-4 shrink-0" /><span>{error}</span></div> : null}
           {!error && !loading && data && data.items.length === 0 ? <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">No hay oportunidades que coincidan con estos filtros.</div> : null}
@@ -323,27 +326,27 @@ export function RecoveryReport() {
 
       <Dialog open={Boolean(attemptItem)} onOpenChange={(open) => !open && setAttemptItem(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Registrar intento de reactivación</DialogTitle><DialogDescription>{attemptItem?.titulo}. Esta acción solo registra lo ocurrido; no envía ningún mensaje.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Ejecutar reactivación</DialogTitle><DialogDescription>{attemptItem?.titulo}. La acción se ejecutará ahora y quedará registrada.</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-2">
-            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Canal</span><Select value={attemptChannel} onValueChange={(value) => setAttemptChannel(value as keyof typeof recoveryChannels)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(recoveryChannels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></label>
-            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Resultado</span><Select value={attemptResult} onValueChange={(value) => setAttemptResult(value as keyof typeof recoveryResults)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(recoveryResults).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></label>
-            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Nota (opcional)</span><Textarea value={attemptReason} onChange={(event) => setAttemptReason(event.target.value)} maxLength={1000} placeholder="Qué ocurrió o qué debe recordarse…" rows={3} /></label>
+            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Acción</span><Select value={actionChannel} onValueChange={(value) => setActionChannel(value as keyof typeof recoveryActions)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(recoveryActions).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></label>
+            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Mensaje o instrucciones</span><Textarea value={actionMessage} onChange={(event) => setActionMessage(event.target.value)} maxLength={4000} placeholder="Mensaje para el prospecto o instrucciones para la llamada…" rows={5} /></label>
+            {actionChannel === "correo" ? <label className="space-y-1 text-sm"><span className="text-muted-foreground">Asunto (opcional)</span><Input value={actionSubject} onChange={(event) => setActionSubject(event.target.value)} maxLength={255} placeholder="Seguimiento de tu oportunidad" /></label> : null}
             {attemptError ? <p className="text-sm text-red-700">{attemptError}</p> : null}
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setAttemptItem(null)}>Cancelar</Button><Button onClick={() => void saveAttempt()} disabled={savingAttempt}>{savingAttempt ? "Guardando..." : "Guardar intento"}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setAttemptItem(null)}>Cancelar</Button><Button onClick={() => void saveAttempt()} disabled={savingAttempt}>{savingAttempt ? "Ejecutando..." : "Ejecutar acción"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={bulkDialogOpen} onOpenChange={(open) => !open && setBulkDialogOpen(false)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Registrar intento en bloque</DialogTitle><DialogDescription>Se registrará el mismo canal y resultado para {selectedIds.length} oportunidades. Esta acción no envía mensajes.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Ejecutar acción en bloque</DialogTitle><DialogDescription>Se ejecutará la misma acción para {selectedIds.length} oportunidades. Los envíos se procesan y reportan individualmente.</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-2">
-            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Canal</span><Select value={attemptChannel} onValueChange={(value) => setAttemptChannel(value as keyof typeof recoveryChannels)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(recoveryChannels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></label>
-            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Resultado</span><Select value={attemptResult} onValueChange={(value) => setAttemptResult(value as keyof typeof recoveryResults)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(recoveryResults).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></label>
-            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Nota (opcional)</span><Textarea value={attemptReason} onChange={(event) => setAttemptReason(event.target.value)} maxLength={1000} placeholder="Qué ocurrió o qué debe recordarse…" rows={3} /></label>
+            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Acción</span><Select value={actionChannel} onValueChange={(value) => setActionChannel(value as keyof typeof recoveryActions)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(recoveryActions).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></label>
+            <label className="space-y-1 text-sm"><span className="text-muted-foreground">Mensaje o instrucciones</span><Textarea value={actionMessage} onChange={(event) => setActionMessage(event.target.value)} maxLength={4000} placeholder="Mensaje para el prospecto o instrucciones para la llamada…" rows={5} /></label>
+            {actionChannel === "correo" ? <label className="space-y-1 text-sm"><span className="text-muted-foreground">Asunto (opcional)</span><Input value={actionSubject} onChange={(event) => setActionSubject(event.target.value)} maxLength={255} placeholder="Seguimiento de tu oportunidad" /></label> : null}
             {attemptError ? <p className="text-sm text-red-700">{attemptError}</p> : null}
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cancelar</Button><Button onClick={() => void saveBulkAttempt()} disabled={savingAttempt || selectedIds.length === 0}>{savingAttempt ? "Guardando..." : "Guardar en bloque"}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cancelar</Button><Button onClick={() => void saveBulkAttempt()} disabled={savingAttempt || selectedIds.length === 0}>{savingAttempt ? "Ejecutando..." : "Ejecutar acción"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
