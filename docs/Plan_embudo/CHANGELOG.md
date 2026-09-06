@@ -22,6 +22,28 @@ Historial de avances del plan definido en [Plan_recuperacion_oportunidades.md](/
 - Eventos generados: `218` cambios de estado, `73` eventos Estancado y `140` eventos Dormido.
 - Las funciones internas quedaron restringidas a `service_role`.
 
+## 2026-09-06 — Atribución explícita de conversaciones
+
+### Completado
+
+- Se revisaron las conversaciones que podían corresponder a más de una oportunidad por compartir persona/contacto.
+- Se estableció la prioridad de atribución:
+  1. `metadata.conversation_id` o `metadata.conversacion_id` explícito.
+  2. Relación por persona/contacto únicamente cuando es única.
+- Se agregó una función de resolución para impedir que una conversación ambigua actualice varias oportunidades.
+- Se optimizó el backfill con una operación basada en CTEs para evitar consultas repetitivas y respetar el tiempo límite de PostgreSQL.
+- Se recalcularon las fechas de interacción y actividad incorporando las relaciones explícitas existentes.
+
+### Validación
+
+- Backfill optimizado: `330` oportunidades procesadas.
+- Interacciones atribuibles después del ajuste: `272` de `488` oportunidades.
+- Tenant principal: `237` de `329` oportunidades con interacción atribuible.
+- La evaluación automática posterior actualizó `11` estados de seguimiento.
+- Estados actuales en oportunidades abiertas: `163` Activo, `5` En riesgo, `73` Estancado y `151` Dormido.
+- Las conversaciones que siguen siendo ambiguas permanecen sin atribución automática.
+- Pruebas backend de recuperación: `2 passed`.
+
 ## 2026-09-06 — Sincronización de interacción y backfill
 
 ### Completado
