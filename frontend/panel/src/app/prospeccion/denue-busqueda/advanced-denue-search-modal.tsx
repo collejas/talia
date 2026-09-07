@@ -173,6 +173,25 @@ function normalizeScianSearchText(value: string | null | undefined): string {
     .trim()
 }
 
+function highlightScianText(value: string, query: string) {
+  const terms = normalizeScianSearchText(query).split(/\s+/).filter(Boolean)
+  if (!terms.length) {
+    return value
+  }
+
+  return value.split(/(\s+)/).map((part, index) => {
+    const normalizedPart = normalizeScianSearchText(part)
+    if (!normalizedPart || !terms.some((term) => normalizedPart.includes(term))) {
+      return part
+    }
+    return (
+      <mark key={`scian-highlight-${index}`} className="rounded-sm bg-yellow-200 px-0.5 text-yellow-950 dark:bg-yellow-500/30 dark:text-yellow-100">
+        {part}
+      </mark>
+    )
+  })
+}
+
 function findScianMatches(
   nodes: ScianTreeNode[],
   query: string,
@@ -532,14 +551,6 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
             Combina filtros por texto, actividad, tamaño y geografía para acotar los resultados de GobMX.
           </DialogDescription>
         </DialogHeader>
-        <Input
-          id="scian-busqueda"
-          aria-label="Buscar actividad SCIAN"
-          value={scianSearch}
-          onChange={(event) => setScianSearch(event.target.value)}
-          placeholder="Buscar actividad SCIAN por nombre o código"
-          className="text-xs"
-        />
         <div className="space-y-3 max-h-[calc(90vh-10rem)] overflow-auto pr-1 text-[11px]">
           {/* Step 1 - Área geográfica */}
           <section className="space-y-1 rounded-lg border border-border/70 p-3 text-[11px] leading-tight">
@@ -660,6 +671,14 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
 
           {/* Step 3 - Actividad */}
           <section className="space-y-1 rounded-lg border border-border/70 p-3 text-[11px] leading-tight">
+            <Input
+              id="scian-busqueda"
+              aria-label="Buscar actividad SCIAN"
+              value={scianSearch}
+              onChange={(event) => setScianSearch(event.target.value)}
+              placeholder="Buscar actividad SCIAN por nombre o código"
+              className="text-xs"
+            />
             <button
               type="button"
               className="flex w-full items-center justify-between text-left text-sm font-semibold"
@@ -710,12 +729,17 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
                                   />
                                   <span className="min-w-0">
                                     <span className="flex items-baseline gap-2 text-xs font-semibold">
-                                      <span className="text-[11px] text-muted-foreground">{result.node.codigo}</span>
-                                      <span>{result.node.titulo ?? "Sin título"}</span>
+                                      <span className="text-[11px] text-muted-foreground">{highlightScianText(result.node.codigo, scianSearch)}</span>
+                                      <span>{highlightScianText(result.node.titulo ?? "Sin título", scianSearch)}</span>
                                     </span>
                                     {result.path.length > 1 ? (
                                       <span className="mt-1 block text-[10px] text-muted-foreground">
-                                        {result.path.slice(0, -1).map((item) => `${item.codigo} ${item.titulo ?? "Sin título"}`).join(" › ")}
+                                        {result.path.slice(0, -1).map((item, index) => (
+                                          <span key={item.codigo}>
+                                            {index > 0 ? " › " : ""}
+                                            {highlightScianText(item.codigo, scianSearch)} {highlightScianText(item.titulo ?? "Sin título", scianSearch)}
+                                          </span>
+                                        ))}
                                       </span>
                                     ) : null}
                                   </span>
