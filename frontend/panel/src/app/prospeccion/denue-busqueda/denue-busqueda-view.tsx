@@ -772,7 +772,7 @@ export function DenueBusquedaView() {
         const selectedBusqueda = busquedasRef.current.find((item) => item.id === busquedaId);
         if (selectedBusqueda) {
           const selectedMeta = extractBusquedaMeta(selectedBusqueda);
-          setSearchMode(selectedMeta.modo === "radio" ? "radial" : "advanced");
+          setSearchMode(selectedMeta.modo && selectedMeta.modo !== "radio" ? "advanced" : "radial");
           setFormValues((prev) => ({
             ...prev,
             query: selectedBusqueda.query ?? prev.query,
@@ -1527,6 +1527,8 @@ export function DenueBusquedaView() {
     if (mode === "radial") {
       setAdvancedFilters(null);
       setAdvancedModalOpen(false);
+    } else {
+      setAdvancedModalOpen(true);
     }
   }, []);
 
@@ -1956,7 +1958,11 @@ export function DenueBusquedaView() {
             <Target className="h-4 w-4" />
             Parámetros de búsqueda
           </CardTitle>
-          <CardDescription>Define el centro y el radio antes de consultar {PROSPECCION_SOURCE_LABELS.denue}.</CardDescription>
+          <CardDescription>
+            {searchMode === "radial"
+              ? `Define el centro y el radio antes de consultar ${PROSPECCION_SOURCE_LABELS.denue}.`
+              : `Configura los filtros detallados para consultar ${PROSPECCION_SOURCE_LABELS.denue}.`}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -1981,7 +1987,7 @@ export function DenueBusquedaView() {
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_repeat(2,minmax(0,1fr))_minmax(0,1fr)]">
-            <div className="space-y-2">
+            <div className={cn("space-y-2", searchMode !== "radial" && "hidden")}>
               <div className="flex items-start gap-2">
                 <Label htmlFor="query">Palabra clave o giro</Label>
                 <TooltipProvider>
@@ -2024,7 +2030,7 @@ export function DenueBusquedaView() {
                 {PROSPECCION_SOURCE_LABELS.denue} buscará negocios cuyo nombre o actividad coincida con este texto.
               </p>
             </div>
-            <div className="space-y-2">
+            <div className={cn("space-y-2", searchMode !== "radial" && "hidden")}>
               <Label htmlFor="radius">Radio (m)</Label>
               <div className="space-y-1">
                 <input
@@ -2045,7 +2051,7 @@ export function DenueBusquedaView() {
                 </p>
               </div>
             </div>
-            <div className="space-y-2">
+            <div className={cn("space-y-2", searchMode !== "radial" && "hidden")}>
               <Label htmlFor="lat">Latitud</Label>
               <Input
                 id="lat"
@@ -2056,7 +2062,7 @@ export function DenueBusquedaView() {
                 disabled={searchMode !== "radial"}
               />
             </div>
-            <div className="space-y-2">
+            <div className={cn("space-y-2", searchMode !== "radial" && "hidden")}>
               <Label htmlFor="lng">Longitud</Label>
               <Input
                 id="lng"
@@ -2067,7 +2073,7 @@ export function DenueBusquedaView() {
                 disabled={searchMode !== "radial"}
               />
             </div>
-            <div className="space-y-2">
+            <div className={cn("space-y-2", searchMode !== "radial" && "hidden")}>
               <Label className="text-xs font-medium text-muted-foreground">Acciones</Label>
             <div className="flex flex-wrap gap-2">
               {canRunBusquedas && searchMode === "radial" ? (
@@ -2078,17 +2084,6 @@ export function DenueBusquedaView() {
                     <Search className="mr-2 h-4 w-4" />
                   )}
                   Buscar y guardar
-                </Button>
-              ) : null}
-              {canRunBusquedas && searchMode === "advanced" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 min-w-[140px]"
-                  onClick={() => setAdvancedModalOpen(true)}
-                  disabled={isSearching || Boolean(activeDenueJobId)}
-                >
-                  Búsqueda avanzada
                 </Button>
               ) : null}
                 <Button
