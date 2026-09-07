@@ -159,6 +159,40 @@ function buildScianTree(scian: DenueCatalogosResponse["scian"] | null): ScianTre
   return roots
 }
 
+function normalizeScianSearchText(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .trim()
+}
+
+function filterScianTree(nodes: ScianTreeNode[], query: string): ScianTreeNode[] {
+  if (!query) {
+    return nodes
+  }
+
+  return nodes.flatMap((node) => {
+    const searchableText = [
+      node.codigo,
+      node.titulo,
+      node.descripcion,
+      node.incluye,
+      node.excluye,
+    ]
+      .map(normalizeScianSearchText)
+      .join(" ")
+    const matches = searchableText.includes(query)
+    const children = filterScianTree(node.children, query)
+
+    if (!matches && children.length === 0) {
+      return []
+    }
+
+    return [{ ...node, children }]
+  })
+}
+
 export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply = true }: Props) {
   const [catalogs, setCatalogs] = useState<DenueCatalogosResponse | null>(null)
   const [loadingCatalogs, setLoadingCatalogs] = useState(false)
@@ -173,6 +207,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
     nombre: "",
   })
   const [selectedScianCodes, setSelectedScianCodes] = useState<Set<string>>(() => new Set())
+  const [scianSearch, setScianSearch] = useState("")
   const [expandedScianCodes, setExpandedScianCodes] = useState<Set<string>>(() => new Set())
   const [sizeSelections, setSizeSelections] = useState<Set<string>>(() => new Set())
   const [selectedStates, setSelectedStates] = useState<Set<string>>(() => new Set())
@@ -203,6 +238,25 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
     () => buildScianTree(catalogs?.scian ?? null),
     [catalogs?.scian],
   )
+
+  const normalizedScianSearch = useMemo(
+    () => normalizeScianSearchText(scianSearch),
+    [scianSearch],
+  )
+
+  const filteredScianTree = useMemo(
+    () => filterScianTree(scianTree, normalizedScianSearch),
+    [normalizedScianSearch, scianTree],
+  )
+
+  useEffect(() => {
+    if (!normalizedScianSearch) {
+      return
+    }
+    setExpandedSections((previous) => (
+      previous.activity ? previous : { ...previous, activity: true }
+    ))
+  }, [normalizedScianSearch])
 
   const stateOnlyGeography = selectedStates.size === 1 && selectedMunicipalities.size === 0
 
@@ -381,7 +435,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
     (nodes: ScianTreeNode[], level = 0) =>
       nodes.map((node) => {
         const hasChildren = node.children.length > 0
-        const isExpanded = expandedScianCodes.has(node.codigo)
+        const isExpanded = normalizedScianSearch.length > 0 || expandedScianCodes.has(node.codigo)
         const isLeaf = !hasChildren
         const loadingIndex = loadingClaseIndice.has(node.codigo)
         const items = claseIndice[node.codigo] ?? []
@@ -464,7 +518,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
           </div>
         )
       }),
-    [claseIndice, expandedScianCodes, loadingClaseIndice, selectedScianCodes, stateOnlyGeography, toggleScianExpansion, toggleScianSelection, loadScianClaseIndice, scianIndiceErrors],
+    [claseIndice, expandedScianCodes, loadingClaseIndice, normalizedScianSearch, selectedScianCodes, stateOnlyGeography, toggleScianExpansion, toggleScianSelection, loadScianClaseIndice, scianIndiceErrors],
   )
 
   const geoStates = catalogs?.geo.states ?? []
@@ -482,6 +536,14 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
             Combina filtros por texto, actividad, tamaño y geografía para acotar los resultados de GobMX.
           </DialogDescription>
         </DialogHeader>
+        <Input
+          id="scian-busqueda"
+          aria-label="Buscar actividad SCIAN"
+          value={scianSearch}
+          onChange={(event) => setScianSearch(event.target.value)}
+          placeholder="Buscar actividad SCIAN por nombre o código"
+          className="text-xs"
+        />
         <div className="space-y-3 max-h-[calc(90vh-10rem)] overflow-auto pr-1 text-[11px]">
           {/* Step 1 - Área geográfica */}
           <section className="space-y-1 rounded-lg border border-border/70 p-3 text-[11px] leading-tight">
@@ -615,13 +677,6 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
             {expandedSections.activity ? (
               <div className="max-h-[50vh] overflow-auto pr-1 text-xs">
                 <div className="space-y-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="actividad-busqueda" className="text-[11px]">Actividad</Label>
-                      <span className="text-[11px] text-muted-foreground">Selecciona una actividad</span>
-                    </div>
-                    <Input id="actividad-busqueda" placeholder="Ej. servicios, comercio" className="text-[11px] py-2" />
-                  </div>
                   <div className="rounded-lg border border-border/60">
                     {loadingCatalogs ? (
                       <div className="flex items-center justify-center p-6 text-sm text-muted-foreground">
@@ -634,7 +689,13 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
                         <label className="flex items-center gap-2 rounded-md border-b border-border/60 pb-2 text-[11px]">
                           <span className="text-muted-foreground">La selección incluye automáticamente todos sus niveles hijos.</span>
                         </label>
-                        <div className="space-y-2 pt-2">{renderScianNodes(scianTree)}</div>
+                        {normalizedScianSearch && filteredScianTree.length === 0 ? (
+                          <p className="pt-2 text-[11px] text-muted-foreground">
+                            No se encontraron actividades SCIAN.
+                          </p>
+                        ) : (
+                          <div className="space-y-2 pt-2">{renderScianNodes(filteredScianTree)}</div>
+                        )}
                       </div>
                     )}
                   </div>
