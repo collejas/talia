@@ -84,8 +84,17 @@ def expand_targets_for_area_act(
     return unique
 
 
-def expand_denue_activity_codes(codes: list[str] | None) -> list[str]:
-    """Expande códigos SCIAN compuestos a códigos consultables por DENUE."""
+def expand_denue_activity_codes(
+    codes: list[str] | None,
+    *,
+    clase_codes: list[str] | None = None,
+) -> list[str]:
+    """Expande códigos SCIAN a códigos de clase consultables por DENUE.
+
+    DENUE solo expone los niveles sector, subsector, rama y clase. Cuando el
+    usuario selecciona una subrama de cinco dígitos, se consulta el catálogo
+    SCIAN para convertirla en sus clases hijas de seis dígitos.
+    """
     if not codes:
         return []
 
@@ -107,6 +116,15 @@ def expand_denue_activity_codes(codes: list[str] | None) -> list[str]:
             if start <= end:
                 expanded.extend([f"{value:02d}" for value in range(start, end + 1)])
                 continue
+
+        if len(code) == 5 and clase_codes is not None:
+            descendants = [
+                candidate
+                for candidate in clase_codes
+                if candidate.startswith(code) and len(candidate) == 6
+            ]
+            expanded.extend(descendants)
+            continue
 
         expanded.append(code)
 

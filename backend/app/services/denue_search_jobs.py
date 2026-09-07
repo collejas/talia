@@ -192,12 +192,16 @@ class DenueSearchJobManager:
                 unique.append(pair)
             return unique
 
-        def _activities() -> list[str]:
+        async def _activities() -> list[str]:
             items: list[str] = []
             for value in activity_codes:
                 if isinstance(value, str) and value.strip():
                     items.append(value.strip())
-            return expand_denue_activity_codes(items)
+            subrama_prefixes = [code for code in items if len(code) == 5 and code.isdigit()]
+            clase_codes: list[str] | None = None
+            if subrama_prefixes:
+                clase_codes = await repo.list_scian_clase_codes_by_prefix(prefixes=subrama_prefixes)
+            return expand_denue_activity_codes(items, clase_codes=clase_codes)
 
         batch_base_size = max(requested_registro_final - registro_inicial + 1, 1)
         batch_size = min(batch_base_size, settings.denue_batch_size)
@@ -388,7 +392,7 @@ class DenueSearchJobManager:
                 if quota_reached:
                     break
         elif modo in {"area_act", "area_act_estr"}:
-            acts = _activities()
+            acts = await _activities()
             if not acts:
                 raise DenueError("actividad_required")
             targets = _geo_targets()

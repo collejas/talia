@@ -19360,6 +19360,40 @@ class CRMRepository:
                 mapping[code] = title
         return mapping
 
+    async def list_scian_clase_codes_by_prefix(self, *, prefixes: list[str]) -> list[str]:
+        """Devuelve clases SCIAN de seis dígitos descendientes de prefijos."""
+
+        normalized_prefixes = sorted({
+            str(prefix).strip()
+            for prefix in prefixes
+            if str(prefix or "").strip()
+        })
+        if not normalized_prefixes:
+            return []
+
+        codes: set[str] = set()
+        for prefix in normalized_prefixes:
+            resp = await self._request(
+                "GET",
+                "/rest/v1/scian_clase",
+                params={
+                    "select": "codigo",
+                    "codigo": f"like.{prefix}%",
+                    "order": "codigo.asc",
+                    "limit": "100",
+                },
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar clases SCIAN por prefijo: {data!r}")
+            for row in data:
+                if not isinstance(row, dict):
+                    continue
+                code = str(row.get("codigo") or "").strip()
+                if len(code) == 6 and code.startswith(prefix):
+                    codes.add(code)
+        return sorted(codes)
+
     async def list_scian_titles(self, *, codes: list[str]) -> dict[str, str]:
         """Devuelve un mapa codigo -> titulo para cualquier nivel SCIAN."""
 

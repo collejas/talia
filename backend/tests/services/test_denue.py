@@ -27,6 +27,13 @@ def test_expand_denue_activity_codes_expands_sector_range() -> None:
     assert expand_denue_activity_codes(["48-49"]) == ["48", "49"]
 
 
+def test_expand_denue_activity_codes_expands_subrama_to_catalog_classes() -> None:
+    assert expand_denue_activity_codes(
+        ["23611"],
+        clase_codes=["236111", "236112", "236113", "236211"],
+    ) == ["236111", "236112", "236113"]
+
+
 def test_normalize_denue_place_materializes_address_columns() -> None:
     normalized = normalize_denue_place(
         {

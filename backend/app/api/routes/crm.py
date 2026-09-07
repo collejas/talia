@@ -5544,11 +5544,18 @@ def _unique_preserve_order(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
 
 
-def _activity_codes_from_payload(payload: DenueBusquedaPayload) -> list[str]:
+async def _activity_codes_from_payload(
+    payload: DenueBusquedaPayload,
+    repo: CRMRepository | None = None,
+) -> list[str]:
     codes = [str(value).strip() for value in (payload.actividad_codigos or []) if value and str(value).strip()]
     if not codes:
         return []
-    return expand_denue_activity_codes(codes)
+    subrama_prefixes = [code for code in codes if len(code) == 5 and code.isdigit()]
+    clase_codes: list[str] | None = None
+    if subrama_prefixes and repo is not None:
+        clase_codes = await repo.list_scian_clase_codes_by_prefix(prefixes=subrama_prefixes)
+    return expand_denue_activity_codes(codes, clase_codes=clase_codes)
 
 
 def _geo_targets_from_payload(payload: DenueBusquedaPayload) -> list[tuple[str | None, str | None]]:
@@ -5566,11 +5573,18 @@ def _geo_targets_from_payload(payload: DenueBusquedaPayload) -> list[tuple[str |
     if not targets:
         targets.append((None, None))
     return targets
-async def _build_advanced_meta(payload: DenueBusquedaPayload, repo: CRMRepository | None = None) -> dict[str, Any]:
+
+
+async def _build_advanced_meta(
+    payload: DenueBusquedaPayload,
+    repo: CRMRepository | None = None,
+    activity_codes: list[str] | None = None,
+) -> dict[str, Any]:
     meta: dict[str, Any] = {"modo": payload.modo}
     if payload.texto_busqueda:
         meta["texto_busqueda"] = payload.texto_busqueda
-    activity_codes = _activity_codes_from_payload(payload)
+    if activity_codes is None:
+        activity_codes = await _activity_codes_from_payload(payload, repo)
     if activity_codes:
         meta["actividad_codigos"] = activity_codes
         provided_names: list[str] = []
@@ -32541,7 +32555,8 @@ async def crear_busqueda_denue(
             detail="GobMX no está configurado para este tenant. Falta la configuración interna de la fuente.",
         )
     client = DenueClient(token=denue_settings.token, base_url=denue_settings.base_url)
-    advanced_meta = await _build_advanced_meta(payload, repo)
+    activity_codes = await _activity_codes_from_payload(payload, repo)
+    advanced_meta = await _build_advanced_meta(payload, repo, activity_codes=activity_codes)
     modo = payload.modo or "radio"
     async_mode = payload.async_mode or modo in {"entidad", "area_act", "area_act_estr"}
     text_query = (payload.texto_busqueda or "").strip()
@@ -32610,7 +32625,7 @@ async def crear_busqueda_denue(
     if async_mode:
         if modo == "entidad" and not text_query:
             raise HTTPException(status_code=400, detail="texto_busqueda_required")
-        if modo in {"area_act", "area_act_estr"} and not _activity_codes_from_payload(payload):
+        if modo in {"area_act", "area_act_estr"} and not activity_codes:
             raise HTTPException(status_code=400, detail="actividad_required")
         if modo == "area_act_estr":
             if not payload.estrato_ids:
@@ -32804,7 +32819,6 @@ async def crear_busqueda_denue(
 
                     await _process_batches(search_batch, extra={"entidad": entidad})
             elif modo == "area_act" or modo == "area_act_estr":
-                activity_codes = _activity_codes_from_payload(payload)
                 if not activity_codes:
                     raise HTTPException(status_code=400, detail="actividad_required")
                 geo_targets = _geo_targets_from_payload(payload)
