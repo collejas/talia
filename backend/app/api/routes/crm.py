@@ -10350,6 +10350,23 @@ def _should_enforce_template_campaign_binding(template_row: dict[str, Any] | Non
     return not _is_whats_prosp_meta_template_row(template_row)
 
 
+def _get_template_campaign_id(template_row: dict[str, Any] | None) -> str:
+    """Obtiene la campaña asociada, priorizando la columna explícita.
+
+    ``metadata.campana_id`` se conserva únicamente para plantillas históricas
+    creadas antes de que la relación se modelara en ``campana_id``.
+    """
+    if not isinstance(template_row, dict):
+        return ""
+    explicit_campaign_id = _clean_text(template_row.get("campana_id"))
+    if explicit_campaign_id:
+        return explicit_campaign_id
+    metadata = template_row.get("metadata")
+    if isinstance(metadata, dict):
+        return _clean_text(metadata.get("campana_id")) or ""
+    return ""
+
+
 async def _apply_default_whatsapp_runtime_template(
     *,
     canales_config: dict[str, dict[str, Any]],
@@ -37824,8 +37841,7 @@ async def prospeccion_campana_update(
                 for template_id, template in template_map.items():
                     if not _should_enforce_template_campaign_binding(template):
                         continue
-                    metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
-                    template_campana = _clean_text(metadata.get("campana_id"))
+                    template_campana = _get_template_campaign_id(template)
                     if not template_campana:
                         raise HTTPException(
                             status_code=400,
@@ -39336,8 +39352,7 @@ async def contactar_prospectos_legacy(
             for template_id, template in template_map.items():
                 if not _should_enforce_template_campaign_binding(template):
                     continue
-                metadata = template.get("metadata") if isinstance(template.get("metadata"), dict) else {}
-                template_campana = _clean_text(metadata.get("campana_id"))
+                template_campana = _get_template_campaign_id(template)
                 if not template_campana:
                     raise HTTPException(
                         status_code=400,
