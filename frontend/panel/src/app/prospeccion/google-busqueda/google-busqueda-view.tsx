@@ -1791,7 +1791,7 @@ export function GoogleBusquedaView() {
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs font-normal">Clase de actividad</Label>
+                <Label className="text-xs font-normal">Filtrar actividad</Label>
                 <Drawer open={actividadDrawerOpen} onOpenChange={setActividadDrawerOpen} direction="right">
                   <DrawerTrigger asChild>
                     <Button
@@ -1801,12 +1801,14 @@ export function GoogleBusquedaView() {
                       className="flex items-center gap-2"
                       disabled={!activeBusquedaId}
                     >
-                      Seleccionar
+                      {selectedActividades.size
+                        ? `${selectedActividades.size} seleccionada${selectedActividades.size === 1 ? "" : "s"}`
+                        : "Seleccionar actividades"}
                     </Button>
                   </DrawerTrigger>
                   <DrawerContent className="sm:max-w-xl">
                     <DrawerHeader>
-                      <DrawerTitle>Clase de actividad</DrawerTitle>
+                      <DrawerTitle>Filtrar actividad</DrawerTitle>
                       <DrawerDescription>
                         Selecciona una o varias clases para filtrar los resultados mostrados.
                       </DrawerDescription>
