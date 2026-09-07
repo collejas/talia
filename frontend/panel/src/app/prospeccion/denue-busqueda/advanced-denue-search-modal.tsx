@@ -50,6 +50,12 @@ type ScianTreeNode = DenueScianNode & {
   children: ScianTreeNode[]
 }
 
+type ScianSearchResult = {
+  node: ScianTreeNode
+  level: number
+  path: ScianTreeNode[]
+}
+
 const SIZE_OPTIONS = [
   { value: "0", label: "Todos los tamaños" },
   { value: "1", label: "0 a 5 personas" },
@@ -167,29 +173,19 @@ function normalizeScianSearchText(value: string | null | undefined): string {
     .trim()
 }
 
-function filterScianTree(nodes: ScianTreeNode[], query: string): ScianTreeNode[] {
-  if (!query) {
-    return nodes
-  }
-
+function findScianMatches(
+  nodes: ScianTreeNode[],
+  query: string,
+  parentPath: ScianTreeNode[] = [],
+  level = 0,
+): ScianSearchResult[] {
   return nodes.flatMap((node) => {
-    const searchableText = [
-      node.codigo,
-      node.titulo,
-      node.descripcion,
-      node.incluye,
-      node.excluye,
-    ]
+    const path = [...parentPath, node]
+    const searchableText = [node.codigo, node.titulo]
       .map(normalizeScianSearchText)
       .join(" ")
-    const matches = searchableText.includes(query)
-    const children = filterScianTree(node.children, query)
-
-    if (!matches && children.length === 0) {
-      return []
-    }
-
-    return [{ ...node, children }]
+    const results = searchableText.includes(query) ? [{ node, level, path }] : []
+    return [...results, ...findScianMatches(node.children, query, path, level + 1)]
   })
 }
 
@@ -244,8 +240,8 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
     [scianSearch],
   )
 
-  const filteredScianTree = useMemo(
-    () => filterScianTree(scianTree, normalizedScianSearch),
+  const scianSearchResults = useMemo(
+    () => normalizedScianSearch ? findScianMatches(scianTree, normalizedScianSearch) : [],
     [normalizedScianSearch, scianTree],
   )
 
@@ -435,7 +431,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
     (nodes: ScianTreeNode[], level = 0) =>
       nodes.map((node) => {
         const hasChildren = node.children.length > 0
-        const isExpanded = normalizedScianSearch.length > 0 || expandedScianCodes.has(node.codigo)
+        const isExpanded = expandedScianCodes.has(node.codigo)
         const isLeaf = !hasChildren
         const loadingIndex = loadingClaseIndice.has(node.codigo)
         const items = claseIndice[node.codigo] ?? []
@@ -518,7 +514,7 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
           </div>
         )
       }),
-    [claseIndice, expandedScianCodes, loadingClaseIndice, normalizedScianSearch, selectedScianCodes, stateOnlyGeography, toggleScianExpansion, toggleScianSelection, loadScianClaseIndice, scianIndiceErrors],
+    [claseIndice, expandedScianCodes, loadingClaseIndice, selectedScianCodes, stateOnlyGeography, toggleScianExpansion, toggleScianSelection, loadScianClaseIndice, scianIndiceErrors],
   )
 
   const geoStates = catalogs?.geo.states ?? []
@@ -689,12 +685,46 @@ export function DenueAdvancedSearchModal({ open, onOpenChange, onApply, canApply
                         <label className="flex items-center gap-2 rounded-md border-b border-border/60 pb-2 text-[11px]">
                           <span className="text-muted-foreground">La selección incluye automáticamente todos sus niveles hijos.</span>
                         </label>
-                        {normalizedScianSearch && filteredScianTree.length === 0 ? (
+                        {normalizedScianSearch && scianSearchResults.length === 0 ? (
                           <p className="pt-2 text-[11px] text-muted-foreground">
                             No se encontraron actividades SCIAN.
                           </p>
+                        ) : normalizedScianSearch ? (
+                          <div className="space-y-2 pt-2">
+                            {scianSearchResults.map((result) => {
+                              const checked = selectedScianCodes.has(result.node.codigo)
+                              const activityDisabled = stateOnlyGeography && result.level === 0
+                              return (
+                                <label
+                                  key={result.node.codigo}
+                                  className={cn(
+                                    "flex cursor-pointer items-start gap-2 rounded-md border px-2 py-2",
+                                    checked ? "border-primary bg-primary/5" : "border-border/60",
+                                    activityDisabled && "cursor-not-allowed opacity-60",
+                                  )}
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    disabled={activityDisabled}
+                                    onCheckedChange={() => toggleScianSelection(result.node.codigo, result.level)}
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="flex items-baseline gap-2 text-xs font-semibold">
+                                      <span className="text-[11px] text-muted-foreground">{result.node.codigo}</span>
+                                      <span>{result.node.titulo ?? "Sin título"}</span>
+                                    </span>
+                                    {result.path.length > 1 ? (
+                                      <span className="mt-1 block text-[10px] text-muted-foreground">
+                                        {result.path.slice(0, -1).map((item) => `${item.codigo} ${item.titulo ?? "Sin título"}`).join(" › ")}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </label>
+                              )
+                            })}
+                          </div>
                         ) : (
-                          <div className="space-y-2 pt-2">{renderScianNodes(filteredScianTree)}</div>
+                          <div className="space-y-2 pt-2">{renderScianNodes(scianTree)}</div>
                         )}
                       </div>
                     )}
