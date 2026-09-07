@@ -120,6 +120,14 @@ function normalizeBusquedaLabel(value: string | null | undefined): string {
   return base.replace(/\s*\(recuperada desde resultados\)\s*/gi, "").trim() || "(Sin texto)";
 }
 
+function getGoogleActividadText(item: GoogleResultadoItem): string {
+  if (typeof item.actividad === "string") return item.actividad.trim();
+  if (item.actividad && typeof item.actividad === "object" && "text" in item.actividad) {
+    return String((item.actividad as { text?: unknown }).text ?? "").trim();
+  }
+  return "";
+}
+
 type ContactFilterValue = "any" | "with" | "without";
 type BusquedasSortKey = "busqueda" | "registros" | "radio" | "fecha";
 
@@ -200,6 +208,7 @@ export function GoogleBusquedaView() {
   const [filterText, setFilterText] = useState("");
   const [debouncedFilterText, setDebouncedFilterText] = useState("");
   const [selectedActividades, setSelectedActividades] = useState<Set<string>>(new Set());
+  const [actividadOptionsByBusqueda, setActividadOptionsByBusqueda] = useState<Record<string, string[]>>({});
   const [actividadDrawerOpen, setActividadDrawerOpen] = useState(false);
   const [actividadSearch, setActividadSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -390,6 +399,9 @@ export function GoogleBusquedaView() {
   const loadResultadosForBusqueda = useCallback(async (busquedaId: string) => {
     setResultadosPagination({ limit: LIST_PAGE_SIZE, offset: 0 });
     setSelectedIds(new Set());
+    setSelectedActividades(new Set());
+    setActividadSearch("");
+    setActividadOptionsByBusqueda({});
     setActiveBusquedaId(busquedaId);
     setResultados([]);
     setResultadosTotal(0);
@@ -456,8 +468,6 @@ export function GoogleBusquedaView() {
   useEffect(() => {
     if (!resultados.length) {
       setSelectedIds((current) => (current.size ? new Set() : current));
-      setSelectedActividades((current) => (current.size ? new Set() : current));
-      setActividadSearch((current) => (current ? "" : current));
       return;
     }
     const validIds = new Set(resultados.map((item) => item.resultado_id));
@@ -480,38 +490,6 @@ export function GoogleBusquedaView() {
       window.clearTimeout(handle);
     };
   }, [filterText]);
-
-  useEffect(() => {
-    if (!selectedActividades.size) {
-      return;
-    }
-    const available = new Set<string>();
-    for (const item of resultados) {
-      if (typeof item.actividad === "string" && item.actividad.trim()) {
-        available.add(item.actividad.trim());
-      } else if (
-        item.actividad &&
-        typeof item.actividad === "object" &&
-        "text" in item.actividad &&
-        typeof (item.actividad as { text?: unknown }).text === "string"
-      ) {
-        const value = String((item.actividad as { text?: string }).text ?? "").trim();
-        if (value) available.add(value);
-      }
-    }
-    let changed = false;
-    const next = new Set<string>();
-    selectedActividades.forEach((value) => {
-      if (available.has(value)) {
-        next.add(value);
-      } else {
-        changed = true;
-      }
-    });
-    if (changed) {
-      setSelectedActividades(next);
-    }
-  }, [resultados, selectedActividades]);
 
   useEffect(() => {
     if (!activeBusquedaId) {
@@ -678,6 +656,21 @@ export function GoogleBusquedaView() {
           return;
         }
         const rows = response.items ?? [];
+        if (!payload.filters.actividades?.length) {
+          setActividadOptionsByBusqueda((current) => {
+            const previous = current[payload.busquedaId] ?? [];
+            const merged = new Set(previous);
+            rows.forEach((item) => {
+              const actividad = getGoogleActividadText(item);
+              if (actividad) merged.add(actividad);
+            });
+            const nextOptions = Array.from(merged).sort((a, b) => a.localeCompare(b, "es"));
+            if (nextOptions.length === previous.length && nextOptions.every((value, index) => value === previous[index])) {
+              return current;
+            }
+            return { ...current, [payload.busquedaId]: nextOptions };
+          });
+        }
         console.debug("[google-busqueda] resultados response", {
           requestSeq,
           busquedaId: payload.busquedaId,
@@ -806,22 +799,16 @@ export function GoogleBusquedaView() {
   ]);
 
   const actividadOptions = useMemo(() => {
+    const cached = activeBusquedaId ? actividadOptionsByBusqueda[activeBusquedaId] : undefined;
+    if (cached?.length) return cached;
+
     const unique = new Set<string>();
     for (const item of resultados) {
-      if (typeof item.actividad === "string" && item.actividad.trim()) {
-        unique.add(item.actividad.trim());
-      } else if (
-        item.actividad &&
-        typeof item.actividad === "object" &&
-        "text" in item.actividad &&
-        typeof (item.actividad as { text?: unknown }).text === "string"
-      ) {
-        const value = String((item.actividad as { text?: string }).text ?? "").trim();
-        if (value) unique.add(value);
-      }
+      const actividad = getGoogleActividadText(item);
+      if (actividad) unique.add(actividad);
     }
     return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
-  }, [resultados]);
+  }, [actividadOptionsByBusqueda, activeBusquedaId, resultados]);
 
   const filteredActividadOptions = useMemo(() => {
     if (!actividadSearch.trim()) {

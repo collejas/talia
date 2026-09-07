@@ -108,7 +108,7 @@ const LIST_PAGE_SIZE = 1000;
 const BUSQUEDAS_PAGE_SIZE = 100;
 const JOB_POLL_INTERVAL_MS = 2000;
 const SAVE_PROSPECTOS_FETCH_BATCH = 2000;
-const SAVE_PROSPECTOS_UPSERT_BATCH = 5000;
+const SAVE_PROSPECTOS_UPSERT_BATCH = 250;
 
 function normalizeBusquedaLabel(value: string | null | undefined): string {
   const base = (value ?? "").trim();
