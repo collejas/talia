@@ -18957,6 +18957,7 @@ class CRMRepository:
                 "/rest/v1/rpc/prospeccion_guardar_denue_transaccional",
                 json=payload,
                 organizacion_id=organizacion_id,
+                timeout=90.0,
             )
         except CRMRepositoryError as exc:
             raw_error = str(exc)
@@ -27005,6 +27006,7 @@ class CRMRepository:
         json: Any = None,
         prefer: str | None = None,
         organizacion_id: UUID | None = None,
+        timeout: float | None = None,
     ) -> httpx.Response:
         url = f"{self._base_url}{path}"
         headers = {
@@ -27033,7 +27035,7 @@ class CRMRepository:
         resp: httpx.Response | None = None
         for attempt in range(retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=timeout or self._timeout) as client:
                     resp = await client.request(method, url, params=params, json=json_payload, headers=headers)
                 if attempt > 0:
                     _append_supabase_connectivity_event(
