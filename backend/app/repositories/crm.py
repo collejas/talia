@@ -18062,6 +18062,23 @@ class CRMRepository:
             )
         return rows
 
+    async def get_sales_assignment_response_time_metrics(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> dict[str, Any]:
+        """Obtiene tiempos agregados de aceptación de notificaciones WhatsApp."""
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_asignaciones_vendedores_tiempos_resumen",
+            json={"p_organizacion_id": str(organizacion_id)},
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, dict):
+            raise CRMRepositoryError(f"sales_assignment_metrics_invalid:{data!r}")
+        return data
+
     async def get_cliente_por_oportunidad(
         self,
         *,

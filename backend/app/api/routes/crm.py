@@ -3526,6 +3526,39 @@ class WhatsAppSalesAssignmentsResponse(BaseModel):
     offset: int
 
 
+class SalesAssignmentResponseTimeVendor(BaseModel):
+    vendedor_usuario_id: UUID
+    vendedor: str
+    aceptadas: int
+    totales: int
+    pendientes: int
+    promedio_segundos: float | None = None
+    minimo_segundos: float | None = None
+    maximo_segundos: float | None = None
+    porcentaje_aceptacion: float
+    porcentaje_rapido: float
+    porcentaje_medio: float
+    porcentaje_lento: float
+
+
+class SalesAssignmentResponseTimeKpi(BaseModel):
+    vendedor: str | None = None
+    promedio_segundos: float | None = None
+    aceptadas: int = 0
+
+
+class SalesAssignmentResponseTimeResponse(BaseModel):
+    ok: bool = True
+    notificaciones: int
+    aceptadas: int
+    pendientes: int
+    porcentaje_aceptacion: float
+    vendedor_mas_rapido: SalesAssignmentResponseTimeKpi | None = None
+    vendedor_mas_lento: SalesAssignmentResponseTimeKpi | None = None
+    pendientes_por_vendedor: list[dict[str, Any]]
+    vendedores: list[SalesAssignmentResponseTimeVendor]
+
+
 class SalesAssignmentAuditResponse(BaseModel):
     ok: bool = True
     items: list[WhatsAppSalesAssignment]
@@ -42131,6 +42164,26 @@ async def list_sales_assignments(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     items = [WhatsAppSalesAssignment.model_validate(row) for row in rows]
     return WhatsAppSalesAssignmentsResponse(items=items, limit=limit, offset=offset)
+
+
+@router.get(
+    "/asignaciones_vendedores/tiempos",
+    response_model=SalesAssignmentResponseTimeResponse,
+)
+async def sales_assignment_response_times(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_any_permission(["conv.read", "conv.assign", "audit.view", "audit.view_all"])),
+) -> SalesAssignmentResponseTimeResponse:
+    """Resume el tiempo de respuesta a notificaciones de oportunidades por WhatsApp."""
+    try:
+        result = await repo.get_sales_assignment_response_time_metrics(
+            organizacion_id=organizacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="sales_assignment_metrics_failed") from exc
+    return SalesAssignmentResponseTimeResponse.model_validate(result)
 
 
 @router.get("/pipeline/overview", response_model=CRMPipelineOverview)

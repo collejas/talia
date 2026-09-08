@@ -37,6 +37,33 @@ type AssignmentsResponse = {
   offset: number;
 };
 
+export type SalesAssignmentResponseTimeVendor = {
+  vendedor_usuario_id: string;
+  vendedor: string;
+  aceptadas: number;
+  totales: number;
+  pendientes: number;
+  promedio_segundos: number | null;
+  minimo_segundos: number | null;
+  maximo_segundos: number | null;
+  porcentaje_aceptacion: number;
+  porcentaje_rapido: number;
+  porcentaje_medio: number;
+  porcentaje_lento: number;
+};
+
+export type SalesAssignmentResponseTimeMetrics = {
+  ok: boolean;
+  notificaciones: number;
+  aceptadas: number;
+  pendientes: number;
+  porcentaje_aceptacion: number;
+  vendedor_mas_rapido: { vendedor: string; promedio_segundos: number; aceptadas: number } | null;
+  vendedor_mas_lento: { vendedor: string; promedio_segundos: number; aceptadas: number } | null;
+  pendientes_por_vendedor: { vendedor: string; pendientes: number }[];
+  vendedores: SalesAssignmentResponseTimeVendor[];
+};
+
 export type SalesAssignmentsPayload = {
   rows: DataTableRow[];
   errors: string[];
@@ -91,4 +118,20 @@ export async function loadSalesAssignments(): Promise<SalesAssignmentsPayload> {
   }));
 
   return { rows, errors: [] };
+}
+
+export async function loadSalesAssignmentResponseTimeMetrics(): Promise<{
+  data: SalesAssignmentResponseTimeMetrics | null;
+  error: string | null;
+}> {
+  const response = await callCrmApi<SalesAssignmentResponseTimeMetrics>(
+    "/crm/asignaciones_vendedores/tiempos",
+  );
+  if (!response.ok || !response.data) {
+    return {
+      data: null,
+      error: "error" in response ? response.error : "No fue posible cargar las métricas",
+    };
+  }
+  return { data: response.data, error: null };
 }
