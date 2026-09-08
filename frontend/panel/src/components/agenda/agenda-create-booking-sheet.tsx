@@ -371,12 +371,12 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
 
   return (
     <Sheet open={open} onOpenChange={(value) => !value && onClose()}>
-      <SheetContent side="right" className="sm:max-w-lg">
-        <SheetHeader>
+      <SheetContent side="right" className="max-h-dvh overflow-hidden sm:max-w-lg">
+        <SheetHeader className="shrink-0">
           <SheetTitle>Nueva cita</SheetTitle>
           <SheetDescription>Selecciona un contacto o activa la cita sin contacto para agendarla.</SheetDescription>
         </SheetHeader>
-        <div className="space-y-4 px-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4">
           <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
             <div className="space-y-0.5">
               <p className="text-sm font-medium">Cita sin contacto</p>
@@ -619,7 +619,7 @@ export function AgendaCreateBookingSheet({ open, onClose, onCreated }: AgendaCre
             />
           </div>
         </div>
-        <SheetFooter>
+        <SheetFooter className="shrink-0">
           <Button type="button" variant="outline" onClick={onClose}>
             Cerrar
           </Button>

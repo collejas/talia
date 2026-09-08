@@ -89,8 +89,8 @@ export function ProspeccionContactDrawer({ open, onOpenChange, data, onPromote }
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="right">
-      <DrawerContent className="data-[vaul-drawer-direction=right]:max-w-4xl">
-        <DrawerHeader className="items-start space-y-2">
+      <DrawerContent className="max-h-dvh data-[vaul-drawer-direction=right]:max-w-4xl">
+        <DrawerHeader className="shrink-0 items-start space-y-2">
           <DrawerTitle>Campaña programada</DrawerTitle>
           <DrawerDescription>
             {data.batchId ? "Lote generado correctamente." : "Se creó un lote de contacto reciente."}
@@ -121,7 +121,8 @@ export function ProspeccionContactDrawer({ open, onOpenChange, data, onPromote }
           </div>
         </DrawerHeader>
         <Separator />
-        <div className="grid gap-4 p-4 lg:grid-cols-[280px_1fr]">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="grid gap-4 p-4 lg:grid-cols-[280px_1fr]">
           <div>
             <p className="text-xs font-semibold uppercase text-muted-foreground">Prospectos</p>
             <ScrollArea className="mt-2 h-[420px] pr-2">
@@ -174,8 +175,9 @@ export function ProspeccionContactDrawer({ open, onOpenChange, data, onPromote }
               />
             )}
           </div>
+          </div>
         </div>
-        <DrawerFooter>
+        <DrawerFooter className="shrink-0">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cerrar
           </Button>
