@@ -5,7 +5,7 @@ import { loadSalesAssignmentResponseTimeMetrics } from "@/lib/crm/asignaciones-v
 export const dynamic = "force-dynamic";
 
 export default async function SalesAssignmentsPage() {
-  const payload = await loadSalesAssignmentResponseTimeMetrics();
+  const payload = await loadSalesAssignmentResponseTimeMetrics({ periodo: "mes" });
 
   return (
     <AppViewLayout title="CRM · Tiempo de aceptación">

@@ -42175,11 +42175,25 @@ async def sales_assignment_response_times(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_any_permission(["conv.read", "conv.assign", "audit.view", "audit.view_all"])),
+    periodo: str = Query(default="mes", max_length=20),
+    desde: str | None = Query(default=None, max_length=40),
+    hasta: str | None = Query(default=None, max_length=40),
 ) -> SalesAssignmentResponseTimeResponse:
     """Resume el tiempo de respuesta a notificaciones de oportunidades por WhatsApp."""
+    periodo_norm = periodo.strip().lower()
+    if periodo_norm == "personalizado":
+        periodo_norm = "fechas"
+    try:
+        date_from, date_to = _resolve_date_range(periodo_norm, desde, hasta)
+    except HTTPException:
+        raise
+    if not date_from or not date_to:
+        raise HTTPException(status_code=400, detail="sales_assignment_metrics_date_range_required")
     try:
         result = await repo.get_sales_assignment_response_time_metrics(
             organizacion_id=organizacion_id,
+            date_from=date_from,
+            date_to=date_to,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="sales_assignment_metrics_failed") from exc

@@ -120,12 +120,15 @@ export async function loadSalesAssignments(): Promise<SalesAssignmentsPayload> {
   return { rows, errors: [] };
 }
 
-export async function loadSalesAssignmentResponseTimeMetrics(): Promise<{
+export async function loadSalesAssignmentResponseTimeMetrics(
+  searchParams: { periodo?: string; desde?: string; hasta?: string } = {},
+): Promise<{
   data: SalesAssignmentResponseTimeMetrics | null;
   error: string | null;
 }> {
   const response = await callCrmApi<SalesAssignmentResponseTimeMetrics>(
     "/crm/asignaciones_vendedores/tiempos",
+    { searchParams },
   );
   if (!response.ok || !response.data) {
     return {

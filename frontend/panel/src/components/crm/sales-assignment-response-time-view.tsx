@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SalesAssignmentResponseTimeMetrics, SalesAssignmentResponseTimeVendor } from "@/lib/crm/asignaciones-vendedores";
@@ -7,12 +8,46 @@ import type { SalesAssignmentResponseTimeMetrics, SalesAssignmentResponseTimeVen
 type Props = { data: SalesAssignmentResponseTimeMetrics | null; error: string | null };
 
 export function SalesAssignmentResponseTimeView({ data, error }: Props) {
-  if (error) return <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>;
-  if (!data || data.vendedores.length === 0) {
+  const [selectedPeriod, setSelectedPeriod] = useState("mes");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [metrics, setMetrics] = useState(data);
+  const [requestError, setRequestError] = useState<string | null>(error);
+
+  useEffect(() => {
+    if (selectedPeriod === "personalizado" && (!customFrom || !customTo)) return;
+    const params = new URLSearchParams({ periodo: selectedPeriod });
+    if (selectedPeriod === "personalizado") {
+      params.set("desde", customFrom);
+      params.set("hasta", customTo);
+    }
+    let active = true;
+    fetch(`/api/embudo/asignaciones/tiempos?${params.toString()}`, { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || "No fue posible cargar las métricas");
+        return body as SalesAssignmentResponseTimeMetrics;
+      })
+      .then((nextMetrics) => {
+        if (active) {
+          setMetrics(nextMetrics);
+          setRequestError(null);
+        }
+      })
+      .catch((requestFailure: unknown) => {
+        if (active) setRequestError(requestFailure instanceof Error ? requestFailure.message : "No fue posible cargar las métricas");
+      });
+    return () => { active = false; };
+  }, [customFrom, customTo, data, selectedPeriod]);
+
+  if (requestError) return <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{requestError}</div>;
+
+  const activeData = metrics;
+  if (!activeData || activeData.vendedores.length === 0) {
     return <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">Aún no hay notificaciones de oportunidades por WhatsApp para medir.</div>;
   }
 
-  const chartRows = data.vendedores.map((vendor) => ({
+  const chartRows = activeData.vendedores.map((vendor) => ({
     vendedor: shortName(vendor.vendedor),
     rapido: vendor.porcentaje_rapido,
     medio: vendor.porcentaje_medio,
@@ -22,16 +57,35 @@ export function SalesAssignmentResponseTimeView({ data, error }: Props) {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
+        <div className="grid gap-1.5">
+          <label htmlFor="sales-assignment-period" className="text-sm font-medium">Periodo</label>
+          <select id="sales-assignment-period" value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="semana">Semana</option>
+            <option value="quincena">Quincena</option>
+            <option value="mes">Mes</option>
+            <option value="bimestre">Bimestre</option>
+            <option value="trimestre">Trimestre</option>
+            <option value="semestre">Semestre</option>
+            <option value="ano">Año</option>
+            <option value="personalizado">Personalizado</option>
+          </select>
+        </div>
+        {selectedPeriod === "personalizado" && <>
+          <div className="grid gap-1.5"><label htmlFor="sales-assignment-from" className="text-sm font-medium">Desde</label><input id="sales-assignment-from" type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm" /></div>
+          <div className="grid gap-1.5"><label htmlFor="sales-assignment-to" className="text-sm font-medium">Hasta</label><input id="sales-assignment-to" type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm" /></div>
+        </>}
+      </div>
       <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard title="Vendedor más rápido" value={data.vendedor_mas_rapido?.vendedor ?? "—"} detail={data.vendedor_mas_rapido ? `Promedio ${formatDuration(data.vendedor_mas_rapido.promedio_segundos)} · ${data.vendedor_mas_rapido.aceptadas} aceptadas` : "Sin aceptaciones"} />
-        <MetricCard title="Vendedor más lento" value={data.vendedor_mas_lento?.vendedor ?? "—"} detail={data.vendedor_mas_lento ? `Promedio ${formatDuration(data.vendedor_mas_lento.promedio_segundos)} · ${data.vendedor_mas_lento.aceptadas} aceptadas` : "Sin aceptaciones"} />
-        <MetricCard title="Leads pendientes" value={String(data.pendientes)} detail={formatPendingDetail(data.pendientes_por_vendedor)} />
+        <MetricCard title="Vendedor más rápido" value={activeData.vendedor_mas_rapido?.vendedor ?? "—"} detail={activeData.vendedor_mas_rapido ? `Promedio ${formatDuration(activeData.vendedor_mas_rapido.promedio_segundos)} · ${activeData.vendedor_mas_rapido.aceptadas} aceptadas` : "Sin aceptaciones"} />
+        <MetricCard title="Vendedor más lento" value={activeData.vendedor_mas_lento?.vendedor ?? "—"} detail={activeData.vendedor_mas_lento ? `Promedio ${formatDuration(activeData.vendedor_mas_lento.promedio_segundos)} · ${activeData.vendedor_mas_lento.aceptadas} aceptadas` : "Sin aceptaciones"} />
+        <MetricCard title="Leads pendientes" value={String(activeData.pendientes)} detail={formatPendingDetail(activeData.pendientes_por_vendedor)} />
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Tiempo de aceptación por vendedor</CardTitle>
-          <CardDescription>Las columnas muestran porcentajes; la línea muestra el tiempo promedio real de aceptación. Total: {data.notificaciones} notificaciones · {data.aceptadas} aceptadas · {data.porcentaje_aceptacion.toFixed(1)}% de aceptación.</CardDescription>
+          <CardDescription>Las columnas muestran porcentajes; la línea muestra el tiempo promedio real de aceptación. Total: {activeData.notificaciones} notificaciones · {activeData.aceptadas} aceptadas · {activeData.porcentaje_aceptacion.toFixed(1)}% de aceptación.</CardDescription>
         </CardHeader>
         <CardContent className="h-[420px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -59,7 +113,7 @@ export function SalesAssignmentResponseTimeView({ data, error }: Props) {
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full min-w-[980px] text-sm">
             <thead><tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">{["Vendedor", "Aceptadas/Totales", "Pendientes", "Prom.", "Mín.", "Máx.", "% Acept.", "% Ráp.", "% Med.", "% Lentas"].map((label) => <th key={label} className="whitespace-nowrap px-4 py-3 font-medium">{label}</th>)}</tr></thead>
-            <tbody>{data.vendedores.map((vendor) => <VendorRow key={vendor.vendedor_usuario_id} vendor={vendor} />)}</tbody>
+            <tbody>{activeData.vendedores.map((vendor) => <VendorRow key={vendor.vendedor_usuario_id} vendor={vendor} />)}</tbody>
           </table>
         </CardContent>
       </Card>

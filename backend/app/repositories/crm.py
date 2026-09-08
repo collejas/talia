@@ -18066,12 +18066,18 @@ class CRMRepository:
         self,
         *,
         organizacion_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> dict[str, Any]:
         """Obtiene tiempos agregados de aceptación de notificaciones WhatsApp."""
         resp = await self._request_service_role(
             "POST",
             "/rest/v1/rpc/crm_asignaciones_vendedores_tiempos_resumen",
-            json={"p_organizacion_id": str(organizacion_id)},
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_desde": date_from.isoformat() if date_from else None,
+                "p_hasta": date_to.isoformat() if date_to else None,
+            },
             organizacion_id=organizacion_id,
         )
         data = resp.json()
