@@ -8,7 +8,7 @@ export default async function SalesAssignmentsPage() {
   const payload = await loadSalesAssignmentResponseTimeMetrics({ periodo: "mes" });
 
   return (
-    <AppViewLayout title="CRM · Tiempo de aceptación">
+    <AppViewLayout title="CRM · Tiempo de aceptación" contentClassName="px-4 sm:px-6 lg:px-8">
       <SalesAssignmentResponseTimeView data={payload.data} error={payload.error} />
     </AppViewLayout>
   );
