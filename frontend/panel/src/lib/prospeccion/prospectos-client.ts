@@ -844,7 +844,7 @@ type ListProspectosParams = {
   segmento?: string
   segmentos?: string[]
   carrierType?: "mobile" | "landline" | "voip"
-  order?: "creado" | "nombre"
+  order?: "creado" | "nombre" | "diverso"
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate"
   whatsappPermitido?: boolean
   llamadaPermitida?: boolean

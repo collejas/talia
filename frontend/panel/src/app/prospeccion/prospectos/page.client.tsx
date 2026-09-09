@@ -116,7 +116,7 @@ type ConScraperFilter = "" | "si" | "no"
 type MinRatingFilter = "" | "3" | "4" | "4.5"
 type EstratoGroupFilter = "" | "micro" | "pequena" | "mediana" | "grande"
 type EnvioCountChannel = "correo" | "whatsapp" | "voz"
-type OrderOption = "creado" | "nombre"
+type OrderOption = "creado" | "nombre" | "diverso"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 type ProspectosSortKey =
   | "prospecto"
@@ -133,7 +133,8 @@ type ProspectosSortKey =
   | "campana"
   | "con_envio"
   | "creado"
-type ProspectTableColumnId = Exclude<ProspectosSortKey, "actividad" | "segmento">
+  | "diverso"
+type ProspectTableColumnId = Exclude<ProspectosSortKey, "actividad" | "segmento" | "diverso">
 type ProspectosViewMode = "grupos" | "prospectos"
 type GroupSortKey = "query" | "estado" | "municipio" | "count" | "created_at"
 
@@ -842,7 +843,10 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
       filtersObj["estratoGroup"] === "grande"
         ? filtersObj["estratoGroup"]
         : "",
-    order: filtersObj["order"] === "nombre" ? "nombre" : "creado",
+    order:
+      filtersObj["order"] === "nombre" || filtersObj["order"] === "diverso"
+        ? filtersObj["order"]
+        : "creado",
     carrierType:
       filtersObj["carrierType"] === "mobile" || filtersObj["carrierType"] === "landline" || filtersObj["carrierType"] === "voip"
         ? filtersObj["carrierType"]
@@ -893,7 +897,8 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
     key === "tamano_rating" ||
     key === "campana" ||
     key === "con_envio" ||
-    key === "creado"
+    key === "creado" ||
+    key === "diverso"
       ? key
       : "creado"
   const sortDirection: "asc" | "desc" = direction === "asc" ? "asc" : "desc"
@@ -1368,6 +1373,7 @@ function ProspectosView() {
   }, [])
   const sortedItems = useMemo(() => {
     const rows = [...items]
+    if (tableSort.key === "diverso") return rows
     rows.sort((a, b) => {
       const aName = (a.display_name || "").trim()
       const bName = (b.display_name || "").trim()
@@ -4710,12 +4716,17 @@ function ProspectosView() {
               <Label>Ordenar por</Label>
               <Select
                 value={filters.order}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    order: (value as OrderOption) || "creado",
-                  }))
-                }
+                onValueChange={(value) => {
+                  const nextOrder = (value as OrderOption) || "creado"
+                  setFilters((prev) => ({ ...prev, order: nextOrder }))
+                  setTableSort(
+                    nextOrder === "nombre"
+                      ? { key: "prospecto", direction: "asc" }
+                      : nextOrder === "diverso"
+                        ? { key: "diverso", direction: "asc" }
+                        : { key: "creado", direction: "desc" },
+                  )
+                }}
               >
                 <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="Orden" />
@@ -4723,6 +4734,7 @@ function ProspectosView() {
                 <SelectContent>
                   <SelectItem value="creado">Más recientes</SelectItem>
                   <SelectItem value="nombre">Nombre (A-Z)</SelectItem>
+                  <SelectItem value="diverso">Orden diverso</SelectItem>
                 </SelectContent>
               </Select>
             </div>

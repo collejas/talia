@@ -4145,7 +4145,7 @@ class ProspectoListQuery(BaseModel):
     email_domain_relation: Literal["same_as_website", "different_from_website", "no_website", "no_email", ""] | None = Field(default=None)
     segmento: str | None = Field(default=None, max_length=120)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
-    order: Literal["creado", "nombre"] | None = Field(default=None)
+    order: Literal["creado", "nombre", "diverso"] | None = Field(default=None)
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
     whatsapp_permitido: bool | None = Field(default=None)
     llamada_permitida: bool | None = Field(default=None)
@@ -33814,7 +33814,13 @@ async def listar_prospectos(
         set((con_envio_canal or []) + _parse_con_envio_canales_param(con_envio_canales))
     )
     try:
-        order_value = "display_name.asc.nullslast" if params.order == "nombre" else None
+        order_value = (
+            "display_name.asc.nullslast"
+            if params.order == "nombre"
+            else "orden_diverso.asc,id.asc"
+            if params.order == "diverso"
+            else None
+        )
         effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
             repo=repo,
             organizacion_id=organizacion_id,
