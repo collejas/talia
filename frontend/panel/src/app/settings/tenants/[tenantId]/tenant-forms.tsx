@@ -2644,56 +2644,6 @@ function TenantWhatsAppSettingsForm({
               Webhook sugerido: <code>{`/api/whatsapp/meta/${tenantId}/webhook`}</code>
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_meta_phone_number_id">Phone Number ID</Label>
-              <Input
-                id="whatsapp_meta_phone_number_id"
-                name="whatsapp_meta_phone_number_id"
-                placeholder="Phone Number ID"
-                defaultValue={initialValues.whatsapp_meta_phone_number_id ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_meta_graph_api_version">Graph API version</Label>
-              <Input
-                id="whatsapp_meta_graph_api_version"
-                name="whatsapp_meta_graph_api_version"
-                placeholder="v21.0"
-                defaultValue={initialValues.whatsapp_meta_graph_api_version ?? "v21.0"}
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="whatsapp_meta_page_access_token">meta.whatsapp.page_access_token (tier B)</Label>
-              <Input
-                id="whatsapp_meta_page_access_token"
-                name="whatsapp_meta_page_access_token"
-                type="password"
-                placeholder="Pega el access token"
-                defaultValue=""
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_meta_verify_token">meta.whatsapp.verify_token (tier A)</Label>
-              <Input
-                id="whatsapp_meta_verify_token"
-                name="whatsapp_meta_verify_token"
-                type="password"
-                placeholder="Pega el verify token"
-                defaultValue=""
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_meta_app_secret">meta.whatsapp.app_secret (tier B)</Label>
-              <Input
-                id="whatsapp_meta_app_secret"
-                name="whatsapp_meta_app_secret"
-                type="password"
-                placeholder="Pega el app secret"
-                defaultValue=""
-              />
-            </div>
-          </div>
           <div className="space-y-1">
             <p className="text-sm font-medium">Plantillas Meta</p>
             <p className="text-xs text-muted-foreground">Nombre técnico e idioma aprobados para cada plantilla de Meta.</p>

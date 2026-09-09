@@ -91,7 +91,6 @@ import {
 } from "./advanced-denue-search-modal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
-import { ProspeccionUsageSummary } from "./prospeccion-usage-summary";
 import {
   Table,
   TableBody,
@@ -1948,25 +1947,67 @@ export function DenueBusquedaView() {
 
   return (
     <div className="space-y-6">
-      <ProspeccionUsageSummary
-        usage={prospeccionUsage}
-        loading={isLoadingProspeccionUsage}
-        error={prospeccionUsageError}
-        onRefresh={() => {
-          void loadProspeccionUsage();
-        }}
-      />
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Target className="h-4 w-4" />
-            Parámetros de búsqueda
-          </CardTitle>
-          <CardDescription>
-            {searchMode === "radial"
-              ? `Define el centro y el radio antes de consultar ${PROSPECCION_SOURCE_LABELS.denue}.`
-              : `Configura los filtros detallados para consultar ${PROSPECCION_SOURCE_LABELS.denue}.`}
-          </CardDescription>
+        <CardHeader className="relative">
+          <div className="min-w-0 pr-56">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Target className="h-4 w-4" />
+              Parámetros de búsqueda
+            </CardTitle>
+            <CardDescription>
+              {searchMode === "radial"
+                ? `Define el centro y el radio antes de consultar ${PROSPECCION_SOURCE_LABELS.denue}.`
+                : `Configura los filtros detallados para consultar ${PROSPECCION_SOURCE_LABELS.denue}.`}
+            </CardDescription>
+          </div>
+          <TooltipProvider>
+            <div className="absolute right-6 top-6 flex items-start gap-4 lg:gap-5">
+              <div className="min-w-[6.5rem] text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-muted-foreground underline decoration-dotted underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    >
+                      Resultados crudos
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="end" className="max-w-xs text-sm">
+                    Muestra los resultados crudos de GobMX disponibles para este periodo.
+                  </TooltipContent>
+                </Tooltip>
+                <p className="mt-1 text-sm font-semibold">
+                  {isLoadingProspeccionUsage || prospeccionUsageError
+                    ? "—"
+                    : prospeccionUsage
+                      ? numberFormatter.format(prospeccionUsage.raw_results.remaining)
+                      : "—"}
+                </p>
+              </div>
+              <div className="min-w-[6.5rem] text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-muted-foreground underline decoration-dotted underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    >
+                      Créditos prospección
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="end" className="max-w-xs text-sm">
+                    Muestra los créditos disponibles para guardar nuevos prospectos en este periodo.
+                  </TooltipContent>
+                </Tooltip>
+                <p className="mt-1 text-sm font-semibold">
+                  {isLoadingProspeccionUsage || prospeccionUsageError
+                    ? "—"
+                    : prospeccionUsage
+                      ? numberFormatter.format(prospeccionUsage.credits.remaining)
+                      : "—"}
+                </p>
+              </div>
+            </div>
+          </TooltipProvider>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-wrap items-center gap-2">
