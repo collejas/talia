@@ -1356,6 +1356,11 @@ async def _run_envio_whatsapp(
         or metadata.get("meta_category")
         or metadata.get("whatsapp_meta_category_snapshot")
     )
+    template_status = _clean_text(
+        payload.get("template_status")
+        or metadata.get("template_status")
+        or metadata.get("whatsapp_template_status_snapshot")
+    ).lower()
     variables_def = metadata.get("twilio_variables") or metadata.get("twilio_content_variables")
     context = _build_placeholder_context(detalle, metadata, payload)
     image_context: dict[str, str] = {}
@@ -1435,6 +1440,20 @@ async def _run_envio_whatsapp(
             },
             error="whatsapp_meta_template_required",
         )
+
+    if payload.get("whatsapp_template_id") or metadata.get("whatsapp_template_id"):
+        if template_status != "approved":
+            return ContactEnvioResult(
+                estado="error",
+                detalle={
+                    "reason": "whatsapp_template_not_approved_in_app",
+                    "template_name": meta_template_name,
+                    "template_language": meta_template_language,
+                    "template_status": template_status or None,
+                },
+                error="whatsapp_template_not_approved_in_app",
+                retryable=False,
+            )
 
     preview_text = _render_template_text(body_template, context).strip()
     wa_result = await _send_whatsapp_message(

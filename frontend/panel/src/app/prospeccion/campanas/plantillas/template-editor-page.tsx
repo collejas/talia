@@ -88,6 +88,7 @@ type FormState = {
   metaTemplateName: string
   metaTemplateLanguage: string
   metaCategory: "marketing" | "utility" | "authentication"
+  templateStatus: "draft" | "approved" | "archived"
   websiteBaseUrl: string
   websiteLinkLabel: string
   demoLinkLabel: string
@@ -110,6 +111,7 @@ const emptyForm = (campaign?: CrmCampaign): FormState => ({
   metaTemplateName: "",
   metaTemplateLanguage: "es_MX",
   metaCategory: "marketing",
+  templateStatus: "draft",
   websiteBaseUrl: "https://talia.mx/",
   websiteLinkLabel: "Visitar sitio web",
   demoLinkLabel: "Agenda tu demo",
@@ -149,6 +151,10 @@ function formFromTemplate(template: ContactoTemplate, campaignId: string): FormS
     metaTemplateName: template.template_name ?? "",
     metaTemplateLanguage: template.language_code ?? "es_MX",
     metaCategory: template.meta_category ?? "marketing",
+    templateStatus:
+      template.template_status === "approved" || template.template_status === "archived"
+        ? template.template_status
+        : "draft",
     websiteBaseUrl: "https://talia.mx/",
     websiteLinkLabel: "Visitar sitio web",
     demoLinkLabel: "Agenda tu demo",
@@ -664,6 +670,11 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
     [form.cuerpoTexto, renderPreviewVariables],
   )
 
+  const whatsappHeaderImage = useMemo(() => {
+    const logoId = imageIds.logo_url
+    return logos.find((logo) => logo.id === logoId) ?? null
+  }, [imageIds.logo_url, logos])
+
   const waMeUrl = useMemo(() => {
     const phone = tenantPhone.replace(/\D+/g, "")
     const phrase = waRules.find((rule) => rule.id === selectedWaRuleId)?.frase_objetivo?.trim() ?? ""
@@ -839,7 +850,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
           template_name: form.metaTemplateName.trim(),
           language_code: form.metaTemplateLanguage.trim(),
           meta_category: form.metaCategory,
-          template_status: "draft" as const,
+          template_status: form.templateStatus,
           activo: true,
           metadata: payload.metadata,
           imagenes,
@@ -1342,9 +1353,70 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="max-w-sm space-y-2">
+                    <Label>Estado en la aplicación</Label>
+                    <Select
+                      value={form.templateStatus}
+                      onValueChange={(value) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          templateStatus: value as FormState["templateStatus"],
+                        }))
+                      }
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">Borrador</SelectItem>
+                        <SelectItem value="approved">Aprobada</SelectItem>
+                        <SelectItem value="archived">Archivada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Marca Aprobada únicamente cuando Meta ya la aprobó con el mismo nombre, idioma, categoría y encabezado.
+                    </p>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="whatsapp-body">Texto de la plantilla</Label>
                     <Textarea id="whatsapp-body" className="min-h-[360px] resize-y" ref={(node) => { contentInputRefs.current.text = node }} onFocus={(event) => rememberContentCursor("text", event.currentTarget)} onClick={(event) => rememberContentCursor("text", event.currentTarget)} onKeyUp={(event) => rememberContentCursor("text", event.currentTarget)} onSelect={(event) => rememberContentCursor("text", event.currentTarget)} value={form.cuerpoTexto} onChange={(event) => { rememberContentCursor("text", event.currentTarget); setForm((previous) => ({ ...previous, cuerpoTexto: event.target.value })) }} placeholder="Hola {{nombre}}, ..." />
+                  </div>
+                  <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                    <div>
+                      <Label>Imagen del encabezado en Meta</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Esta imagen se enviará como header de la plantilla. Meta debe tener la plantilla aprobada con header de tipo imagen.
+                      </p>
+                    </div>
+                    <Select
+                      value={imageIds.logo_url || "__none__"}
+                      onValueChange={(value) =>
+                        setImageIds((previous) => ({
+                          ...previous,
+                          logo_url: value === "__none__" ? undefined : value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={logosLoading ? "Cargando imágenes..." : "Selecciona una imagen"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin imagen</SelectItem>
+                        {logos.map((logo) => (
+                          <SelectItem key={logo.id} value={logo.id}>{logo.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {whatsappHeaderImage ? (
+                      <div className="overflow-hidden rounded-md border bg-background">
+                        <Image
+                          src={whatsappHeaderImage.file_url}
+                          alt={whatsappHeaderImage.nombre}
+                          width={720}
+                          height={360}
+                          unoptimized
+                          className="max-h-52 w-full object-cover"
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </>
               }
@@ -1744,6 +1816,31 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
                   "<p style='color:#888;font:14px sans-serif;padding:24px'>El HTML aparecerá aquí.</p>"
                 }
               />
+            </div>
+          ) : form.canal === "whatsapp" ? (
+            <div className="mx-auto max-w-2xl rounded-xl border bg-emerald-50 p-4">
+              <div className="max-w-[92%] overflow-hidden rounded-2xl rounded-bl-md bg-white text-sm leading-6 text-foreground shadow-sm">
+                {whatsappHeaderImage ? (
+                  <div className="border-b bg-muted/20">
+                    <Image
+                      src={whatsappHeaderImage.file_url}
+                      alt={whatsappHeaderImage.nombre}
+                      width={720}
+                      height={360}
+                      unoptimized
+                      className="h-52 w-full object-cover"
+                    />
+                  </div>
+                ) : null}
+                <pre className="whitespace-pre-wrap bg-background p-5 text-sm leading-6 shadow-sm">
+                  {previewText || "El contenido aparecerá aquí."}
+                </pre>
+              </div>
+              {!whatsappHeaderImage ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  No hay imagen de encabezado asignada en la aplicación.
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="rounded-lg border bg-muted/40 p-3 sm:p-6">
