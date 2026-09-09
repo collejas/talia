@@ -863,6 +863,7 @@ type ListProspectosParams = {
   templateId?: string
   conEnvio?: boolean
   conEnvioCanales?: Array<"correo" | "whatsapp" | "llamada">
+  optOutWhatsapp?: boolean
   conScraper?: boolean
   enviosCorreoMin?: number
   enviosCorreoMax?: number
@@ -949,6 +950,9 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
         url.searchParams.append("con_envio_canal", canal)
       }
     }
+  }
+  if (typeof params.optOutWhatsapp === "boolean") {
+    url.searchParams.set("opt_out_whatsapp", params.optOutWhatsapp ? "true" : "false")
   }
   if (typeof params.conScraper === "boolean") {
     url.searchParams.set("con_scraper", params.conScraper ? "true" : "false")

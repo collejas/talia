@@ -19718,6 +19718,7 @@ class CRMRepository:
         envios_whatsapp_max: int | None = None,
         envios_voz_min: int | None = None,
         envios_voz_max: int | None = None,
+        opt_out_whatsapp: bool | None = None,
         timezone_name: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
@@ -20031,6 +20032,22 @@ class CRMRepository:
                     include_ids &= scraper_prospecto_ids
             elif scraper_prospecto_ids:
                 exclude_ids.update(scraper_prospecto_ids)
+
+        if opt_out_whatsapp is not None:
+            opt_out_ids = await self._list_prospecto_ids_with_contact_suppressions(
+                usuario_token=usuario_token,
+                organizacion_id=organizacion_id,
+                canal="whatsapp",
+            )
+            if opt_out_whatsapp:
+                if not opt_out_ids:
+                    return [], 0
+                if include_ids is None:
+                    include_ids = set(opt_out_ids)
+                else:
+                    include_ids &= opt_out_ids
+            else:
+                exclude_ids.update(opt_out_ids)
 
         if include_ids is not None:
             if exclude_ids:
@@ -23843,6 +23860,45 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"contact_suppression_by_prospect_invalid:{data!r}")
         return data
+
+    async def _list_prospecto_ids_with_contact_suppressions(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID | None,
+        canal: str,
+    ) -> set[str]:
+        """Obtiene IDs de prospectos con exclusión activa por canal."""
+        if organizacion_id is None:
+            return set()
+        result: set[str] = set()
+        offset = 0
+        page_size = 1000
+        while offset < 200_000:
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_contacto_suppressions",
+                token=usuario_token,
+                params={
+                    "select": "prospecto_id",
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "activo": "eq.true",
+                    "canal": _postgrest_in_clause([canal, "all"]),
+                    "prospecto_id": "not.is.null",
+                    "limit": str(page_size),
+                    "offset": str(offset),
+                },
+            )
+            data = resp.json() or []
+            if not isinstance(data, list) or not data:
+                break
+            for row in data:
+                if isinstance(row, dict) and row.get("prospecto_id"):
+                    result.add(str(row["prospecto_id"]))
+            if len(data) < page_size:
+                break
+            offset += len(data)
+        return result
 
     async def list_prospecto_contact_indicators(
         self,

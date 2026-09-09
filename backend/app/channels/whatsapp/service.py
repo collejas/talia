@@ -3328,6 +3328,7 @@ async def handle_incoming_message(
                 message=message,
                 conversation_id=conversation_id,
                 persona_id=persona_id,
+                repo=repo,
                 openai_conversation_id=openai_conversation_id,
                 previous_response_id=previous_response_id,
                 catalog_context=catalog_context_text,
@@ -4090,6 +4091,7 @@ async def _generate_assistant_reply(
     inbound_message_id: str | None = None,
     attachment_content_items: list[dict[str, Any]] | None = None,
     resolved_full_name: str | None = None,
+    repo: CRMRepository | None = None,
 ) -> AssistantReply:
     debug_timings: dict[str, float] = {}
     started = time.perf_counter()
@@ -4165,6 +4167,41 @@ async def _generate_assistant_reply(
             channel="whatsapp",
             organizacion_id=str(organizacion_id) if organizacion_id else None,
         )
+        if repo and organizacion_id:
+            try:
+                prospecto_uuid = await _resolve_prospeccion_prospecto_id(
+                    repo=repo,
+                    persona_id=persona_id,
+                    organizacion_id=organizacion_id,
+                    message=message,
+                )
+                phone_e164 = _normalize_phone_number(message.from_number)
+                if phone_e164 and not re.fullmatch(r"\+[0-9]{7,15}", phone_e164):
+                    phone_e164 = None
+                existing = await repo.worker_find_active_contact_suppression(
+                    organizacion_id=organizacion_id,
+                    canal="whatsapp",
+                    prospecto_id=prospecto_uuid,
+                    phone_e164=phone_e164,
+                )
+                if not existing and (prospecto_uuid or phone_e164):
+                    await repo.worker_create_contact_suppression(
+                        payload={
+                            "organizacion_id": str(organizacion_id),
+                            "canal": "whatsapp",
+                            "prospecto_id": str(prospecto_uuid) if prospecto_uuid else None,
+                            "phone_e164": phone_e164,
+                            "motivo": "baja",
+                            "origen": "whatsapp_inbound",
+                            "activo": True,
+                            "metadata": {"conversation_id": conversation_id},
+                        }
+                    )
+            except (CRMRepositoryError, ValueError) as exc:
+                logger.warning(
+                    "whatsapp.prospeccion_opt_out_registration_failed",
+                    extra={"conversation_id": conversation_id, "error": str(exc)},
+                )
         try:
             await whatsapp_tools._handle_mark_lost_negacion(
                 {
@@ -4184,7 +4221,7 @@ async def _generate_assistant_reply(
             text="Perfecto, gracias por tu tiempo. Si en algún momento quieres explorar cómo automatizar tu atención, con gusto te ayudo. ¡Excelente día!",
             openai_conversation_id=openai_conversation_id,
             response_id=previous_response_id,
-            tools_called=["mark_lost_negacion_failed"],
+            tools_called=["mark_lost_negacion"],
             skip_post_send_tasks=True,
         )
 

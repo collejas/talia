@@ -4160,6 +4160,7 @@ class ProspectoListQuery(BaseModel):
     estrato_group: str | None = Field(default=None, max_length=40)
     campana_id: UUID | None = Field(default=None)
     con_envio: bool | None = Field(default=None)
+    opt_out_whatsapp: bool | None = Field(default=None)
     con_scraper: bool | None = Field(default=None)
     envios_correo_min: int | None = Field(default=None, ge=0, le=1_000_000)
     envios_correo_max: int | None = Field(default=None, ge=0, le=1_000_000)
@@ -33860,6 +33861,7 @@ async def listar_prospectos(
                 template_id=template_id,
                 con_envio=params.con_envio,
                 con_envio_canales=con_envio_canales_values or None,
+                opt_out_whatsapp=params.opt_out_whatsapp,
                 con_scraper=params.con_scraper,
                 envios_correo_min=envios_correo_min,
                 envios_correo_max=envios_correo_max,

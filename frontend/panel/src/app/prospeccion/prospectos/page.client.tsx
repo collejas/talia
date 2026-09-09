@@ -165,6 +165,7 @@ type Filters = {
   plantillaId: string
   carrierType: "" | "mobile" | "landline" | "voip"
   contactFilters: ContactPresenceFilter[]
+  whatsappOptOut: WhatsAppOptOutFilter
   queryFilters: string[]
   actividadFilters: string[]
   dateOption: DateRangeOption
@@ -320,6 +321,7 @@ const initialFilters: Filters = {
   order: "creado",
   carrierType: "",
   contactFilters: [],
+  whatsappOptOut: "no",
   queryFilters: [],
   actividadFilters: [],
   dateOption: "",
@@ -502,6 +504,8 @@ type ContactPresenceFilter =
   | "website_has"
   | "website_missing"
 
+type WhatsAppOptOutFilter = "" | "si" | "no"
+
 const CONTACT_FILTER_OPTIONS: Array<{ value: ContactPresenceFilter; label: string }> = [
   { value: "phone_has", label: "Tiene teléfono" },
   { value: "phone_missing", label: "No tiene teléfono" },
@@ -510,6 +514,12 @@ const CONTACT_FILTER_OPTIONS: Array<{ value: ContactPresenceFilter; label: strin
   { value: "website_has", label: "Tiene sitio web" },
   { value: "website_missing", label: "No tiene sitio web" },
 ]
+
+const WHATSAPP_OPTOUT_LABELS: Record<WhatsAppOptOutFilter, string> = {
+  "": "Todos los estados",
+  si: "Solicitaron no recibir",
+  no: "Disponibles para WhatsApp",
+}
 
 const CONTACT_FILTER_LABELS: Record<ContactPresenceFilter, string> = CONTACT_FILTER_OPTIONS.reduce(
   (acc, option) => {
@@ -864,6 +874,10 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
           )
         )
       : [],
+    whatsappOptOut:
+      filtersObj["whatsappOptOut"] === "si" || filtersObj["whatsappOptOut"] === "no"
+        ? filtersObj["whatsappOptOut"]
+        : "no",
     queryFilters: Array.isArray(filtersObj["queryFilters"])
       ? (filtersObj["queryFilters"] as unknown[]).filter((value): value is string => typeof value === "string")
       : [],
@@ -1264,6 +1278,7 @@ function ProspectosView() {
       !filters.estratoGroup &&
       !filters.carrierType &&
       filters.contactFilters.length === 0 &&
+      filters.whatsappOptOut === "" &&
       filters.actividadFilters.length === 0 &&
       filters.queryFilters.length === 0,
     [filters]
@@ -1733,6 +1748,9 @@ function ProspectosView() {
         chips.push(CONTACT_FILTER_LABELS[filterKey])
       })
     }
+    if (filters.whatsappOptOut) {
+      chips.push(WHATSAPP_OPTOUT_LABELS[filters.whatsappOptOut])
+    }
     if (filters.queryFilters.length) {
       const labels = filters.queryFilters.map((value) => queryLabelMap.get(value) ?? value)
       chips.push(`Consulta: ${labels.join(", ")}`)
@@ -1785,6 +1803,7 @@ function ProspectosView() {
           templateId: filters.plantillaId || undefined,
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
+          optOutWhatsapp: filters.whatsappOptOut === "si" ? true : filters.whatsappOptOut === "no" ? false : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           includeScraperStatus: false,
@@ -1878,6 +1897,7 @@ function ProspectosView() {
           templateId: filters.plantillaId || undefined,
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
+          optOutWhatsapp: filters.whatsappOptOut === "si" ? true : filters.whatsappOptOut === "no" ? false : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           includeScraperStatus: false,
@@ -4596,6 +4616,27 @@ function ProspectosView() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+            </div>
+            <div className="space-y-1">
+              <Label>Estado WhatsApp</Label>
+              <Select
+                value={filters.whatsappOptOut || "todos"}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    whatsappOptOut: value === "si" || value === "no" ? value : "",
+                  }))
+                }
+              >
+                <SelectTrigger className="min-w-[220px] text-sm">
+                  <SelectValue placeholder="Estado WhatsApp" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los estados</SelectItem>
+                  <SelectItem value="no">Disponibles para WhatsApp</SelectItem>
+                  <SelectItem value="si">Solicitaron no recibir</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Segmento</Label>
