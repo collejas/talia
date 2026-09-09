@@ -7,7 +7,7 @@ import random
 import asyncio
 import unicodedata
 from typing import Any, Literal
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import httpx
 
@@ -25,6 +25,27 @@ _DENUE_MIN_SPLIT_WINDOW = 25
 _DENUE_HTTP_TIMEOUT = httpx.Timeout(connect=20.0, read=30.0, write=20.0, pool=30.0)
 _DENUE_HTTP_LIMITS = httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=30.0)
 _DENUE_HTTP_CLIENT: httpx.AsyncClient | None = None
+
+
+def _redact_denue_url(url: str) -> str:
+    """Oculta el token final de las rutas de consulta antes de registrarlas."""
+    parsed = urlsplit(url)
+    parts = parsed.path.split("/")
+    if len(parts) > 1 and parts[-1]:
+        parts[-1] = "[REDACTED_TOKEN]"
+    return urlunsplit((parsed.scheme, parsed.netloc, "/".join(parts), parsed.query, parsed.fragment))
+
+
+def _classify_provider_error(message: str | None) -> str:
+    """Convierte respuestas de credenciales del proveedor a códigos seguros y estables."""
+    normalized = str(message or "").casefold()
+    if normalized.startswith("denue_") and all(char.isalnum() or char in {"_", "-"} for char in normalized):
+        return normalized
+    if any(value in normalized for value in ("expired", "vencid", "caduc", "expir")):
+        return "denue_token_expired"
+    if any(value in normalized for value in ("token", "api key", "apikey", "api_key", "unauthorized", "forbidden", "access denied", "autoriz")):
+        return "denue_token_invalid"
+    return "denue_provider_error"
 
 
 def _get_denue_http_client(timeout: float) -> httpx.AsyncClient:
@@ -163,7 +184,7 @@ class DenueClient:
                         "max_attempts": max_attempts,
                         "method": method,
                         "segments": segments,
-                        "url": url,
+                        "url": _redact_denue_url(url),
                     },
                 )
                 if attempt >= max_attempts:
@@ -176,7 +197,7 @@ class DenueClient:
                         "max_attempts": max_attempts,
                         "method": method,
                         "segments": segments,
-                        "url": url,
+                        "url": _redact_denue_url(url),
                     },
                 )
                 if attempt >= max_attempts:
@@ -188,7 +209,7 @@ class DenueClient:
                     "max_attempts": max_attempts,
                     "method": method,
                     "segments": segments,
-                    "url": url,
+                    "url": _redact_denue_url(url),
                 }
                 _invalidate_denue_http_client(client)
                 if attempt >= max_attempts:
@@ -204,7 +225,7 @@ class DenueClient:
                     "max_attempts": max_attempts,
                     "method": method,
                     "segments": segments,
-                    "url": url,
+                    "url": _redact_denue_url(url),
                 }
                 if attempt >= max_attempts:
                     logger.exception("denue.request_error", extra=log_payload)
@@ -251,7 +272,7 @@ class DenueClient:
                 "lat": lat,
                 "lng": lng,
                 "radius": radius,
-                "url": url,
+                "url": _redact_denue_url(url),
             },
         )
         resp = await self._get(url, method="Buscar")
@@ -263,8 +284,10 @@ class DenueClient:
             )
             search_logger.error(
                 "denue.http_error",
-                extra={"status": resp.status_code, "detail": detail, "url": url},
+                extra={"status": resp.status_code, "detail": detail, "url": _redact_denue_url(url)},
             )
+            if resp.status_code in {401, 403}:
+                raise DenueError("denue_token_invalid")
             raise DenueError(f"denue_http_{resp.status_code}")
         try:
             data = resp.json()
@@ -273,13 +296,13 @@ class DenueClient:
             text = detail.strip()
             if not text:
                 logger.warning("denue.empty_response")
-                search_logger.warning("denue.empty_response", extra={"url": url})
+                search_logger.warning("denue.empty_response", extra={"url": _redact_denue_url(url)})
                 return []
             try:
                 data = json.loads(text)
             except ValueError as exc:
                 logger.exception("denue.invalid_json", extra={"detail": text[:500]})
-                search_logger.exception("denue.invalid_json", extra={"detail": text[:500], "url": url})
+                search_logger.exception("denue.invalid_json", extra={"detail": text[:500], "url": _redact_denue_url(url)})
                 raise DenueError("denue_invalid_response") from exc
         return self._coerce_rows(data, method="Buscar", url=url)
 
@@ -370,7 +393,7 @@ class DenueClient:
         path = f"{self.base_url}/consulta/{method}/{'/'.join(segments)}/{self.token}"
         search_logger.info(
             "denue.request_path",
-            extra={"method": method, "segments": segments, "url": path},
+            extra={"method": method, "segments": segments, "url": _redact_denue_url(path)},
         )
         try:
             resp = await self._get(path, method=method, segments=segments)
@@ -378,7 +401,7 @@ class DenueClient:
             if self._should_treat_remote_protocol_error_as_empty(method, segments, exc):
                 search_logger.info(
                     "denue.empty_result",
-                    extra={"method": method, "segments": segments, "url": path, "reason": "remote_protocol_empty"},
+                    extra={"method": method, "segments": segments, "url": _redact_denue_url(path), "reason": "remote_protocol_empty"},
                 )
                 return []
             split_results = await self._retry_request_list_with_split(method, segments, exc)
@@ -393,8 +416,10 @@ class DenueClient:
             )
             search_logger.error(
                 "denue.http_error",
-                extra={"status": resp.status_code, "detail": detail, "method": method, "url": path},
+                extra={"status": resp.status_code, "detail": detail, "method": method, "url": _redact_denue_url(path)},
             )
+            if resp.status_code in {401, 403}:
+                raise DenueError("denue_token_invalid")
             raise DenueError(f"denue_http_{resp.status_code}")
         try:
             data = resp.json()
@@ -405,7 +430,7 @@ class DenueClient:
                 logger.warning("denue.empty_response")
                 search_logger.warning(
                     "denue.empty_response",
-                    extra={"method": method, "segments": segments, "url": path},
+                    extra={"method": method, "segments": segments, "url": _redact_denue_url(path)},
                 )
                 return []
             try:
@@ -414,7 +439,7 @@ class DenueClient:
                 logger.exception("denue.invalid_json", extra={"detail": text[:500]})
                 search_logger.exception(
                     "denue.invalid_json",
-                    extra={"detail": text[:500], "method": method, "segments": segments, "url": path},
+                    extra={"detail": text[:500], "method": method, "segments": segments, "url": _redact_denue_url(path)},
                 )
                 raise DenueError("denue_invalid_response") from exc
         return self._coerce_rows(data, method=method, url=path)
@@ -428,7 +453,7 @@ class DenueClient:
 
         message = data.get("error") or data.get("message")
         if message:
-            raise DenueError(str(message))
+            raise DenueError(_classify_provider_error(str(message)))
 
         row_keys = (
             "rows",
@@ -457,19 +482,19 @@ class DenueClient:
                 if int(value) == 0:
                     search_logger.info(
                         "denue.empty_result",
-                        extra={"method": method, "url": url, "key": key},
+                        extra={"method": method, "url": _redact_denue_url(url), "key": key},
                     )
                     return []
             except (TypeError, ValueError):
                 continue
 
         if not data:
-            search_logger.info("denue.empty_result", extra={"method": method, "url": url, "reason": "empty_dict"})
+            search_logger.info("denue.empty_result", extra={"method": method, "url": _redact_denue_url(url), "reason": "empty_dict"})
             return []
 
         empty_values = (None, "", 0, 0.0, False)
         if all(value in empty_values or value == [] for value in data.values()):
-            search_logger.info("denue.empty_result", extra={"method": method, "url": url, "reason": "empty_values"})
+            search_logger.info("denue.empty_result", extra={"method": method, "url": _redact_denue_url(url), "reason": "empty_values"})
             return []
 
         raise DenueError("denue_invalid_response")

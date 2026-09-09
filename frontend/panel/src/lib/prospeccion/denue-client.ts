@@ -3,6 +3,34 @@ import { refreshSession, shouldAttemptSessionRefresh } from "@/lib/auth/session-
 const RETRYABLE_STATUS = new Set([502, 503, 504, 522, 524]);
 const RESULT_DELETE_BATCH_SIZE = 500;
 
+/** Convierte códigos técnicos de GobMX en mensajes que el usuario puede accionar. */
+export function getDenueErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const code = raw.trim().toLowerCase();
+  if (code.includes("denue_token_missing") || code.includes("no está configurado") || code.includes("no esta configurado")) {
+    return "GobMX no está configurado. Solicita al administrador que configure la clave de acceso de esta fuente.";
+  }
+  if (code.includes("denue_token_expired")) {
+    return "La clave de acceso de GobMX venció. Solicita al administrador que la renueve.";
+  }
+  if (code.includes("denue_token_invalid") || code.includes("denue_http_401") || code.includes("denue_http_403")) {
+    return "La clave de acceso de GobMX no es válida o fue rechazada. Solicita al administrador que la revise o la renueve.";
+  }
+  if (code.includes("denue_provider_error")) {
+    return "GobMX rechazó la consulta. Revisa la configuración de acceso o solicita al administrador que la valide.";
+  }
+  if (code.includes("denue_connect_timeout") || code.includes("denue_read_timeout")) {
+    return "GobMX tardó demasiado en responder. Intenta nuevamente en unos minutos.";
+  }
+  if (code.includes("denue_request_failed") || code.includes("denue_remote_protocol_error")) {
+    return "No fue posible comunicarse con GobMX. Intenta nuevamente en unos minutos.";
+  }
+  if (code.includes("denue_invalid_response") || code.includes("denue_http_")) {
+    return "GobMX devolvió una respuesta inesperada. Intenta nuevamente y, si continúa, informa al administrador.";
+  }
+  return raw || "No fue posible completar la búsqueda en GobMX.";
+}
+
 export type CreateDenueSearchPayload = {
   query: string;
   lat: number;

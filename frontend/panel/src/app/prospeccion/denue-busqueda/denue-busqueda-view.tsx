@@ -31,6 +31,7 @@ import {
   deleteDenueBusqueda,
   deleteDenueResultados,
   getDenueJob,
+  getDenueErrorMessage,
   cancelDenueJob,
   getDenueResultadosBounds,
   listDenueActividades,
@@ -1721,7 +1722,10 @@ export function DenueBusquedaView() {
                     setFeedback({ type: "info", message: `Búsqueda ${PROSPECCION_SOURCE_LABELS.denue} cancelada.` });
                   } else {
                     const error = jobResp.job.error ? String(jobResp.job.error) : "denue_job_failed";
-                    setFeedback({ type: "error", message: `Búsqueda ${PROSPECCION_SOURCE_LABELS.denue} falló: ${error}` });
+                    setFeedback({
+                      type: "error",
+                      message: getDenueErrorMessage(error),
+                    });
                   }
                   await loadBusquedas();
                   await loadResultadosForBusqueda(jobResp.job.busqueda_id);
@@ -1750,10 +1754,10 @@ export function DenueBusquedaView() {
         await loadBusquedas();
         await loadResultadosForBusqueda(response.busqueda_id);
         await loadProspeccionUsage();
-      } catch {
+      } catch (error) {
         setFeedback({
           type: "error",
-          message: `No fue posible iniciar la búsqueda ${PROSPECCION_SOURCE_LABELS.denue}. Intenta nuevamente.`,
+          message: getDenueErrorMessage(error),
         });
         setFeedbackDialog({
           open: true,
