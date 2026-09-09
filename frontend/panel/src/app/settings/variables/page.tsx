@@ -19,7 +19,6 @@ import {
   type TemplateAiPromptConfig,
 } from "./components/tenant-template-ai-prompt-config-panel"
 import { TenantAiBrandContextPanel } from "./components/tenant-ai-brand-context-panel"
-import { WhatsAppAssistantSchedulePanel } from "./components/whatsapp-assistant-schedule-panel"
 import { MetaAssistedConnectionPanel } from "./components/meta-assisted-connection-panel"
 import {
   TenantTemplateAiLayoutsPanel,
@@ -36,6 +35,8 @@ import {
   TenantTwilioSettings,
   TenantWhatsAppSettings,
   TenantWhatsAppProspeccionSettings,
+  TenantWhatsAppRoutes,
+  TenantWhatsAppValidation,
   TenantMessengerSettings,
   TenantModuleFlagsForm,
   TenantBusquedaSettings,
@@ -181,7 +182,7 @@ export default async function SettingsVariablesPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const requestedTab = (await searchParams).tab
-  const defaultTab =
+  const requestedDefaultTab =
     requestedTab === "brand" ||
     requestedTab === "webchat" ||
     requestedTab === "web-tracking" ||
@@ -197,6 +198,7 @@ export default async function SettingsVariablesPage({
     requestedTab === "secrets"
       ? requestedTab
       : "brand"
+  const defaultTab = requestedDefaultTab === "whatsapp-prosp" ? "whatsapp" : requestedDefaultTab
   const settingsResp = await callCrmApi<TenantSettingsResponse>("/tenant/me/settings", {
     organizacionId: null,
     withUserToken: true,
@@ -518,7 +520,6 @@ export default async function SettingsVariablesPage({
                   <TabsTrigger value="mail">Correo</TabsTrigger>
                   <TabsTrigger value="twilio">Telefonía</TabsTrigger>
                   <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-                  <TabsTrigger value="whatsapp-prosp">WhatsApp para prospección</TabsTrigger>
                   <TabsTrigger value="messenger">Messenger</TabsTrigger>
                   <TabsTrigger value="busqueda">Búsqueda</TabsTrigger>
                   <TabsTrigger value="openai">Inteligencia</TabsTrigger>
@@ -601,17 +602,14 @@ export default async function SettingsVariablesPage({
                     initialConnection={metaConnectionResp.ok ? metaConnectionResp.data : null}
                     businessId={process.env.META_TALIA_BUSINESS_ID ?? "1358726956043196"}
                   />
-                  <WhatsAppAssistantSchedulePanel
-                    initialValues={scheduleResp.ok ? scheduleResp.data : null}
-                  />
+                  <TenantWhatsAppRoutes tenantId={tenantId} routes={routes} />
                   <TenantWhatsAppSettings
                     tenantId={tenantId}
                     initialValues={whatsappInitialValues}
-                    routes={routes}
+                    scheduleValues={scheduleResp.ok ? scheduleResp.data : null}
                   />
-                </TabsContent>
-                <TabsContent value="whatsapp-prosp" className="pt-4">
                   <TenantWhatsAppProspeccionSettings tenantId={tenantId} initialValues={whatsappInitialValues} />
+                  <TenantWhatsAppValidation tenantId={tenantId} />
                 </TabsContent>
                 <TabsContent value="messenger" className="pt-4">
                   <TenantMessengerSettings

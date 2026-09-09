@@ -587,7 +587,6 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
               <TenantWhatsAppSettings
                 tenantId={tenantId}
                 initialValues={whatsappInitialValues}
-                routes={routes}
               />
             </TabsContent>
             <TabsContent value="whatsapp-prosp" className="pt-4">

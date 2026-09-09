@@ -38,6 +38,7 @@ import {
 } from "./actions"
 import { TenantFiscalAddressFields } from "./tenant-fiscal-address-fields"
 import { RequiredLabel } from "@/components/ui/required-label"
+import { WhatsAppAssistantSchedulePanel } from "@/app/settings/variables/components/whatsapp-assistant-schedule-panel"
 
 export type TenantSettingsActions = {
   updateTenantConfigAction: CrudActionHandler
@@ -110,17 +111,6 @@ function formatCrudMessage(value: unknown): string | null {
     }
   }
   return String(value)
-}
-
-function friendlyValidationMessage(items: string[], emptyMessage = "Todo está correcto."): string[] {
-  if (!items.length) return [emptyMessage]
-  return items.map((item) => {
-    const value = String(item).toLowerCase()
-    if (value.includes("route") || value.includes("canal")) return "Falta configurar un canal de comunicación."
-    if (value.includes("secret") || value.includes("token") || value.includes("key")) return "Falta completar una conexión segura."
-    if (value.includes("config")) return "Falta completar un dato de configuración."
-    return "Hay un dato pendiente de revisar."
-  })
 }
 
 function FormStatusMessage({ state }: { state: CrudActionState }) {
@@ -2351,37 +2341,119 @@ export function TenantTwilioSettings({
 export function TenantWhatsAppSettings({
   tenantId,
   initialValues,
-  routes,
+  scheduleValues,
 }: {
   tenantId: string
   initialValues: WhatsAppInitialValues
-  routes: RouteItem[]
+  scheduleValues?: Record<string, unknown> | null
 }) {
   const formKey = useMemo(() => buildWhatsAppSettingsKey(initialValues), [initialValues])
-  return <TenantWhatsAppSettingsForm key={formKey} tenantId={tenantId} initialValues={initialValues} routes={routes} />
+  return <TenantWhatsAppSettingsForm key={formKey} tenantId={tenantId} initialValues={initialValues} scheduleValues={scheduleValues} />
+}
+
+export function TenantWhatsAppRoutes({ tenantId, routes }: { tenantId: string; routes: RouteItem[] }) {
+  const actions = useTenantSettingsActions()
+  const { state: routeState, formAction: createRouteAction, formRef: createRouteRef } = useCrudForm(
+    actions.createTenantRouteAction,
+  )
+  const { formAction: deleteRouteAction } = useCrudForm(actions.deleteTenantRouteAction)
+  const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-medium">Rutas de recepción</h3>
+        <p className="text-xs text-muted-foreground">Asocia un número E.164 a la organización para recibir mensajes.</p>
+      </div>
+      <form ref={createRouteRef} action={createRouteAction} className="space-y-3">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="canal" value="whatsapp" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_route_clave">Número de recepción</Label>
+            <Input id="whatsapp_route_clave" name="clave" placeholder="+5214443354450" required />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={routeState} />
+          <SubmitButton label="Agregar ruta" pendingLabel="Guardando..." />
+        </div>
+      </form>
+      {channelRoutes.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No hay rutas registradas.</p>
+      ) : (
+        <div className="space-y-2">
+          {channelRoutes.map((route) => (
+            <div key={route.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm">
+              <div className="font-mono">{route.clave}</div>
+              <form action={deleteRouteAction}>
+                <input type="hidden" name="tenant_id" value={tenantId} />
+                <input type="hidden" name="route_id" value={route.id} />
+                <Button type="submit" variant="ghost" size="sm">Eliminar</Button>
+              </form>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function TenantWhatsAppValidation({ tenantId }: { tenantId: string }) {
+  const actions = useTenantSettingsActions()
+  const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
+
+  return (
+    <form action={validateAction} className="space-y-3">
+      <input type="hidden" name="tenant_id" value={tenantId} />
+      <input type="hidden" name="scope" value="whatsapp" />
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Validación funcional</h3>
+          <p className="text-xs text-muted-foreground">Comprueba que WhatsApp tenga conexión, ruta y configuración operativa.</p>
+        </div>
+        <Button type="submit" variant="outline" size="sm">Comprobar</Button>
+      </div>
+      {validateState.report ? (
+        <div className="rounded-lg border border-border/60 p-4 text-sm space-y-3">
+          <p className="font-medium">{validateState.message}</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rutas pendientes</p>
+              <ul className="list-disc pl-5">{validateState.report.missing_routes.length ? validateState.report.missing_routes.map((x: string) => <li key={x}>{x}</li>) : <li>—</li>}</ul>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Datos pendientes</p>
+              <ul className="list-disc pl-5">{validateState.report.missing_config.length ? validateState.report.missing_config.map((x: string) => <li key={x}>{x}</li>) : <li>—</li>}</ul>
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Conexiones pendientes</p>
+              <ul className="list-disc pl-5">{validateState.report.missing_secrets.length ? validateState.report.missing_secrets.map((x: string) => <li key={x}>{x}</li>) : <li>—</li>}</ul>
+            </div>
+            {validateState.report.notes.length ? (
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notas</p>
+                <ul className="list-disc pl-5">{validateState.report.notes.map((x: string) => <li key={x}>{x}</li>)}</ul>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : <FormStatusMessage state={validateState} />}
+    </form>
+  )
 }
 
 function TenantWhatsAppSettingsForm({
   tenantId,
   initialValues,
-  routes,
+  scheduleValues,
 }: {
   tenantId: string
   initialValues: WhatsAppInitialValues
-  routes: RouteItem[]
+  scheduleValues?: Record<string, unknown> | null
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
-  const { state: routeState, formAction: createRouteAction, formRef: createRouteRef } = useCrudForm(
-    actions.createTenantRouteAction,
-  )
-  const { formAction: deleteRouteAction } = useCrudForm(actions.deleteTenantRouteAction)
-  const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
-  const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
-  const [provider, setProvider] = useState<"twilio" | "meta">(initialValues.whatsapp_provider ?? "twilio")
-  const isMetaProvider = provider === "meta"
-  const twilioStateLabel = isMetaProvider ? "Inactivo" : "Activo"
-  const metaStateLabel = isMetaProvider ? "Activo" : "Inactivo"
   const router = useRouter()
   const refreshMessageRef = useRef<string | null>(null)
   useEffect(() => {
@@ -2401,7 +2473,7 @@ function TenantWhatsAppSettingsForm({
           <div className="space-y-1">
             <p className="text-sm font-medium">Variables y funciones del asistente</p>
             <p className="text-xs text-muted-foreground">
-              Se usan en ambos proveedores y controlan el comportamiento conversacional de WhatsApp.
+              Controlan el comportamiento conversacional de WhatsApp.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -2517,129 +2589,15 @@ function TenantWhatsAppSettingsForm({
           </div>
         </div>
 
-        <div className="rounded-lg border border-border/60 p-4 space-y-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1">
-              <Label htmlFor="whatsapp_provider_switch">Proveedor activo</Label>
-              <p className="text-xs text-muted-foreground">
-                Solo se activa el bloque del proveedor seleccionado.
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <span className={`text-sm ${!isMetaProvider ? "font-medium text-foreground" : "text-muted-foreground"}`}>
-                  Twilio
-                </span>
-                <p className={`text-xs ${!isMetaProvider ? "text-emerald-600" : "text-muted-foreground"}`}>{twilioStateLabel}</p>
-              </div>
-              <label className="relative inline-flex h-6 w-11 cursor-pointer items-center">
-                <input
-                  id="whatsapp_provider_switch"
-                  type="checkbox"
-                  className="peer sr-only"
-                  checked={isMetaProvider}
-                  onChange={(event) => setProvider(event.target.checked ? "meta" : "twilio")}
-                />
-                <span className="absolute inset-0 rounded-full bg-input transition-colors peer-checked:bg-primary" />
-                <span className="absolute left-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform peer-checked:translate-x-5" />
-              </label>
-              <div>
-                <span className={`text-sm ${isMetaProvider ? "font-medium text-foreground" : "text-muted-foreground"}`}>
-                  Meta
-                </span>
-                <p className={`text-xs ${isMetaProvider ? "text-emerald-600" : "text-muted-foreground"}`}>{metaStateLabel}</p>
-              </div>
-            </div>
-          </div>
-          <input type="hidden" name="whatsapp_provider" value={provider} />
-        </div>
-
-        <fieldset
-          className="rounded-lg border border-border/60 p-4 space-y-4"
-          hidden={isMetaProvider}
-        >
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Twilio</p>
-            <p className="text-xs text-emerald-600">Estado: Activo</p>
-            <p className="text-xs text-muted-foreground">
-              Se conserva para organizaciones existentes o como respaldo operativo.
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_twilio_phone_number">Número de WhatsApp</Label>
-              <Input
-                id="whatsapp_twilio_phone_number"
-                name="whatsapp_twilio_phone_number"
-                placeholder="+5214443354450"
-                defaultValue={initialValues.whatsapp_twilio_phone_number ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_twilio_phone_number_sid">SID del número</Label>
-              <Input
-                id="whatsapp_twilio_phone_number_sid"
-                name="whatsapp_twilio_phone_number_sid"
-                placeholder="PNXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-                defaultValue={initialValues.whatsapp_twilio_phone_number_sid ?? ""}
-              />
-            </div>
-            <div className="flex items-center gap-3 md:col-span-2">
-              <input
-                id="whatsapp_twilio_validate_signatures"
-                name="whatsapp_twilio_validate_signatures"
-                type="checkbox"
-                className="size-4"
-                defaultChecked={Boolean(initialValues.whatsapp_twilio_validate_signatures ?? true)}
-              />
-              <Label htmlFor="whatsapp_twilio_validate_signatures">Validar firmas</Label>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Plantillas Twilio</p>
-            <p className="text-xs text-muted-foreground">SIDs para mensajes automáticos de Twilio.</p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_sales">SID plantilla de ventas</Label>
-              <Input
-                id="whatsapp_template_sales"
-                name="whatsapp_template_sales"
-                placeholder="HX..."
-                defaultValue={initialValues.whatsapp_template_sales ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_appointment">SID plantilla de cita</Label>
-              <Input
-                id="whatsapp_template_appointment"
-                name="whatsapp_template_appointment"
-                placeholder="HX..."
-                defaultValue={initialValues.whatsapp_template_appointment ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_cancel">SID plantilla de cancelación</Label>
-              <Input
-                id="whatsapp_template_cancel"
-                name="whatsapp_template_cancel"
-                placeholder="HX..."
-                defaultValue={initialValues.whatsapp_template_cancel ?? ""}
-              />
-            </div>
-          </div>
-        </fieldset>
-
-        <fieldset
-          className="rounded-lg border border-border/60 p-4 space-y-4"
-          hidden={!isMetaProvider}
-        >
+        <input type="hidden" name="whatsapp_provider" value="meta" />
+      </form>
+      <WhatsAppAssistantSchedulePanel initialValues={scheduleValues ?? null} />
+      <form action={formAction} className="space-y-6">
+        <input type="hidden" name="tenant_id" value={tenantId} />
+        <input type="hidden" name="whatsapp_provider" value="meta" />
+        <fieldset className="rounded-lg border border-border/60 p-4 space-y-4">
           <div className="space-y-1">
             <p className="text-sm font-medium">Meta WhatsApp Cloud API</p>
-            <p className="text-xs text-emerald-600">Estado: Activo</p>
-            <p className="text-xs text-muted-foreground">
-              Este bloque prepara el provider nuevo que correrá en paralelo a Twilio.
-            </p>
             <p className="text-xs text-muted-foreground">
               Webhook sugerido: <code>{`/api/whatsapp/meta/${tenantId}/webhook`}</code>
             </p>
@@ -2745,122 +2703,12 @@ function TenantWhatsAppSettingsForm({
             </div>
           </div>
         </fieldset>
-        <p className="text-xs text-muted-foreground">
-          La configuración de Twilio queda en este bloque y la de Meta en el suyo, incluyendo las plantillas.
-        </p>
-
         <div className="flex items-center justify-between gap-3">
           <FormStatusMessage state={state} />
           <SubmitButton label="Guardar WhatsApp" pendingLabel="Guardando..." />
         </div>
       </form>
 
-      <form ref={createRouteRef} action={createRouteAction} className="space-y-3">
-        <h3 className="text-sm font-medium">Ruta (WhatsApp)</h3>
-        <p className="text-xs text-muted-foreground">Asocia un número E.164 a la organización para recibir mensajes.</p>
-        <input type="hidden" name="tenant_id" value={tenantId} />
-        <input type="hidden" name="canal" value="whatsapp" />
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="whatsapp_route_clave">clave (número)</Label>
-            <Input
-              id="whatsapp_route_clave"
-              name="clave"
-              placeholder="+5214443354450"
-              required
-            />
-          </div>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <FormStatusMessage state={routeState} />
-          <SubmitButton label="Agregar ruta" pendingLabel="Guardando..." />
-        </div>
-      </form>
-
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium">Rutas de WhatsApp</h3>
-        {channelRoutes.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No hay rutas registradas.</p>
-        ) : (
-          <div className="space-y-2">
-            {channelRoutes.map((route) => (
-              <div key={route.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm">
-                <div className="font-mono">{route.clave}</div>
-                <form action={deleteRouteAction}>
-                  <input type="hidden" name="tenant_id" value={tenantId} />
-                  <input type="hidden" name="route_id" value={route.id} />
-                  <Button type="submit" variant="ghost" size="sm">
-                    Eliminar
-                  </Button>
-                </form>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <form action={validateAction} className="space-y-3">
-        <input type="hidden" name="tenant_id" value={tenantId} />
-        <input type="hidden" name="scope" value="whatsapp" />
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-medium">Validación</h3>
-            <p className="text-xs text-muted-foreground">Revisa faltantes de config/rutas/secretos para WhatsApp.</p>
-          </div>
-          <Button type="submit" variant="outline" size="sm">
-            Validar
-          </Button>
-        </div>
-        {validateState.report ? (
-          <div className="rounded-lg border border-border/60 p-4 text-sm space-y-3">
-            <p className="font-medium">{validateState.message}</p>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing routes</p>
-                <ul className="list-disc pl-5">
-                  {validateState.report.missing_routes.length ? (
-                    validateState.report.missing_routes.map((x: string) => <li key={x}>{x}</li>)
-                  ) : (
-                    <li>—</li>
-                  )}
-                </ul>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing config</p>
-                <ul className="list-disc pl-5">
-                  {validateState.report.missing_config.length ? (
-                    validateState.report.missing_config.map((x: string) => <li key={x}>{x}</li>)
-                  ) : (
-                    <li>—</li>
-                  )}
-                </ul>
-              </div>
-              <div className="space-y-1 md:col-span-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Missing secrets</p>
-                <ul className="list-disc pl-5">
-                  {validateState.report.missing_secrets.length ? (
-                    validateState.report.missing_secrets.map((x: string) => <li key={x}>{x}</li>)
-                  ) : (
-                    <li>—</li>
-                  )}
-                </ul>
-              </div>
-              {validateState.report.notes.length ? (
-                <div className="space-y-1 md:col-span-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
-                  <ul className="list-disc pl-5">
-                    {validateState.report.notes.map((x: string) => (
-                      <li key={x}>{x}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <FormStatusMessage state={validateState} />
-        )}
-      </form>
     </div>
   )
 }
