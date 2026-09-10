@@ -62,7 +62,7 @@ function rowToContact(row: Record<string, unknown>): ContactImportItem | null {
   return name ? { ...item, display_name: name, origen: "importacion_contactos" } : null
 }
 
-async function parseFile(file: File): Promise<{ items: ContactImportItem[]; preview: PreviewRow[]; errors: string[] }> {
+async function parseFile(file: File, correoObligatorio: boolean): Promise<{ items: ContactImportItem[]; preview: PreviewRow[]; errors: string[] }> {
   const xlsx = await import("xlsx")
   const workbook = file.name.toLowerCase().endsWith(".csv")
     ? xlsx.read(await file.text(), { type: "string" })
@@ -81,6 +81,10 @@ async function parseFile(file: File): Promise<{ items: ContactImportItem[]; prev
     const item = rowToContact(row)
     if (!item) {
       errors.push(`Fila ${index + 2}: no contiene nombre, empresa o teléfono.`)
+      return
+    }
+    if (correoObligatorio && !item.correo_principal) {
+      errors.push(`Fila ${index + 2}: el correo electrónico es obligatorio para este tenant.`)
       return
     }
     items.push(item)
@@ -106,7 +110,7 @@ function downloadTemplate() {
   })
 }
 
-export function ContactosImportador({ onImported }: { onImported?: (summary: ContactImportSummary) => void }) {
+export function ContactosImportador({ onImported, correoObligatorio = true }: { onImported?: (summary: ContactImportSummary) => void; correoObligatorio?: boolean }) {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<ImportStatus>("idle")
   const [file, setFile] = useState<File | null>(null)
@@ -123,11 +127,11 @@ export function ContactosImportador({ onImported }: { onImported?: (summary: Con
     if (!nextFile) return
     setStatus("parsing")
     try {
-      const parsed = await parseFile(nextFile)
+      const parsed = await parseFile(nextFile, correoObligatorio)
       setItems(parsed.items); setPreview(parsed.preview); setParseErrors(parsed.errors); setStatus(parsed.items.length ? "ready" : "error")
       if (!parsed.items.length) setError(parsed.errors[0] || "El archivo no contiene filas importables.")
     } catch (value) { setStatus("error"); setError(value instanceof Error ? value.message : "No se pudo leer el archivo.") }
-  }, [reset])
+  }, [correoObligatorio, reset])
   const handleImport = useCallback(async () => {
     if (!items.length) return
     setStatus("importing"); setError(null)
@@ -152,7 +156,7 @@ export function ContactosImportador({ onImported }: { onImported?: (summary: Con
             <Button type="button" variant="secondary" size="sm" onClick={downloadTemplate}><IconDownload className="mr-1.5 size-4" />Descargar plantilla</Button>
           </div>
           <Input type="file" accept={ACCEPTED_FILE_EXT} onChange={handleFile} disabled={importing} />
-          <p className="text-xs text-muted-foreground">Se aceptan CSV y XLSX, hasta {MAX_IMPORT_ROWS.toLocaleString("es-MX")} filas. No incluyas vendedor: se toma de tu sesión.</p>
+          <p className="text-xs text-muted-foreground">Se aceptan CSV y XLSX, hasta {MAX_IMPORT_ROWS.toLocaleString("es-MX")} filas. {correoObligatorio ? "El correo electrónico es obligatorio." : "El correo electrónico es opcional."} No incluyas vendedor: se toma de tu sesión.</p>
           {statusText ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><IconLoader className="size-4 animate-spin" />{statusText}</p> : null}
           {file && status !== "parsing" ? <div className="rounded-lg border bg-muted/40 p-3 text-sm"><p className="font-medium">{file.name}</p><p className="text-xs text-muted-foreground">{items.length.toLocaleString("es-MX")} filas válidas · {parseErrors.length.toLocaleString("es-MX")} filas omitidas antes de importar</p>{preview.length ? <div className="mt-3 space-y-2">{preview.map((row, index) => <div key={`${row.name}-${index}`} className="rounded-md border bg-background px-3 py-2 text-xs"><p className="font-medium">{row.name}</p><p className="text-muted-foreground">{row.company || "Sin empresa"}{row.contact ? ` · ${row.contact}` : ""}</p></div>)}</div> : null}</div> : null}
           {parseErrors.length ? <div className="max-h-32 overflow-y-auto rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200"><p className="flex items-center gap-2 font-medium"><IconAlertTriangle className="size-4" />Filas no importables</p>{parseErrors.slice(0, 8).map((message) => <p key={message} className="mt-1">{message}</p>)}</div> : null}

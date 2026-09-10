@@ -58,6 +58,7 @@ export type TenantScopedSettings = {
   sitio_web?: string | null
   estado_onboarding?: string | null
   activo?: boolean | null
+  correo_contacto_obligatorio?: boolean
   config?: Record<string, unknown> | null
   routes: Array<{ id?: string; canal: string; clave: string }>
 }

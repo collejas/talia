@@ -811,14 +811,14 @@ function buildPayload(state: ContactCreateState, dedupe?: DedupeDecision, curren
   };
 }
 
-function validateState(state: ContactCreateState): string | null {
+function validateState(state: ContactCreateState, correoContactoObligatorio = true): string | null {
   if (state.mode === "empresa_nueva" && !state.cuenta.tipo.trim()) {
     return "Selecciona el tipo de cuenta.";
   }
   if (!state.persona.nombre.trim()) return "El nombre es obligatorio.";
   if (!state.persona.apellido_paterno.trim()) return "El apellido paterno es obligatorio.";
   if (!state.persona.origen.trim()) return "Selecciona el origen del contacto.";
-  if (!state.persona.correo_principal.trim()) return "El correo 1 principal es obligatorio.";
+  if (correoContactoObligatorio && !state.persona.correo_principal.trim()) return "El correo 1 principal es obligatorio.";
   if (!state.persona.telefono_principal_e164.trim()) return "El teléfono principal es obligatorio.";
   if (state.mode === "empresa_existente" && !state.cuenta.cuenta_id.trim()) {
     return "Selecciona una empresa existente.";
@@ -1158,7 +1158,7 @@ export function ContactCreateFlow({
   const submitLabel = "Guardar contacto";
 
   const submit = async (dedupeDecision?: DedupeDecision) => {
-    const validationError = validateState(state);
+    const validationError = validateState(state, tenantCatalogs.correoContactoObligatorio);
     if (validationError) {
       if (validationError === "Selecciona una empresa existente.") {
         dispatch({ type: "error/set", value: null });
@@ -1336,7 +1336,7 @@ export function ContactCreateFlow({
               <Field label="ID de contacto">
                 <Input value={state.persona.codigo_contacto || "Se generará automáticamente"} readOnly disabled className="bg-muted" />
               </Field>
-              <Field label="Correo 1 principal" required>
+              <Field label="Correo 1 principal" required={tenantCatalogs.correoContactoObligatorio}>
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
               </Field>
               <Field label="Correo 2" hint="Opcional">

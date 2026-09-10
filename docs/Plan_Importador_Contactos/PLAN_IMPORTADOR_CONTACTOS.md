@@ -17,6 +17,8 @@ El importador debe estar disponible únicamente para usuarios con alguno de esto
 
 Cada contacto creado desde este flujo debe quedar asignado automáticamente al usuario autenticado que realizó la carga. El usuario no debe poder elegir otro vendedor desde el archivo ni desde el request.
 
+La obligatoriedad del correo se configura por organización desde `Settings > Variables`. El valor inicial es obligatorio para conservar el comportamiento existente; al desactivarlo, los contactos nuevos, editados o importados pueden conservar el correo vacío.
+
 ## 2. Diagnóstico actual
 
 ### Lo que ya existe
@@ -48,6 +50,13 @@ Cada contacto creado desde este flujo debe quedar asignado automáticamente al u
 - La edición de usuarios de `settings/usuarios` permite asignar o quitar el rol que contiene ese permiso.
 - La migración agrega el permiso a organizaciones existentes y lo asigna inicialmente a roles llamados `vendedor`, `agente` y `supervisor` cuando existen.
 - Dueños y administradores conservan el acceso automático mediante el contexto de permisos existente.
+
+### Configuración de datos de contacto
+
+- La regla se almacena en la columna explícita `organizaciones.correo_contacto_obligatorio`.
+- La modificación requiere `settings.manage`; owner y admin conservan el bypass administrativo.
+- `settings.view` permite entrar a la configuración, pero no modificarla.
+- La base de datos no obliga el correo, por lo que los registros históricos sin correo siguen siendo válidos.
 
 ## 3. Decisión técnica recomendada
 

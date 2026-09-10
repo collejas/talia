@@ -323,7 +323,10 @@ async def require_tenant_context(
             requested_id = UUID(requested_organizacion_id)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="organizacion_id_invalid") from exc
-        if not await platform_repo.is_platform_admin(user_id=user_id):
+        # The panel sends the current tenant in this header for all requests.
+        # A regular tenant user may confirm its own context; only switching to
+        # a different tenant requires platform-admin privileges.
+        if requested_id != organizacion_id and not await platform_repo.is_platform_admin(user_id=user_id):
             raise HTTPException(status_code=403, detail="platform_admin_required_for_organizacion_context")
         organizacion_id = requested_id
 
@@ -397,6 +400,7 @@ class TenantScopedSettings(BaseModel):
     sitio_web: str | None = None
     estado_onboarding: str | None = None
     activo: bool | None = None
+    correo_contacto_obligatorio: bool = True
     config: dict[str, Any] | None = None
     routes: list[ChannelRoute] = Field(default_factory=list)
 
@@ -470,6 +474,7 @@ class TenantContactCatalogsResponse(BaseModel):
 
     organizacion_id: UUID
     catalogos: dict[str, Any] = Field(default_factory=dict)
+    correo_contacto_obligatorio: bool = True
 
 
 class TenantScopedUpdateRequest(BaseModel):
@@ -520,6 +525,7 @@ class TenantScopedUpdateRequest(BaseModel):
     regimen_fiscal: str | None = None
     sitio_web: str | None = None
     estado_onboarding: str | None = None
+    correo_contacto_obligatorio: bool | None = None
 
 
 class UserMailConnectionState(BaseModel):
@@ -755,6 +761,7 @@ def _apply_organization_fields(target: dict[str, Any], source: Any) -> dict[str,
         ("correo_facturacion", "correo_facturacion"),
         ("contacto_nombre", "contacto_nombre"),
         ("contacto_telefono", "contacto_telefono"),
+        ("correo_contacto_obligatorio", "correo_contacto_obligatorio"),
         ("timezone", "timezone"),
         ("idioma", "idioma"),
         ("moneda", "moneda"),
@@ -842,6 +849,7 @@ async def _build_tenant_response(
         "sitio_web": row.get("sitio_web"),
         "estado_onboarding": row.get("estado_onboarding"),
         "activo": row.get("activo"),
+        "correo_contacto_obligatorio": row.get("correo_contacto_obligatorio", True) is not False,
         "config": row.get("config") if isinstance(row.get("config"), dict) else None,
         "routes": _format_route_rows(routes),
     }
@@ -1400,6 +1408,7 @@ async def get_tenant_contact_catalogs(
     return TenantContactCatalogsResponse(
         organizacion_id=context.organizacion_id,
         catalogos=catalogos,
+        correo_contacto_obligatorio=row.get("correo_contacto_obligatorio", True) is not False,
     )
 
 

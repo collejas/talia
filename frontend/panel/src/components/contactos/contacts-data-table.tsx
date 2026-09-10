@@ -1390,7 +1390,7 @@ export function ContactsDataTable({
           </Button>
         </>
       ) : null}
-      {canImportContacts ? <ContactosImportador onImported={onContactsImported ? () => onContactsImported() : undefined} /> : null}
+      {canImportContacts ? <ContactosImportador correoObligatorio={tenantCatalogs.correoContactoObligatorio} onImported={onContactsImported ? () => onContactsImported() : undefined} /> : null}
       {canExportCsv ? (
         <Button
           type="button"

@@ -13593,6 +13593,15 @@ def _validate_rfc_length_for_account_type(rfc: str | None, account_type: str | N
     return normalized
 
 
+async def _contact_email_is_required(repo: CRMRepository, organizacion_id: UUID) -> bool:
+    try:
+        return await repo.get_organizacion_contact_email_required(organizacion_id=organizacion_id)
+    except CRMRepositoryError:
+        # Fail closed: si no se puede leer la regla del tenant, se conserva la
+        # política histórica de exigir correo en las altas/ediciones.
+        return True
+
+
 def _rfc_length_error_message(expected: int | None) -> str:
     if expected == 13:
         return "Personas Físicas: Consta de 13 caracteres"
@@ -25024,7 +25033,8 @@ async def validate_persona_alta(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_principal):
+    email_required = await _contact_email_is_required(repo, organizacion_id)
+    if email_required and not _persona_alta_clean_text(persona.correo_principal):
         raise HTTPException(status_code=400, detail="correo_principal_required")
     if not _persona_alta_clean_text(persona.telefono_principal_e164):
         raise HTTPException(status_code=400, detail="telefono_principal_required")
@@ -25092,7 +25102,8 @@ async def create_persona_alta(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_principal):
+    email_required = await _contact_email_is_required(repo, organizacion_id)
+    if email_required and not _persona_alta_clean_text(persona.correo_principal):
         raise HTTPException(status_code=400, detail="correo_principal_required")
     if not _persona_alta_clean_text(persona.telefono_principal_e164):
         raise HTTPException(status_code=400, detail="telefono_principal_required")
@@ -25369,7 +25380,8 @@ async def update_persona(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_principal):
+    email_required = await _contact_email_is_required(repo, organizacion_id)
+    if email_required and not _persona_alta_clean_text(persona.correo_principal):
         raise HTTPException(status_code=400, detail="correo_principal_required")
     if not _persona_alta_clean_text(persona.telefono_principal_e164):
         raise HTTPException(status_code=400, detail="telefono_principal_required")
@@ -25880,7 +25892,8 @@ async def validate_persona_update(
 
     if not _persona_alta_clean_text(persona.nombre) or not _persona_alta_clean_text(persona.apellido_paterno):
         raise HTTPException(status_code=400, detail="persona_incompleta")
-    if not _persona_alta_clean_text(persona.correo_principal):
+    email_required = await _contact_email_is_required(repo, organizacion_id)
+    if email_required and not _persona_alta_clean_text(persona.correo_principal):
         raise HTTPException(status_code=400, detail="correo_principal_required")
     if not _persona_alta_clean_text(persona.telefono_principal_e164):
         raise HTTPException(status_code=400, detail="telefono_principal_required")
@@ -26162,6 +26175,7 @@ async def import_personas(
     if not (privileged or allowed_by_permission):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="contact_import_permission_required")
 
+    email_required = await _contact_email_is_required(repo, organizacion_id)
     created: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
@@ -26174,6 +26188,9 @@ async def import_personas(
             display_name = str(raw.pop("display_name", "") or "").strip()
             email = _persona_alta_normalize_email(raw.get("correo_principal"))
             phone = _persona_alta_normalize_phone(raw.get("telefono_principal_e164"))
+            if email_required and not email:
+                errors.append({"row": row_number, "motivo": "correo_principal_required"})
+                continue
             if email and email in seen_emails:
                 skipped.append({"row": row_number, "motivo": "duplicado_en_archivo"})
                 continue

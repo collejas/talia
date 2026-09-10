@@ -26987,6 +26987,19 @@ class CRMRepository:
         config = row.get("config")
         return config if isinstance(config, dict) else ({} if config is None else None)
 
+    async def get_organizacion_contact_email_required(self, *, organizacion_id: UUID) -> bool:
+        params = {
+            "select": "correo_contacto_obligatorio",
+            "id": f"eq.{organizacion_id}",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/organizaciones", params=params)
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("organizacion_not_found")
+        value = data[0].get("correo_contacto_obligatorio")
+        return value is not False
+
     async def set_organizacion_config(
         self,
         *,

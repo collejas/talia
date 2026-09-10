@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { SettingsErrorCallout } from "@/components/settings/settings-helpers"
+import { ContactEmailRequirementCard } from "@/components/settings/contact-email-requirement-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { callCrmApi } from "@/lib/api/crm"
@@ -124,6 +125,7 @@ type TenantSettingsResponse = {
   sitio_web?: string | null
   estado_onboarding?: string | null
   activo?: boolean | null
+  correo_contacto_obligatorio?: boolean
   config?: Record<string, unknown> | null
   routes: Array<{ canal: string; clave: string; id: string; activo?: boolean | null }>
 }
@@ -486,6 +488,8 @@ export default async function SettingsVariablesPage({
               <TenantOrganizationInfoForm tenantId={tenantId} info={tenantInfo} showActiveToggle={false} />
             </CardContent>
           </Card>
+
+          {data ? <ContactEmailRequirementCard initialRequired={data.correo_contacto_obligatorio} /> : null}
 
           <Card>
             <CardHeader className="space-y-1">

@@ -4,11 +4,11 @@ Este archivo registra el avance, las decisiones y las validaciones del plan docu
 
 ## Estado actual
 
-- Estado: `Permiso configurable aplicado; pendiente prueba autenticada completa del importador`
+- Estado: `Configuración de correo corregida; pendiente prueba autenticada completa del importador`
 - Última actualización: 2026-09-10 (UTC)
 - Código implementado: sí
 - Migración creada: sí; aplicada en Supabase: sí
-- Despliegue realizado: no
+- Despliegue realizado: API reiniciada con la corrección; frontend ya contenía la integración previa
 - Prueba funcional autenticada: pendiente
 
 ## 2026-09-10 - Diagnóstico y documentación inicial
@@ -118,6 +118,30 @@ Cada cambio debe registrar:
 - Se reemplazó la validación hardcodeada por roles en el importador por el permiso `contacts.import`.
 - El frontend de Contactos ahora muestra el botón por permiso, manteniendo bypass para `owner` y `admin`.
 - El backend valida el mismo permiso desde el contexto autenticado y conserva el ownership en el usuario de sesión.
+
+## 2026-09-10 - Corrección de lectura de configuración en Contactos
+
+### Encontrado
+- La configuración del tenant sí se estaba guardando: la base contiene un tenant con `correo_contacto_obligatorio = false`.
+- `/api/personas/catalogos/config` devolvía `403` porque el BFF envía `X-Organizacion-Id` también para usuarios normales.
+- El backend trataba cualquier encabezado como un cambio de tenant reservado a administradores de plataforma.
+- Al fallar la lectura, el frontend aplicaba correctamente su valor seguro predeterminado: correo obligatorio.
+
+### Cambiado
+- `require_tenant_context` ahora acepta el encabezado cuando coincide con el tenant propio del usuario.
+- Se mantiene la restricción para cambiar a un tenant distinto: solo un administrador de plataforma puede hacerlo.
+- Se agregaron pruebas para el contexto propio y se actualizaron las pruebas existentes para incluir el request HTTP.
+
+### Validado
+- Pruebas de contexto e importador: `7 passed`.
+- Compilación Python de `tenant.py`: pasó.
+- `git diff --check`: pasó.
+
+### Validación posterior
+- API reiniciada y quedó `active/running` con un nuevo proceso.
+
+### Pendiente
+- Repetir la prueba autenticada en Contactos: leer configuración `200`, crear contacto sin correo y confirmar persistencia.
 - Se agregó el permiso a la provisión de nuevos tenants.
 - Se creó la migración `20260910223548_add_contacts_import_permission.sql` para tenants existentes.
 - La migración asigna inicialmente el permiso a roles existentes llamados `vendedor`, `agente` y `supervisor`; después puede quitarse o reasignarse desde la matriz de roles.
@@ -160,3 +184,22 @@ Cada cambio debe registrar:
 - Refrescar la vista `settings/usuarios/roles` con una sesión nueva o recarga completa para comprobar la matriz visual.
 - Marcar el permiso para el rol `agente` del tenant operativo si se requiere una validación específica.
 - Ejecutar una importación autenticada y comprobar `propietario_usuario_id`.
+
+## 2026-09-10 - Configuración por tenant del correo obligatorio
+
+### Cambiado
+- Se agregó `organizaciones.correo_contacto_obligatorio boolean NOT NULL DEFAULT true`.
+- Se expuso la configuración en `Settings > Variables`.
+- Solo `settings.manage`, owner y admin pueden modificarla.
+- La regla se devuelve junto con los catálogos de Contactos y se refleja en altas, ediciones e importaciones.
+- Con `true`, el correo sigue siendo obligatorio; con `false`, se puede conservar vacío en contactos nuevos y existentes.
+- Se mantuvo la base de datos compatible con históricos sin correo.
+
+### Validado
+- Migración `contact_email_requirement_per_tenant` aplicada en Supabase.
+- Las 9 organizaciones existentes quedaron con `correo_contacto_obligatorio = true`.
+- Pruebas de importación: permiso, admin y tenant con correo opcional.
+
+### Pendiente
+- Repetir deploy del backend y panel.
+- Cambiar temporalmente la opción a `No` en un tenant y probar alta, edición e importación de un contacto sin correo.

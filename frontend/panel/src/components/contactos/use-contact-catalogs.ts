@@ -7,6 +7,7 @@ import { usePermissions } from "@/hooks/use-permissions"
 
 type CatalogsResponse = {
   catalogos?: Record<string, unknown> | null
+  correo_contacto_obligatorio?: boolean
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -54,6 +55,7 @@ export function useTenantContactCatalogs() {
   const [formaPagoOptions, setFormaPagoOptions] = useState<ContactCatalogOption[]>([])
   const [metodoPagoOptions, setMetodoPagoOptions] = useState<ContactCatalogOption[]>([])
   const [loading, setLoading] = useState(true)
+  const [correoContactoObligatorio, setCorreoContactoObligatorio] = useState(true)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -77,10 +79,12 @@ export function useTenantContactCatalogs() {
           setUsoCfdiOptions([])
           setFormaPagoOptions([])
           setMetodoPagoOptions([])
+          setCorreoContactoObligatorio(true)
           setLoading(false)
           return
         }
         const payload = (await response.json()) as CatalogsResponse
+        setCorreoContactoObligatorio(payload.correo_contacto_obligatorio !== false)
         const catalogos = asRecord(payload.catalogos)
         const puestosRaw = catalogos ? catalogos.puesto ?? catalogos.puestos : null
         const origenesRaw = catalogos ? catalogos.origen ?? catalogos.origenes : null
@@ -113,6 +117,7 @@ export function useTenantContactCatalogs() {
         setUsoCfdiOptions([])
         setFormaPagoOptions([])
         setMetodoPagoOptions([])
+        setCorreoContactoObligatorio(true)
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
@@ -129,6 +134,7 @@ export function useTenantContactCatalogs() {
     setUsoCfdiOptions([])
     setFormaPagoOptions([])
     setMetodoPagoOptions([])
+    setCorreoContactoObligatorio(true)
     void load()
 
     return () => controller.abort()
@@ -145,8 +151,9 @@ export function useTenantContactCatalogs() {
       usoCfdiOptions,
       formaPagoOptions,
       metodoPagoOptions,
+      correoContactoObligatorio,
       loading,
     }),
-    [loading, puestoOptions, origenOptions, areaOptions, rolDecisionOptions, clasificacionNegocioOptions, tamanoOptions, usoCfdiOptions, formaPagoOptions, metodoPagoOptions],
+    [loading, puestoOptions, origenOptions, areaOptions, rolDecisionOptions, clasificacionNegocioOptions, tamanoOptions, usoCfdiOptions, formaPagoOptions, metodoPagoOptions, correoContactoObligatorio],
   )
 }

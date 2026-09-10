@@ -731,10 +731,10 @@ function buildPayload(state: ContactEditState, dedupe?: DedupeDecision) {
   };
 }
 
-function validateState(state: ContactEditState): string | null {
+function validateState(state: ContactEditState, correoContactoObligatorio = true): string | null {
   if (!state.persona.nombre.trim()) return "El nombre es obligatorio.";
   if (!state.persona.apellido_paterno.trim()) return "El apellido paterno es obligatorio.";
-  if (!state.persona.correo_principal.trim()) return "El correo 1 principal es obligatorio.";
+  if (correoContactoObligatorio && !state.persona.correo_principal.trim()) return "El correo 1 principal es obligatorio.";
   if (!state.persona.telefono_principal_e164.trim()) return "El teléfono principal es obligatorio.";
   if (state.mode === "empresa_existente" && !state.cuenta.cuenta_id.trim()) {
     return "Selecciona una cuenta existente.";
@@ -1488,7 +1488,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
 
   const submit = async (dedupeDecision?: DedupeDecision) => {
     if (!resolvedPersonaId) return;
-    const validationError = validateState(state);
+    const validationError = validateState(state, tenantCatalogs.correoContactoObligatorio);
     if (validationError) {
       dispatch({ type: "error/set", value: validationError });
       toast.error(validationError);
@@ -1640,7 +1640,7 @@ export function ContactEditFlow({ open, onOpenChange, personaId, onSaved }: Cont
               <Field label="ID de contacto">
                 <Input value={state.persona.codigo_contacto || "Se generará automáticamente"} readOnly disabled className="bg-muted" />
               </Field>
-              <Field label="Correo 1 principal" required>
+              <Field label="Correo 1 principal" required={tenantCatalogs.correoContactoObligatorio}>
                 <Input value={state.persona.correo_principal} onChange={(e) => dispatch({ type: "persona/set", field: "correo_principal", value: e.target.value })} />
               </Field>
               <Field label="Correo 2" hint="Opcional">
