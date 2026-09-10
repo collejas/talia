@@ -45538,6 +45538,29 @@ async def demografia_campanas_atribucion(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    # El tenant maestro conserva conversiones legacy de campañas cuyo envío o
+    # lote original ya no está relacionado con la atribución de mensajes. No
+    # es seguro inventar una plantilla para ellas, pero sí debemos mantenerlas
+    # visibles en el mapa como conversiones históricas sin plantilla.
+    if organizacion_id == tenant_runtime.MASTER_ORGANIZACION_ID:
+        try:
+            legacy_conversion_rows = await repo.get_campana_conversion_resumen_rango(
+                organizacion_id=organizacion_id,
+                campana_id=campana_uuid,
+                date_from_iso=date_from.isoformat() if date_from else None,
+                date_to_iso=date_to.isoformat() if date_to else None,
+                limit=1000,
+                offset=0,
+            )
+        except CRMRepositoryError:
+            logger.warning(
+                "crm.demografia.campanas_atribucion.legacy_conversion_fallback_failed",
+                extra={"organizacion_id": str(organizacion_id)},
+            )
+            legacy_conversion_rows = []
+    else:
+        legacy_conversion_rows = []
+
     mapa_campaign_rows: list[dict[str, Any]] = []
     for row in campaign_rows:
         canal = _clean_text(row.get("canal")) or "correo"
@@ -45569,6 +45592,42 @@ async def demografia_campanas_atribucion(
                 "envios_totales": int(row.get("envios_totales") or 0),
                 "oportunidades_total": int(row.get("oportunidades_total") or 0),
                 "conversaciones_total": int(row.get("conversaciones_total") or 0),
+            }
+        )
+
+    whatsapp_by_campaign: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"oportunidades": 0, "conversaciones": 0}
+    )
+    for row in mapa_whatsapp_rows:
+        campaign_key = _clean_text(row.get("campana_id"))
+        if not campaign_key:
+            continue
+        whatsapp_by_campaign[campaign_key]["oportunidades"] += int(row.get("oportunidades_total") or 0)
+        whatsapp_by_campaign[campaign_key]["conversaciones"] += int(row.get("conversaciones_total") or 0)
+
+    for row in legacy_conversion_rows:
+        if _clean_text(row.get("canal")) != "whatsapp":
+            continue
+        campaign_id = _clean_text(row.get("campana_id"))
+        if not campaign_id:
+            continue
+        covered = whatsapp_by_campaign[campaign_id]
+        opportunities_missing = max(int(row.get("oportunidades") or 0) - covered["oportunidades"], 0)
+        conversations_missing = max(int(row.get("conversaciones") or 0) - covered["conversaciones"], 0)
+        if opportunities_missing <= 0 and conversations_missing <= 0:
+            continue
+        mapa_whatsapp_rows.append(
+            {
+                "campana_id": campaign_id,
+                "campana_nombre": row.get("campana_nombre"),
+                "canal": "whatsapp",
+                "template_id": None,
+                "template_nombre": "Histórico sin plantilla",
+                "template_slug": None,
+                "version_id": None,
+                "envios_totales": 0,
+                "oportunidades_total": opportunities_missing,
+                "conversaciones_total": conversations_missing,
             }
         )
 
