@@ -542,6 +542,7 @@ export async function loadDemografiaData(
     hasta?: string | null;
     includeMap?: boolean;
     includeCampaignAttribution?: boolean;
+    soloConversiones?: boolean;
   } = {},
 ): Promise<DemografiaData> {
   const resumenParams: DemografiaQueryParams = { nivel };
@@ -615,6 +616,10 @@ export async function loadDemografiaData(
   }
   if (options.includeCampaignAttribution) {
     resumenParams.incluir_atribucion_campanas = true;
+  }
+  if (options.soloConversiones) {
+    resumenParams.solo_conversiones = true;
+    mapaParams.solo_conversiones = true;
   }
   mapaParams.skip_visitantes = true;
 

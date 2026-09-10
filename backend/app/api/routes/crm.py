@@ -854,6 +854,130 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
         totals["conversaciones_whatsapp"] = _to_number(totals.get("conversaciones_whatsapp"))
 
 
+async def _restrict_visitantes_payload_whatsapp_to_conversions(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    nivel: str,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    campana_id: UUID | None,
+    campana_tipo: str | None,
+    visitantes_payload: dict[str, Any],
+) -> None:
+    """Replace WhatsApp traffic counts with one count per converted conversation."""
+    if not isinstance(visitantes_payload, dict):
+        return
+
+    campaign_ids: set[UUID] | None = None
+    if campana_tipo and not campana_id:
+        campaign_ids = set()
+        for row in await repo.list_campaigns(organizacion_id=organizacion_id):
+            if not isinstance(row, dict) or str(row.get("canal") or "").strip().lower() != campana_tipo:
+                continue
+            try:
+                campaign_ids.add(UUID(str(row.get("id") or "").strip()))
+            except ValueError:
+                continue
+
+    conversion_rows = await repo.list_campana_conversion_conversations(
+        organizacion_id=organizacion_id,
+        campana_id=campana_id,
+        campana_ids=campaign_ids,
+        date_from=date_from,
+        date_to=date_to,
+        limit=500,
+        offset=0,
+    )
+    conversion_ids = {
+        str(row.get("conversacion_id") or "").strip()
+        for row in conversion_rows
+        if isinstance(row, dict) and _safe_uuid(str(row.get("conversacion_id") or "").strip())
+    }
+    items = visitantes_payload.get("items")
+    if not isinstance(items, list):
+        return
+
+    # The demographic RPC includes outbound-only sends. Reset WhatsApp fields,
+    # then add back only distinct conversations present in campana_conversion.
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item["whatsapp_total"] = 0
+        item["conversaciones_whatsapp"] = 0
+        for parent_key in ("visitantes_totales_por_canal", "totales_por_canal"):
+            channel_totals = item.get(parent_key)
+            if isinstance(channel_totals, dict):
+                channel_totals["whatsapp"] = 0
+        conversation_channels = item.get("conversation_channels")
+        if isinstance(conversation_channels, dict):
+            conversation_channels["conversaciones_whatsapp"] = 0
+        item["wa_atribucion_top"] = []
+        item["whatsapp_atribucion_top"] = []
+
+    totals = visitantes_payload.get("totals")
+    if isinstance(totals, dict):
+        for key in ("whatsapp_total", "conversaciones_whatsapp", "wa_atribucion_total", "whatsapp_atribucion_total"):
+            if key in totals:
+                totals[key] = 0
+    if not conversion_ids:
+        return
+
+    rows = await repo.visitas_persona_whatsapp_conversaciones(
+        organizacion_id=organizacion_id,
+        limit=min(len(conversion_ids), 500),
+        offset=0,
+        include_persona_details=True,
+        conversation_ids=conversion_ids,
+    )
+    aggregates: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        phone_value = _extract_whatsapp_phone_value(row)
+        if not phone_value:
+            continue
+        key, name = _resolve_whatsapp_geo_bucket(
+            leads_geo.phone_location_from_number(phone_value), nivel=nivel
+        )
+        if not key:
+            continue
+        bucket = aggregates.setdefault(key, {"count": 0, "name": name})
+        bucket["count"] += 1
+        if name:
+            bucket["name"] = name
+
+    item_by_key = {
+        str(item.get("key") or "UNK"): item
+        for item in items
+        if isinstance(item, dict)
+    }
+    total_conversions = 0
+    for key, payload in aggregates.items():
+        count = int(payload.get("count") or 0)
+        if count <= 0:
+            continue
+        item = item_by_key.get(key)
+        if item is None:
+            item = {
+                "level": nivel, "key": key, "name": payload.get("name") or "Desconocido",
+                "total": 0, "con_chat": 0, "sin_chat": 0, "webchat_total": 0,
+                "webchat_con_chat": 0, "webchat_sin_chat": 0, "whatsapp_total": 0,
+                "voz_total": 0, "correo_total": 0, "sesiones_web_total": 0,
+                "sesiones_webchat_total": 0, "sesiones_con_chat_webchat": 0,
+                "sesiones_sin_chat_webchat": 0, "conversaciones_whatsapp": 0,
+                "conversaciones_voz": 0, "conversaciones_correo": 0,
+                "fuentes_top": [], "utm_top": [], "wa_atribucion_top": [], "has_data": False,
+            }
+            items.append(item)
+            item_by_key[key] = item
+        _apply_whatsapp_bucket_counts(
+            item=item, count=count, level=nivel, name=str(payload.get("name") or "")
+        )
+        total_conversions += count
+    if isinstance(totals, dict):
+        totals["whatsapp_total"] = total_conversions
+        totals["conversaciones_whatsapp"] = total_conversions
+
+
 def _build_whatsapp_location_cache_key(
     *,
     organizacion_id: UUID,
@@ -40719,6 +40843,7 @@ async def get_visits_whatsapp_conversations(
     campana_id: str | None = Query(default=None),
     campana_tipo: str | None = Query(default=None),
     template_id: str | None = Query(default=None),
+    solo_conversion: bool = Query(default=False),
 ) -> list[dict[str, Any]]:
     request_started = time.perf_counter()
     stage_timings: dict[str, float] = {}
@@ -40743,6 +40868,12 @@ async def get_visits_whatsapp_conversations(
     campana_id_value = (campana_id or "").strip() or None
     campana_tipo_value = (campana_tipo or "").strip().lower() or None
     template_id_value = (template_id or "").strip().lower() or None
+    conversion_campana_uuid: UUID | None = None
+    if solo_conversion and campana_id_value:
+        try:
+            conversion_campana_uuid = UUID(campana_id_value)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="campana_id_invalid") from exc
     wa_regla_uuid: UUID | None = None
     if wa_regla_id_value:
         try:
@@ -40752,13 +40883,30 @@ async def get_visits_whatsapp_conversations(
 
     try:
         fetch_rows_started = time.perf_counter()
+        conversion_rows: list[dict[str, Any]] = []
+        conversion_conversation_ids: set[str] | None = None
+        if solo_conversion:
+            conversion_rows = await repo.list_campana_conversion_conversations(
+                organizacion_id=organizacion_id,
+                campana_id=conversion_campana_uuid,
+                date_from=date_from,
+                date_to=date_to,
+                limit=limit,
+                offset=offset,
+            )
+            conversion_conversation_ids = {
+                str(row.get("conversacion_id") or "").strip()
+                for row in conversion_rows
+                if _safe_uuid(str(row.get("conversacion_id") or "").strip())
+            }
         rows = await repo.visitas_persona_whatsapp_conversaciones(
             usuario_token=_normalize_reports_user_token(user_token),
             organizacion_id=organizacion_id,
             limit=limit,
-            offset=offset,
+            offset=0 if solo_conversion else offset,
             date_from=date_from,
             date_to=date_to,
+            conversation_ids=conversion_conversation_ids,
         )
         stage_timings["fetch_rows_ms"] = round((time.perf_counter() - fetch_rows_started) * 1000, 2)
         events_started = time.perf_counter()
@@ -45793,6 +45941,7 @@ async def demografia_resumen_v2(
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
     incluir_atribucion_campanas: bool = Query(default=False),
+    solo_conversiones: bool = Query(default=False),
 ) -> dict[str, Any]:
     request_started = time.perf_counter()
     stage_timings: dict[str, float] = {}
@@ -45882,6 +46031,7 @@ async def demografia_resumen_v2(
             "hasta": (hasta or "").strip() or None,
             "timezone": effective_timezone,
             "incluir_atribucion_campanas": incluir_atribucion_campanas,
+            "solo_conversiones": solo_conversiones,
         },
     )
     cached_resumen = await _read_demografia_response_cache(
@@ -45971,14 +46121,26 @@ async def demografia_resumen_v2(
         )
         stage_timings["parallel_fetch_ms"] = round((time.perf_counter() - parallel_started) * 1000, 2)
         whatsapp_locations_started = time.perf_counter()
-        await _enrich_visitantes_payload_with_whatsapp_locations(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            nivel=nivel_normalizado,
-            date_from=date_from,
-            date_to=date_to,
-            visitantes_payload=visitantes_payload,
-        )
+        if solo_conversiones:
+            await _restrict_visitantes_payload_whatsapp_to_conversions(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                nivel=nivel_normalizado,
+                date_from=date_from,
+                date_to=date_to,
+                campana_id=campana_uuid_value,
+                campana_tipo=campana_tipo_value,
+                visitantes_payload=visitantes_payload,
+            )
+        else:
+            await _enrich_visitantes_payload_with_whatsapp_locations(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                nivel=nivel_normalizado,
+                date_from=date_from,
+                date_to=date_to,
+                visitantes_payload=visitantes_payload,
+            )
         stage_timings["whatsapp_locations_ms"] = round((time.perf_counter() - whatsapp_locations_started) * 1000, 2)
 
         catalog_started = time.perf_counter()
@@ -46656,6 +46818,7 @@ async def demografia_mapa_v2(
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
     skip_visitantes: bool = Query(default=False),
+    solo_conversiones: bool = Query(default=False),
 ) -> dict[str, Any]:
     request_started = time.perf_counter()
     stage_timings: dict[str, float] = {}
@@ -46739,6 +46902,7 @@ async def demografia_mapa_v2(
             "desde": (desde or "").strip() or None,
             "hasta": (hasta or "").strip() or None,
             "timezone": effective_timezone,
+            "solo_conversiones": solo_conversiones,
         },
     )
     cached_mapa = await _read_demografia_response_cache(
@@ -46829,14 +46993,26 @@ async def demografia_mapa_v2(
         )
         stage_timings["parallel_fetch_ms"] = round((time.perf_counter() - parallel_started) * 1000, 2)
         whatsapp_locations_started = time.perf_counter()
-        await _enrich_visitantes_payload_with_whatsapp_locations(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            nivel=nivel_normalizado,
-            date_from=date_from,
-            date_to=date_to,
-            visitantes_payload=visitantes_payload,
-        )
+        if solo_conversiones:
+            await _restrict_visitantes_payload_whatsapp_to_conversions(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                nivel=nivel_normalizado,
+                date_from=date_from,
+                date_to=date_to,
+                campana_id=campana_uuid_value,
+                campana_tipo=campana_tipo_value,
+                visitantes_payload=visitantes_payload,
+            )
+        else:
+            await _enrich_visitantes_payload_with_whatsapp_locations(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                nivel=nivel_normalizado,
+                date_from=date_from,
+                date_to=date_to,
+                visitantes_payload=visitantes_payload,
+            )
         stage_timings["whatsapp_locations_ms"] = round((time.perf_counter() - whatsapp_locations_started) * 1000, 2)
         dataset_started = time.perf_counter()
         dataset = demografia_service.build_map_dataset(

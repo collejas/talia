@@ -336,6 +336,7 @@ export default async function Page({
     hasta,
     includeMap: view !== "overview",
     includeCampaignAttribution: false,
+    soloConversiones: true,
     })
     .then((value) => ({ ok: true as const, value }))
     .catch((error: unknown) => ({

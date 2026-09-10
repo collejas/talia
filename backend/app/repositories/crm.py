@@ -17283,6 +17283,7 @@ class CRMRepository:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         include_contact_details: bool = True,
+        conversation_ids: set[str] | None = None,
     ) -> list[dict[str, Any]]:
         request_started = time.perf_counter()
         stage_timings: dict[str, float] = {}
@@ -17295,6 +17296,11 @@ class CRMRepository:
         }
         if organizacion_id:
             params["organizacion_id"] = f"eq.{organizacion_id}"
+        if conversation_ids is not None:
+            safe_ids = sorted({value.strip() for value in conversation_ids if value.strip()})
+            if not safe_ids:
+                return []
+            params["id"] = f"in.({','.join(safe_ids)})"
         if date_from and date_to:
             params["and"] = (
                 f"(iniciada_en.gte.{date_from.isoformat()},"
@@ -17452,6 +17458,7 @@ class CRMRepository:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         include_persona_details: bool = True,
+        conversation_ids: set[str] | None = None,
     ) -> list[dict[str, Any]]:
         return await self.visitas_whatsapp_conversaciones(
             usuario_token=usuario_token,
@@ -17461,7 +17468,48 @@ class CRMRepository:
             date_from=date_from,
             date_to=date_to,
             include_contact_details=include_persona_details,
+            conversation_ids=conversation_ids,
         )
+
+    async def list_campana_conversion_conversations(
+        self,
+        *,
+        organizacion_id: UUID,
+        campana_id: UUID | None = None,
+        campana_ids: set[UUID] | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str] = {
+            "select": "campana_id,conversacion_id,oportunidad_id,creado_en,respondio_en",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "conversacion_id": "not.is.null",
+            "order": "creado_en.desc",
+            "limit": str(max(1, min(int(limit), 500))),
+            "offset": str(max(0, int(offset))),
+        }
+        if campana_id:
+            params["campana_id"] = f"eq.{campana_id}"
+        elif campana_ids is not None:
+            if not campana_ids:
+                return []
+            ordered_ids = sorted(str(value) for value in campana_ids)
+            params["campana_id"] = f"in.({','.join(ordered_ids)})"
+        if date_from:
+            params["creado_en"] = f"gte.{date_from.isoformat()}"
+        if date_to:
+            params["creado_en"] = f"lte.{date_to.isoformat()}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/campana_conversion",
+            params=params,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada en campana_conversion: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
 
     async def list_whatsapp_sales_assignments(
         self,
