@@ -24301,6 +24301,34 @@ class CRMRepository:
             raise CRMRepositoryError(f"campana_conversion_resumen_rango_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def get_prospeccion_campana_whatsapp_template_metricas_rango(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        campana_id: UUID | None = None,
+        date_from_iso: str | None = None,
+        date_to_iso: str | None = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/prospeccion_campana_whatsapp_template_metricas_rango",
+            token=usuario_token,
+            json={
+                "p_campana_id": str(campana_id) if campana_id else None,
+                "p_date_from": date_from_iso,
+                "p_date_to": date_to_iso,
+                "p_limit": max(1, min(limit, 1000)),
+                "p_offset": max(0, offset),
+            },
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospeccion_campana_whatsapp_template_metricas_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def cancel_pending_envios(
         self,
         *,

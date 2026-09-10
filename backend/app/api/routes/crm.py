@@ -416,7 +416,7 @@ WINNING_STAGE_CODES = ("general_cerrado_ganado", "cerrado_ganado")
 # La proyección persistente ya es la fuente rápida y transaccional. Mantener
 # resultados de threads en memoria retrasaría los eventos SSE y reintroduciría
 # inconsistencias entre instancias.
-INBOX_THREADS_CACHE_TTL_SECONDS = 0.0
+INBOX_THREADS_CACHE_TTL_SECONDS = 15.0
 INBOX_THREADS_CACHE_MAX_ENTRIES = 256
 _INBOX_THREADS_CACHE: dict[str, tuple[float, list[Any]]] = {}
 _INBOX_THREADS_CACHE_LOCK = asyncio.Lock()
@@ -45525,7 +45525,7 @@ async def demografia_campanas_atribucion(
                 limit=1000,
                 offset=0,
             ),
-            repo.get_prospeccion_campana_whatsapp_metricas_rango(
+            repo.get_prospeccion_campana_whatsapp_template_metricas_rango(
                 usuario_token=effective_user_token,
                 organizacion_id=organizacion_id,
                 campana_id=campana_uuid,
@@ -45541,8 +45541,6 @@ async def demografia_campanas_atribucion(
     mapa_campaign_rows: list[dict[str, Any]] = []
     for row in campaign_rows:
         canal = _clean_text(row.get("canal")) or "correo"
-        if canal != "correo":
-            continue
         mapa_campaign_rows.append(
             {
                 "campana_id": row.get("campana_id"),
@@ -45551,6 +45549,7 @@ async def demografia_campanas_atribucion(
                 "template_id": row.get("template_id"),
                 "template_slug": row.get("template_slug"),
                 "template_nombre": row.get("template_nombre"),
+                "version_id": row.get("version_id"),
                 "envios_enviados": int(row.get("envios_enviados") or 0),
                 "sesiones_utm": int(row.get("sesiones_utm") or 0),
             }
@@ -45563,6 +45562,11 @@ async def demografia_campanas_atribucion(
                 "campana_id": row.get("campana_id"),
                 "campana_nombre": row.get("campana_nombre"),
                 "canal": _clean_text(row.get("canal")) or "whatsapp",
+                "template_id": row.get("template_id"),
+                "template_nombre": row.get("template_nombre"),
+                "template_slug": row.get("template_slug"),
+                "version_id": row.get("version_id"),
+                "envios_totales": int(row.get("envios_totales") or 0),
                 "oportunidades_total": int(row.get("oportunidades_total") or 0),
                 "conversaciones_total": int(row.get("conversaciones_total") or 0),
             }
@@ -46023,7 +46027,7 @@ async def demografia_resumen_v2(
             rows: list[dict[str, Any]] = []
             offset = 0
             while True:
-                page_rows = await repo.get_prospeccion_campana_whatsapp_metricas_rango(
+                page_rows = await repo.get_prospeccion_campana_whatsapp_template_metricas_rango(
                     usuario_token=effective_user_token,
                     organizacion_id=organizacion_id,
                     campana_id=campana_uuid_value,

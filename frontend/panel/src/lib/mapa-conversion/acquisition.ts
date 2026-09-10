@@ -246,7 +246,6 @@ export function buildDeferredCampaignAttribution(
 ): NonNullable<DemografiaSummaryResponse["attribution_rankings"]> {
   const campaignRank = new Map<string, Record<string, unknown>>();
   const templateRank = new Map<string, Record<string, unknown>>();
-  const whatsappTemplateRows = new Map<string, Array<Record<string, unknown>>>();
   const channelFilter = normalizeText(filters.campanaTipo);
   const templateFilter = normalizeText(filters.templateId);
 
@@ -262,10 +261,6 @@ export function buildDeferredCampaignAttribution(
     // metric is oportunidades_total. The template feed's sesiones_utm is a
     // traffic metric and must not be added to WhatsApp opportunities.
     if (canal === "whatsapp") {
-      const campaignKey = campaignId || campaignLabel;
-      const rows = whatsappTemplateRows.get(campaignKey) ?? [];
-      rows.push(row);
-      whatsappTemplateRows.set(campaignKey, rows);
       continue;
     }
     const sessions = toNumber(row.sesiones_utm);
@@ -321,27 +316,23 @@ export function buildDeferredCampaignAttribution(
     campaign.context_total = toNumber(campaign.context_total) + toNumber(row.conversaciones_total);
     campaignRank.set(key, campaign);
 
-    // The WhatsApp operational RPC is aggregated by campaign. When that
-    // campaign has exactly one template in the selected range, its distinct
-    // opportunity total can safely be shown at template level as well.
-    const templateRows = whatsappTemplateRows.get(campaignId || campaignLabel) ?? [];
-    if (templateRows.length === 1) {
-      const templateRow = templateRows[0];
-      const templateId = String(templateRow.template_id || templateRow.template_slug || "").trim();
-      if (templateId) {
-        const templateKey = `whatsapp::${campaignId || campaignLabel}::${templateId}`;
-        templateRank.set(templateKey, {
-          value: templateId,
-          label: String(templateRow.template_nombre || templateRow.template_slug || templateId).trim(),
-          canal,
-          parent_campaign_value: campaignId || null,
-          parent_campaign_label: campaignLabel,
-          conversion_total: toNumber(row.oportunidades_total),
-          context_total: toNumber(row.conversaciones_total),
-          conversion_label: "Oportunidades",
-          context_label: "Conversaciones",
-        });
-      }
+    const templateId = String(row.template_id || row.template_slug || "").trim();
+    if (templateId) {
+      const templateKey = `whatsapp::${campaignId || campaignLabel}::${templateId}`;
+      const template = templateRank.get(templateKey) ?? {
+        value: templateId,
+        label: String(row.template_nombre || row.template_slug || templateId).trim(),
+        canal,
+        parent_campaign_value: campaignId || null,
+        parent_campaign_label: campaignLabel,
+        conversion_total: 0,
+        context_total: 0,
+        conversion_label: "Oportunidades",
+        context_label: "Conversaciones",
+      };
+      template.conversion_total = toNumber(template.conversion_total) + toNumber(row.oportunidades_total);
+      template.context_total = toNumber(template.context_total) + toNumber(row.conversaciones_total);
+      templateRank.set(templateKey, template);
     }
   }
 

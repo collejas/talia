@@ -1760,7 +1760,29 @@ class ProspeccionContactSender:
 
         canal = _clean_text(envio.get("canal")) or ""
         detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
-        payload = envio.get("payload") if isinstance(envio.get("payload"), dict) else {}
+        payload = dict(envio.get("payload")) if isinstance(envio.get("payload"), dict) else {}
+        # Las columnas del envio son la fuente canonica para identificar la
+        # plantilla seleccionada. Reinyectarlas al payload permite que los
+        # workers antiguos y los nuevos generados por IA compartan el mismo
+        # contrato de tracking y de transporte.
+        payload_metadata = dict(payload.get("metadata")) if isinstance(payload.get("metadata"), dict) else {}
+        template_id_column = _clean_text(
+            envio.get("plantilla_id")
+            or envio.get("whatsapp_template_id")
+            or envio.get("template_id")
+        )
+        version_id_column = _clean_text(envio.get("version_id"))
+        if template_id_column:
+            payload["template_id"] = template_id_column
+            payload_metadata["template_id"] = template_id_column
+            if canal == "whatsapp":
+                payload["whatsapp_template_id"] = template_id_column
+                payload_metadata["whatsapp_template_id"] = template_id_column
+        if version_id_column:
+            payload["version_id"] = version_id_column
+            payload_metadata["version_id"] = version_id_column
+        if payload_metadata:
+            payload["metadata"] = payload_metadata
 
         org_value = envio.get("organizacion_id")
         org_uuid: UUID | None = None
