@@ -24,6 +24,16 @@
 - Persistencia del nuevo filtro en vistas guardadas.
 - Documentación funcional en `Plan_Opt.md`.
 
+### Backfill histórico ejecutado
+
+- Se revisaron 13 mensajes candidatos de conversaciones de prospección.
+- Se identificaron 12 contactos distintos.
+- Se crearon 12 exclusiones activas de WhatsApp.
+- 10 quedaron relacionadas a `prospecto_id` y 2 quedaron protegidas por teléfono; un candidato con prospecto se consolidó con otra exclusión del mismo contacto.
+- Las filas se marcaron con `origen = whatsapp_backfill` y `motivo = baja`.
+- El backfill no modificó ni eliminó mensajes históricos.
+- Se validó en Supabase que existen 12 exclusiones activas de WhatsApp y que todas provienen del backfill.
+
 ### Verificación técnica
 
 - `git diff --check`: correcto.
@@ -34,4 +44,3 @@
 - Ejecutar una prueba funcional controlada en producción con un prospecto autorizado.
 - Confirmar visualmente el filtro en navegador después del deploy.
 - Confirmar el bloqueo de una campaña programada que reciba la baja después de su creación.
-

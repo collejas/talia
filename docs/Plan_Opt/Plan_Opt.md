@@ -76,3 +76,17 @@ Para cerrar la validación funcional se debe probar con un prospecto controlado:
 5. Intentar una nueva campaña y comprobar que el resultado indique `opt_out_whatsapp`.
 6. Verificar que una campaña previamente programada también sea omitida por el worker.
 
+## Backfill histórico ejecutado
+
+Se revisaron los mensajes entrantes históricos de WhatsApp con una negativa definitiva. Para reducir falsos positivos, solo se consideraron conversaciones con contexto de prospección o contactos cuyo origen era prospección publicitaria.
+
+Resultado del backfill:
+
+- 13 mensajes candidatos encontrados.
+- 12 contactos distintos protegidos.
+- 10 exclusiones ligadas a un `prospecto_id`.
+- 2 exclusiones ligadas únicamente al teléfono, que también bloquean futuros envíos.
+- 0 mensajes originales modificados.
+- 0 exclusiones duplicadas creadas.
+
+Las exclusiones históricas quedaron identificadas con `origen = whatsapp_backfill`, `motivo = baja` y `activo = true`. La operación fue idempotente: volver a ejecutar la misma lógica no debe crear otra exclusión activa para el mismo prospecto o teléfono.
