@@ -291,15 +291,48 @@ async function callDemografiaEndpoint<T>(
 function mergeMapWithSummaryVisitors(
   map: DemografiaMapResponse,
   summary: DemografiaSummaryResponse,
+  options: { soloConversiones?: boolean } = {},
 ): DemografiaMapResponse {
   const summaryItems = Array.isArray(summary.visitantes?.items) ? summary.visitantes.items : [];
   const byKey = new Map(summaryItems.map((item) => [item.key, item]));
+  const normalizeLocationName = (value: string | null | undefined) =>
+    String(value || "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  const byName = new Map(
+    summaryItems
+      .map((item) => [normalizeLocationName(item.name), item] as const)
+      .filter(([name]) => Boolean(name)),
+  );
   const mergedKeys = new Set<string>();
 
   const mergedDataset = (Array.isArray(map.dataset) ? map.dataset : []).map((entry) => {
-    const visitor = byKey.get(entry.key);
-    if (!visitor) return entry;
-    mergedKeys.add(entry.key);
+    const visitor = byKey.get(entry.key) ?? byName.get(normalizeLocationName(entry.name));
+    if (!visitor) {
+      if (!options.soloConversiones) return entry;
+      return {
+        ...entry,
+        visitantes_totales_por_canal: {
+          ...(entry.visitantes_totales_por_canal || {}),
+          whatsapp: 0,
+        },
+        totales_por_canal: {
+          ...(entry.totales_por_canal || {}),
+          whatsapp: 0,
+        },
+        conversation_channels: {
+          sesiones_webchat_total: entry.conversation_channels?.sesiones_webchat_total ?? 0,
+          sesiones_con_chat_webchat: entry.conversation_channels?.sesiones_con_chat_webchat ?? 0,
+          sesiones_sin_chat_webchat: entry.conversation_channels?.sesiones_sin_chat_webchat ?? 0,
+          conversaciones_whatsapp: 0,
+          conversaciones_voz: entry.conversation_channels?.conversaciones_voz ?? 0,
+          conversaciones_correo: entry.conversation_channels?.conversaciones_correo ?? 0,
+        },
+      };
+    }
+    mergedKeys.add(visitor.key);
 
     const visitantesPorCanal = {
       ...(entry.visitantes_totales_por_canal || {}),
@@ -635,6 +668,8 @@ export async function loadDemografiaData(
   );
   return {
     summary: normalizedSummary,
-    map: mergeMapWithSummaryVisitors(normalizedMap, normalizedSummary),
+    map: mergeMapWithSummaryVisitors(normalizedMap, normalizedSummary, {
+      soloConversiones: options.soloConversiones,
+    }),
   };
 }

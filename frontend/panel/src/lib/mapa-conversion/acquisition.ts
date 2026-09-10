@@ -317,11 +317,12 @@ export function buildDeferredCampaignAttribution(
     campaignRank.set(key, campaign);
 
     const templateId = String(row.template_id || row.template_slug || "").trim();
-    if (templateId) {
-      const templateKey = `whatsapp::${campaignId || campaignLabel}::${templateId}`;
-      const template = templateRank.get(templateKey) ?? {
-        value: templateId,
-        label: String(row.template_nombre || row.template_slug || templateId).trim(),
+    const templateKey = templateId || "historico-sin-plantilla";
+    if (templateKey) {
+      const templateIdentity = `whatsapp::${campaignId || campaignLabel}::${templateKey}`;
+      const template = templateRank.get(templateIdentity) ?? {
+        value: templateId || `historico-sin-plantilla:${campaignId || campaignLabel}`,
+        label: String(row.template_nombre || row.template_slug || "Histórico sin plantilla").trim(),
         canal,
         parent_campaign_value: campaignId || null,
         parent_campaign_label: campaignLabel,
@@ -332,7 +333,7 @@ export function buildDeferredCampaignAttribution(
       };
       template.conversion_total = toNumber(template.conversion_total) + toNumber(row.oportunidades_total);
       template.context_total = toNumber(template.context_total) + toNumber(row.conversaciones_total);
-      templateRank.set(templateKey, template);
+      templateRank.set(templateIdentity, template);
     }
   }
 

@@ -889,6 +889,23 @@ async def _restrict_visitantes_payload_whatsapp_to_conversions(
         limit=500,
         offset=0,
     )
+    # Mantener el límite temporal también en esta capa. Además de protegernos
+    # contra respuestas de repositorios/caches antiguos que no incluyan el
+    # filtro `gte`, evita mezclar conversiones históricas con el rango visible.
+    if date_from or date_to:
+        filtered_conversion_rows: list[dict[str, Any]] = []
+        for row in conversion_rows:
+            if not isinstance(row, dict):
+                continue
+            converted_at = _parse_datetime(row.get("creado_en"))
+            if converted_at is None:
+                continue
+            if date_from and converted_at < date_from:
+                continue
+            if date_to and converted_at > date_to:
+                continue
+            filtered_conversion_rows.append(row)
+        conversion_rows = filtered_conversion_rows
     conversion_ids = {
         str(row.get("conversacion_id") or "").strip()
         for row in conversion_rows
@@ -45686,27 +45703,24 @@ async def demografia_campanas_atribucion(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    # El tenant maestro conserva conversiones legacy de campañas cuyo envío o
-    # lote original ya no está relacionado con la atribución de mensajes. No
-    # es seguro inventar una plantilla para ellas, pero sí debemos mantenerlas
-    # visibles en el mapa como conversiones históricas sin plantilla.
-    if organizacion_id == tenant_runtime.MASTER_ORGANIZACION_ID:
-        try:
-            legacy_conversion_rows = await repo.get_campana_conversion_resumen_rango(
-                organizacion_id=organizacion_id,
-                campana_id=campana_uuid,
-                date_from_iso=date_from.isoformat() if date_from else None,
-                date_to_iso=date_to.isoformat() if date_to else None,
-                limit=1000,
-                offset=0,
-            )
-        except CRMRepositoryError:
-            logger.warning(
-                "crm.demografia.campanas_atribucion.legacy_conversion_fallback_failed",
-                extra={"organizacion_id": str(organizacion_id)},
-            )
-            legacy_conversion_rows = []
-    else:
+    # Una conversión puede conservar campaña/oportunidad aunque se haya
+    # eliminado el envío o no exista ya una atribución saliente relacionable.
+    # No es seguro inventar una plantilla, pero sí debemos mantenerla visible
+    # para todos los tenants como conversión histórica sin plantilla.
+    try:
+        legacy_conversion_rows = await repo.get_campana_conversion_resumen_rango(
+            organizacion_id=organizacion_id,
+            campana_id=campana_uuid,
+            date_from_iso=date_from.isoformat() if date_from else None,
+            date_to_iso=date_to.isoformat() if date_to else None,
+            limit=1000,
+            offset=0,
+        )
+    except CRMRepositoryError:
+        logger.warning(
+            "crm.demografia.campanas_atribucion.legacy_conversion_fallback_failed",
+            extra={"organizacion_id": str(organizacion_id)},
+        )
         legacy_conversion_rows = []
 
     mapa_campaign_rows: list[dict[str, Any]] = []
@@ -46010,7 +46024,12 @@ async def demografia_resumen_v2(
     resumen_cache_key = _build_demografia_response_cache_key(
         "resumen-v2",
         {
-            "schema_version": "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities",
+            "schema_version": (
+                "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities"
+                "-conversion-geo-v3"
+                if solo_conversiones
+                else "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities"
+            ),
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
             "estado": state_code,
@@ -46882,6 +46901,7 @@ async def demografia_mapa_v2(
     mapa_cache_key = _build_demografia_response_cache_key(
         "mapa-v2-whatsapp-personas",
         {
+            "schema_version": "mapa-v2-conversion-geo-v3" if solo_conversiones else "mapa-v2-whatsapp-personas",
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
             "estado": state_code,
