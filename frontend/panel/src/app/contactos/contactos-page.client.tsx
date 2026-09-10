@@ -41,6 +41,7 @@ export default function ContactosPageClient({ table = [] }: ContactosPageClientP
   const [visibleRows, setVisibleRows] = React.useState<ContactTableRow[]>(table)
   const [loadingTable, setLoadingTable] = React.useState(true)
   const [errors, setErrors] = React.useState<string[]>([])
+  const [reloadKey, setReloadKey] = React.useState(0)
 
   const handleFiltersChange = React.useCallback((nextFilters: ContactFilters) => {
     setFilters((prev) => (areFiltersEqual(prev, nextFilters) ? prev : nextFilters))
@@ -114,7 +115,7 @@ export default function ContactosPageClient({ table = [] }: ContactosPageClientP
       alive = false
       controller.abort()
     }
-  }, [])
+  }, [reloadKey])
 
   const derivedCards = React.useMemo(() => {
     if (!isDefaultFilterSet(filters)) {
@@ -144,6 +145,7 @@ export default function ContactosPageClient({ table = [] }: ContactosPageClientP
         onFiltersChange={handleFiltersChange}
         onVisibleRowsChange={setVisibleRows}
         onContactsDeleted={handleContactsDeleted}
+        onContactsImported={() => setReloadKey((current) => current + 1)}
         loading={loadingTable}
       />
     </div>

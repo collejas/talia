@@ -4874,6 +4874,51 @@ class ProspectosImportPayload(BaseModel):
     items: list[ProspectoManualPayload] = Field(default_factory=list, min_length=1, max_length=2000)
 
 
+class CRMContactImportItem(BaseModel):
+    """Fila importable de contactos; el propietario nunca viene del cliente."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, max_length=160)
+    nombre: str | None = Field(default=None, max_length=160)
+    apellido_paterno: str | None = Field(default=None, max_length=160)
+    apellido_materno: str | None = Field(default=None, max_length=160)
+    correo_principal: str | None = Field(default=None, max_length=255)
+    telefono_principal_e164: str | None = Field(default=None, max_length=32)
+    company_name: str | None = Field(default=None, max_length=160)
+    puesto: str | None = Field(default=None, max_length=120)
+    area: str | None = Field(default=None, max_length=120)
+    rol_decision: str | None = Field(default=None, max_length=120)
+    estado: str | None = Field(default=None, max_length=80)
+    origen: str | None = Field(default=None, max_length=80)
+    notas: str | None = Field(default=None, max_length=2000)
+    website: str | None = Field(default=None, max_length=255)
+    tipo_vialidad: str | None = Field(default=None, max_length=120)
+    nombre_vialidad: str | None = Field(default=None, max_length=255)
+    numero_exterior: str | None = Field(default=None, max_length=64)
+    numero_interior: str | None = Field(default=None, max_length=64)
+    colonia: str | None = Field(default=None, max_length=255)
+    codigo_postal: str | None = Field(default=None, max_length=16)
+    entidad: str | None = Field(default=None, max_length=120)
+    municipio: str | None = Field(default=None, max_length=120)
+    pais: str | None = Field(default=None, max_length=120)
+
+    @model_validator(mode="after")
+    def _ensure_display_source(self) -> "CRMContactImportItem":
+        if any(
+            str(value or "").strip()
+            for value in (self.display_name, self.nombre, self.apellido_paterno, self.company_name, self.telefono_principal_e164)
+        ):
+            return self
+        raise ValueError("contact_import_name_required")
+
+
+class CRMContactImportPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CRMContactImportItem] = Field(default_factory=list, min_length=1, max_length=2000)
+
+
 class ProspectosTablePreferencePayload(BaseModel):
     """Preferencias de visualización para la tabla de prospectos."""
 
@@ -26085,6 +26130,112 @@ async def create_persona(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMPersona.model_validate(row)
+
+
+@router.post("/personas/importar")
+async def import_personas(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMContactImportPayload,
+) -> dict[str, Any]:
+    """Importa contactos y asigna cada alta al usuario autenticado."""
+
+    actor_id = _safe_uuid(_jwt_verify_and_sub(user_token))
+    if actor_id is None and (_is_pytest_runtime() or settings.environment.strip().lower() == "test"):
+        actor_id = usuario_id
+    if actor_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_user_invalid")
+
+    actor_repo = CRMRepository(user_token=user_token)
+    try:
+        permission_context = await actor_repo.get_permission_context()
+        privileged = (
+            _coerce_bool(permission_context.get("es_admin")) is True
+            or _coerce_bool(permission_context.get("es_owner")) is True
+        )
+        allowed_by_role = privileged
+        if not allowed_by_role:
+            for role in ("vendedor", "agente", "supervisor"):
+                if await actor_repo.user_has_role(usuario_id=actor_id, role_code=role):
+                    allowed_by_role = True
+                    break
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="contact_import_access_failed") from exc
+    if not allowed_by_role:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="contact_import_role_required")
+
+    created: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    seen_emails: set[str] = set()
+    seen_phones: set[str] = set()
+
+    for row_number, item in enumerate(payload.items, start=1):
+        try:
+            raw = item.model_dump(exclude_none=True)
+            display_name = str(raw.pop("display_name", "") or "").strip()
+            email = _persona_alta_normalize_email(raw.get("correo_principal"))
+            phone = _persona_alta_normalize_phone(raw.get("telefono_principal_e164"))
+            if email and email in seen_emails:
+                skipped.append({"row": row_number, "motivo": "duplicado_en_archivo"})
+                continue
+            if phone and phone in seen_phones:
+                skipped.append({"row": row_number, "motivo": "duplicado_en_archivo"})
+                continue
+            if email:
+                seen_emails.add(email)
+                raw["correo_principal"] = email
+            if phone:
+                seen_phones.add(phone)
+                raw["telefono_principal_e164"] = phone
+
+            existing = None
+            if email:
+                existing = await repo.get_persona_by_email(email=email, organizacion_id=organizacion_id)
+            if existing is None and phone:
+                existing = await repo.get_persona_by_phone_e164(phone_e164=phone, organizacion_id=organizacion_id)
+            if existing:
+                skipped.append({"row": row_number, "motivo": "ya_existia_en_tenant"})
+                continue
+
+            if display_name and not raw.get("nombre"):
+                raw["nombre"] = display_name
+            raw["nombre_completo"] = display_name or " ".join(
+                str(raw.get(key) or "").strip()
+                for key in ("nombre", "apellido_paterno", "apellido_materno")
+                if str(raw.get(key) or "").strip()
+            )
+            raw["propietario_usuario_id"] = str(actor_id)
+            raw["origen"] = str(raw.get("origen") or "importacion_contactos").strip()
+            row_created = await repo.create_persona(
+                organizacion_id=organizacion_id,
+                payload={key: value for key, value in raw.items() if value not in (None, "")},
+            )
+            created.append({"id": str(row_created.get("id"))})
+        except CRMRepositoryError as exc:
+            detail = str(exc).lower()
+            if "duplicate" in detail or "unique" in detail:
+                skipped.append({"row": row_number, "motivo": "duplicado_en_tenant"})
+            else:
+                logger.warning(
+                    "contacts_import.row_failed",
+                    extra={"organizacion_id": str(organizacion_id), "row": row_number, "error": str(exc)},
+                )
+                errors.append({"row": row_number, "motivo": "alta_no_realizada"})
+
+    return {
+        "ok": True,
+        "total": len(payload.items),
+        "created": len(created),
+        "skipped": len(skipped),
+        "failed": len(errors),
+        "created_items": created,
+        "skipped_items": skipped,
+        "errors": errors,
+    }
 
 
 @router.patch(

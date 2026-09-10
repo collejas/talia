@@ -4,7 +4,7 @@ Este archivo registra el avance, las decisiones y las validaciones del plan docu
 
 ## Estado actual
 
-- Estado: `Propuesta documentada`
+- Estado: `Implementación local inicial; pendiente despliegue y prueba autenticada`
 - Última actualización: 2026-09-10 (UTC)
 - Código implementado: no
 - Migraciones aplicadas: no
@@ -60,6 +60,37 @@ Este archivo registra el avance, las decisiones y las validaciones del plan docu
 - Confirmar columnas mínimas y formato oficial del archivo.
 - Definir tratamiento de duplicados existentes.
 - Definir límite inicial de filas y tamaño de archivo.
+
+## 2026-09-10 - Primera implementación
+
+### Cambiado
+
+- Se agregó `ContactosImportador` en la barra de acciones de Contactos.
+- Se agregó soporte de lectura CSV/XLSX en el navegador con vista previa y plantilla descargable.
+- Se agregó el proxy `POST /api/personas/importar`.
+- Se agregó el endpoint `POST /crm/personas/importar`.
+- El endpoint acepta `vendedor`, `agente`, `supervisor`, `owner` y `admin`.
+- El propietario se fuerza desde el usuario autenticado y no se acepta desde el archivo.
+- Se agregó deduplicación dentro del archivo y contra correo/teléfono existentes en el tenant.
+- La tabla se recarga después de una importación exitosa.
+- La autorización de roles se evalúa con ciclos async explícitos.
+- El propietario en producción se obtiene únicamente del `sub` validado del JWT; el encabezado de usuario solo se tolera en pruebas.
+
+### Validado
+
+- `python3 -m py_compile backend/app/api/routes/crm.py` pasó.
+- `git diff --check` pasó.
+- Lint focalizado de los archivos frontend modificados terminó sin errores reportados.
+- React Doctor terminó con puntuación 100/100 y sin hallazgos.
+- `tests/api/test_contact_import.py` pasó con `2 passed`.
+
+### Pendiente
+
+- Ejecutar pruebas automatizadas específicas del endpoint con repositorio simulado.
+- Confirmar en un tenant real el código/nombre del rol `supervisor`.
+- Ejecutar prueba autenticada real y comprobar en base de datos el `propietario_usuario_id` persistido.
+- Completar prueba visual en viewport normal.
+- Corregir o separar los fallos preexistentes observados en `tests/api/test_crm_routes.py`; no corresponden al importador.
 
 ## Formato para futuras entradas
 

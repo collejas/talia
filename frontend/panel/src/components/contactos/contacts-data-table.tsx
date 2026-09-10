@@ -46,6 +46,7 @@ import type { ContactAdvancedFilters, ContactFilters, ContactTableRow } from "@/
 import { ContactCreateFlow } from "@/components/contactos/contact-create-flow";
 import { ContactEditFlow } from "@/components/contactos/contact-edit-flow";
 import { ContactLinkFlow } from "@/components/contactos/contact-link-flow";
+import { ContactosImportador } from "@/components/contactos/contactos-importador";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 
@@ -369,6 +370,13 @@ function isSalesLevelRole(roles: string[] | undefined): boolean {
   });
 }
 
+function canImportContactsByRole(roles: string[] | undefined): boolean {
+  return (roles ?? []).some((role) => {
+    const value = (role ?? "").toString().trim().toLowerCase();
+    return value === "vendedor" || value === "agente" || value === "supervisor" || value.includes("vendedor") || value.includes("agente") || value.includes("supervisor");
+  });
+}
+
 const CONTACT_COLUMNS: Array<{
   id: string;
   label: string;
@@ -563,12 +571,14 @@ export function ContactsDataTable({
   onFiltersChange,
   onVisibleRowsChange,
   onContactsDeleted,
+  onContactsImported,
   loading = false,
 }: {
   data: ContactTableRow[];
   onFiltersChange?: (filters: ContactFilters) => void;
   onVisibleRowsChange?: (rows: ContactTableRow[]) => void;
   onContactsDeleted?: (keys: string[]) => void;
+  onContactsImported?: () => void;
   loading?: boolean;
 }) {
   const router = useRouter();
@@ -584,6 +594,9 @@ export function ContactsDataTable({
     permissionContext.es_admin ||
     permissionContext.es_owner ||
     normalizedPerms.includes("contacts.export_csv");
+  const canImportContacts =
+    !permissionsLoading &&
+    (permissionContext.es_admin || permissionContext.es_owner || canImportContactsByRole(permissionContext.roles));
   const [searchTerm, setSearchTerm] = React.useState("");
   const [ownerFilter, setOwnerFilter] = React.useState("all");
   const [createdFromFilter, setCreatedFromFilter] = React.useState("");
@@ -1384,6 +1397,7 @@ export function ContactsDataTable({
           </Button>
         </>
       ) : null}
+      {canImportContacts ? <ContactosImportador onImported={onContactsImported ? () => onContactsImported() : undefined} /> : null}
       {canExportCsv ? (
         <Button
           type="button"
