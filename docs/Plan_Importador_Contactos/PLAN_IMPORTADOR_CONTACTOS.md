@@ -1,7 +1,7 @@
 # Plan: importador de contactos para usuarios comerciales
 
 Fecha de diagnóstico: 2026-09-10 (UTC)  
-Estado: propuesta documentada; sin cambios de código, base de datos ni despliegue.
+Estado: implementación local del permiso configurable; pendiente migración aplicada, despliegue y prueba autenticada.
 
 ## 1. Idea de producto
 
@@ -33,13 +33,21 @@ Cada contacto creado desde este flujo debe quedar asignado automáticamente al u
 - El paquete frontend ya incluye `xlsx`.
 - Hay lógica de autoasignación en `supabase/migrations/20280510_092000_contactos_creator_owner.sql` que contempla al creador vendedor, aunque no debe ser la única garantía del nuevo flujo.
 
-### Lo que no existe todavía
+### Lo que ya fue implementado
 
-- No existe un botón específico de importación en la vista de Contactos.
-- No existe un componente importador dedicado a `personas`.
-- No existe un endpoint batch para importar contactos.
-- El endpoint actual de alta no establece explícitamente el usuario de sesión como propietario en el servicio de importación.
-- El importador existente trabaja con prospectos y usa el permiso `ejecutar_busquedas`; no debe reutilizarse directamente para contactos.
+- Existe un botón y componente importador dedicado a `personas`.
+- Existe el endpoint batch `POST /crm/personas/importar` y su proxy del panel.
+- El backend establece explícitamente el usuario validado de sesión como `propietario_usuario_id`.
+- La visibilidad y autorización del importador usan el permiso `contacts.import`.
+- El importador de prospectos sigue separado y no se reutiliza para contactos.
+
+### Administración desde Settings/RH
+
+- El permiso `contacts.import` se muestra en el catálogo de permisos de la organización.
+- La matriz de roles de `settings/usuarios/roles` permite asignarlo o quitarlo de cualquier rol.
+- La edición de usuarios de `settings/usuarios` permite asignar o quitar el rol que contiene ese permiso.
+- La migración agrega el permiso a organizaciones existentes y lo asigna inicialmente a roles llamados `vendedor`, `agente` y `supervisor` cuando existen.
+- Dueños y administradores conservan el acceso automático mediante el contexto de permisos existente.
 
 ## 3. Decisión técnica recomendada
 
@@ -57,8 +65,10 @@ Vista Contactos
 
 La autorización debe existir en dos capas:
 
-1. Frontend: no renderizar el botón si el usuario no tiene rol `vendedor`, `agente` o `supervisor`, ni es `owner` o `admin`.
-2. Backend: volver a resolver el usuario, sus roles y sus privilegios desde la sesión/JWT y rechazar cualquier llamada que no corresponda a esos perfiles.
+1. Frontend: no renderizar el botón si el usuario no tiene `contacts.import`, ni es `owner` o `admin`.
+2. Backend: volver a resolver el contexto de permisos desde la sesión/JWT y rechazar cualquier llamada sin `contacts.import`, salvo owner/admin.
+
+La autorización ya no depende de nombres hardcodeados de roles. Por eso un supervisor puede recibir o perder el permiso desde la matriz de `Settings/RH`, sin modificar código.
 
 Los roles `admin`, `owner` y `supervisor` quedan incluidos en esta propuesta. La asignación seguirá siendo al usuario que realiza la carga; ser administrador, dueño o supervisor no debe permitir seleccionar arbitrariamente a otro propietario dentro del importador.
 
@@ -180,8 +190,8 @@ Una tabla de lotes/importaciones sería recomendable en una segunda fase si se r
 ### Fase 1 - Contrato y seguridad
 
 - Crear schema Pydantic específico para importación.
-- Crear permiso o regla específica para importar contactos, si se desea administrarlo de forma configurable.
-- Validar rol comercial y tenant en backend.
+- Crear y sembrar el permiso específico `contacts.import`.
+- Validar `contacts.import` y tenant en backend.
 - Forzar `propietario_usuario_id` desde la sesión.
 - Definir respuesta consistente con `created`, `skipped`, `errors` y detalle de filas.
 
@@ -215,8 +225,9 @@ Una tabla de lotes/importaciones sería recomendable en una segunda fase si se r
 
 La funcionalidad podrá considerarse terminada cuando:
 
-- El botón solo aparezca para `vendedor`, `agente`, `supervisor`, `owner` y `admin` según la decisión documentada.
-- El backend rechace roles no autorizados.
+- El botón solo aparezca para usuarios con `contacts.import`, además de `owner` y `admin`.
+- `contacts.import` pueda asignarse o quitarse a un rol desde `Settings/RH`.
+- El backend rechace usuarios sin `contacts.import`.
 - El propietario se tome de la sesión y no del archivo.
 - Los contactos importados se lean nuevamente mostrando al vendedor correcto.
 - La importación reporte claramente creados, omitidos y errores.

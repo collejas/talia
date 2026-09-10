@@ -12,12 +12,12 @@ type ImportStatus = "idle" | "parsing" | "ready" | "importing" | "success" | "er
 
 const MAX_IMPORT_ROWS = 2000
 const ACCEPTED_FILE_EXT = ".csv,.xlsx"
-const TEMPLATE_HEADERS = [
+const TEMPLATE_HEADERS: string[] = [
   "Nombre", "Primer apellido", "Segundo apellido", "Correo", "Teléfono", "Empresa",
   "Puesto", "Área", "Rol de decisión", "Estado", "Sitio web", "Tipo de vialidad",
   "Nombre de vialidad", "Número exterior", "Número interior", "Colonia", "Código postal",
   "Entidad", "Municipio", "País", "Notas",
-] as const
+]
 
 type ContactImportField = keyof ContactImportItem
 type PreviewRow = { name: string; contact: string; company: string }

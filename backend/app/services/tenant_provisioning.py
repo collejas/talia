@@ -107,6 +107,7 @@ TENANT_BASE_PERMISSION_CODES = (
     "contacts.view_sensitive_unowned",
     "accounts.view_sensitive_unowned",
     "contacts.export_csv",
+    "contacts.import",
     "messages.read",
     "messages.write",
     "calls.read",
@@ -373,7 +374,8 @@ async def _ensure_permissions_exist(
     missing = [code for code in permission_codes if code not in existing_codes]
     if not missing:
         return
-    payload = [{"codigo": code, "descripcion": code} for code in missing]
+    descriptions = {"contacts.import": "Importar contactos"}
+    payload = [{"codigo": code, "descripcion": descriptions.get(code, code)} for code in missing]
     await repo.create_permissions(organizacion_id=organizacion_id, permisos=payload)
 
 

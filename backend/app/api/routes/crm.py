@@ -26156,16 +26156,11 @@ async def import_personas(
             _coerce_bool(permission_context.get("es_admin")) is True
             or _coerce_bool(permission_context.get("es_owner")) is True
         )
-        allowed_by_role = privileged
-        if not allowed_by_role:
-            for role in ("vendedor", "agente", "supervisor"):
-                if await actor_repo.user_has_role(usuario_id=actor_id, role_code=role):
-                    allowed_by_role = True
-                    break
+        allowed_by_permission = "contacts.import" in _permission_context_permission_codes(permission_context)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="contact_import_access_failed") from exc
-    if not allowed_by_role:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="contact_import_role_required")
+    if not (privileged or allowed_by_permission):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="contact_import_permission_required")
 
     created: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []

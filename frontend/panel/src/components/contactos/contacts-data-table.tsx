@@ -370,13 +370,6 @@ function isSalesLevelRole(roles: string[] | undefined): boolean {
   });
 }
 
-function canImportContactsByRole(roles: string[] | undefined): boolean {
-  return (roles ?? []).some((role) => {
-    const value = (role ?? "").toString().trim().toLowerCase();
-    return value === "vendedor" || value === "agente" || value === "supervisor" || value.includes("vendedor") || value.includes("agente") || value.includes("supervisor");
-  });
-}
-
 const CONTACT_COLUMNS: Array<{
   id: string;
   label: string;
@@ -596,7 +589,7 @@ export function ContactsDataTable({
     normalizedPerms.includes("contacts.export_csv");
   const canImportContacts =
     !permissionsLoading &&
-    (permissionContext.es_admin || permissionContext.es_owner || canImportContactsByRole(permissionContext.roles));
+    (permissionContext.es_admin || permissionContext.es_owner || normalizedPerms.includes("contacts.import"));
   const [searchTerm, setSearchTerm] = React.useState("");
   const [ownerFilter, setOwnerFilter] = React.useState("all");
   const [createdFromFilter, setCreatedFromFilter] = React.useState("");

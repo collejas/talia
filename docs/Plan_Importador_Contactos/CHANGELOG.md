@@ -4,10 +4,10 @@ Este archivo registra el avance, las decisiones y las validaciones del plan docu
 
 ## Estado actual
 
-- Estado: `Implementación local inicial; pendiente despliegue y prueba autenticada`
+- Estado: `Permiso configurable aplicado; pendiente prueba autenticada completa del importador`
 - Última actualización: 2026-09-10 (UTC)
-- Código implementado: no
-- Migraciones aplicadas: no
+- Código implementado: sí
+- Migración creada: sí; aplicada en Supabase: sí
 - Despliegue realizado: no
 - Prueba funcional autenticada: pendiente
 
@@ -111,3 +111,52 @@ Cada cambio debe registrar:
 ### Riesgos
 - ...
 ```
+
+## 2026-09-10 - Integración con permisos configurables de Settings/RH
+
+### Cambiado
+- Se reemplazó la validación hardcodeada por roles en el importador por el permiso `contacts.import`.
+- El frontend de Contactos ahora muestra el botón por permiso, manteniendo bypass para `owner` y `admin`.
+- El backend valida el mismo permiso desde el contexto autenticado y conserva el ownership en el usuario de sesión.
+- Se agregó el permiso a la provisión de nuevos tenants.
+- Se creó la migración `20260910223548_add_contacts_import_permission.sql` para tenants existentes.
+- La migración asigna inicialmente el permiso a roles existentes llamados `vendedor`, `agente` y `supervisor`; después puede quitarse o reasignarse desde la matriz de roles.
+
+### Validado
+- La matriz existente de `settings/usuarios/roles` ya permite asignar y quitar `contacts.import`.
+- La edición existente de usuarios ya permite asignar y quitar los roles correspondientes.
+- No se agregó una tabla de permisos por usuario; se reutiliza el modelo RBAC actual.
+
+### Pendiente
+- Aplicar la migración en Supabase siguiendo el procedimiento de despliegue.
+- Ejecutar prueba autenticada con un usuario autorizado y otro sin `contacts.import`.
+- Confirmar en base de datos que `propietario_usuario_id` coincide con el usuario que subió el archivo.
+- Ejecutar prueba visual en viewport normal.
+
+## 2026-09-10 - Corrección de validación TypeScript en despliegue
+
+### Encontrado
+- `scripts/deploy_panel_atomic.sh` detuvo el release antes de publicar porque TypeScript rechazó los encabezados `readonly` de la plantilla XLSX.
+- El problema estaba en `contactos-importador.tsx`, al pasar `TEMPLATE_HEADERS` a `xlsx.utils.aoa_to_sheet`.
+
+### Corregido
+- Se tipó `TEMPLATE_HEADERS` como `string[]` mutable, compatible con `xlsx`.
+
+### Pendiente
+- Repetir el despliegue y confirmar que el release pase `tsc`, build, cambio atómico y reinicio de API.
+
+## 2026-09-10 - Aplicación de permiso en Supabase
+
+### Cambiado
+- Se aplicó la migración `add_contacts_import_permission` en Supabase.
+- Se creó `contacts.import` con descripción `Importar contactos` para las organizaciones existentes.
+- Se asignó inicialmente a los roles existentes `agente` y `supervisor`.
+
+### Validado
+- La migración remota quedó registrada con versión `20260910223548`.
+- Consulta remota confirmó el permiso en 9 organizaciones y su asignación a `agente` y `supervisor`.
+
+### Pendiente
+- Refrescar la vista `settings/usuarios/roles` con una sesión nueva o recarga completa para comprobar la matriz visual.
+- Marcar el permiso para el rol `agente` del tenant operativo si se requiere una validación específica.
+- Ejecutar una importación autenticada y comprobar `propietario_usuario_id`.

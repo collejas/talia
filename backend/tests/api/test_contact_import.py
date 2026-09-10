@@ -8,15 +8,18 @@ from app.api.routes import crm as crm_routes
 
 
 class ImportRepositoryFake:
-    def __init__(self, *, allowed_role: str | None = "vendedor") -> None:
-        self.allowed_role = allowed_role
+    def __init__(self, *, permission: bool = True, admin: bool = False, owner: bool = False) -> None:
+        self.permission = permission
+        self.admin = admin
+        self.owner = owner
         self.created: list[dict[str, Any]] = []
 
     async def get_permission_context(self) -> dict[str, Any]:
-        return {"es_admin": False, "es_owner": False}
-
-    async def user_has_role(self, *, usuario_id: uuid.UUID, role_code: str) -> bool:
-        return role_code == self.allowed_role
+        return {
+            "es_admin": self.admin,
+            "es_owner": self.owner,
+            "permisos": ["contacts.import"] if self.permission else [],
+        }
 
     async def get_persona_by_email(self, *, email: str, organizacion_id: uuid.UUID) -> dict[str, Any] | None:
         return None
@@ -57,8 +60,8 @@ async def test_import_personas_assigns_session_user_and_skips_file_duplicates(mo
 
 
 @pytest.mark.asyncio
-async def test_import_personas_rejects_non_commercial_role(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = ImportRepositoryFake(allowed_role=None)
+async def test_import_personas_rejects_without_import_permission(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = ImportRepositoryFake(permission=False)
     monkeypatch.setattr(crm_routes, "CRMRepository", lambda user_token=None: fake)
 
     with pytest.raises(HTTPException) as error:
@@ -73,4 +76,22 @@ async def test_import_personas_rejects_non_commercial_role(monkeypatch: pytest.M
         )
 
     assert error.value.status_code == 403
-    assert error.value.detail == "contact_import_role_required"
+    assert error.value.detail == "contact_import_permission_required"
+
+
+@pytest.mark.asyncio
+async def test_import_personas_allows_admin_without_import_permission(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = ImportRepositoryFake(permission=False, admin=True)
+    monkeypatch.setattr(crm_routes, "CRMRepository", lambda user_token=None: fake)
+
+    result = await crm_routes.import_personas(
+        repo=fake,
+        user_token="test-token",
+        organizacion_id=uuid.uuid4(),
+        usuario_id=uuid.uuid4(),
+        payload=crm_routes.CRMContactImportPayload(
+            items=[crm_routes.CRMContactImportItem(nombre="Ana")]
+        ),
+    )
+
+    assert result["created"] == 1
