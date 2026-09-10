@@ -3087,12 +3087,14 @@ export function TenantOpenaiSettings({
   hasGeneralApiKey,
   hasVoiceApiKey,
   showRequiredMarkers = false,
+  technicalFieldLabels = false,
 }: {
   tenantId: string
   initialValues: OpenaiInitialValues
   hasGeneralApiKey: boolean
   hasVoiceApiKey: boolean
   showRequiredMarkers?: boolean
+  technicalFieldLabels?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [generalState, generalAction] = useActionState(actions.updateOpenaiGeneralAction, INITIAL_CRUD_STATE)
@@ -3113,7 +3115,9 @@ export function TenantOpenaiSettings({
         <form action={generalAction} className="space-y-3">
           <input type="hidden" name="tenant_id" value={tenantId} />
           <div className="space-y-2">
-            <Label htmlFor="openai_general_project_id">Identificador de conexión</Label>
+            <Label htmlFor="openai_general_project_id">
+              {technicalFieldLabels ? "Project ID" : "Identificador de conexión"}
+            </Label>
             <Input
               id="openai_general_project_id"
               name="openai_general_project_id"
@@ -3122,7 +3126,15 @@ export function TenantOpenaiSettings({
             />
           </div>
           <div className="space-y-2">
-            {showRequiredMarkers ? <RequiredLabel htmlFor="openai_general_api_key">Clave de conexión</RequiredLabel> : <Label htmlFor="openai_general_api_key">Clave de conexión</Label>}
+            {showRequiredMarkers ? (
+              <RequiredLabel htmlFor="openai_general_api_key">
+                {technicalFieldLabels ? "API Key" : "Clave de conexión"}
+              </RequiredLabel>
+            ) : (
+              <Label htmlFor="openai_general_api_key">
+                {technicalFieldLabels ? "API Key" : "Clave de conexión"}
+              </Label>
+            )}
             <Input id="openai_general_api_key" name="openai_general_api_key" type="password" placeholder="Pega la clave aquí" />
             <p className="text-xs text-muted-foreground">
               El valor no se muestra una vez guardado. Solo lo ve un admin si lo rota.

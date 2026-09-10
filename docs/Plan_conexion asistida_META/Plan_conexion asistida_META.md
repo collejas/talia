@@ -84,6 +84,33 @@ El token global solo puede utilizarse para un tenant si Meta le concedió acceso
 
 ## 3. Situación actual
 
+### Incidente crítico de aislamiento detectado el 2026-09-10
+
+Durante el alta de Digitalenfa (`d886f51e-de02-439b-a402-14db81217a0a`) se
+confirmó que su conexión asistida estaba en estado `conectado` y que el
+`Phone Number ID` era `1274226179111227`, pero dos mensajes entrantes fueron
+persistidos en el tenant maestro. La evidencia en `webhooks_entrantes` mostró
+que Meta sí entregó ese `Phone Number ID`; por lo tanto, el problema estaba en
+la resolución del tenant, no en el WABA o en los prompts.
+
+Reglas obligatorias incorporadas al onboarding y al runtime:
+
+- El `Phone Number ID` de Meta es la identidad primaria del tenant para todo
+  webhook entrante de Cloud API.
+- La tabla relacional `whatsapp_meta_connections` es la fuente canónica para
+  resolver números con estado `conectado`; los tenants legacy se resuelven con
+  la configuración existente como compatibilidad.
+- Si Meta entrega un `Phone Number ID` y no existe una coincidencia válida,
+  Talia debe rechazar el webhook y registrar el diagnóstico interno. Nunca
+  debe usar el tenant incluido en la URL compartida ni el tenant maestro como
+  fallback.
+- El procesamiento del mensaje debe aplicar la misma regla: un número Meta no
+  resuelto no puede continuar hacia el teléfono visible ni hacia el tenant
+  predeterminado.
+- La activación del onboarding debe mantener una prueba real de recepción con
+  el WAMID y confirmar que `webhooks_entrantes.organizacion_id` coincide con el
+  tenant conectado antes de considerar el alta terminada.
+
 Actualmente la configuración de `settings/variables` permite guardar por tenant:
 
 - `whatsapp.meta.phone_number_id` en la configuración del tenant.

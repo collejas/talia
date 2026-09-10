@@ -947,6 +947,29 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     })
     if (!putResp.ok) throw new Error(putResp.error)
 
+    if (promptId || promptVersion || assistantId) {
+      const verifyResp = await callCrmApi<{
+        ok: boolean
+        config?: Record<string, unknown>
+      }>("/tenant/me/settings", {
+        organizacionId: null,
+        withUserToken: true,
+      })
+      if (!verifyResp.ok) throw new Error("No se pudo verificar la configuración de WhatsApp.")
+      const storedWhatsapp = isRecord(verifyResp.data.config?.whatsapp)
+        ? verifyResp.data.config.whatsapp
+        : {}
+      if (promptId && storedWhatsapp.prompt_id !== promptId) {
+        throw new Error("El prompt_id de WhatsApp no quedó persistido. Intenta guardarlo nuevamente.")
+      }
+      if (promptVersion && storedWhatsapp.prompt_version !== promptVersion) {
+        throw new Error("La versión del prompt de WhatsApp no quedó persistida. Intenta guardarla nuevamente.")
+      }
+      if (assistantId && storedWhatsapp.assistant_id !== assistantId) {
+        throw new Error("El assistant_id de WhatsApp no quedó persistido. Intenta guardarlo nuevamente.")
+      }
+    }
+
     if (metaPageAccessToken) {
       await upsertTenantSecret("meta.whatsapp.page_access_token", metaPageAccessToken, "B")
     }

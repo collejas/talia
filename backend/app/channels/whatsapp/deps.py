@@ -101,6 +101,10 @@ async def _resolve_meta_payload_organizacion_id(
         parsed = _parse_org_uuid(resolved)
         if parsed:
             return parsed
+        # Si Meta entregó un Phone Number ID, nunca usar el tenant de la URL
+        # como fallback: normalmente esa URL es compartida y puede apuntar al
+        # tenant maestro. Un número desconocido debe rechazarse.
+        return None
     display_phone_number = _extract_meta_display_phone_number(payload)
     if display_phone_number:
         resolved = await resolve_whatsapp_organizacion(to_number=display_phone_number)

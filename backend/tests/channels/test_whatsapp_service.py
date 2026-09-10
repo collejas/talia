@@ -11,6 +11,7 @@ import pytest
 
 from app.assistants.runtime import AssistantSpec
 from app.channels.whatsapp import schemas, service
+from app.services import tenant_runtime
 
 
 def _build_sample_message() -> schemas.WhatsAppIncomingMessage:
@@ -44,6 +45,20 @@ def _async_return(value: Any):
         return value
 
     return _inner
+
+
+def test_whatsapp_runtime_uses_global_meta_credentials(monkeypatch) -> None:
+    monkeypatch.setattr(tenant_runtime.settings, "meta_system_user_access_token", "global-token")
+    monkeypatch.setattr(tenant_runtime.settings, "whatsapp_meta_verify_token", "verify#token")
+    monkeypatch.setattr(tenant_runtime.settings, "meta_app_secret", "global-app-secret")
+    monkeypatch.setattr(tenant_runtime.settings, "meta_graph_api_version", "v25.0")
+
+    runtime = tenant_runtime.WhatsappRuntimeSettings.from_settings()
+
+    assert runtime.meta_page_access_token == "global-token"
+    assert runtime.meta_verify_token == "verify#token"
+    assert runtime.meta_app_secret == "global-app-secret"
+    assert runtime.meta_graph_api_version == "v25.0"
 
 
 def test_booking_confirmation_hint_detects_te_esperamos() -> None:

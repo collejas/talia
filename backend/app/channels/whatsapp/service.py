@@ -2750,6 +2750,12 @@ async def handle_incoming_message(
             organizacion_hint = await resolve_whatsapp_organizacion_by_phone_number_id(
                 phone_number_id=inbound_meta_phone_number_id
             )
+            if not organizacion_hint:
+                logger.error(
+                    "whatsapp.meta_phone_number_unresolved",
+                    extra={"phone_number_id": inbound_meta_phone_number_id},
+                )
+                raise HTTPException(status_code=500, detail="No se pudo enrutar el número de WhatsApp Meta")
         else:
             organizacion_hint = None
         if not organizacion_hint:

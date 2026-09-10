@@ -1,5 +1,7 @@
 """Cobertura básica para los endpoints del canal WhatsApp."""
 
+from uuid import UUID
+
 import pytest
 from httpx import AsyncClient
 
@@ -7,6 +9,28 @@ from app.channels.whatsapp import deps
 from app.channels.whatsapp import service
 from app.core.config import settings
 from app.services.tenant_runtime import TwilioRuntimeSettings
+
+
+@pytest.mark.asyncio
+async def test_meta_payload_with_unknown_phone_number_id_does_not_fallback_to_url_tenant(monkeypatch) -> None:
+    payload = {
+        "entry": [{
+            "changes": [{
+                "value": {"metadata": {"phone_number_id": "unknown-meta-phone"}}
+            }]
+        }]
+    }
+
+    async def fake_resolve(*, phone_number_id):
+        assert phone_number_id == "unknown-meta-phone"
+        return None
+
+    monkeypatch.setattr(deps, "resolve_whatsapp_organizacion_by_phone_number_id", fake_resolve)
+
+    assert await deps._resolve_meta_payload_organizacion_id(
+        payload=payload,
+        fallback_organizacion_id=UUID("00000000-0000-0000-0000-000000000001"),
+    ) is None
 
 
 @pytest.mark.asyncio

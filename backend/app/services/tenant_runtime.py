@@ -1387,10 +1387,13 @@ class WhatsappRuntimeSettings:
             twilio_account_sid=settings.twilio_account_sid,
             twilio_auth_token=settings.twilio_auth_token,
             meta_phone_number_id=None,
-            meta_page_access_token=None,
-            meta_verify_token=None,
-            meta_app_secret=None,
-            meta_graph_api_version="v21.0",
+            # Meta usa credenciales globales de plataforma como valores base
+            # para tenants nuevos. Los secretos legacy por tenant, si existen,
+            # se aplican más abajo como override explícito.
+            meta_page_access_token=settings.meta_system_user_access_token,
+            meta_verify_token=settings.whatsapp_meta_verify_token,
+            meta_app_secret=settings.meta_app_secret,
+            meta_graph_api_version=settings.meta_graph_api_version,
         )
 
 

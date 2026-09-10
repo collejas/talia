@@ -2,6 +2,35 @@
 
 Este archivo registra las decisiones, evidencias, cambios, validaciones y despliegues del refactor de conexión asistida de WhatsApp Meta en Talia.
 
+## 2026-09-10 · Bloqueo de fuga de mensajes entre tenants
+
+- Se confirmó el incidente de Digitalenfa: `Phone Number ID` `1274226179111227`
+  fue persistido en el tenant maestro aunque la conexión de Digitalenfa estaba
+  conectada en la tabla asistida.
+- El resolver ahora consulta primero `whatsapp_meta_connections` por el
+  `Phone Number ID` y estado `conectado`; la compatibilidad legacy usa el filtro
+  JSON textual correcto.
+- Un `Phone Number ID` de Meta no resuelto ya no puede caer al tenant de la URL,
+  al teléfono visible ni al tenant predeterminado. El webhook se rechaza y el
+  mensaje no se procesa.
+- Se agregó una prueba de regresión que demuestra que un número desconocido no
+  puede resolverse al tenant maestro.
+- Pendiente operativo: desplegar el backend corregido y ejecutar una prueba real
+  de recepción de Digitalenfa, verificando el WAMID y la fila persistida antes
+  de reactivar el canal para tráfico normal.
+
+## 2026-09-10 · Credenciales Meta globales para tenants nuevos
+
+- El runtime de WhatsApp ahora inicializa el token Meta, `META_APP_SECRET`,
+  `WHATSAPP_META_VERIFY_TOKEN` y la versión Graph desde la configuración global
+  del backend.
+- Los secretos cifrados por tenant se conservan como override de compatibilidad
+  para tenants legacy.
+- Se agregó una prueba que confirma que el carácter `#` del verify token se
+  conserva y que las credenciales globales llegan al runtime.
+- El proceso `talia-api` debe reiniciarse después de modificar `.env`; el proceso
+  activo anterior inició antes de que se agregaran las variables.
+
 ## 2026-09-02 · Recuperación de intentos fallidos
 
 - Se permite corregir el WABA y el Phone Number ID cuando el intento anterior

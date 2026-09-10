@@ -1478,9 +1478,27 @@ class PlatformRepository:
         phone_key = str(phone_number_id or "").strip()
         if not phone_key:
             return None
+        # La tabla de conexiones asistidas es la fuente relacional canónica.
+        # No depender únicamente de un filtro JSON para el aislamiento del webhook.
+        data = await self._rest(
+            "GET",
+            "/rest/v1/whatsapp_meta_connections",
+            params={
+                "select": "organizacion_id",
+                "phone_number_id": f"eq.{phone_key}",
+                "estado": "eq.conectado",
+                "limit": "1",
+            },
+        )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            value = data[0].get("organizacion_id")
+            if value:
+                return str(value)
+
+        # Compatibilidad con tenants Meta legacy aún no migrados a la tabla.
         params = {
             "select": "id",
-            "config->whatsapp->meta->phone_number_id": f"eq.{phone_key}",
+            "config->whatsapp->meta->>phone_number_id": f"eq.{phone_key}",
             "limit": "1",
         }
         data = await self._rest("GET", "/rest/v1/organizaciones", params=params)
