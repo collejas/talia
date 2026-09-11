@@ -8129,9 +8129,14 @@ class CRMRepository:
             params["organizacion_id"] = f"eq.{organizacion_id}"
         if periodo_id:
             params["periodo_id"] = f"eq.{periodo_id}"
-        if fecha_desde:
+        if fecha_desde and fecha_hasta:
+            params["and"] = (
+                f"(mensaje_creado_en.gte.{fecha_desde.isoformat()},"
+                f"mensaje_creado_en.lt.{fecha_hasta.isoformat()})"
+            )
+        elif fecha_desde:
             params["mensaje_creado_en"] = f"gte.{fecha_desde.isoformat()}"
-        if fecha_hasta:
+        elif fecha_hasta:
             params["mensaje_creado_en"] = f"lt.{fecha_hasta.isoformat()}"
         if categoria_meta == "conversacion_sin_tarifa_meta":
             params["categoria_interna_cobro"] = f"eq.{categoria_meta}"
