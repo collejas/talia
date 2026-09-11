@@ -91,6 +91,8 @@ class BillingMessageItem(BaseModel):
     costo_meta_aplica: bool
     costo_meta_unitario: Decimal
     costo_meta_importe: Decimal
+    costo_meta_estado: str
+    meta_entregado_en: datetime | None = None
     costo_total_mensaje: Decimal
     tipo_cargo: str
     fuente_registro: str

@@ -3058,13 +3058,12 @@ async def record_delivery_event(
         )
         if provider == "meta":
             pricing_fields = message_billing.extract_meta_pricing_fields(raw_payload)
-            if pricing_fields:
-                await repo.update_billing_meta_message(
-                    proveedor=provider,
-                    proveedor_mensaje_id=message_sid,
-                    estado_proveedor=event,
-                    **pricing_fields,
-                )
+            await repo.update_billing_meta_message(
+                proveedor=provider,
+                proveedor_mensaje_id=message_sid,
+                estado_proveedor=event,
+                **pricing_fields,
+            )
     except (CRMRepositoryError, AttributeError) as exc:
         raise StorageError(str(exc)) from exc
 
@@ -3096,13 +3095,12 @@ async def reconcile_delivery_events_for_message(
         )
         for event in events:
             pricing_fields = message_billing.extract_meta_pricing_fields(event.get("payload_crudo"))
-            if pricing_fields:
-                await repo.update_billing_meta_message(
-                    proveedor=provider,
-                    proveedor_mensaje_id=message_sid,
-                    estado_proveedor=event.get("evento"),
-                    **pricing_fields,
-                )
+            await repo.update_billing_meta_message(
+                proveedor=provider,
+                proveedor_mensaje_id=message_sid,
+                estado_proveedor=event.get("evento"),
+                **pricing_fields,
+            )
         return len(events)
     except (CRMRepositoryError, AttributeError) as exc:
         raise StorageError(str(exc)) from exc

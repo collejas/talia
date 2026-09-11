@@ -74,7 +74,7 @@ El `conversacion_id` agrupa los mensajes, pero no genera un cargo separado. Una 
 
 ## 4. Regla de mensajes cobrables
 
-Se considera mensaje cobrable cuando:
+Se considera mensaje cobrable para el cargo GEOACTIV cuando:
 
 - la dirección sea `entrante` o `saliente`;
 - pertenezca a un tenant válido;
@@ -91,6 +91,29 @@ Por defecto, no se cobrarán:
 - eventos de `enviado`, `entregado` o `leído` como unidades independientes.
 
 Un mensaje aceptado se cobra una sola vez, aunque después reciba varios estados de entrega.
+
+El cargo GEOACTIV y el costo de Meta son decisiones independientes. La aceptación
+con WAMID habilita el cargo GEOACTIV, pero no confirma el costo de Meta.
+
+### Confirmación del costo Meta
+
+El costo Meta solamente se registra como confirmado cuando concurren estas condiciones:
+
+- el proveedor es Meta y el mensaje es saliente;
+- existe un callback Meta `entregado` o `leído` asociado al mismo WAMID;
+- Meta reporta `pricing.billable=true`;
+- existe una tarifa vigente aplicable para la categoría y el país.
+
+La ausencia de entrega no genera costo Meta. Los estados operativos son:
+
+- `pendiente`: Meta aceptó el mensaje, pero aún no existe evidencia suficiente;
+- `confirmado`: entrega y `billable=true` confirmados;
+- `no_entregado`: existe fallo sin entrega confirmada;
+- `no_aplica`: mensaje gratuito, entrante o categoría sin costo Meta.
+
+La conciliación financiera definitiva debe comparar los mensajes confirmados
+contra el reporte o factura de Meta del periodo. Un callback de aceptación no
+debe presentarse como costo Meta definitivo.
 
 ## 5. Regla de hilos
 

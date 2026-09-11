@@ -486,6 +486,14 @@ Pendiente de API:
 
 ## Próximas fases
 
+### Confirmación de costo Meta por entrega — 2026-09-11
+
+- Se separó la evidencia de aceptación Meta, que habilita el cargo GEOACTIV, de la evidencia de entrega que habilita el costo Meta.
+- El costo Meta solo se acumula con callback `entregado`/`leído` y `pricing.billable=true`.
+- Los callbacks Meta se procesan aunque no incluyan `pricing`, para cerrar decisiones con eventos recibidos anteriormente.
+- Se agregó `cobro_mensajes.costo_meta_estado` y `meta_entregado_en` para distinguir pendiente, confirmado, no entregado y no aplica.
+- El backfill histórico recalculó periodos sin reenviar mensajes ni alterar cargos GEOACTIV.
+
 ### Fase 1 — Diseño técnico detallado
 
 - Aprobar nombres finales de tablas y columnas.

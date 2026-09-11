@@ -8112,7 +8112,7 @@ class CRMRepository:
             "nombre_plantilla,idioma_plantilla,categoria_meta,categoria_interna_cobro,tipo_pricing_meta,"
             "billable_meta,estado_proveedor,aceptado_proveedor_en,facturable,"
             "motivo_no_facturable,origen_tarifa_app,cargo_app_unitario,cargo_app_importe,"
-            "costo_meta_aplica,costo_meta_unitario,costo_meta_importe,costo_total_mensaje,"
+            "costo_meta_aplica,costo_meta_unitario,costo_meta_importe,costo_meta_estado,meta_entregado_en,costo_total_mensaje,"
             "tipo_cargo,fuente_registro,conciliacion_estado,creado_en,mensaje_creado_en,"
             "contacto_nombre_historico,contacto_telefono_historico,contacto_correo_historico,"
             "operativo_eliminado,operativo_eliminado_en"
