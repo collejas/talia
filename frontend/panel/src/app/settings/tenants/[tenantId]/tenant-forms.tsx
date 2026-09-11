@@ -1960,7 +1960,19 @@ export function TenantBusquedaSettings({
     <form action={formAction} className="space-y-6">
       <input type="hidden" name="tenant_id" value={tenantId} />
 
-      <div className="space-y-2">
+      <div className="space-y-4 rounded-lg border border-border/60 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">GobMX (DENUE)</h3>
+            <p className="text-xs text-muted-foreground">
+              Consulta negocios y establecimientos mediante la fuente oficial de INEGI.
+            </p>
+          </div>
+          <p className="text-xs font-medium text-muted-foreground">
+            {hasToken ? "Conexión registrada" : "Conexión pendiente"}
+          </p>
+        </div>
+        <div className="space-y-2">
         {showRequiredMarkers ? <RequiredLabel htmlFor="denue_base_url">Dirección de la fuente de negocios</RequiredLabel> : <Label htmlFor="denue_base_url">Dirección de la fuente de negocios</Label>}
         <Input
           id="denue_base_url"
@@ -1981,14 +1993,15 @@ export function TenantBusquedaSettings({
             ? "Token registrado; no se muestra el valor actual."
             : "Aún no hay una clave guardada para esta organización."}
         </p>
+        </div>
       </div>
 
       <div className="space-y-3 rounded-lg border border-border/60 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-medium">Búsqueda de lugares</h3>
+            <h3 className="text-sm font-medium">Google Places</h3>
             <p className="text-xs text-muted-foreground">
-              Configura la consulta de lugares y los límites de búsqueda.
+              Consulta lugares, negocios y detalles mediante Google Places.
             </p>
           </div>
           <p className="text-xs font-medium text-muted-foreground">
