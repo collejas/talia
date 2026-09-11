@@ -2357,7 +2357,7 @@ export function TenantWhatsAppRoutes({ tenantId, routes }: { tenantId: string; r
   const channelRoutes = routes.filter((route) => route.canal === "whatsapp")
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 rounded-lg border border-border/60 p-4">
       <div>
         <h3 className="text-sm font-medium">Rutas de recepción</h3>
         <p className="text-xs text-muted-foreground">Asocia un número E.164 a la organización para recibir mensajes.</p>
@@ -2401,7 +2401,7 @@ export function TenantWhatsAppValidation({ tenantId }: { tenantId: string }) {
   const [validateState, validateAction] = useActionState(actions.validateTenantAction, INITIAL_CRUD_STATE)
 
   return (
-    <form action={validateAction} className="space-y-3">
+    <form action={validateAction} className="space-y-4 rounded-lg border border-border/60 p-4">
       <input type="hidden" name="tenant_id" value={tenantId} />
       <input type="hidden" name="scope" value="whatsapp" />
       <div className="flex items-center justify-between gap-3">
@@ -2582,12 +2582,11 @@ function TenantWhatsAppSettingsForm({
               </p>
             </div>
           </div>
-        </div>
-
-        <input type="hidden" name="whatsapp_provider" value="meta" />
-        <div className="flex items-center justify-between gap-3">
-          <FormStatusMessage state={state} />
-          <SubmitButton label="Guardar configuración del asistente" pendingLabel="Guardando..." />
+          <input type="hidden" name="whatsapp_provider" value="meta" />
+          <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+            <FormStatusMessage state={state} />
+            <SubmitButton label="Guardar configuración del asistente" pendingLabel="Guardando..." />
+          </div>
         </div>
       </form>
     </div>
@@ -2667,11 +2666,11 @@ export function TenantWhatsAppMetaSettings({
             <p className="text-xs text-muted-foreground">Se aplica al crear o reprogramar actividades nuevas. Predeterminado: 90 minutos.</p>
           </div>
         </div>
+        <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+          <FormStatusMessage state={state} />
+          <SubmitButton label="Guardar WhatsApp" pendingLabel="Guardando..." />
+        </div>
       </fieldset>
-      <div className="flex items-center justify-between gap-3">
-        <FormStatusMessage state={state} />
-        <SubmitButton label="Guardar WhatsApp" pendingLabel="Guardando..." />
-      </div>
     </form>
   )
 }
@@ -2727,7 +2726,7 @@ function TenantWhatsAppProspeccionSettingsForm({
 
   return (
     <div className="space-y-6">
-      <form action={formAction} className="space-y-4">
+      <form action={formAction} className="space-y-4 rounded-lg border border-border/60 p-4">
         <input type="hidden" name="tenant_id" value={tenantId} />
         <input type="hidden" name="whatsapp_prospeccion_templates_managed_in_db" value="1" />
         <div className="space-y-2">

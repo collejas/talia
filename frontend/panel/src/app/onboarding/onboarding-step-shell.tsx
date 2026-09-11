@@ -92,7 +92,9 @@ export function OnboardingStepShell({
               <p className="mt-2 text-sm text-muted-foreground">Guarda tus cambios. Puedes continuar después sin perder el avance.</p>
               <p className="mt-2 text-xs text-muted-foreground"><span className="text-destructive" aria-hidden="true">*</span> Campo o decisión necesaria para completar este paso.</p>
             </div>
-            {children}
+            <div className="space-y-6">
+              {children}
+            </div>
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
               <button className="rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50" disabled={!previous || saving} onClick={() => previous && void go(`/onboarding/${previous.id}`)}>
                 Anterior

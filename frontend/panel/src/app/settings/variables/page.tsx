@@ -554,7 +554,7 @@ export default async function SettingsVariablesPage({
                   ) : null}
                   {layoutConfigResp?.ok ? <TenantTemplateAiLayoutsPanel initialItems={layoutConfigResp.data.items} /> : null}
                 </TabsContent>
-                <TabsContent value="webchat" className="pt-4">
+                <TabsContent value="webchat" className="space-y-6 pt-4">
                   <TenantWebchatSettings
                     tenantId={tenantId}
                     initialValues={{
@@ -575,16 +575,16 @@ export default async function SettingsVariablesPage({
                     }}
                   />
                 </TabsContent>
-                <TabsContent value="web-tracking" className="pt-4">
+                <TabsContent value="web-tracking" className="space-y-6 pt-4">
                   <TenantWebTrackingPanel />
                 </TabsContent>
-                <TabsContent value="calendar" className="pt-4">
+                <TabsContent value="calendar" className="space-y-6 pt-4">
                   <TenantCalendarSettings
                     tenantId={tenantId}
                     initialValues={calendarInitialValues}
                   />
                 </TabsContent>
-                <TabsContent value="mail" className="pt-4">
+                <TabsContent value="mail" className="space-y-6 pt-4">
                   <div className="space-y-6">
                     <TenantEmailServicePanel
                       data={emailServiceResp.ok ? emailServiceResp.data : null}
@@ -600,10 +600,10 @@ export default async function SettingsVariablesPage({
                     initialValues={mailInitialValues}
                   />
                 </TabsContent>
-                <TabsContent value="twilio" className="pt-4">
+                <TabsContent value="twilio" className="space-y-6 pt-4">
                   <TenantTwilioSettings tenantId={tenantId} initialValues={twilioInitialValues} />
                 </TabsContent>
-                <TabsContent value="whatsapp" className="pt-4">
+                <TabsContent value="whatsapp" className="space-y-6 pt-4">
                   <MetaAssistedConnectionPanel
                     initialConnection={metaConnectionResp.ok ? metaConnectionResp.data : null}
                     businessId={process.env.META_TALIA_BUSINESS_ID ?? "1358726956043196"}
@@ -621,14 +621,14 @@ export default async function SettingsVariablesPage({
                   <TenantWhatsAppValidation tenantId={tenantId} />
                   <WhatsAppAssistantSchedulePanel initialValues={scheduleResp.ok ? scheduleResp.data : null} />
                 </TabsContent>
-                <TabsContent value="messenger" className="pt-4">
+                <TabsContent value="messenger" className="space-y-6 pt-4">
                   <TenantMessengerSettings
                     tenantId={tenantId}
                     initialValues={messengerInitialValues}
                     routes={routes}
                   />
                 </TabsContent>
-                <TabsContent value="busqueda" className="pt-4">
+                <TabsContent value="busqueda" className="space-y-6 pt-4">
                   <TenantBusquedaSettings
                     tenantId={tenantId}
                     initialValues={searchInitialValues}
@@ -636,7 +636,7 @@ export default async function SettingsVariablesPage({
                     hasGoogleApiKey={hasGoogleApiKey}
                   />
                 </TabsContent>
-                <TabsContent value="openai" className="pt-4">
+                <TabsContent value="openai" className="space-y-6 pt-4">
                   <TenantOpenaiSettings
                     tenantId={tenantId}
                     initialValues={openaiInitialValues}
@@ -644,7 +644,7 @@ export default async function SettingsVariablesPage({
                     hasVoiceApiKey={hasVoiceApiKey}
                   />
                 </TabsContent>
-                <TabsContent value="close-lead" className="pt-4">
+                <TabsContent value="close-lead" className="space-y-6 pt-4">
                   <WhatsAppCloseWindowForm initialMinutes={whatsappInitialValues.whatsapp_close_after_lead_minutes} />
                   {closeLeadPolicies ? (
                     <CloseLeadPolicyPanel
@@ -658,7 +658,7 @@ export default async function SettingsVariablesPage({
                     />
                   )}
                 </TabsContent>
-                <TabsContent value="secrets" className="pt-4">
+                <TabsContent value="secrets" className="space-y-6 pt-4">
                   <TenantSecretsManager tenantId={tenantId} secrets={secrets} />
                 </TabsContent>
               </Tabs>
