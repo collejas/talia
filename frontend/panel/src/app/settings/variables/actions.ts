@@ -39,6 +39,7 @@ export async function operateMetaWhatsAppConnectionAction(
     })
     if (!response.ok) return failure(response.error, "Meta no pudo completar la operación")
     revalidatePath("/settings/variables")
+    revalidatePath("/onboarding", "layout")
     return { status: "success", message: accion === "validar" ? "Acceso validado correctamente." : "Paso completado correctamente.", connection: response.data }
   } catch (error) {
     return failure(error, "No fue posible completar la operación con Meta")
@@ -222,6 +223,7 @@ export async function updateWhatsappAssistantScheduleAction(
     })
     if (!response.ok) throw new Error(response.error)
     revalidatePath("/settings/variables")
+    revalidatePath("/onboarding", "layout")
     return success("Horario del asistente guardado.")
   } catch (error) {
     return failure(error, "No se pudo guardar el horario del asistente.")

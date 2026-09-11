@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState } from "react"
+import { useActionState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,8 +18,14 @@ export function MetaAssistedConnectionPanel({
   businessId: string
 }) {
   const [state, formAction, pending] = useActionState(operateMetaWhatsAppConnectionAction, INITIAL_STATE)
+  const router = useRouter()
   const connection = state.connection ?? initialConnection
   const estado = typeof connection?.estado === "string" ? connection.estado : "pendiente"
+
+  useEffect(() => {
+    if (state.status === "success") router.refresh()
+  }, [router, state])
+
   return (
     <div className="rounded-lg border border-border/60 p-4 space-y-4">
       <div className="space-y-1">

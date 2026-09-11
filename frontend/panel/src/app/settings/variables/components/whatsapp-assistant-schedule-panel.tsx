@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useMemo } from "react"
+import { useActionState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 
 import { updateWhatsappAssistantScheduleAction, type CrudActionState } from "@/app/settings/variables/actions"
 import { Button } from "@/components/ui/button"
@@ -35,7 +36,12 @@ function readString(values: Record<string, unknown> | null, key: string, fallbac
 
 export function WhatsAppAssistantSchedulePanel({ initialValues }: Props) {
   const [state, formAction] = useActionState(updateWhatsappAssistantScheduleAction, INITIAL_STATE)
+  const router = useRouter()
   const formKey = useMemo(() => JSON.stringify(initialValues ?? {}), [initialValues])
+
+  useEffect(() => {
+    if (state.status === "success") router.refresh()
+  }, [router, state])
 
   return (
     <form key={formKey} action={formAction} className="space-y-5 rounded-lg border border-border/60 p-4">

@@ -3,6 +3,13 @@
 Este archivo registra el avance del plan de simplificación de
 `/settings/variables`.
 
+## [2026-09-11] — Sincronización de horario y conexión Meta
+
+- El guardado de “Horario del asistente WhatsApp” y “Meta WhatsApp Cloud API”
+  invalida tanto `settings/variables` como el onboarding.
+- Ambos paneles refrescan sus datos después de guardar para mostrar la respuesta
+  persistida por la API y mantener la misma información en ambas vistas.
+
 ## [2026-09-11] — Guardado compartido de configuración de WhatsApp
 
 - El bloque de variables del asistente en onboarding y `settings/variables` ahora
