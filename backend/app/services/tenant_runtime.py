@@ -538,6 +538,7 @@ async def get_webchat_runtime_settings(*, organizacion_id: UUID) -> WebchatRunti
     whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
     openai_cfg = _as_dict(config.get("openai")) or {}
     general_cfg = _as_dict(openai_cfg.get("general")) or {}
+    voice_cfg = _as_dict(openai_cfg.get("voice")) or {}
     assistant_id = webchat.get("assistant_id") if isinstance(webchat.get("assistant_id"), str) else None
     prompt_version = webchat.get("prompt_version") if isinstance(webchat.get("prompt_version"), str) else None
 
@@ -1411,35 +1412,30 @@ async def get_whatsapp_runtime_settings(
     agenda_cfg = _as_dict(features_cfg.get("agenda")) or {}
     settings_payload.agenda_enabled = _coerce_bool(agenda_cfg.get("enabled"), True)
     whatsapp_cfg = _as_dict(config.get("whatsapp")) or {}
+    openai_cfg = _as_dict(config.get("openai")) or {}
+    general_cfg = _as_dict(openai_cfg.get("general")) or {}
+    voice_cfg = _as_dict(openai_cfg.get("voice")) or {}
     settings_payload.send_seller_data_to_customer = _coerce_bool(
         whatsapp_cfg.get("send_seller_data_to_customer"),
         False,
     )
     whatsapp_twilio_cfg = _as_dict(whatsapp_cfg.get("twilio")) or {}
     whatsapp_meta_cfg = _as_dict(whatsapp_cfg.get("meta")) or {}
-    openai_cfg = _as_dict(config.get("openai")) or {}
-    general_cfg = _as_dict(openai_cfg.get("general")) or {}
-    voice_cfg = _as_dict(openai_cfg.get("voice")) or {}
-
     provider_value = _coerce_str_or_none(whatsapp_cfg.get("provider"))
     if provider_value is not None:
         settings_payload.provider = provider_value.lower()
 
-    assistant_id = _coerce_str_or_none(voice_cfg.get("assistant_id"))
-    if assistant_id is None:
-        assistant_id = _coerce_str_or_none(whatsapp_cfg.get("assistant_id"))
+    # WhatsApp is an independent configuration domain. Never let a voice
+    # assistant overwrite the tenant's WhatsApp assistant at runtime.
+    assistant_id = _coerce_str_or_none(whatsapp_cfg.get("assistant_id"))
     if assistant_id is not None:
         settings_payload.assistant_id = assistant_id
 
-    prompt_id = _coerce_str_or_none(voice_cfg.get("prompt_id"))
-    if prompt_id is None:
-        prompt_id = _coerce_str_or_none(whatsapp_cfg.get("prompt_id"))
+    prompt_id = _coerce_str_or_none(whatsapp_cfg.get("prompt_id"))
     if prompt_id is not None:
         settings_payload.prompt_id = prompt_id
 
-    prompt_version = _coerce_str_or_none(voice_cfg.get("prompt_version"))
-    if prompt_version is None:
-        prompt_version = _coerce_str_or_none(whatsapp_cfg.get("prompt_version"))
+    prompt_version = _coerce_str_or_none(whatsapp_cfg.get("prompt_version"))
     if prompt_version is not None:
         settings_payload.prompt_version = prompt_version
 

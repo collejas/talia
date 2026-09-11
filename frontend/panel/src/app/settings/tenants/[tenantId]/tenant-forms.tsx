@@ -2590,6 +2590,10 @@ function TenantWhatsAppSettingsForm({
         </div>
 
         <input type="hidden" name="whatsapp_provider" value="meta" />
+        <div className="flex items-center justify-between gap-3">
+          <FormStatusMessage state={state} />
+          <SubmitButton label="Guardar configuración del asistente" pendingLabel="Guardando..." />
+        </div>
       </form>
       <WhatsAppAssistantSchedulePanel initialValues={scheduleValues ?? null} />
       <form action={formAction} className="space-y-6">

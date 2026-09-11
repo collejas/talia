@@ -981,6 +981,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     }
 
     revalidatePath("/settings/variables")
+    revalidatePath("/onboarding", "layout")
     return success("Configuración de WhatsApp guardada.")
   } catch (error) {
     return failure(error, "No se pudo guardar la configuración de WhatsApp.")

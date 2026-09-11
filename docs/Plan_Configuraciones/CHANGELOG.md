@@ -3,6 +3,18 @@
 Este archivo registra el avance del plan de simplificación de
 `/settings/variables`.
 
+## [2026-09-11] — Guardado compartido de configuración de WhatsApp
+
+- El bloque de variables del asistente en onboarding y `settings/variables` ahora
+  tiene su propio botón de guardado.
+- Se corrigió la separación accidental entre el formulario de variables y el
+  formulario de plantillas Meta, que impedía enviar y persistir prompt, versión,
+  asistente y tiempos de WhatsApp.
+- Después de guardar, ambas rutas se revalidan para que el siguiente render lea
+  los valores persistidos desde la misma configuración de la organización.
+- El runtime de WhatsApp usa primero su propia configuración y no toma valores
+  del bloque de Voz.
+
 ## [2026-09-02] — Recuperación de WhatsApp durante el onboarding
 
 - El paso de WhatsApp ahora se considera completo únicamente cuando la conexión
