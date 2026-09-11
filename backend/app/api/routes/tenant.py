@@ -61,6 +61,7 @@ class TenantOnboardingProgressResponse(BaseModel):
     webchat_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     voz_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     zoom_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
+    web_tracking_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     errores: list[str] = Field(default_factory=list)
     pasos: list[dict[str, Any]] = Field(default_factory=list)
     correo: dict[str, bool] = Field(default_factory=dict)
@@ -72,6 +73,7 @@ class TenantOnboardingProgressUpdate(BaseModel):
     webchat_decision: Literal["pendiente", "usar", "no_usar"] | None = None
     voz_decision: Literal["pendiente", "usar", "no_usar"] | None = None
     zoom_decision: Literal["pendiente", "usar", "no_usar"] | None = None
+    web_tracking_decision: Literal["pendiente", "usar", "no_usar"] | None = None
     ultimo_paso: str | None = Field(default=None, max_length=80)
 
     @model_validator(mode="after")
@@ -80,6 +82,7 @@ class TenantOnboardingProgressUpdate(BaseModel):
             self.webchat_decision is None
             and self.voz_decision is None
             and self.zoom_decision is None
+            and self.web_tracking_decision is None
             and self.ultimo_paso is None
         ):
             raise ValueError("debe_indicar_un_cambio")
@@ -894,6 +897,20 @@ async def _get_onboarding_progress(
     whatsapp_connection = await platform_repo.get_whatsapp_meta_connection(
         organizacion_id=context.organizacion_id
     )
+    web_tracking_sites: list[dict[str, Any]] = []
+    web_tracking_domains: list[dict[str, Any]] = []
+    try:
+        tracking_repo = CRMRepository(user_token=None)
+        web_tracking_sites = await tracking_repo.list_web_tracking_sites(
+            organizacion_id=context.organizacion_id
+        )
+        web_tracking_domains = await tracking_repo.list_web_tracking_domains(
+            organizacion_id=context.organizacion_id
+        )
+    except CRMRepositoryError:
+        # La configuración general no debe dejar de mostrarse si el módulo web
+        # todavía no está disponible o su migración está pendiente.
+        pass
     preferences = await platform_repo.get_tenant_onboarding_progress(
         organizacion_id=context.organizacion_id
     )
@@ -915,10 +932,13 @@ async def _get_onboarding_progress(
         preferences=preferences,
         email_service=email_service,
         whatsapp_connection=whatsapp_connection,
+        web_tracking_sites=web_tracking_sites,
+        web_tracking_domains=web_tracking_domains,
     )
     progress["webchat_decision"] = str((preferences or {}).get("webchat_decision") or "pendiente")
     progress["voz_decision"] = str((preferences or {}).get("voz_decision") or "pendiente")
     progress["zoom_decision"] = str((preferences or {}).get("zoom_decision") or "pendiente")
+    progress["web_tracking_decision"] = str((preferences or {}).get("web_tracking_decision") or "pendiente")
     return TenantOnboardingProgressResponse.model_validate(progress)
 
 

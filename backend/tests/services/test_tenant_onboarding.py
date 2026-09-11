@@ -44,3 +44,41 @@ def test_legacy_whatsapp_route_remains_compatible_without_assisted_record() -> N
 
     whatsapp = next(step for step in progress["pasos"] if step["id"] == "whatsapp")
     assert whatsapp["completado"] is True
+
+
+def test_web_tracking_can_be_marked_as_not_used() -> None:
+    progress = build_onboarding_progress(
+        tenant=_tenant(),
+        routes=[],
+        secrets=[],
+        preferences={"web_tracking_decision": "no_usar"},
+    )
+
+    pagina_web = next(step for step in progress["pasos"] if step["id"] == "pagina_web")
+    assert pagina_web["completado"] is True
+    assert progress["web_tracking_decision"] == "no_usar"
+
+
+def test_web_tracking_requires_active_site_and_verified_domain_when_selected() -> None:
+    base = {
+        "web_tracking_decision": "usar",
+    }
+    pending = build_onboarding_progress(
+        tenant=_tenant(),
+        routes=[],
+        secrets=[],
+        preferences=base,
+        web_tracking_sites=[{"id": "site-1", "active": True}],
+        web_tracking_domains=[{"tracking_site_id": "site-1", "active": True, "verification_status": "pending"}],
+    )
+    assert next(step for step in pending["pasos"] if step["id"] == "pagina_web")["completado"] is False
+
+    verified = build_onboarding_progress(
+        tenant=_tenant(),
+        routes=[],
+        secrets=[],
+        preferences=base,
+        web_tracking_sites=[{"id": "site-1", "active": True}],
+        web_tracking_domains=[{"tracking_site_id": "site-1", "active": True, "verification_status": "verified"}],
+    )
+    assert next(step for step in verified["pasos"] if step["id"] == "pagina_web")["completado"] is True

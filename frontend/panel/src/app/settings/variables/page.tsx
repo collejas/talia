@@ -10,7 +10,7 @@ import { callCrmApi } from "@/lib/api/crm"
 import { fetchCloseLeadPolicy } from "@/app/settings/close-lead/actions"
 import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-panel"
 import { WhatsAppCloseWindowForm } from "@/components/settings/whatsapp-close-window-form"
-import { TenantWebTrackingPanel } from "./components/tenant-web-tracking-panel"
+import { TenantWebTrackingPanel, type WebTrackingDecision } from "./components/tenant-web-tracking-panel"
 import {
   TenantEmailServicePanel,
   type TenantEmailServiceData,
@@ -230,7 +230,7 @@ export default async function SettingsVariablesPage({
     organizacionId: null,
     withUserToken: true,
   })
-  const onboardingResp = await callCrmApi<{ correo?: { completado?: boolean } }>("/tenant/me/onboarding", {
+  const onboardingResp = await callCrmApi<{ correo?: { completado?: boolean }; web_tracking_decision?: WebTrackingDecision }>("/tenant/me/onboarding", {
     organizacionId: null,
     withUserToken: true,
   })
@@ -576,7 +576,9 @@ export default async function SettingsVariablesPage({
                   />
                 </TabsContent>
                 <TabsContent value="web-tracking" className="space-y-6 pt-4">
-                  <TenantWebTrackingPanel />
+                  <TenantWebTrackingPanel
+                    initialDecision={onboardingResp.ok ? onboardingResp.data.web_tracking_decision : "pendiente"}
+                  />
                 </TabsContent>
                 <TabsContent value="calendar" className="space-y-6 pt-4">
                   <TenantCalendarSettings

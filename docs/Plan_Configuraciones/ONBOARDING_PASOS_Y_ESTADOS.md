@@ -89,6 +89,21 @@ Si elige usarlo, debe comprobar:
 Si elige no utilizarlo, el paso queda en `No se utilizará` y el canal permanece
 desactivado.
 
+### Paso 3 bis. Página Web
+
+Opcional.
+
+El tenant debe elegir una de estas opciones:
+
+- Configurar la Página Web.
+- No configurar ahora.
+
+Si elige configurar, debe existir una instalación activa de tracking con al menos
+un dominio activo y verificado. Si elige no configurarla, el paso queda resuelto
+como `No se utilizará` y esa decisión se guarda en el progreso del onboarding.
+La instalación, los dominios, el código y la verificación se administran desde
+el mismo componente en `onboarding/pagina_web` y `settings/variables`.
+
 ### Paso 4. WhatsApp
 
 Opcional según plan.

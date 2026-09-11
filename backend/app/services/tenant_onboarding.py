@@ -55,12 +55,15 @@ def build_onboarding_progress(
     preferences: dict[str, Any] | None,
     email_service: dict[str, Any] | None = None,
     whatsapp_connection: dict[str, Any] | None = None,
+    web_tracking_sites: list[dict[str, Any]] | None = None,
+    web_tracking_domains: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     config = tenant.get("config") if isinstance(tenant.get("config"), dict) else {}
     preferences = preferences or {}
     webchat_decision = str(preferences.get("webchat_decision") or "pendiente")
     voz_decision = str(preferences.get("voz_decision") or "pendiente")
     zoom_decision = str(preferences.get("zoom_decision") or "pendiente")
+    web_tracking_decision = str(preferences.get("web_tracking_decision") or "pendiente")
 
     organization_values = (
         tenant.get("nombre_comercial") or tenant.get("nombre"),
@@ -129,6 +132,20 @@ def build_onboarding_progress(
     # avance que puede completar el tenant. El onboarding valida la configuración
     # que el tenant controla: correo operativo, DNS y remitente.
     correo_done = mail_operational_done and domain_verified and sender_configured
+    web_tracking_sites = web_tracking_sites or []
+    web_tracking_domains = web_tracking_domains or []
+    active_tracking_site_ids = {
+        str(site.get("id")) for site in web_tracking_sites if site.get("active") is True
+    }
+    web_tracking_done = web_tracking_decision == "no_usar" or (
+        web_tracking_decision == "usar"
+        and any(
+            str(domain.get("tracking_site_id")) in active_tracking_site_ids
+            and domain.get("active") is True
+            and domain.get("verification_status") == "verified"
+            for domain in web_tracking_domains
+        )
+    )
 
     definitions = [
         ("organizacion", "Datos de tu organización", organization_done),
@@ -140,6 +157,7 @@ def build_onboarding_progress(
         ("agenda", "Agenda", agenda_configured and zoom_done),
         ("correo", "Correo", correo_done),
         ("busqueda", "Búsquedas", search_done),
+        ("pagina_web", "Página Web", web_tracking_done),
     ]
     steps: list[dict[str, Any]] = []
     for key, title, done in definitions:
@@ -159,6 +177,7 @@ def build_onboarding_progress(
         "total": len(steps),
         "paso_actual": first_pending,
         "ultimo_paso": preferences.get("ultimo_paso"),
+        "web_tracking_decision": web_tracking_decision,
         "completado": completed == len(steps),
         "requiere_onboarding": str(tenant.get("estado_onboarding") or "pendiente")
         != "completado",

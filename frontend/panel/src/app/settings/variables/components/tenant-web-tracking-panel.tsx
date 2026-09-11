@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -37,6 +38,8 @@ type TrackingSite = {
   domains: TrackingDomain[]
 }
 
+export type WebTrackingDecision = "pendiente" | "usar" | "no_usar"
+
 const COLLECTOR_ENDPOINT =
   process.env.NEXT_PUBLIC_TRACKING_COLLECTOR_URL || "https://talia.mx/api/crm/web/visit"
 const TRACKING_SCRIPT_URL = "https://talia.mx/assets/js/site-tracking.js?v=20260815-cors1"
@@ -63,7 +66,15 @@ function statusVariant(status: VerificationStatus): "default" | "secondary" | "d
   return "outline"
 }
 
-export function TenantWebTrackingPanel({ tenantId }: { tenantId?: string }) {
+export function TenantWebTrackingPanel({
+  tenantId,
+  initialDecision = "pendiente",
+}: {
+  tenantId?: string
+  initialDecision?: WebTrackingDecision
+}) {
+  const router = useRouter()
+  const [decision, setDecision] = useState<WebTrackingDecision>(initialDecision)
   const [sites, setSites] = useState<TrackingSite[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -77,6 +88,30 @@ export function TenantWebTrackingPanel({ tenantId }: { tenantId?: string }) {
     [tenantId],
   )
   const withTenantQuery = useCallback((path: string) => `${path}${tenantQuery}`, [tenantQuery])
+
+  const saveDecision = async (value: Exclude<WebTrackingDecision, "pendiente">) => {
+    setMessage(null)
+    setSaving(true)
+    try {
+      const response = await fetch("/api/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ web_tracking_decision: value }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(errorMessage(payload, "No se pudo guardar la decisión."))
+      setDecision(value)
+      setMessage({
+        type: "success",
+        text: value === "no_usar" ? "Página Web marcada como no utilizada." : "Página Web seleccionada para configuración.",
+      })
+      router.refresh()
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo guardar la decisión." })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const loadSites = useCallback(async () => {
     setLoading(true)
@@ -240,6 +275,22 @@ export function TenantWebTrackingPanel({ tenantId }: { tenantId?: string }) {
 
   return (
     <div className="space-y-4">
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="text-base">¿Quieres configurar la Página Web?</CardTitle>
+          <CardDescription>
+            Puedes instalar el seguimiento web ahora o dejar esta función sin configurar. Esta decisión puede cambiarse después.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3 pt-0">
+          <Button type="button" variant={decision === "usar" ? "default" : "outline"} onClick={() => void saveDecision("usar")} disabled={saving}>
+            Sí, configurar
+          </Button>
+          <Button type="button" variant={decision === "no_usar" ? "default" : "outline"} onClick={() => void saveDecision("no_usar")} disabled={saving}>
+            No configurar ahora
+          </Button>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader className="space-y-2">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">

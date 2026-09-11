@@ -466,3 +466,11 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
   `talia-panel.service`.
 - La ruta requiere sesión autenticada; sin sesión redirige al flujo de acceso
   del panel.
+
+## [2026-09-11] — Página Web dentro del onboarding
+
+- Se incorporó el módulo existente de Página Web (tracking, dominios, código y
+  verificación) como paso del onboarding.
+- El tenant puede elegir configurar la Página Web o marcarla como no utilizada.
+- La decisión se persiste explícitamente y participa en el porcentaje de avance.
+- Onboarding y `settings/variables` muestran y guardan la misma información.

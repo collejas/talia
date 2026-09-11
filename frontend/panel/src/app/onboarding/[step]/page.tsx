@@ -24,6 +24,7 @@ import * as tenantActionsLib from "@/app/settings/variables/actions"
 import { MetaAssistedConnectionPanel } from "@/app/settings/variables/components/meta-assisted-connection-panel"
 import { WhatsAppAssistantSchedulePanel } from "@/app/settings/variables/components/whatsapp-assistant-schedule-panel"
 import { TenantEmailServicePanel, type TenantEmailServiceData } from "@/app/settings/variables/components/tenant-email-service-panel"
+import { TenantWebTrackingPanel, type WebTrackingDecision } from "@/app/settings/variables/components/tenant-web-tracking-panel"
 import { TenantAiBrandContextPanel } from "@/app/settings/variables/components/tenant-ai-brand-context-panel"
 import { OnboardingStepShell } from "../onboarding-step-shell"
 import { OptionalFeatureChoice } from "../optional-feature-choice"
@@ -41,6 +42,7 @@ type Progress = {
   webchat_decision: "pendiente" | "usar" | "no_usar"
   voz_decision: "pendiente" | "usar" | "no_usar"
   zoom_decision: "pendiente" | "usar" | "no_usar"
+  web_tracking_decision: WebTrackingDecision
   correo?: {
     correo_operativo_configurado: boolean
     dominio_registrado: boolean
@@ -191,6 +193,8 @@ export default async function OnboardingStepPage({ params }: { params: Promise<{
         return <TenantOpenaiSettings tenantId={tenantId} initialValues={{ general_project_id: text(openaiGeneral, "project_id"), voice_prompt_id: text(openaiVoice, "prompt_id"), voice_prompt_version: text(openaiVoice, "prompt_version"), voice_model: text(openaiVoice, "model"), voice_max_tokens: number(openaiVoice, "max_tokens"), voice_stt_model: text(openaiVoice, "stt_model") }} hasGeneralApiKey={hasSecret("openai.general.api_key")} hasVoiceApiKey={hasSecret("openai.voice.api_key")} showRequiredMarkers technicalFieldLabels />
       case "webchat":
         return <OptionalFeatureChoice feature="Webchat" initialDecision={progressResp.data.webchat_decision}><TenantWebchatSettings tenantId={tenantId} initialValues={{ enabled: bool(record(record(config.features).webchat), "enabled") ?? false, assistant_id: text(webchat, "assistant_id") ?? "", prompt_version: text(webchat, "prompt_version") ?? "", inactivity_minutes: number(webchat, "inactivity_minutes"), persist_session: bool(webchat, "persist_session"), reengage_minutes: number(webchat, "reengage_minutes"), reengage_max_attempts: number(webchat, "reengage_max_attempts"), escalate_minutes: number(webchat, "escalate_minutes"), webchat_alias: routes.find((item) => item.canal === "webchat")?.clave ?? "" }} /></OptionalFeatureChoice>
+      case "pagina_web":
+        return <TenantWebTrackingPanel initialDecision={progressResp.data.web_tracking_decision} />
       case "voz":
         return <OptionalFeatureChoice feature="Voz" initialDecision={progressResp.data.voz_decision}><TenantTwilioSettings tenantId={tenantId} initialValues={{ twilio_phone_number: text(twilio, "phone_number"), twilio_phone_number_sid: text(twilio, "phone_number_sid"), twilio_validate_signatures: bool(twilio, "validate_signatures") ?? true, voice_webhook_path: text(voice, "webhook_path") ?? "", voice_full_duplex: bool(voice, "full_duplex") ?? true, voice_debug_verbose: bool(voice, "debug_verbose") ?? false, voice_debug_energy_every_n: number(voice, "energy_every_n") }} showRequiredMarkers /></OptionalFeatureChoice>
       case "agenda":
