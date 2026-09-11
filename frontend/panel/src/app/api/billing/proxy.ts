@@ -23,10 +23,13 @@ export async function proxyBillingRequest(request: Request, backendPath: string,
 
   let body: unknown = undefined
   if (request.method !== "GET") {
-    try {
-      body = await request.json()
-    } catch {
-      return NextResponse.json({ error: "request_body_invalid" }, { status: 400 })
+    const rawBody = await request.text()
+    if (rawBody.trim()) {
+      try {
+        body = JSON.parse(rawBody) as unknown
+      } catch {
+        return NextResponse.json({ error: "request_body_invalid" }, { status: 400 })
+      }
     }
   }
 
