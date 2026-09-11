@@ -38,7 +38,6 @@ import {
 } from "./actions"
 import { TenantFiscalAddressFields } from "./tenant-fiscal-address-fields"
 import { RequiredLabel } from "@/components/ui/required-label"
-import { WhatsAppAssistantSchedulePanel } from "@/app/settings/variables/components/whatsapp-assistant-schedule-panel"
 
 export type TenantSettingsActions = {
   updateTenantConfigAction: CrudActionHandler
@@ -2341,14 +2340,12 @@ export function TenantTwilioSettings({
 export function TenantWhatsAppSettings({
   tenantId,
   initialValues,
-  scheduleValues,
 }: {
   tenantId: string
   initialValues: WhatsAppInitialValues
-  scheduleValues?: Record<string, unknown> | null
 }) {
   const formKey = useMemo(() => buildWhatsAppSettingsKey(initialValues), [initialValues])
-  return <TenantWhatsAppSettingsForm key={formKey} tenantId={tenantId} initialValues={initialValues} scheduleValues={scheduleValues} />
+  return <TenantWhatsAppSettingsForm key={formKey} tenantId={tenantId} initialValues={initialValues} />
 }
 
 export function TenantWhatsAppRoutes({ tenantId, routes }: { tenantId: string; routes: RouteItem[] }) {
@@ -2446,11 +2443,9 @@ export function TenantWhatsAppValidation({ tenantId }: { tenantId: string }) {
 function TenantWhatsAppSettingsForm({
   tenantId,
   initialValues,
-  scheduleValues,
 }: {
   tenantId: string
   initialValues: WhatsAppInitialValues
-  scheduleValues?: Record<string, unknown> | null
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
@@ -2595,125 +2590,89 @@ function TenantWhatsAppSettingsForm({
           <SubmitButton label="Guardar configuración del asistente" pendingLabel="Guardando..." />
         </div>
       </form>
-      <WhatsAppAssistantSchedulePanel initialValues={scheduleValues ?? null} />
-      <form action={formAction} className="space-y-6">
-        <input type="hidden" name="tenant_id" value={tenantId} />
-        <input type="hidden" name="whatsapp_provider" value="meta" />
-        <fieldset className="rounded-lg border border-border/60 p-4 space-y-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Meta WhatsApp Cloud API</p>
-            <p className="text-xs text-muted-foreground">
-              Webhook sugerido: <code>{`/api/whatsapp/meta/${tenantId}/webhook`}</code>
-            </p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Plantillas Meta</p>
-            <p className="text-xs text-muted-foreground">Nombre técnico e idioma aprobados para cada plantilla de Meta.</p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_sales_meta_name">Nombre plantilla de ventas</Label>
-              <Input
-                id="whatsapp_template_sales_meta_name"
-                name="whatsapp_template_sales_meta_name"
-                placeholder="mi_plantilla_ventas"
-                defaultValue={initialValues.whatsapp_template_sales_meta_name ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_sales_meta_language">Idioma plantilla de ventas</Label>
-              <Input
-                id="whatsapp_template_sales_meta_language"
-                name="whatsapp_template_sales_meta_language"
-                placeholder="es_MX"
-                defaultValue={initialValues.whatsapp_template_sales_meta_language ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_appointment_meta_name">
-                Nombre plantilla de cita
-              </Label>
-              <Input
-                id="whatsapp_template_appointment_meta_name"
-                name="whatsapp_template_appointment_meta_name"
-                placeholder="mi_plantilla_cita"
-                defaultValue={initialValues.whatsapp_template_appointment_meta_name ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_appointment_meta_language">
-                Idioma plantilla de cita
-              </Label>
-              <Input
-                id="whatsapp_template_appointment_meta_language"
-                name="whatsapp_template_appointment_meta_language"
-                placeholder="es_MX"
-                defaultValue={initialValues.whatsapp_template_appointment_meta_language ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_cancel_meta_name">Nombre plantilla de cancelación</Label>
-              <Input
-                id="whatsapp_template_cancel_meta_name"
-                name="whatsapp_template_cancel_meta_name"
-                placeholder="mi_plantilla_cancelacion"
-                defaultValue={initialValues.whatsapp_template_cancel_meta_name ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_cancel_meta_language">Idioma plantilla de cancelación</Label>
-              <Input
-                id="whatsapp_template_cancel_meta_language"
-                name="whatsapp_template_cancel_meta_language"
-                placeholder="es_MX"
-                defaultValue={initialValues.whatsapp_template_cancel_meta_language ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_activity_reminder_meta_name">
-                Nombre plantilla recordatorio de actividad
-              </Label>
-              <Input
-                id="whatsapp_template_activity_reminder_meta_name"
-                name="whatsapp_template_activity_reminder_meta_name"
-                placeholder="recordatorio_actividad"
-                defaultValue={initialValues.whatsapp_template_activity_reminder_meta_name ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_template_activity_reminder_meta_language">
-                Idioma plantilla recordatorio de actividad
-              </Label>
-              <Input
-                id="whatsapp_template_activity_reminder_meta_language"
-                name="whatsapp_template_activity_reminder_meta_language"
-                placeholder="es_MX"
-                defaultValue={initialValues.whatsapp_template_activity_reminder_meta_language ?? ""}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp_activity_reminder_minutes_before">Minutos antes del evento</Label>
-              <Input
-                id="whatsapp_activity_reminder_minutes_before"
-                name="whatsapp_activity_reminder_minutes_before"
-                type="number"
-                min={0}
-                step={1}
-                defaultValue={initialValues.whatsapp_activity_reminder_minutes_before ?? 90}
-              />
-              <p className="text-xs text-muted-foreground">
-                Se aplica al crear o reprogramar actividades nuevas. Predeterminado: 90 minutos.
-              </p>
-            </div>
-          </div>
-        </fieldset>
-        <div className="flex items-center justify-between gap-3">
-          <FormStatusMessage state={state} />
-          <SubmitButton label="Guardar WhatsApp" pendingLabel="Guardando..." />
-        </div>
-      </form>
-
     </div>
+  )
+}
+
+export function TenantWhatsAppMetaSettings({
+  tenantId,
+  initialValues,
+}: {
+  tenantId: string
+  initialValues: WhatsAppInitialValues
+}) {
+  const actions = useTenantSettingsActions()
+  const [state, formAction] = useActionState(actions.updateWhatsAppSettingsAction, INITIAL_CRUD_STATE)
+  const router = useRouter()
+  const refreshMessageRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (state.status !== "success") return
+    const message = state.message ?? null
+    if (refreshMessageRef.current === message) return
+    refreshMessageRef.current = message
+    router.refresh()
+  }, [router, state.message, state.status])
+
+  return (
+    <form action={formAction} className="space-y-6">
+      <input type="hidden" name="tenant_id" value={tenantId} />
+      <input type="hidden" name="whatsapp_provider" value="meta" />
+      <fieldset className="rounded-lg border border-border/60 p-4 space-y-4">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Meta WhatsApp Cloud API</p>
+          <p className="text-xs text-muted-foreground">
+            Webhook sugerido: <code>{`/api/whatsapp/meta/${tenantId}/webhook`}</code>
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Plantillas Meta</p>
+          <p className="text-xs text-muted-foreground">Nombre técnico e idioma aprobados para cada plantilla de Meta.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_sales_meta_name">Nombre plantilla de ventas</Label>
+            <Input id="whatsapp_template_sales_meta_name" name="whatsapp_template_sales_meta_name" placeholder="mi_plantilla_ventas" defaultValue={initialValues.whatsapp_template_sales_meta_name ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_sales_meta_language">Idioma plantilla de ventas</Label>
+            <Input id="whatsapp_template_sales_meta_language" name="whatsapp_template_sales_meta_language" placeholder="es_MX" defaultValue={initialValues.whatsapp_template_sales_meta_language ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_appointment_meta_name">Nombre plantilla de cita</Label>
+            <Input id="whatsapp_template_appointment_meta_name" name="whatsapp_template_appointment_meta_name" placeholder="mi_plantilla_cita" defaultValue={initialValues.whatsapp_template_appointment_meta_name ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_appointment_meta_language">Idioma plantilla de cita</Label>
+            <Input id="whatsapp_template_appointment_meta_language" name="whatsapp_template_appointment_meta_language" placeholder="es_MX" defaultValue={initialValues.whatsapp_template_appointment_meta_language ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_cancel_meta_name">Nombre plantilla de cancelación</Label>
+            <Input id="whatsapp_template_cancel_meta_name" name="whatsapp_template_cancel_meta_name" placeholder="mi_plantilla_cancelacion" defaultValue={initialValues.whatsapp_template_cancel_meta_name ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_cancel_meta_language">Idioma plantilla de cancelación</Label>
+            <Input id="whatsapp_template_cancel_meta_language" name="whatsapp_template_cancel_meta_language" placeholder="es_MX" defaultValue={initialValues.whatsapp_template_cancel_meta_language ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_activity_reminder_meta_name">Nombre plantilla recordatorio de actividad</Label>
+            <Input id="whatsapp_template_activity_reminder_meta_name" name="whatsapp_template_activity_reminder_meta_name" placeholder="recordatorio_actividad" defaultValue={initialValues.whatsapp_template_activity_reminder_meta_name ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_template_activity_reminder_meta_language">Idioma plantilla recordatorio de actividad</Label>
+            <Input id="whatsapp_template_activity_reminder_meta_language" name="whatsapp_template_activity_reminder_meta_language" placeholder="es_MX" defaultValue={initialValues.whatsapp_template_activity_reminder_meta_language ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_activity_reminder_minutes_before">Minutos antes del evento</Label>
+            <Input id="whatsapp_activity_reminder_minutes_before" name="whatsapp_activity_reminder_minutes_before" type="number" min={0} step={1} defaultValue={initialValues.whatsapp_activity_reminder_minutes_before ?? 90} />
+            <p className="text-xs text-muted-foreground">Se aplica al crear o reprogramar actividades nuevas. Predeterminado: 90 minutos.</p>
+          </div>
+        </div>
+      </fieldset>
+      <div className="flex items-center justify-between gap-3">
+        <FormStatusMessage state={state} />
+        <SubmitButton label="Guardar WhatsApp" pendingLabel="Guardando..." />
+      </div>
+    </form>
   )
 }
 

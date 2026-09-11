@@ -21,6 +21,7 @@ import {
 } from "./components/tenant-template-ai-prompt-config-panel"
 import { TenantAiBrandContextPanel } from "./components/tenant-ai-brand-context-panel"
 import { MetaAssistedConnectionPanel } from "./components/meta-assisted-connection-panel"
+import { WhatsAppAssistantSchedulePanel } from "./components/whatsapp-assistant-schedule-panel"
 import {
   TenantTemplateAiLayoutsPanel,
   type TemplateAiLayout,
@@ -35,6 +36,7 @@ import {
   TenantMailSettings,
   TenantTwilioSettings,
   TenantWhatsAppSettings,
+  TenantWhatsAppMetaSettings,
   TenantWhatsAppProspeccionSettings,
   TenantWhatsAppRoutes,
   TenantWhatsAppValidation,
@@ -606,14 +608,18 @@ export default async function SettingsVariablesPage({
                     initialConnection={metaConnectionResp.ok ? metaConnectionResp.data : null}
                     businessId={process.env.META_TALIA_BUSINESS_ID ?? "1358726956043196"}
                   />
+                  <TenantWhatsAppMetaSettings
+                    tenantId={tenantId}
+                    initialValues={whatsappInitialValues}
+                  />
                   <TenantWhatsAppRoutes tenantId={tenantId} routes={routes} />
                   <TenantWhatsAppSettings
                     tenantId={tenantId}
                     initialValues={whatsappInitialValues}
-                    scheduleValues={scheduleResp.ok ? scheduleResp.data : null}
                   />
                   <TenantWhatsAppProspeccionSettings tenantId={tenantId} initialValues={whatsappInitialValues} />
                   <TenantWhatsAppValidation tenantId={tenantId} />
+                  <WhatsAppAssistantSchedulePanel initialValues={scheduleResp.ok ? scheduleResp.data : null} />
                 </TabsContent>
                 <TabsContent value="messenger" className="pt-4">
                   <TenantMessengerSettings
