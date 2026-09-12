@@ -18323,6 +18323,7 @@ async def list_accounts(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     lite: bool = Query(default=False),
+    q: Annotated[str | None, Query(max_length=120)] = None,
 ) -> CRMAccountsResponse:
     try:
         rows = await repo.list_accounts(
@@ -18330,6 +18331,7 @@ async def list_accounts(
             limit=limit,
             offset=offset,
             lite=lite,
+            search=q,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

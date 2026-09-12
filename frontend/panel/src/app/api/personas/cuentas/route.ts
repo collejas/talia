@@ -30,7 +30,7 @@ function normalize(value: string): string {
 export async function GET(request: NextRequest) {
   const query = normalize(request.nextUrl.searchParams.get("q") ?? "");
   const result = await callCrmApi<CRMAccountsResponse>("/crm/cuentas", {
-    searchParams: { limit: "200", offset: "0" },
+    searchParams: { limit: "200", offset: "0", ...(query ? { q: query } : {}) },
     withUserToken: true,
   });
 

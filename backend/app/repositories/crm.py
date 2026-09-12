@@ -1324,6 +1324,7 @@ class CRMRepository:
         offset: int = 0,
         order: Literal["creado_en.desc", "creado_en.asc"] = "creado_en.desc",
         lite: bool = False,
+        search: str | None = None,
     ) -> list[dict[str, Any]]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -1343,6 +1344,14 @@ class CRMRepository:
                 "tipo_centro_comercial,corredor_industrial,numero_local,codigo_postal,clave_entidad,entidad,clave_municipio,"
                 "municipio,clave_localidad,localidad,pais,email,website,tipo_establecimiento,latitud,longitud,fecha_incorporacion,"
                 "archived_at,merged_into_cuenta_id,merge_metadata"
+            )
+        normalized_search = str(search or "").strip()[:120]
+        if normalized_search:
+            literal = _postgrest_ilike_literal(normalized_search)
+            params["or"] = (
+                f"(nombre.ilike.{literal},razon_social.ilike.{literal},"
+                f"rfc.ilike.{literal},codigo_cuenta.ilike.{literal},"
+                f"alias.ilike.{literal})"
             )
         resp = await self._request("GET", "/rest/v1/cuentas", params=params)
         data = resp.json()
