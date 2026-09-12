@@ -18174,7 +18174,7 @@ class CRMRepository:
                 params={
                     "organizacion_id": f"eq.{organizacion_id}",
                     "cliente_id": _postgrest_in_clause(client_ids),
-                    "select": "cliente_id,total,estatus",
+                    "select": "cliente_id,total,estatus,fecha_venta",
                 },
                 organizacion_id=organizacion_id,
             ),
@@ -18184,7 +18184,7 @@ class CRMRepository:
                 params={
                     "organizacion_id": f"eq.{organizacion_id}",
                     "cliente_id": _postgrest_in_clause(client_ids),
-                    "select": "cliente_id,monto,estatus",
+                    "select": "cliente_id,monto,estatus,fecha_pago",
                 },
                 organizacion_id=organizacion_id,
             ),
@@ -18195,7 +18195,7 @@ class CRMRepository:
                     "organizacion_id": f"eq.{organizacion_id}",
                     "cliente_id": _postgrest_in_clause(client_ids),
                     "estado": "eq.ganada",
-                    "select": "cliente_id",
+                    "select": "cliente_id,proxima_actividad_en,ultima_actividad_en",
                 },
                 organizacion_id=organizacion_id,
             ),
@@ -18210,6 +18210,10 @@ class CRMRepository:
         count_by_client: dict[str, int] = defaultdict(int)
         paid_by_client: dict[str, Decimal] = defaultdict(Decimal)
         won_opportunities_by_client: dict[str, int] = defaultdict(int)
+        last_purchase_by_client: dict[str, str] = {}
+        last_payment_by_client: dict[str, str] = {}
+        next_activity_by_client: dict[str, str] = {}
+        activity_by_client: dict[str, str] = {}
         for sale in sales:
             if not isinstance(sale, dict) or sale.get("estatus") in {"cancelada", "reembolsada"}:
                 continue
@@ -18218,15 +18222,30 @@ class CRMRepository:
                 continue
             sold_by_client[client_id] += Decimal(str(sale.get("total") or 0))
             count_by_client[client_id] += 1
+            purchase_date = sale.get("fecha_venta")
+            if isinstance(purchase_date, str) and purchase_date > last_purchase_by_client.get(client_id, ""):
+                last_purchase_by_client[client_id] = purchase_date
         for payment in payments:
             if not isinstance(payment, dict) or payment.get("estatus") != "confirmado":
                 continue
             client_id = str(payment.get("cliente_id") or "")
             if client_id:
                 paid_by_client[client_id] += Decimal(str(payment.get("monto") or 0))
+                payment_date = payment.get("fecha_pago")
+                if isinstance(payment_date, str) and payment_date > last_payment_by_client.get(client_id, ""):
+                    last_payment_by_client[client_id] = payment_date
         for opportunity in opportunities:
             if isinstance(opportunity, dict) and opportunity.get("cliente_id"):
                 won_opportunities_by_client[str(opportunity["cliente_id"])] += 1
+                client_id = str(opportunity["cliente_id"])
+                next_activity = opportunity.get("proxima_actividad_en")
+                if isinstance(next_activity, str) and (
+                    client_id not in next_activity_by_client or next_activity < next_activity_by_client[client_id]
+                ):
+                    next_activity_by_client[client_id] = next_activity
+                last_activity = opportunity.get("ultima_actividad_en")
+                if isinstance(last_activity, str) and last_activity > activity_by_client.get(client_id, ""):
+                    activity_by_client[client_id] = last_activity
 
         for row in rows:
             client_id = str(row.get("id") or "")
@@ -18237,6 +18256,14 @@ class CRMRepository:
             row["total_vendido"] = float(sold)
             row["total_cobrado"] = float(paid)
             row["saldo_pendiente"] = float(max(sold - paid, Decimal("0")))
+            row["ultima_compra_en"] = last_purchase_by_client.get(client_id) or None
+            row["ultimo_pago_en"] = last_payment_by_client.get(client_id) or None
+            row["proxima_actividad_en"] = next_activity_by_client.get(client_id) or None
+            row["estado_relacion"] = (
+                "Seguimiento programado" if client_id in next_activity_by_client
+                else "Con actividad" if client_id in activity_by_client
+                else "Sin actividad"
+            )
 
     async def get_cliente_historial(
         self,

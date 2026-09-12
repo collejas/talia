@@ -3844,6 +3844,10 @@ class ClienteRecord(BaseModel):
     total_vendido: float = 0
     total_cobrado: float = 0
     saldo_pendiente: float = 0
+    ultima_compra_en: datetime | None = None
+    ultimo_pago_en: datetime | None = None
+    proxima_actividad_en: datetime | None = None
+    estado_relacion: str | None = None
     moneda: str | None = None
     metadatos: dict[str, Any] | None = None
     ganado_en: datetime | None = None

@@ -65,6 +65,10 @@ export type ClienteRecord = {
   total_vendido: number;
   total_cobrado: number;
   saldo_pendiente: number;
+  ultima_compra_en: string | null;
+  ultimo_pago_en: string | null;
+  proxima_actividad_en: string | null;
+  estado_relacion: string | null;
   moneda: string | null;
   metadatos: Record<string, unknown> | null;
   ganado_en: string | null;

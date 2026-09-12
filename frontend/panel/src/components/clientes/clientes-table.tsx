@@ -24,7 +24,58 @@ function moneyValue(row: DataTableRow, key: string): string {
   }).format(value);
 }
 
+function dateValue(row: DataTableRow, key: string): string {
+  const value = rawValue(row, key);
+  if (typeof value !== "string" || !value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" }).format(date);
+}
+
 const clientColumns: ColumnDef<DataTableRow>[] = [
+  {
+    id: "telefono",
+    accessorFn: (row) => textValue(row, "telefono"),
+    header: ({ column }) => <SortButton column={column} label="Teléfono" />,
+    cell: ({ row }) => textValue(row.original, "telefono"),
+    meta: { label: "Teléfono" },
+  },
+  {
+    id: "correo",
+    accessorFn: (row) => textValue(row, "correo"),
+    header: ({ column }) => <SortButton column={column} label="Correo" />,
+    cell: ({ row }) => textValue(row.original, "correo"),
+    meta: { label: "Correo" },
+  },
+  {
+    id: "ultima_compra",
+    accessorFn: (row) => String(rawValue(row, "ultima_compra_en") || ""),
+    header: ({ column }) => <SortButton column={column} label="Última compra" />,
+    cell: ({ row }) => dateValue(row.original, "ultima_compra_en"),
+    meta: { label: "Última compra" },
+  },
+  {
+    id: "ultimo_pago",
+    accessorFn: (row) => String(rawValue(row, "ultimo_pago_en") || ""),
+    header: ({ column }) => <SortButton column={column} label="Último pago" />,
+    cell: ({ row }) => dateValue(row.original, "ultimo_pago_en"),
+    meta: { label: "Último pago" },
+  },
+  {
+    id: "proxima_actividad",
+    accessorFn: (row) => String(rawValue(row, "proxima_actividad_en") || ""),
+    header: ({ column }) => <SortButton column={column} label="Próxima actividad" />,
+    cell: ({ row }) => dateValue(row.original, "proxima_actividad_en"),
+    meta: { label: "Próxima actividad" },
+  },
+  {
+    id: "estado_relacion",
+    accessorFn: (row) => textValue(row, "estado_relacion"),
+    header: ({ column }) => <SortButton column={column} label="Estado de relación" />,
+    cell: ({ row }) => textValue(row.original, "estado_relacion"),
+    meta: { label: "Estado de relación" },
+  },
   {
     id: "empresa",
     accessorFn: (row) => textValue(row, "empresa_nombre"),
@@ -61,6 +112,14 @@ export function ClientesTable({ rows }: { rows: DataTableRow[] }) {
       data={rows}
       extraColumns={clientColumns}
       storageKey="clientes"
+      initialVisibility={{
+        telefono: false,
+        correo: false,
+        ultima_compra: false,
+        ultimo_pago: false,
+        proxima_actividad: false,
+        estado_relacion: false,
+      }}
       columnLabels={{
         header: "Cliente",
         type: "Contacto",
@@ -74,11 +133,17 @@ export function ClientesTable({ rows }: { rows: DataTableRow[] }) {
         "session",
         "empresa",
         "type",
+        "telefono",
+        "correo",
         "oportunidades",
         "chat",
         "visits",
         "cobrado",
         "saldo",
+        "ultima_compra",
+        "ultimo_pago",
+        "proxima_actividad",
+        "estado_relacion",
         "reviewer",
         "actions",
       ]}
