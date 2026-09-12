@@ -267,6 +267,22 @@ incorporar:
 - `public.pagos`: pagos, anticipos, pagos parciales, liquidaciones,
   devoluciones y cancelaciones.
 
+### Vista de clientes
+
+La vista principal mostrará una tabla resumida de clientes. Al abrir un
+cliente se mostrará un detalle organizado por secciones, sin mezclar
+prospección, venta y cobranza:
+
+```text
+Resumen | Oportunidades | Cotizaciones | Ventas | Pagos | Documentos
+```
+
+El resumen incluirá contacto, empresa, vendedor, estado, primera compra,
+número de oportunidades ganadas, número de ventas, importe vendido, importe
+cobrado y saldo pendiente. Las secciones de oportunidades, cotizaciones,
+ventas y pagos conservarán sus relaciones y fechas para reconstruir el ciclo
+comercial completo. Cada sección tendrá estados de carga, error y vacío.
+
 Relaciones esperadas:
 
 ```text
@@ -342,6 +358,11 @@ Ya están aplicados en Supabase los puntos estructurales 2, 3, 4 y parte del
   pago como clave de idempotencia.
 - La API expone
   `POST /crm/cotizaciones/{cotizacion_id}/pago-confirmado`.
+- La vista de clientes ya tiene preparada la ruta de detalle
+  `/clientes/{clienteId}` con las secciones Resumen, Oportunidades,
+  Cotizaciones, Ventas, Pagos y Documentos.
+- La tabla principal de clientes enlaza cada registro con su detalle
+  comercial, en lugar de enviarlo directamente a la empresa o al contacto.
 
 Queda pendiente retirar el trigger histórico que crea clientes al ganar una
 oportunidad y reemplazar el endpoint manual de conversión. Se hará cuando el
