@@ -325,3 +325,25 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
    reportes.
 8. Validar el flujo de primera compra y compra recurrente por contacto,
    empresa y cliente.
+
+### Estado de implementación al 2026-09-12
+
+Ya están aplicados en Supabase los puntos estructurales 2, 3, 4 y parte del
+5:
+
+- `oportunidades.cliente_id` vincula las 42 oportunidades ganadas existentes
+  con su cliente, sin asociar oportunidades abiertas o perdidas.
+- Existe una restricción para impedir más de una cotización aceptada por
+  oportunidad.
+- Existen `ventas`, `venta_items` y `pagos`, con foreign keys tenant-safe,
+  índices, constraints monetarios y RLS.
+- La función protegida `crm_registrar_pago_confirmado` formaliza cliente,
+  venta, partidas y pago en una sola transacción, usando la referencia de
+  pago como clave de idempotencia.
+- La API expone
+  `POST /crm/cotizaciones/{cotizacion_id}/pago-confirmado`.
+
+Queda pendiente retirar el trigger histórico que crea clientes al ganar una
+oportunidad y reemplazar el endpoint manual de conversión. Se hará cuando el
+nuevo endpoint esté desplegado y validado, para no dejar una ventana sin
+flujo operativo.

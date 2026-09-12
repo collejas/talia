@@ -3859,6 +3859,23 @@ class LeadConversionPayload(BaseModel):
     forzar: bool = Field(default=False)
 
 
+class ConfirmedPaymentPayload(BaseModel):
+    monto: Decimal = Field(..., gt=0, max_digits=14, decimal_places=2)
+    tipo_pago: Literal["anticipo", "parcial", "liquidacion", "otro"] = "parcial"
+    fecha_pago: datetime | None = None
+    metodo_pago: str | None = Field(default=None, max_length=100)
+    referencia_pago: str | None = Field(default=None, max_length=160)
+
+
+class ConfirmedPaymentResponse(BaseModel):
+    venta_id: UUID
+    cliente_id: UUID
+    pago_id: UUID
+    venta_estatus: str
+    pago_acumulado: Decimal
+    total: Decimal
+
+
 PORTAL_DOCUMENT_REQUIREMENTS: list[dict[str, str]] = [
     {
         "tipo": ClienteDocumentoTipo.CONSTANCIA_FISCAL.value,
@@ -31523,6 +31540,49 @@ async def list_lead_quotes(
         if isinstance(row, dict):
             quotes.append(_quote_from_row(row))
     return LeadQuoteListResponse(quotes=quotes)
+
+
+@router.post(
+    "/cotizaciones/{cotizacion_id}/pago-confirmado",
+    response_model=ConfirmedPaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def registrar_pago_confirmado(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("clientes.view")),
+    cotizacion_id: UUID,
+    payload: ConfirmedPaymentPayload,
+) -> ConfirmedPaymentResponse:
+    """Formaliza una venta y cliente únicamente al confirmar un pago."""
+    try:
+        result = await repo.registrar_pago_confirmado(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+            monto=payload.monto,
+            tipo_pago=payload.tipo_pago,
+            fecha_pago=payload.fecha_pago,
+            metodo_pago=payload.metodo_pago,
+            referencia_pago=payload.referencia_pago,
+            registrado_por_usuario_id=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "accepted_won_quote_not_found" in message:
+            raise HTTPException(status_code=409, detail="cotizacion_no_aceptada_oportunidad_no_ganada") from exc
+        if "sale_account_missing" in message:
+            raise HTTPException(status_code=409, detail="venta_sin_cuenta") from exc
+        if "sale_contact_missing" in message:
+            raise HTTPException(status_code=409, detail="venta_sin_contacto") from exc
+        if "sale_total_must_be_positive" in message:
+            raise HTTPException(status_code=409, detail="cotizacion_sin_total") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_registrar_pago") from exc
+    try:
+        return ConfirmedPaymentResponse.model_validate(result)
+    except ValidationError as exc:
+        raise HTTPException(status_code=502, detail="respuesta_pago_invalida") from exc
 
 
 @router.post(

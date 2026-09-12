@@ -4285,6 +4285,44 @@ class CRMRepository:
                 return row
         raise CRMRepositoryError("quote_not_found")
 
+    async def registrar_pago_confirmado(
+        self,
+        *,
+        organizacion_id: UUID,
+        cotizacion_id: UUID,
+        monto: Decimal,
+        tipo_pago: str = "parcial",
+        fecha_pago: datetime | None = None,
+        metodo_pago: str | None = None,
+        referencia_pago: str | None = None,
+        registrado_por_usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Registra pago, venta y cliente mediante la transacción protegida."""
+        payload = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_cotizacion_id": str(cotizacion_id),
+            "p_monto": str(monto),
+            "p_tipo_pago": tipo_pago,
+            "p_fecha_pago": fecha_pago.isoformat() if fecha_pago else None,
+            "p_metodo_pago": metodo_pago,
+            "p_referencia_pago": referencia_pago,
+            "p_registrado_por_usuario_id": (
+                str(registrado_por_usuario_id) if registrado_por_usuario_id else None
+            ),
+        }
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_registrar_pago_confirmado",
+            json=payload,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() if resp.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict) and isinstance(data.get("crm_registrar_pago_confirmado"), dict):
+            return data["crm_registrar_pago_confirmado"]
+        raise CRMRepositoryError("payment_registration_response_invalid")
+
     async def create_quote_entry(
         self,
         *,
