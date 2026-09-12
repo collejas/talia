@@ -82,7 +82,7 @@ function mapCards(rows: ClienteRecord[]): LeadCards {
   const completados = rows.filter((row) => row.estado_onboarding === "completado").length;
   const pendientes = rows.filter((row) => row.estado_onboarding !== "completado").length;
   const nuevas = rows.filter((row) => isWithinDays(row.creado_en, 7)).length;
-  const montoTotal = rows.reduce((acc, row) => acc + (Number(row.monto_estimado) || 0), 0);
+  const montoTotal = rows.reduce((acc, row) => acc + (Number(row.total_vendido) || 0), 0);
 
   return {
     total,
@@ -135,13 +135,16 @@ function mapTable(rows: ClienteRecord[]): DataTableRow[] {
       header,
       type: status,
       status,
-      target: formatCurrency(row.monto_estimado, row.moneda || "MXN"),
+      target: formatCurrency(row.total_vendido, row.moneda || "MXN"),
       limit: row.contacto?.correo || "—",
       reviewer,
       raw: {
         cliente_id: row.id,
         detail_href: `/clientes/${encodeURIComponent(row.id)}`,
         rfc: row.rfc,
+        total_vendido: row.total_vendido,
+        total_cobrado: row.total_cobrado,
+        saldo_pendiente: row.saldo_pendiente,
         estado: row.estado_onboarding,
         contacto_id: row.contacto_id,
         vendedor_usuario_id: row.vendedor_usuario_id,

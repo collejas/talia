@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import defaultdict
 from difflib import SequenceMatcher
 import json
 import re
@@ -18151,7 +18152,74 @@ class CRMRepository:
                 organizacion_id=organizacion_id,
                 rows=rows,
             )
+            await self._attach_cliente_sales_summary(
+                organizacion_id=organizacion_id,
+                rows=rows,
+            )
         return rows
+
+    async def _attach_cliente_sales_summary(
+        self,
+        *,
+        organizacion_id: UUID,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        client_ids = [str(row["id"]) for row in rows if row.get("id")]
+        if not client_ids:
+            return
+        sales_resp, payments_resp = await asyncio.gather(
+            self._request_service_role(
+                "GET",
+                "/rest/v1/ventas",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "cliente_id": _postgrest_in_clause(client_ids),
+                    "select": "cliente_id,total,estatus",
+                },
+                organizacion_id=organizacion_id,
+            ),
+            self._request_service_role(
+                "GET",
+                "/rest/v1/pagos",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "cliente_id": _postgrest_in_clause(client_ids),
+                    "select": "cliente_id,monto,estatus",
+                },
+                organizacion_id=organizacion_id,
+            ),
+        )
+        sales = sales_resp.json() or []
+        payments = payments_resp.json() or []
+        if not isinstance(sales, list) or not isinstance(payments, list):
+            raise CRMRepositoryError("Respuesta inesperada al resumir ventas de clientes")
+
+        sold_by_client: dict[str, Decimal] = defaultdict(Decimal)
+        count_by_client: dict[str, int] = defaultdict(int)
+        paid_by_client: dict[str, Decimal] = defaultdict(Decimal)
+        for sale in sales:
+            if not isinstance(sale, dict) or sale.get("estatus") in {"cancelada", "reembolsada"}:
+                continue
+            client_id = str(sale.get("cliente_id") or "")
+            if not client_id:
+                continue
+            sold_by_client[client_id] += Decimal(str(sale.get("total") or 0))
+            count_by_client[client_id] += 1
+        for payment in payments:
+            if not isinstance(payment, dict) or payment.get("estatus") != "confirmado":
+                continue
+            client_id = str(payment.get("cliente_id") or "")
+            if client_id:
+                paid_by_client[client_id] += Decimal(str(payment.get("monto") or 0))
+
+        for row in rows:
+            client_id = str(row.get("id") or "")
+            sold = sold_by_client.get(client_id, Decimal("0"))
+            paid = paid_by_client.get(client_id, Decimal("0"))
+            row["numero_ventas"] = count_by_client.get(client_id, 0)
+            row["total_vendido"] = float(sold)
+            row["total_cobrado"] = float(paid)
+            row["saldo_pendiente"] = float(max(sold - paid, Decimal("0")))
 
     async def get_cliente_historial(
         self,
@@ -18202,7 +18270,7 @@ class CRMRepository:
                 raise CRMRepositoryError("Respuesta inesperada al listar historial de cotizaciones")
             cotizaciones = [row for row in quote_data if isinstance(row, dict)]
 
-        sales_resp = await self._request(
+        sales_resp = await self._request_service_role(
             "GET",
             "/rest/v1/ventas",
             params={
@@ -18211,6 +18279,7 @@ class CRMRepository:
                 "select": "id,oportunidad_id,cotizacion_id,estatus,subtotal,impuestos,total,moneda,fecha_venta,fecha_pago_completo,creado_en,actualizado_en",
                 "order": "fecha_venta.desc",
             },
+            organizacion_id=organizacion_id,
         )
         ventas = sales_resp.json() or []
         if not isinstance(ventas, list):
@@ -18222,7 +18291,7 @@ class CRMRepository:
         pagos: list[dict[str, Any]] = []
         if venta_ids:
             items_resp, payments_resp = await asyncio.gather(
-                self._request(
+                self._request_service_role(
                     "GET",
                     "/rest/v1/venta_items",
                     params={
@@ -18231,8 +18300,9 @@ class CRMRepository:
                         "select": "id,venta_id,catalog_item_id,descripcion,cantidad,precio_unitario,descuento_monto,impuestos,subtotal,moneda,orden,creado_en",
                         "order": "orden.asc",
                     },
+                    organizacion_id=organizacion_id,
                 ),
-                self._request(
+                self._request_service_role(
                     "GET",
                     "/rest/v1/pagos",
                     params={
@@ -18242,6 +18312,7 @@ class CRMRepository:
                         "select": "id,venta_id,monto,moneda,tipo_pago,estatus,fecha_pago,fecha_confirmacion,metodo_pago,referencia_pago,creado_en",
                         "order": "fecha_pago.desc",
                     },
+                    organizacion_id=organizacion_id,
                 ),
             )
             item_data = items_resp.json() or []

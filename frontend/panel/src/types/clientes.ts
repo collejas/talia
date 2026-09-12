@@ -60,6 +60,10 @@ export type ClienteRecord = {
   datos_facturacion: Record<string, unknown> | null;
   fuente: string | null;
   monto_estimado: number | null;
+  numero_ventas: number;
+  total_vendido: number;
+  total_cobrado: number;
+  saldo_pendiente: number;
   moneda: string | null;
   metadatos: Record<string, unknown> | null;
   ganado_en: string | null;

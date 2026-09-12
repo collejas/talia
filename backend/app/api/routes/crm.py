@@ -3839,6 +3839,10 @@ class ClienteRecord(BaseModel):
     datos_facturacion: dict[str, Any] | None = None
     fuente: str | None = None
     monto_estimado: float | None = None
+    numero_ventas: int = 0
+    total_vendido: float = 0
+    total_cobrado: float = 0
+    saldo_pendiente: float = 0
     moneda: str | None = None
     metadatos: dict[str, Any] | None = None
     ganado_en: datetime | None = None

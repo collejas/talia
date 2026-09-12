@@ -363,6 +363,11 @@ Ya están aplicados en Supabase los puntos estructurales 2, 3, 4 y parte del
   Cotizaciones, Ventas, Pagos y Documentos.
 - La tabla principal de clientes enlaza cada registro con su detalle
   comercial, en lugar de enviarlo directamente a la empresa o al contacto.
+- La lista de clientes no utiliza `clientes.monto_estimado` como importe de
+  venta: muestra el total formal acumulado de `ventas.total`, además de total
+  cobrado y saldo pendiente.
+- El historial consulta `ventas`, `venta_items` y `pagos` mediante el backend
+  autorizado, respetando el RLS de las tablas comerciales.
 
 Queda pendiente retirar el trigger histórico que crea clientes al ganar una
 oportunidad y reemplazar el endpoint manual de conversión. Se hará cuando el
