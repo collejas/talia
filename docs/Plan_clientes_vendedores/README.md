@@ -203,3 +203,24 @@ En el estado actual del sistema, la opcion mas limpia es derivar el vendedor con
 
 Solo si el negocio necesita historial inmutable conviene materializar un snapshot en `clientes`.
 
+## 12) Conversión automática de oportunidades ganadas
+
+La tabla canónica sigue siendo `public.clientes`; no se crea una tabla nueva.
+Toda oportunidad cuya etapa tenga categoría `ganada` o cuyo estado sea
+`ganada` debe tener un cliente asociado mediante:
+
+```text
+oportunidades.organizacion_id + oportunidad_id
+    -> clientes.organizacion_id + oportunidad_id
+```
+
+La conversión debe ser idempotente y completar, cuando falte, la cuenta CRM
+de la oportunidad antes de crear el cliente. También debe exigir un contacto
+principal válido y conservar las relaciones explícitas de tenant, contacto,
+cuenta y oportunidad.
+
+La migración
+`20260912152756_auto_create_cliente_from_won_opportunity.sql` prepara un
+trigger para cubrir cambios hechos desde el panel, servicios internos o SQL,
+y ejecuta un backfill idempotente de oportunidades ya ganadas. Debe revisarse
+en staging antes de aplicarse en producción.
