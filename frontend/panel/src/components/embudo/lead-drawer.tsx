@@ -1018,6 +1018,7 @@ export function LeadDrawer({
   const [paymentQuote, setPaymentQuote] = useState<LeadQuoteEntry | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentType, setPaymentType] = useState<"anticipo" | "parcial" | "liquidacion" | "otro">("parcial");
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -3136,6 +3137,7 @@ export function LeadDrawer({
     setPaymentQuote(quote);
     setPaymentAmount(quote.total != null ? String(quote.total) : "");
     setPaymentType("parcial");
+    setPaymentDate(new Date().toISOString().slice(0, 10));
     setPaymentMethod("");
     setPaymentReference("");
     setPaymentError(null);
@@ -3149,6 +3151,10 @@ export function LeadDrawer({
       setPaymentError("Captura un monto válido mayor que cero.");
       return;
     }
+    if (!paymentDate) {
+      setPaymentError("Selecciona la fecha en que se realizó el pago.");
+      return;
+    }
     setPaymentError(null);
     startQuoteAction(async () => {
       try {
@@ -3158,6 +3164,7 @@ export function LeadDrawer({
           body: JSON.stringify({
             monto: Number(amount.toFixed(2)),
             tipo_pago: paymentType,
+            fecha_pago: fromDateTimeLocalInput(`${paymentDate}T12:00`),
             metodo_pago: paymentMethod.trim() || null,
             referencia_pago: paymentReference.trim() || null,
           }),
@@ -3174,7 +3181,7 @@ export function LeadDrawer({
         setPaymentError(error instanceof Error ? error.message : "No se pudo registrar el pago.");
       }
     });
-  }, [fetchQuotes, paymentAmount, paymentMethod, paymentQuote, paymentReference, paymentType]);
+  }, [fetchQuotes, paymentAmount, paymentDate, paymentMethod, paymentQuote, paymentReference, paymentType]);
 
   const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition, forceDisabled = false) => {
     const stageValues = stagePrep[stageCode] ?? {};
@@ -5359,6 +5366,18 @@ export function LeadDrawer({
                   <SelectItem value="otro">Otro</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="confirmed-payment-date">Fecha del pago</Label>
+              <Input
+                id="confirmed-payment-date"
+                type="date"
+                value={paymentDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(event) => setPaymentDate(event.target.value)}
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">Indica cuándo se recibió el pago. La fecha de captura se conserva por separado.</p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="confirmed-payment-method">Método de pago</Label>

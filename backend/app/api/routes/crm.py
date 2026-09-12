@@ -3876,7 +3876,7 @@ class ClienteHistorialResponse(BaseModel):
 class ConfirmedPaymentPayload(BaseModel):
     monto: Decimal = Field(..., gt=0, max_digits=14, decimal_places=2)
     tipo_pago: Literal["anticipo", "parcial", "liquidacion", "otro"] = "parcial"
-    fecha_pago: datetime | None = None
+    fecha_pago: datetime
     metodo_pago: str | None = Field(default=None, max_length=100)
     referencia_pago: str | None = Field(default=None, max_length=160)
 
