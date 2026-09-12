@@ -203,24 +203,125 @@ En el estado actual del sistema, la opcion mas limpia es derivar el vendedor con
 
 Solo si el negocio necesita historial inmutable conviene materializar un snapshot en `clientes`.
 
-## 12) Conversión automática de oportunidades ganadas
+## 12) Conversión histórica de oportunidades ganadas
 
 La tabla canónica sigue siendo `public.clientes`; no se crea una tabla nueva.
-Toda oportunidad cuya etapa tenga categoría `ganada` o cuyo estado sea
-`ganada` debe tener un cliente asociado mediante:
+Esta sección describe el comportamiento transitorio aplicado durante la
+reconciliación inicial. La regla definitiva está en la sección 13: una
+oportunidad ganada no crea cliente hasta que exista un pago confirmado.
+
+Durante la reconciliación inicial, las oportunidades ganadas se asociaron al
+cliente disponible por medio de:
 
 ```text
 oportunidades.organizacion_id + oportunidad_id
     -> clientes.organizacion_id + oportunidad_id
 ```
 
-La conversión debe ser idempotente y completar, cuando falte, la cuenta CRM
-de la oportunidad antes de crear el cliente. También debe exigir un contacto
-principal válido y conservar las relaciones explícitas de tenant, contacto,
-cuenta y oportunidad.
+La conversión histórica fue idempotente y completó, cuando faltaba, la cuenta
+CRM y el contacto mínimo recuperable de la oportunidad. El trigger asociado
+debe reemplazarse o desactivarse al implementar el flujo definitivo basado en
+ventas y pagos.
 
-La migración
+La migración histórica
 `20260912152756_auto_create_cliente_from_won_opportunity.sql` prepara un
 trigger para cubrir cambios hechos desde el panel, servicios internos o SQL,
-y ejecuta un backfill idempotente de oportunidades ya ganadas. Debe revisarse
-en staging antes de aplicarse en producción.
+y ejecuta un backfill idempotente de oportunidades ya ganadas. Ya fue aplicada
+mediante Supabase MCP; queda pendiente sustituirla por la regla definitiva de
+creación de cliente posterior al pago.
+
+## 13) Modelo comercial: venta y pago antes de crear cliente
+
+### Regla de negocio
+
+Una cotización aceptada representa un compromiso comercial y mueve la
+oportunidad a ganada, pero todavía no confirma una venta cobrada. El cliente
+se crea o activa únicamente cuando existe un pago confirmado asociado a la
+venta.
+
+```text
+contacto / empresa
+└── una o muchas oportunidades
+    └── una cotización aceptada por oportunidad
+        └── oportunidad ganada
+            └── venta formal
+                └── uno o varios pagos
+                    └── cliente creado o actualizado
+```
+
+Una vez que el contacto o empresa ya es cliente, cada nueva oportunidad
+ganada se conserva en su historial; no se sobrescribe la oportunidad
+anterior.
+
+### Modelo de datos objetivo
+
+Se mantiene `public.clientes` como maestro del cliente. El modelo debe
+incorporar:
+
+- `public.oportunidades.cliente_id`: relación de muchas oportunidades con un
+  cliente.
+- `public.ventas`: venta formal asociada a organización, cliente, cuenta,
+  oportunidad y cotización.
+- `public.venta_items`: productos o servicios vendidos, con cantidad, precio,
+  descuentos, impuestos y subtotal.
+- `public.pagos`: pagos, anticipos, pagos parciales, liquidaciones,
+  devoluciones y cancelaciones.
+
+Relaciones esperadas:
+
+```text
+clientes 1 ─── N oportunidades
+oportunidades 1 ─── N cotizaciones
+oportunidades 1 ─── 1 venta
+ventas 1 ─── N venta_items
+ventas 1 ─── N pagos
+```
+
+La relación histórica debe usar columnas y foreign keys reales. No se debe
+guardar el vínculo principal entre venta, oportunidad, cliente o pago dentro
+de `metadata`.
+
+### Estados y reglas de integridad
+
+- Sólo puede existir una cotización aceptada activa por oportunidad.
+- Una oportunidad ganada debe conservar su cotización aceptada.
+- Una venta debe referenciar la oportunidad y cotización que la originaron.
+- El primer pago confirmado crea o activa el cliente.
+- La venta puede distinguir entre `pendiente_pago`, `pago_parcial`,
+  `pagada`, `cancelada` y `reembolsada`.
+- `clientes.oportunidad_id` no debe seguir siendo la única relación. Se debe
+  migrar a una referencia de origen histórica o retirarse después de validar
+  `oportunidades.cliente_id`.
+
+### Métricas comerciales
+
+Los indicadores deben separar conceptos:
+
+- oportunidades ganadas;
+- ventas formalizadas;
+- ventas con pago parcial;
+- ventas pagadas o liquidadas;
+- clientes nuevos;
+- clientes recurrentes;
+- importe vendido;
+- importe cobrado;
+- saldo pendiente.
+
+Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
+
+### Fases de implementación
+
+1. Modificar el flujo actual para que la aceptación de cotización marque la
+   oportunidad como ganada, sin crear todavía el cliente.
+2. Crear `oportunidades.cliente_id` y conservar todas las oportunidades del
+   mismo cliente.
+3. Crear `ventas` y `venta_items` con restricciones, índices y RLS por tenant.
+4. Crear `pagos` para soportar anticipos, parcialidades, liquidaciones,
+   devoluciones y cancelaciones.
+5. Crear o activar el cliente al registrar el primer pago confirmado.
+6. Reconciliar los clientes creados por el flujo anterior y conservar la
+   trazabilidad de su origen.
+7. Actualizar APIs, panel de clientes, detalle de oportunidad, ventas y
+   reportes.
+8. Validar el flujo de primera compra y compra recurrente por contacto,
+   empresa y cliente.
