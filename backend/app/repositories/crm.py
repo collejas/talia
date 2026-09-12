@@ -18153,6 +18153,113 @@ class CRMRepository:
             )
         return rows
 
+    async def get_cliente_historial(
+        self,
+        *,
+        organizacion_id: UUID,
+        cliente_id: UUID,
+        usuario_token: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Obtiene el historial comercial completo de un cliente del tenant."""
+        cliente = await self.get_cliente_por_id(
+            organizacion_id=organizacion_id,
+            cliente_id=cliente_id,
+            usuario_token=usuario_token,
+        )
+        if cliente is None:
+            return None
+
+        opp_resp = await self._request(
+            "GET",
+            "/rest/v1/oportunidades",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "cliente_id": f"eq.{cliente_id}",
+                "select": "id,titulo,estado,monto_estimado,moneda,creado_en,cerrado_en,cliente_id",
+                "order": "creado_en.desc",
+            },
+        )
+        oportunidades = opp_resp.json() or []
+        if not isinstance(oportunidades, list):
+            raise CRMRepositoryError("Respuesta inesperada al listar historial de oportunidades")
+        oportunidades = [row for row in oportunidades if isinstance(row, dict)]
+        oportunidad_ids = [str(row["id"]) for row in oportunidades if row.get("id")]
+
+        cotizaciones: list[dict[str, Any]] = []
+        if oportunidad_ids:
+            quote_resp = await self._request(
+                "GET",
+                "/rest/v1/cotizaciones",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "oportunidad_id": _postgrest_in_clause(oportunidad_ids),
+                    "select": "id,oportunidad_id,estatus,total,moneda,creado_en,actualizado_en",
+                    "order": "creado_en.desc",
+                },
+            )
+            quote_data = quote_resp.json() or []
+            if not isinstance(quote_data, list):
+                raise CRMRepositoryError("Respuesta inesperada al listar historial de cotizaciones")
+            cotizaciones = [row for row in quote_data if isinstance(row, dict)]
+
+        sales_resp = await self._request(
+            "GET",
+            "/rest/v1/ventas",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "cliente_id": f"eq.{cliente_id}",
+                "select": "id,oportunidad_id,cotizacion_id,estatus,subtotal,impuestos,total,moneda,fecha_venta,fecha_pago_completo,creado_en,actualizado_en",
+                "order": "fecha_venta.desc",
+            },
+        )
+        ventas = sales_resp.json() or []
+        if not isinstance(ventas, list):
+            raise CRMRepositoryError("Respuesta inesperada al listar historial de ventas")
+        ventas = [row for row in ventas if isinstance(row, dict)]
+        venta_ids = [str(row["id"]) for row in ventas if row.get("id")]
+
+        venta_items: list[dict[str, Any]] = []
+        pagos: list[dict[str, Any]] = []
+        if venta_ids:
+            items_resp, payments_resp = await asyncio.gather(
+                self._request(
+                    "GET",
+                    "/rest/v1/venta_items",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "venta_id": _postgrest_in_clause(venta_ids),
+                        "select": "id,venta_id,catalog_item_id,descripcion,cantidad,precio_unitario,descuento_monto,impuestos,subtotal,moneda,orden,creado_en",
+                        "order": "orden.asc",
+                    },
+                ),
+                self._request(
+                    "GET",
+                    "/rest/v1/pagos",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "cliente_id": f"eq.{cliente_id}",
+                        "venta_id": _postgrest_in_clause(venta_ids),
+                        "select": "id,venta_id,monto,moneda,tipo_pago,estatus,fecha_pago,fecha_confirmacion,metodo_pago,referencia_pago,creado_en",
+                        "order": "fecha_pago.desc",
+                    },
+                ),
+            )
+            item_data = items_resp.json() or []
+            payment_data = payments_resp.json() or []
+            if not isinstance(item_data, list) or not isinstance(payment_data, list):
+                raise CRMRepositoryError("Respuesta inesperada al listar detalle comercial")
+            venta_items = [row for row in item_data if isinstance(row, dict)]
+            pagos = [row for row in payment_data if isinstance(row, dict)]
+
+        return {
+            "cliente": cliente,
+            "oportunidades": oportunidades,
+            "cotizaciones": cotizaciones,
+            "ventas": ventas,
+            "venta_items": venta_items,
+            "pagos": pagos,
+        }
+
     async def get_sales_assignment_response_time_metrics(
         self,
         *,

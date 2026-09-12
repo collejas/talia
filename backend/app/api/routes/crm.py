@@ -3855,6 +3855,15 @@ class ClienteListResponse(BaseModel):
     offset: int
 
 
+class ClienteHistorialResponse(BaseModel):
+    cliente: ClienteRecord
+    oportunidades: list[dict[str, Any]] = Field(default_factory=list)
+    cotizaciones: list[dict[str, Any]] = Field(default_factory=list)
+    ventas: list[dict[str, Any]] = Field(default_factory=list)
+    venta_items: list[dict[str, Any]] = Field(default_factory=list)
+    pagos: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class LeadConversionPayload(BaseModel):
     forzar: bool = Field(default=False)
 
@@ -19122,6 +19131,31 @@ async def list_clientes(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     items = [ClienteRecord.model_validate(row) for row in rows]
     return ClienteListResponse(items=items, limit=limit, offset=offset)
+
+
+@router.get("/clientes/{cliente_id}/historial", response_model=ClienteHistorialResponse)
+async def historial_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),
+    _: str = Depends(require_permission("clientes.view")),
+    cliente_id: UUID,
+) -> ClienteHistorialResponse:
+    try:
+        history = await repo.get_cliente_historial(
+            organizacion_id=organizacion_id,
+            cliente_id=cliente_id,
+            usuario_token=user_token,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudo_consultar_historial_cliente") from exc
+    if history is None:
+        raise HTTPException(status_code=404, detail="cliente_no_encontrado")
+    try:
+        return ClienteHistorialResponse.model_validate(history)
+    except ValidationError as exc:
+        raise HTTPException(status_code=502, detail="historial_cliente_invalido") from exc
 
 
 @router.get("/etapas", response_model=list[CRMPipelineStage])
