@@ -42,7 +42,6 @@ def _search_configuration_ready(config: dict[str, Any], secrets: list[dict[str, 
         (
             _has_text(denue.get("base_url")),
             _secret_exists(secrets, "denue", "token"),
-            _secret_exists(secrets, "google", "places", "api_key"),
         )
     )
 
@@ -64,6 +63,7 @@ def build_onboarding_progress(
     voz_decision = str(preferences.get("voz_decision") or "pendiente")
     zoom_decision = str(preferences.get("zoom_decision") or "pendiente")
     web_tracking_decision = str(preferences.get("web_tracking_decision") or "pendiente")
+    google_places_decision = str(preferences.get("google_places_decision") or "pendiente")
 
     organization_values = (
         tenant.get("nombre_comercial") or tenant.get("nombre"),
@@ -119,7 +119,12 @@ def build_onboarding_progress(
     migration = email_service.get("migration") if isinstance(email_service.get("migration"), dict) else {}
     domain = email_service.get("domain") if isinstance(email_service.get("domain"), dict) else {}
     mail_operational_done = _mail_operational_configured(config, secrets)
-    search_done = _search_configuration_ready(config, secrets)
+    denue_ready = _search_configuration_ready(config, secrets)
+    google_key_exists = _secret_exists(secrets, "google", "places", "api_key")
+    # La clave existente mantiene compatibles los tenants configurados antes
+    # de que se incorporara la decisión opcional al onboarding.
+    google_ready = google_places_decision == "no_usar" or google_key_exists
+    search_done = denue_ready and google_ready
     domain_verified = domain.get("status") == "verified" and _has_text(domain.get("verified_at"))
     sender_configured = domain_verified and _has_text(domain.get("default_from_email"))
     service_validated = bool(migration.get("validated_at"))
@@ -178,6 +183,7 @@ def build_onboarding_progress(
         "paso_actual": first_pending,
         "ultimo_paso": preferences.get("ultimo_paso"),
         "web_tracking_decision": web_tracking_decision,
+        "google_places_decision": google_places_decision,
         "completado": completed == len(steps),
         "requiere_onboarding": str(tenant.get("estado_onboarding") or "pendiente")
         != "completado",

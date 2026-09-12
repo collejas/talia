@@ -43,6 +43,7 @@ import {
   TenantMessengerSettings,
   TenantModuleFlagsForm,
   TenantBusquedaSettings,
+  type GooglePlacesDecision,
   TenantOpenaiSettings,
   TenantSecretsManager,
   type RouteItem,
@@ -230,7 +231,7 @@ export default async function SettingsVariablesPage({
     organizacionId: null,
     withUserToken: true,
   })
-  const onboardingResp = await callCrmApi<{ correo?: { completado?: boolean }; web_tracking_decision?: WebTrackingDecision }>("/tenant/me/onboarding", {
+  const onboardingResp = await callCrmApi<{ correo?: { completado?: boolean }; web_tracking_decision?: WebTrackingDecision; google_places_decision?: GooglePlacesDecision }>("/tenant/me/onboarding", {
     organizacionId: null,
     withUserToken: true,
   })
@@ -623,6 +624,7 @@ export default async function SettingsVariablesPage({
                     initialValues={searchInitialValues}
                     hasToken={hasDenueToken}
                     hasGoogleApiKey={hasGoogleApiKey}
+                    googlePlacesDecision={onboardingResp.ok ? onboardingResp.data.google_places_decision : "pendiente"}
                   />
                 </TabsContent>
                 <TabsContent value="openai" className="space-y-6 pt-4">

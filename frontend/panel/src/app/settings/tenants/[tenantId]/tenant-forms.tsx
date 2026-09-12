@@ -1233,6 +1233,8 @@ type BusquedaInitialValues = {
   denue_base_url?: string
 }
 
+export type GooglePlacesDecision = "pendiente" | "usar" | "no_usar"
+
 export function TenantWebchatSettings({
   tenantId,
   initialValues,
@@ -1933,16 +1935,41 @@ export function TenantBusquedaSettings({
   initialValues,
   hasToken,
   hasGoogleApiKey,
+  googlePlacesDecision = "pendiente",
   showRequiredMarkers = false,
 }: {
   tenantId: string
   initialValues: BusquedaInitialValues
   hasToken: boolean
   hasGoogleApiKey: boolean
+  googlePlacesDecision?: GooglePlacesDecision
   showRequiredMarkers?: boolean
 }) {
   const actions = useTenantSettingsActions()
   const [state, formAction] = useActionState(actions.updateBusquedaSettingsAction, INITIAL_CRUD_STATE)
+  const [decision, setDecision] = useState<GooglePlacesDecision>(googlePlacesDecision)
+  const [decisionSaving, setDecisionSaving] = useState(false)
+  const [decisionMessage, setDecisionMessage] = useState<string | null>(null)
+
+  const saveGooglePlacesDecision = async (value: Exclude<GooglePlacesDecision, "pendiente">) => {
+    setDecisionSaving(true)
+    setDecisionMessage(null)
+    try {
+      const response = await fetch("/api/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ google_places_decision: value }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : "No se pudo guardar la decisión.")
+      setDecision(value)
+      setDecisionMessage(value === "no_usar" ? "Google Places marcado como no utilizado." : "Google Places seleccionado para configuración.")
+    } catch (error) {
+      setDecisionMessage(error instanceof Error ? error.message : "No se pudo guardar la decisión.")
+    } finally {
+      setDecisionSaving(false)
+    }
+  }
 
   return (
     <form action={formAction} className="space-y-6">
@@ -1995,6 +2022,19 @@ export function TenantBusquedaSettings({
           <p className="text-xs font-medium text-muted-foreground">
             {hasGoogleApiKey ? "Conexión registrada" : "Conexión pendiente"}
           </p>
+        </div>
+        <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+          <p className="text-sm font-medium">¿Quieres utilizar Google Places?</p>
+          <p className="mt-1 text-xs text-muted-foreground">Puedes configurarlo ahora o dejarlo sin utilizar. Esta decisión cuenta en el avance del onboarding.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" variant={decision === "usar" ? "default" : "outline"} onClick={() => void saveGooglePlacesDecision("usar")} disabled={decisionSaving}>
+              Sí, configurarlo
+            </Button>
+            <Button type="button" variant={decision === "no_usar" ? "default" : "outline"} onClick={() => void saveGooglePlacesDecision("no_usar")} disabled={decisionSaving}>
+              No lo utilizaré
+            </Button>
+          </div>
+          {decisionMessage ? <p className="mt-2 text-xs text-muted-foreground">{decisionMessage}</p> : null}
         </div>
         <div className="space-y-2">
           {showRequiredMarkers ? <RequiredLabel htmlFor="google_places_api_key">Clave de acceso a lugares (nueva)</RequiredLabel> : <Label htmlFor="google_places_api_key">Clave de acceso a lugares (nueva)</Label>}

@@ -62,6 +62,7 @@ class TenantOnboardingProgressResponse(BaseModel):
     voz_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     zoom_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     web_tracking_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
+    google_places_decision: Literal["pendiente", "usar", "no_usar"] = "pendiente"
     errores: list[str] = Field(default_factory=list)
     pasos: list[dict[str, Any]] = Field(default_factory=list)
     correo: dict[str, bool] = Field(default_factory=dict)
@@ -74,6 +75,7 @@ class TenantOnboardingProgressUpdate(BaseModel):
     voz_decision: Literal["pendiente", "usar", "no_usar"] | None = None
     zoom_decision: Literal["pendiente", "usar", "no_usar"] | None = None
     web_tracking_decision: Literal["pendiente", "usar", "no_usar"] | None = None
+    google_places_decision: Literal["pendiente", "usar", "no_usar"] | None = None
     ultimo_paso: str | None = Field(default=None, max_length=80)
 
     @model_validator(mode="after")
@@ -83,6 +85,7 @@ class TenantOnboardingProgressUpdate(BaseModel):
             and self.voz_decision is None
             and self.zoom_decision is None
             and self.web_tracking_decision is None
+            and self.google_places_decision is None
             and self.ultimo_paso is None
         ):
             raise ValueError("debe_indicar_un_cambio")
@@ -939,6 +942,7 @@ async def _get_onboarding_progress(
     progress["voz_decision"] = str((preferences or {}).get("voz_decision") or "pendiente")
     progress["zoom_decision"] = str((preferences or {}).get("zoom_decision") or "pendiente")
     progress["web_tracking_decision"] = str((preferences or {}).get("web_tracking_decision") or "pendiente")
+    progress["google_places_decision"] = str((preferences or {}).get("google_places_decision") or "pendiente")
     return TenantOnboardingProgressResponse.model_validate(progress)
 
 

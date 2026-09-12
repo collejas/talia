@@ -483,3 +483,5 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
   de resultados.
 - La sección Google Places conserva únicamente la clave de acceso a lugares y
   el botón de guardado en onboarding y `settings/variables`.
+- Google Places ahora es opcional: el tenant puede configurarlo o marcarlo como
+  no utilizado; la métrica de Búsquedas considera esa decisión.

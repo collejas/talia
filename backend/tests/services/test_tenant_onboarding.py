@@ -82,3 +82,27 @@ def test_web_tracking_requires_active_site_and_verified_domain_when_selected() -
         web_tracking_domains=[{"tracking_site_id": "site-1", "active": True, "verification_status": "verified"}],
     )
     assert next(step for step in verified["pasos"] if step["id"] == "pagina_web")["completado"] is True
+
+
+def test_google_places_can_be_marked_as_not_used() -> None:
+    progress = build_onboarding_progress(
+        tenant=_tenant(),
+        routes=[],
+        secrets=[{"clave": "denue.token"}],
+        preferences={"google_places_decision": "no_usar"},
+    )
+
+    busqueda = next(step for step in progress["pasos"] if step["id"] == "busqueda")
+    assert busqueda["completado"] is True
+
+
+def test_google_places_is_required_when_selected() -> None:
+    progress = build_onboarding_progress(
+        tenant=_tenant(),
+        routes=[],
+        secrets=[{"clave": "denue.token"}],
+        preferences={"google_places_decision": "usar"},
+    )
+
+    busqueda = next(step for step in progress["pasos"] if step["id"] == "busqueda")
+    assert busqueda["completado"] is False

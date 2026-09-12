@@ -20,3 +20,7 @@ La única configuración editable por tenant es:
 El formulario de Google Places en `/onboarding/busqueda` y
 `/settings/variables?tab=busqueda` muestra únicamente esa clave y su estado de
 registro. El valor nunca se vuelve a mostrar después de guardarlo.
+
+Google Places es opcional dentro del onboarding. El tenant puede configurarlo o
+marcarlo como no utilizado; la métrica del paso Búsquedas considera cualquiera
+de esas decisiones como resuelta cuando GobMX también está listo.
