@@ -1014,6 +1014,13 @@ export function LeadDrawer({
   const [quotePreviewPdfUrl, setQuotePreviewPdfUrl] = useState<string | null>(null);
   const [quotePreviewPdfFilename, setQuotePreviewPdfFilename] = useState("cotizacion.pdf");
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentQuote, setPaymentQuote] = useState<LeadQuoteEntry | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentType, setPaymentType] = useState<"anticipo" | "parcial" | "liquidacion" | "otro">("parcial");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [quoteChannel, setQuoteChannel] = useState<"email" | "whatsapp">("email");
   const [quoteTitle, setQuoteTitle] = useState("");
   const [quoteDescription, setQuoteDescription] = useState("");
@@ -3125,6 +3132,50 @@ export function LeadDrawer({
     [card, fetchQuotes, updateWonStagePrep],
   );
 
+  const openPaymentDialog = useCallback((quote: LeadQuoteEntry) => {
+    setPaymentQuote(quote);
+    setPaymentAmount(quote.total != null ? String(quote.total) : "");
+    setPaymentType("parcial");
+    setPaymentMethod("");
+    setPaymentReference("");
+    setPaymentError(null);
+    setPaymentDialogOpen(true);
+  }, []);
+
+  const handleConfirmedPayment = useCallback(() => {
+    if (!paymentQuote) return;
+    const amount = Number(paymentAmount.replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setPaymentError("Captura un monto válido mayor que cero.");
+      return;
+    }
+    setPaymentError(null);
+    startQuoteAction(async () => {
+      try {
+        const response = await fetch(`/api/embudo/quotes/${paymentQuote.id}/pago-confirmado`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            monto: Number(amount.toFixed(2)),
+            tipo_pago: paymentType,
+            metodo_pago: paymentMethod.trim() || null,
+            referencia_pago: paymentReference.trim() || null,
+          }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setPaymentError(typeof body?.error === "string" ? body.error : "No se pudo registrar el pago.");
+          return;
+        }
+        setPaymentDialogOpen(false);
+        setQuoteSuccess("Pago confirmado. Se formalizó la venta y el cliente.");
+        await fetchQuotes();
+      } catch (error) {
+        setPaymentError(error instanceof Error ? error.message : "No se pudo registrar el pago.");
+      }
+    });
+  }, [fetchQuotes, paymentAmount, paymentMethod, paymentQuote, paymentReference, paymentType]);
+
   const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition, forceDisabled = false) => {
     const stageValues = stagePrep[stageCode] ?? {};
     const rawValue = stageValues[field.key];
@@ -3839,6 +3890,18 @@ export function LeadDrawer({
                                 <IconTrophy className="size-4" />
                                 Marcar como aceptada
                               </Button>
+                              {quote.status === "aceptada" ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="gap-1"
+                                  onClick={() => openPaymentDialog(quote)}
+                                  disabled={quotePending}
+                                >
+                                  <IconCheck className="size-4" />
+                                  Registrar pago
+                                </Button>
+                              ) : null}
                               <Button
                                 type="button"
                                 size="sm"
@@ -5259,6 +5322,59 @@ export function LeadDrawer({
                 </ScrollArea>
               </aside>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>Registrar pago de la venta</DialogTitle>
+          <DialogDescription>
+            Confirma el pago de la cotización aceptada para formalizar la venta y crear o activar al cliente.
+          </DialogDescription>
+          <div className="space-y-4 py-2">
+            <div className="rounded-md bg-muted/40 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Total de la cotización: </span>
+              <span className="font-semibold">{formatQuoteCurrency(paymentQuote?.total ?? null, paymentQuote?.currency ?? null)}</span>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="confirmed-payment-amount">Monto recibido</Label>
+              <Input
+                id="confirmed-payment-amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={paymentAmount}
+                onChange={(event) => setPaymentAmount(event.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Tipo de pago</Label>
+              <Select value={paymentType} onValueChange={(value) => setPaymentType(value as typeof paymentType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="anticipo">Anticipo</SelectItem>
+                  <SelectItem value="parcial">Pago parcial</SelectItem>
+                  <SelectItem value="liquidacion">Liquidación</SelectItem>
+                  <SelectItem value="otro">Otro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="confirmed-payment-method">Método de pago</Label>
+              <Input id="confirmed-payment-method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} placeholder="Transferencia, efectivo, tarjeta..." />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="confirmed-payment-reference">Referencia</Label>
+              <Input id="confirmed-payment-reference" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Folio o referencia bancaria" />
+            </div>
+            {paymentError ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{paymentError}</p> : null}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)} disabled={quotePending}>Cancelar</Button>
+            <Button type="button" onClick={handleConfirmedPayment} disabled={quotePending || !paymentQuote}>
+              {quotePending ? "Registrando..." : "Confirmar pago"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
