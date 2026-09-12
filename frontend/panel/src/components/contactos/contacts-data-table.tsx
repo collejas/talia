@@ -1443,23 +1443,6 @@ export function ContactsDataTable({
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="grid gap-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">Propietario</Label>
-                <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="unassigned">Sin asignar</SelectItem>
-                    {ownerOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">Ligado</Label>
                 <Select
                   value={advancedFilters.ligado}
