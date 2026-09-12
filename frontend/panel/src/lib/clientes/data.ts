@@ -128,13 +128,15 @@ function mapTable(rows: ClienteRecord[]): DataTableRow[] {
     const header = row.razon_social || row.contacto?.nombre_completo || "Cliente sin nombre";
     const principal = resolvePrincipal(row.responsables);
     const reviewer = row.vendedor_nombre || principal?.nombre || row.contacto?.nombre_completo || "Sin vendedor";
-    const status = formatStatus(row.estado_onboarding);
+    const status = row.contacto?.nombre_completo || "—";
+    const numeroVentas = Number(row.numero_ventas) || 0;
+    const numeroOportunidadesGanadas = Number(row.numero_oportunidades_ganadas) || 0;
 
     return {
       id: index + 1,
       header,
       type: status,
-      status,
+      status: String(numeroVentas),
       target: formatCurrency(row.total_vendido, row.moneda || "MXN"),
       limit: row.contacto?.correo || "—",
       reviewer,
@@ -145,7 +147,14 @@ function mapTable(rows: ClienteRecord[]): DataTableRow[] {
         total_vendido: row.total_vendido,
         total_cobrado: row.total_cobrado,
         saldo_pendiente: row.saldo_pendiente,
+        moneda: row.moneda || "MXN",
         estado: row.estado_onboarding,
+        empresa_nombre: row.razon_social,
+        numero_oportunidades_ganadas: numeroOportunidadesGanadas,
+        status_meta: {
+          label: `${numeroVentas} ${numeroVentas === 1 ? "venta" : "ventas"}`,
+          variant: "outline",
+        },
         contacto_id: row.contacto_id,
         vendedor_usuario_id: row.vendedor_usuario_id,
         vendedor_nombre: row.vendedor_nombre,

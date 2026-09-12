@@ -3840,6 +3840,7 @@ class ClienteRecord(BaseModel):
     fuente: str | None = None
     monto_estimado: float | None = None
     numero_ventas: int = 0
+    numero_oportunidades_ganadas: int = 0
     total_vendido: float = 0
     total_cobrado: float = 0
     saldo_pendiente: float = 0
@@ -3866,10 +3867,6 @@ class ClienteHistorialResponse(BaseModel):
     ventas: list[dict[str, Any]] = Field(default_factory=list)
     venta_items: list[dict[str, Any]] = Field(default_factory=list)
     pagos: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class LeadConversionPayload(BaseModel):
-    forzar: bool = Field(default=False)
 
 
 class ConfirmedPaymentPayload(BaseModel):
@@ -31486,81 +31483,14 @@ async def obtener_cliente_de_oportunidad(
         )
     cliente_activo = cliente or cliente_por_contacto
     etapa = oportunidad_row.get("etapa") if isinstance(oportunidad_row.get("etapa"), dict) else {}
-    oportunidad_ganada = _clean_text((etapa or {}).get("categoria")).lower() == "ganada"
     cliente_existente_por_contacto = bool(cliente_por_contacto and not cliente)
-    puede_convertir = False
-    razon_no_convertir: str | None = None
-    if not oportunidad_ganada:
-        razon_no_convertir = "oportunidad_no_ganada"
-    elif cliente_activo:
-        razon_no_convertir = "cliente_ya_existe"
-    else:
-        razon_no_convertir = "conversion_requiere_pago_confirmado"
     return {
         "ok": True,
         "cliente": cliente_activo,
         "cliente_por_oportunidad": cliente,
         "cliente_existente_por_contacto": cliente_por_contacto,
         "cliente_existente_por_contacto_bool": cliente_existente_por_contacto,
-        "puede_convertir": puede_convertir,
-        "razon_no_convertir": razon_no_convertir,
     }
-
-
-@router.post("/oportunidades/{oportunidad_id}/convertir")
-async def convertir_oportunidad_cliente(
-    *,
-    repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("clientes.view")),
-    user_token: str = Depends(require_user_token),
-    oportunidad_id: UUID,
-    payload: LeadConversionPayload,
-) -> dict[str, Any]:
-    raise HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail="conversion_cliente_requiere_pago_confirmado",
-    )
-    # Se conserva el código legado debajo durante la transición para no
-    # romper referencias internas; el flujo público ya no puede usarlo.
-    oportunidad_row = await repo.get_opportunity_with_contact(
-        organizacion_id=organizacion_id,
-        oportunidad_id=oportunidad_id,
-    )
-    if oportunidad_row is None:
-        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
-    cuenta_id = _safe_uuid(oportunidad_row.get("cuenta_id"))
-    if cuenta_id is None:
-        cuenta_id, oportunidad_row = await _ensure_oportunidad_cuenta(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            oportunidad_row=oportunidad_row,
-        )
-    cliente_existente_por_contacto = None
-    contacto_principal_id = _safe_uuid(oportunidad_row.get("contacto_principal_id"))
-    if contacto_principal_id is not None:
-        cliente_existente_por_contacto = await repo.get_cliente_por_contacto(
-            organizacion_id=organizacion_id,
-            usuario_token=user_token,
-            contacto_id=contacto_principal_id,
-        )
-    if cliente_existente_por_contacto is not None:
-        return {"ok": True, "cliente": cliente_existente_por_contacto}
-    try:
-        await repo.convert_oportunidad_en_cliente(
-            organizacion_id=organizacion_id,
-            usuario_token=user_token,
-            oportunidad_id=oportunidad_id,
-            forzar=payload.forzar,
-        )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    cliente = await repo.get_cliente_por_oportunidad(
-        organizacion_id=organizacion_id,
-        usuario_token=user_token,
-        oportunidad_id=oportunidad_id,
-    )
-    return {"ok": True, "cliente": cliente}
 
 
 @router.get(

@@ -1,5 +1,5 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
-import { DataTable } from "@/components/data-table";
+import { ClientesTable } from "@/components/clientes/clientes-table";
 import { loadClientesData } from "@/lib/clientes/data";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export default async function ClientesPage() {
 
   return (
     <AppViewLayout title="Clientes">
-      <DataTable data={data.table} columnLabels={{ reviewer: "Vendedor" }} />
+      <ClientesTable rows={data.table} />
     </AppViewLayout>
   );
 }

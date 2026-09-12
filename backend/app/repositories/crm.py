@@ -18167,7 +18167,7 @@ class CRMRepository:
         client_ids = [str(row["id"]) for row in rows if row.get("id")]
         if not client_ids:
             return
-        sales_resp, payments_resp = await asyncio.gather(
+        sales_resp, payments_resp, opportunities_resp = await asyncio.gather(
             self._request_service_role(
                 "GET",
                 "/rest/v1/ventas",
@@ -18188,15 +18188,28 @@ class CRMRepository:
                 },
                 organizacion_id=organizacion_id,
             ),
+            self._request_service_role(
+                "GET",
+                "/rest/v1/oportunidades",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "cliente_id": _postgrest_in_clause(client_ids),
+                    "estado": "eq.ganada",
+                    "select": "cliente_id",
+                },
+                organizacion_id=organizacion_id,
+            ),
         )
         sales = sales_resp.json() or []
         payments = payments_resp.json() or []
-        if not isinstance(sales, list) or not isinstance(payments, list):
+        opportunities = opportunities_resp.json() or []
+        if not isinstance(sales, list) or not isinstance(payments, list) or not isinstance(opportunities, list):
             raise CRMRepositoryError("Respuesta inesperada al resumir ventas de clientes")
 
         sold_by_client: dict[str, Decimal] = defaultdict(Decimal)
         count_by_client: dict[str, int] = defaultdict(int)
         paid_by_client: dict[str, Decimal] = defaultdict(Decimal)
+        won_opportunities_by_client: dict[str, int] = defaultdict(int)
         for sale in sales:
             if not isinstance(sale, dict) or sale.get("estatus") in {"cancelada", "reembolsada"}:
                 continue
@@ -18211,12 +18224,16 @@ class CRMRepository:
             client_id = str(payment.get("cliente_id") or "")
             if client_id:
                 paid_by_client[client_id] += Decimal(str(payment.get("monto") or 0))
+        for opportunity in opportunities:
+            if isinstance(opportunity, dict) and opportunity.get("cliente_id"):
+                won_opportunities_by_client[str(opportunity["cliente_id"])] += 1
 
         for row in rows:
             client_id = str(row.get("id") or "")
             sold = sold_by_client.get(client_id, Decimal("0"))
             paid = paid_by_client.get(client_id, Decimal("0"))
             row["numero_ventas"] = count_by_client.get(client_id, 0)
+            row["numero_oportunidades_ganadas"] = won_opportunities_by_client.get(client_id, 0)
             row["total_vendido"] = float(sold)
             row["total_cobrado"] = float(paid)
             row["saldo_pendiente"] = float(max(sold - paid, Decimal("0")))
@@ -18601,86 +18618,6 @@ class CRMRepository:
                 )
             return row
         return None
-
-    async def convert_oportunidad_en_cliente(
-        self,
-        *,
-        organizacion_id: UUID,
-        oportunidad_id: UUID,
-        usuario_token: str | None = None,
-        forzar: bool = False,
-    ) -> Any:
-        opportunity = await self.get_opportunity_with_contact(
-            organizacion_id=organizacion_id,
-            oportunidad_id=oportunidad_id,
-        )
-        if not isinstance(opportunity, dict):
-            raise CRMRepositoryError("oportunidad_no_encontrada_para_convertir")
-
-        contact_id = _safe_uuid(opportunity.get("contacto_principal_id"))
-        if contact_id is None:
-            raise CRMRepositoryError("oportunidad_sin_contacto_principal")
-
-        await self.ensure_contact_record_for_persona(
-            organizacion_id=organizacion_id,
-            persona_id=contact_id,
-            use_service_role=True,
-        )
-
-        existing = await self.get_cliente_por_oportunidad(
-            organizacion_id=organizacion_id,
-            oportunidad_id=oportunidad_id,
-            usuario_token=usuario_token,
-        )
-        if isinstance(existing, dict):
-            return existing
-
-        account_id = _safe_uuid(opportunity.get("cuenta_id"))
-        if account_id is None:
-            raise CRMRepositoryError("cliente_conversion_cuenta_missing")
-
-        quotes_total = opportunity.get("monto_estimado")
-        metadata = _ensure_metadata(opportunity.get("metadata"))
-        body: dict[str, Any] = {
-            "organizacion_id": str(organizacion_id),
-            "contacto_id": str(contact_id),
-            "persona_id": str(contact_id),
-            "cuenta_id": str(account_id),
-            "oportunidad_id": str(oportunidad_id),
-            "legacy_lead_id": str(oportunidad_id),
-            "estado_onboarding": "pendiente",
-            "datos_facturacion": {},
-            "metadatos": {
-                "source": "crm",
-                "conversion_source": "oportunidad",
-                "conversion_forzada": bool(forzar),
-                "opportunity_stage": (opportunity.get("etapa") or {}).get("codigo"),
-            },
-            "moneda": opportunity.get("moneda") or "MXN",
-            "monto_estimado": quotes_total if isinstance(quotes_total, (int, float, Decimal)) else None,
-            "ganado_en": datetime.now(timezone.utc).isoformat(),
-            "tablero_id": _safe_uuid((metadata.get("stage_prep") or {}).get("tablero_id")) if isinstance(metadata, dict) else None,
-            "etapa_id": _safe_uuid(opportunity.get("etapa_id")),
-        }
-        body = {key: value for key, value in body.items() if value is not None}
-        params = {"on_conflict": "contacto_id"}
-        try:
-            resp = await self._request_service_role(
-                "POST",
-                "/rest/v1/clientes",
-                params=params,
-                json=body,
-                prefer="resolution=merge-duplicates,return=representation",
-                organizacion_id=organizacion_id,
-            )
-        except CRMRepositoryError as exc:
-            if "clientes_contacto_org_fkey" not in str(exc).lower():
-                raise
-            raise CRMRepositoryError("cliente_conversion_contact_missing") from exc
-        data = resp.json()
-        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
-            raise CRMRepositoryError("convertir_lead_response_invalid")
-        return data[0]
 
     async def create_cliente_document(
         self,

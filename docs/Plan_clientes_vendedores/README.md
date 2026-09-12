@@ -224,11 +224,9 @@ debe reemplazarse o desactivarse al implementar el flujo definitivo basado en
 ventas y pagos.
 
 La migración histórica
-`20260912152756_auto_create_cliente_from_won_opportunity.sql` prepara un
-trigger para cubrir cambios hechos desde el panel, servicios internos o SQL,
-y ejecuta un backfill idempotente de oportunidades ya ganadas. Ya fue aplicada
-mediante Supabase MCP; queda pendiente sustituirla por la regla definitiva de
-creación de cliente posterior al pago.
+`20260912153411_auto_create_cliente_from_won_opportunity.sql` hizo el backfill
+idempotente de oportunidades ya ganadas. Ese flujo quedó cerrado: el trigger
+histórico fue eliminado y no debe reactivarse.
 
 ## 13) Modelo comercial: venta y pago antes de crear cliente
 
@@ -369,7 +367,14 @@ Ya están aplicados en Supabase los puntos estructurales 2, 3, 4 y parte del
 - El historial consulta `ventas`, `venta_items` y `pagos` mediante el backend
   autorizado, respetando el RLS de las tablas comerciales.
 
-Queda pendiente retirar el trigger histórico que crea clientes al ganar una
-oportunidad y reemplazar el endpoint manual de conversión. Se hará cuando el
-nuevo endpoint esté desplegado y validado, para no dejar una ventana sin
-flujo operativo.
+El flujo legacy quedó retirado. Ya no existe el endpoint manual de conversión
+de oportunidad a cliente ni la acción equivalente en el panel. La única vía
+para crear o activar un cliente desde una oportunidad es registrar un pago
+confirmado mediante:
+
+`POST /crm/cotizaciones/{cotizacion_id}/pago-confirmado`
+
+La operación formaliza, en una sola transacción, el cliente, la venta, sus
+partidas y el pago. La conversión manual de una oportunidad ganada queda
+rechazada por diseño; ganar la oportunidad y aceptar la cotización no implica
+por sí solo que exista una venta cobrada.

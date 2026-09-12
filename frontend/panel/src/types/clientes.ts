@@ -61,6 +61,7 @@ export type ClienteRecord = {
   fuente: string | null;
   monto_estimado: number | null;
   numero_ventas: number;
+  numero_oportunidades_ganadas: number;
   total_vendido: number;
   total_cobrado: number;
   saldo_pendiente: number;
