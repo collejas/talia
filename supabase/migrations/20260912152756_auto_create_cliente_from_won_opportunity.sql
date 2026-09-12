@@ -51,7 +51,32 @@ BEGIN
        AND c.organizacion_id = v_op.organizacion_id;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'contacto_principal_no_encontrado';
+        -- Older CRM rows can retain the contact UUID after the contact row was
+        -- removed. Recover the minimum identity from the opportunity snapshot
+        -- before creating the client, preserving the original UUID.
+        INSERT INTO public.contactos (
+            id,
+            organizacion_id,
+            nombre_completo,
+            company_name,
+            estado,
+            captura_estado,
+            contacto_datos,
+            persona_datos
+        ) VALUES (
+            v_op.contacto_principal_id,
+            v_op.organizacion_id,
+            coalesce(nullif(btrim(v_op.contacto_nombre), ''), nullif(btrim(v_op.titulo), ''), 'Contacto recuperado'),
+            nullif(btrim(v_op.metadata ->> 'contacto_empresa'), ''),
+            'lead',
+            'incompleto',
+            jsonb_build_object(
+                'recovered_from_won_opportunity', v_op.id,
+                'recovery_note', 'Identidad mínima reconstruida desde el snapshot de la oportunidad.'
+            ),
+            '{}'::jsonb
+        )
+        RETURNING * INTO v_contact;
     END IF;
 
     -- Repair legacy opportunities without an account before creating the client.
