@@ -1231,18 +1231,6 @@ function buildWhatsProspSettingsKey(
 
 type BusquedaInitialValues = {
   denue_base_url?: string
-  google_nearby_url?: string
-  google_text_url?: string
-  google_details_url?: string
-  google_field_mask?: string
-  google_details_field_mask?: string
-  google_language_code?: string
-  google_region_code?: string
-  google_grid_max_tile_radius_m?: number
-  google_pause_between_pages?: number
-  google_dense_grid_max_tile_radius_m?: number
-  google_dense_pause_between_pages?: number
-  google_dense_max_results?: number
 }
 
 export function TenantWebchatSettings({
@@ -2008,141 +1996,19 @@ export function TenantBusquedaSettings({
             {hasGoogleApiKey ? "Conexión registrada" : "Conexión pendiente"}
           </p>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="google_nearby_url">Dirección para buscar lugares cercanos</Label>
-            <Input
-              id="google_nearby_url"
-              name="google_nearby_url"
-              placeholder="https://places.googleapis.com/v1/places:searchNearby"
-              defaultValue={initialValues.google_nearby_url ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="google_text_url">Dirección para buscar por texto</Label>
-            <Input
-              id="google_text_url"
-              name="google_text_url"
-              placeholder="https://places.googleapis.com/v1/places:searchText"
-              defaultValue={initialValues.google_text_url ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="google_details_url">Dirección para consultar un lugar</Label>
-            <Input
-              id="google_details_url"
-              name="google_details_url"
-              placeholder="https://places.googleapis.com/v1/places"
-              defaultValue={initialValues.google_details_url ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="google_field_mask">Información que se solicitará</Label>
-            <Textarea
-              id="google_field_mask"
-              name="google_field_mask"
-              className="font-mono text-xs"
-              rows={3}
-              defaultValue={initialValues.google_field_mask ?? ""}
-            />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="google_details_field_mask">Información adicional del lugar</Label>
-            <Textarea
-              id="google_details_field_mask"
-              name="google_details_field_mask"
-              className="font-mono text-xs"
-              rows={3}
-              defaultValue={initialValues.google_details_field_mask ?? ""}
-            />
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2">
-            <Label htmlFor="google_language_code">Idioma</Label>
-            <Input
-              id="google_language_code"
-              name="google_language_code"
-              placeholder="es"
-              defaultValue={initialValues.google_language_code ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="google_region_code">Región</Label>
-            <Input
-              id="google_region_code"
-              name="google_region_code"
-              placeholder="MX"
-              defaultValue={initialValues.google_region_code ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            {showRequiredMarkers ? <RequiredLabel htmlFor="google_places_api_key">Clave de acceso para lugares</RequiredLabel> : <Label htmlFor="google_places_api_key">Clave de acceso para lugares</Label>}
-            <Input id="google_places_api_key" name="google_places_api_key" type="password" placeholder="Pega la clave" />
-            <p className="text-xs text-muted-foreground">
-              Solo se guarda al pegar una nueva clave; el valor actual no se muestra.
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="google_grid_max_tile_radius_m">Distancia máxima de búsqueda</Label>
-            <Input
-              id="google_grid_max_tile_radius_m"
-              name="google_grid_max_tile_radius_m"
-              type="number"
-              min={200}
-              defaultValue={initialValues.google_grid_max_tile_radius_m ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="google_pause_between_pages">Pausa entre consultas</Label>
-            <Input
-              id="google_pause_between_pages"
-              name="google_pause_between_pages"
-              type="number"
-              step="0.1"
-              defaultValue={initialValues.google_pause_between_pages ?? ""}
-            />
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="google_dense_grid_max_tile_radius_m">Distancia máxima de búsqueda detallada</Label>
-            <Input
-              id="google_dense_grid_max_tile_radius_m"
-              name="google_dense_grid_max_tile_radius_m"
-              type="number"
-              min={200}
-              defaultValue={initialValues.google_dense_grid_max_tile_radius_m ?? ""}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="google_dense_pause_between_pages">Pausa entre consultas detalladas</Label>
-            <Input
-              id="google_dense_pause_between_pages"
-              name="google_dense_pause_between_pages"
-              type="number"
-              step="0.1"
-              defaultValue={initialValues.google_dense_pause_between_pages ?? ""}
-            />
-          </div>
-        </div>
         <div className="space-y-2">
-          <Label htmlFor="google_dense_max_results">Máximo de resultados detallados</Label>
-          <Input
-            id="google_dense_max_results"
-            name="google_dense_max_results"
-            type="number"
-            min={1}
-            defaultValue={initialValues.google_dense_max_results ?? ""}
-          />
+          {showRequiredMarkers ? <RequiredLabel htmlFor="google_places_api_key">Clave de acceso a lugares (nueva)</RequiredLabel> : <Label htmlFor="google_places_api_key">Clave de acceso a lugares (nueva)</Label>}
+          <Input id="google_places_api_key" name="google_places_api_key" type="password" placeholder="Pega la clave" />
+          <p className="text-xs text-muted-foreground">
+            {hasGoogleApiKey
+              ? "Clave registrada; no se muestra el valor actual."
+              : "Aún no hay una clave guardada para esta organización."}
+          </p>
         </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <FormStatusMessage state={state} />
-        <SubmitButton label="Guardar Búsqueda" pendingLabel="Guardando..." />
+        <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+          <FormStatusMessage state={state} />
+          <SubmitButton label="Guardar Búsqueda" pendingLabel="Guardando..." />
+        </div>
       </div>
     </form>
   )

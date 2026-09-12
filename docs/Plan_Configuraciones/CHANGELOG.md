@@ -474,3 +474,12 @@ No cerrar la primera fase únicamente con compilación local. Debe comprobarse q
 - El tenant puede elegir configurar la Página Web o marcarla como no utilizada.
 - La decisión se persiste explícitamente y participa en el porcentaje de avance.
 - Onboarding y `settings/variables` muestran y guardan la misma información.
+
+## [2026-09-12] — Google Places global
+
+- Los endpoints, idioma y región de Google Places se administran globalmente
+  desde el entorno del backend y ya no se editan por tenant.
+- Se retiraron del formulario los campos de máscaras, límites, pausas y máximo
+  de resultados.
+- La sección Google Places conserva únicamente la clave de acceso a lugares y
+  el botón de guardado en onboarding y `settings/variables`.

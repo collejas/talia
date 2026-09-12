@@ -384,45 +384,9 @@ const SECTIONS: SectionConfig[] = [
   },
   {
     title: "Búsqueda",
-    description: "URLs y límites para GobMX y Google Places.",
+    description: "Configuración de acceso para GobMX y Google Places.",
     fields: [
       { label: "denue.base_url", path: "denue.base_url" },
-      { label: "google_places.nearby_url", path: "google_places.nearby_url" },
-      { label: "google_places.text_url", path: "google_places.text_url" },
-      { label: "google_places.details_url", path: "google_places.details_url" },
-      { label: "google_places.field_mask", path: "google_places.field_mask", multiline: true },
-      {
-        label: "google_places.details_field_mask",
-        path: "google_places.details_field_mask",
-        multiline: true,
-      },
-      { label: "google_places.language_code", path: "google_places.language_code" },
-      { label: "google_places.region_code", path: "google_places.region_code" },
-      {
-        label: "google_places.grid_max_tile_radius_m",
-        path: "google_places.grid_max_tile_radius_m",
-        type: "number",
-      },
-      {
-        label: "google_places.pause_between_pages",
-        path: "google_places.pause_between_pages",
-        type: "number",
-      },
-      {
-        label: "google_places.dense_grid_max_tile_radius_m",
-        path: "google_places.dense_grid_max_tile_radius_m",
-        type: "number",
-      },
-      {
-        label: "google_places.dense_pause_between_pages",
-        path: "google_places.dense_pause_between_pages",
-        type: "number",
-      },
-      {
-        label: "google_places.dense_max_results",
-        path: "google_places.dense_max_results",
-        type: "number",
-      },
     ],
     secrets: [
       { clave: "denue.token", label: "denue.token (tier A)", tier: "A", placeholder: "Token GobMX" },

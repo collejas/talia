@@ -1057,50 +1057,8 @@ async def get_google_places_runtime_settings(
     if organizacion_id is None:
         return settings_payload
 
-    config = await get_org_config(organizacion_id=organizacion_id)
-    google_cfg = _as_dict(config.get("google_places")) or {}
-
-    nearby_url = _coerce_str(google_cfg.get("nearby_url"))
-    if nearby_url is not None:
-        settings_payload.nearby_url = nearby_url
-    text_url = _coerce_str(google_cfg.get("text_url"))
-    if text_url is not None:
-        settings_payload.text_url = text_url
-    details_url = _coerce_str(google_cfg.get("details_url"))
-    if details_url is not None:
-        settings_payload.details_url = details_url
-    field_mask = _coerce_str(google_cfg.get("field_mask"))
-    if field_mask is not None:
-        settings_payload.field_mask = field_mask
-    details_field_mask = _coerce_str(google_cfg.get("details_field_mask"))
-    if details_field_mask is not None:
-        settings_payload.details_field_mask = details_field_mask
-    language_code = _coerce_str(google_cfg.get("language_code"))
-    if language_code is not None:
-        settings_payload.language_code = language_code
-    region_code = _coerce_str(google_cfg.get("region_code"))
-    if region_code is not None:
-        settings_payload.region_code = region_code
-    grid_max = google_cfg.get("grid_max_tile_radius_m")
-    if grid_max is not None:
-        settings_payload.grid_max_tile_radius_m = _coerce_int(grid_max, settings_payload.grid_max_tile_radius_m)
-    pause_between = google_cfg.get("pause_between_pages")
-    if pause_between is not None:
-        settings_payload.pause_between_pages = _coerce_float(pause_between, settings_payload.pause_between_pages)
-    dense_grid = google_cfg.get("dense_grid_max_tile_radius_m")
-    if dense_grid is not None:
-        settings_payload.dense_grid_max_tile_radius_m = _coerce_int(
-            dense_grid, settings_payload.dense_grid_max_tile_radius_m
-        )
-    dense_pause = google_cfg.get("dense_pause_between_pages")
-    if dense_pause is not None:
-        settings_payload.dense_pause_between_pages = _coerce_float(
-            dense_pause, settings_payload.dense_pause_between_pages
-        )
-    dense_max = google_cfg.get("dense_max_results")
-    if dense_max is not None:
-        settings_payload.dense_max_results = _coerce_positive_int_or_none(dense_max)
-
+    # La API, máscaras, idioma, región y límites son globales. Solo la clave
+    # puede variar por tenant y se obtiene del secreto tenant-scoped.
     api_key_secret = await get_secret_plaintext(organizacion_id=organizacion_id, clave="google.places_api_key")
     if api_key_secret:
         settings_payload.api_key = api_key_secret
