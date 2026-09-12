@@ -31450,12 +31450,14 @@ async def obtener_cliente_de_oportunidad(
     etapa = oportunidad_row.get("etapa") if isinstance(oportunidad_row.get("etapa"), dict) else {}
     oportunidad_ganada = _clean_text((etapa or {}).get("categoria")).lower() == "ganada"
     cliente_existente_por_contacto = bool(cliente_por_contacto and not cliente)
-    puede_convertir = oportunidad_ganada and not cliente_activo
+    puede_convertir = False
     razon_no_convertir: str | None = None
     if not oportunidad_ganada:
         razon_no_convertir = "oportunidad_no_ganada"
     elif cliente_activo:
         razon_no_convertir = "cliente_ya_existe"
+    else:
+        razon_no_convertir = "conversion_requiere_pago_confirmado"
     return {
         "ok": True,
         "cliente": cliente_activo,
@@ -31477,6 +31479,12 @@ async def convertir_oportunidad_cliente(
     oportunidad_id: UUID,
     payload: LeadConversionPayload,
 ) -> dict[str, Any]:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="conversion_cliente_requiere_pago_confirmado",
+    )
+    # Se conserva el código legado debajo durante la transición para no
+    # romper referencias internas; el flujo público ya no puede usarlo.
     oportunidad_row = await repo.get_opportunity_with_contact(
         organizacion_id=organizacion_id,
         oportunidad_id=oportunidad_id,
