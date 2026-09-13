@@ -13521,6 +13521,11 @@ class CRMCuentaMergeResponse(BaseModel):
 
 class CRMContactSearchItem(BaseModel):
     id: UUID
+    cuenta_id: UUID | None = None
+    cuenta_nombre: str | None = None
+    nombre_nombres: str | None = None
+    apellido_paterno: str | None = None
+    apellido_materno: str | None = None
     nombre: str | None = None
     correo: str | None = None
     telefono: str | None = None
@@ -19746,6 +19751,14 @@ async def pipeline_create_opportunity(
             organizacion_id=organizacion_id,
             payload=body,
         )
+        selected_account_id = _safe_uuid(row.get("cuenta_id") or body.get("cuenta_id"))
+        selected_persona_id = _safe_uuid(row.get("contacto_principal_id") or body.get("contacto_principal_id"))
+        if selected_account_id and selected_persona_id:
+            await repo.ensure_persona_account_relation(
+                organizacion_id=organizacion_id,
+                persona_id=selected_persona_id,
+                cuenta_id=selected_account_id,
+            )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     opportunity_id = row.get("id")
@@ -25034,6 +25047,11 @@ async def search_personas_legacy(
         items.append(
             CRMPersonaSearchItem(
                 id=contacto_id,
+                cuenta_id=_safe_uuid(row.get("cuenta_id")),
+                cuenta_nombre=row.get("cuenta_nombre"),
+                nombre_nombres=row.get("nombre_nombres"),
+                apellido_paterno=row.get("apellido_paterno"),
+                apellido_materno=row.get("apellido_materno"),
                 nombre=row.get("nombre_completo"),
                 correo=row.get("correo_secundario") or row.get("correo_institucional") or row.get("correo_principal") or row.get("correo"),
                 telefono=row.get("telefono_movil_1_e164") or row.get("telefono_principal_e164") or row.get("telefono_e164"),
@@ -25067,6 +25085,11 @@ async def search_personas(
         items.append(
             CRMPersonaSearchItem(
                 id=persona_id,
+                cuenta_id=_safe_uuid(row.get("cuenta_id")),
+                cuenta_nombre=row.get("cuenta_nombre"),
+                nombre_nombres=row.get("nombre_nombres"),
+                apellido_paterno=row.get("apellido_paterno"),
+                apellido_materno=row.get("apellido_materno"),
                 nombre=row.get("nombre_completo"),
                 correo=row.get("correo_secundario") or row.get("correo_institucional") or row.get("correo_principal") or row.get("correo"),
                 telefono=row.get("telefono_movil_1_e164") or row.get("telefono_principal_e164") or row.get("telefono_e164"),
@@ -51999,8 +52022,8 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         or None
     )
     contacto_empresa = (
-        _clean_text(contacto.get("company_name"))
-        or _clean_text(cuenta.get("nombre"))
+        _clean_text(cuenta.get("nombre"))
+        or _clean_text(contacto.get("company_name"))
         or _clean_text(metadata.get("contacto_empresa"))
         or None
     )
@@ -52018,6 +52041,18 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     )
     proyecto_necesidades = _clean_text(metadata.get("proyecto_necesidades")) or _clean_text(row.get("descripcion")) or None
 
+    nombre_nombres = _clean_text(contacto.get("nombre_nombres") or contacto.get("nombre")) or None
+    apellido_paterno = _clean_text(contacto.get("apellido_paterno")) or None
+    apellido_materno = _clean_text(contacto.get("apellido_materno")) or None
+    if nombre_nombres and not apellido_paterno and not apellido_materno and " " in nombre_nombres:
+        name_parts = nombre_nombres.split()
+        if len(name_parts) == 2:
+            nombre_nombres, apellido_paterno = name_parts
+        elif len(name_parts) >= 3:
+            nombre_nombres = " ".join(name_parts[:-2])
+            apellido_paterno = name_parts[-2]
+            apellido_materno = name_parts[-1]
+
     return CRMPipelineBoardCard(
         tarjeta_id=oportunidad_id,
         contacto_id=_safe_uuid(contacto.get("id")),
@@ -52026,9 +52061,9 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         codigo_oportunidad=_clean_text(row.get("codigo_oportunidad")) or None,
         titulo=titulo_value,
         nombre=nombre,
-        nombre_nombres=_clean_text(contacto.get("nombre_nombres") or contacto.get("nombre")) or None,
-        apellido_paterno=_clean_text(contacto.get("apellido_paterno")) or None,
-        apellido_materno=_clean_text(contacto.get("apellido_materno")) or None,
+        nombre_nombres=nombre_nombres,
+        apellido_paterno=apellido_paterno,
+        apellido_materno=apellido_materno,
         persona_fisica_moral=pipeline_person_type,
         razon_social=(
             _clean_text(contacto.get("razon_social"))

@@ -158,6 +158,11 @@ export type ScheduleLeadDemoResult =
 
 export type ContactSearchResult = {
   id: string;
+  cuenta_id: string | null;
+  cuenta_nombre: string | null;
+  nombre_nombres: string | null;
+  apellido_paterno: string | null;
+  apellido_materno: string | null;
   nombre: string;
   correo: string | null;
   telefono: string | null;
@@ -166,6 +171,11 @@ export type ContactSearchResult = {
 
 type CrmContactSearchItem = {
   id: string;
+  cuenta_id?: string | null;
+  cuenta_nombre?: string | null;
+  nombre_nombres?: string | null;
+  apellido_paterno?: string | null;
+  apellido_materno?: string | null;
   nombre: string | null;
   correo: string | null;
   telefono: string | null;
@@ -427,6 +437,11 @@ export async function searchEmbudoContacts(query: string, limit = 8): Promise<Co
   const rows = Array.isArray(response.data?.items) ? response.data.items : [];
   return rows.map((row) => ({
     id: row.id,
+    cuenta_id: row.cuenta_id ?? null,
+    cuenta_nombre: row.cuenta_nombre ?? null,
+    nombre_nombres: row.nombre_nombres ?? null,
+    apellido_paterno: row.apellido_paterno ?? null,
+    apellido_materno: row.apellido_materno ?? null,
     nombre: row.nombre?.trim().length ? row.nombre.trim() : "Sin nombre",
     correo: row.correo ?? null,
     telefono: row.telefono ?? null,
@@ -443,6 +458,8 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
   logDebug("resolve-user", { userId });
 
   const rawContact = input.contacto ?? {};
+  const opportunityInput = input.oportunidad ?? {};
+  const selectedAccountId = sanitizeNullableString(opportunityInput.cuenta_id);
   const contactUpdatePayload: Record<string, unknown> = {};
   const contactRequestId = randomUUID();
 
@@ -493,7 +510,9 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
   if (contactId) {
     if (nombreValue !== null) contactUpdatePayload.nombre_completo = nombreValue;
-    if (companyValue !== null) contactUpdatePayload.company_name = companyValue;
+    // company_name is legacy/person-level data and cannot represent multiple
+    // account relations. The opportunity account is authoritative here.
+    if (companyValue !== null && !selectedAccountId) contactUpdatePayload.company_name = companyValue;
     if (notesValue !== null) contactUpdatePayload.notes = notesValue;
     if (needValue !== null) contactUpdatePayload.necesidad_proposito = needValue;
     logDebug("use-existing-contact", { contactId });
@@ -553,7 +572,6 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
   removeUndefined(contactUpdatePayload);
 
-  const opportunityInput = input.oportunidad ?? {};
   const baseMetadata = normalizeMetadata(opportunityInput.metadata);
   if (!("created_via" in baseMetadata)) {
     baseMetadata.created_via = "embudo_manual";
@@ -598,6 +616,9 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
       lead_score: opportunityInput.lead_score ?? baseMetadata.lead_score,
     },
   };
+  if (typeof opportunityInput.cuenta_id === "string" && opportunityInput.cuenta_id.trim()) {
+    opportunityPayload.cuenta_id = opportunityInput.cuenta_id.trim();
+  }
   removeUndefined(opportunityPayload);
 
   const response = await callCrmApi<PipelineCardResponse>("/crm/pipeline/opportunities", {

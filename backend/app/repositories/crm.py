@@ -9672,7 +9672,15 @@ class CRMRepository:
             return rows
 
         account_by_persona: dict[str, str] = {}
+        account_by_opportunity: dict[str, str] = {}
         account_ids: list[str] = []
+        for row in rows:
+            opportunity_id = str(row.get("id") or "").strip()
+            account_id = str(row.get("cuenta_id") or "").strip()
+            if opportunity_id and account_id:
+                account_by_opportunity[opportunity_id] = account_id
+                if account_id not in account_ids:
+                    account_ids.append(account_id)
         for relation in relation_data:
             if not isinstance(relation, dict):
                 continue
@@ -9705,7 +9713,9 @@ class CRMRepository:
             if isinstance(account, dict) and account.get("id")
         }
         for row in rows:
-            account_id = account_by_persona.get(str(row.get("contacto_principal_id") or "").strip())
+            account_id = account_by_opportunity.get(str(row.get("id") or "").strip())
+            if not account_id:
+                account_id = account_by_persona.get(str(row.get("contacto_principal_id") or "").strip())
             account = account_map.get(account_id) if account_id else None
             if not account:
                 continue
@@ -9914,7 +9924,7 @@ class CRMRepository:
             return can_view_unowned_contacts or can_view_unowned_accounts
 
         rows: list[dict[str, Any]] = []
-        seen_ids: set[str] = set()
+        seen_keys: set[tuple[str, str]] = set()
         search_clause = _build_search_clause(
             [
                 "codigo_contacto",
@@ -9956,23 +9966,56 @@ class CRMRepository:
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al buscar contactos: {data!r}")
+        async def _append_persona_variants(
+            persona: dict[str, Any],
+            relation_account_ids: list[str] | None = None,
+        ) -> None:
+            persona_id = str(persona.get("id") or "").strip()
+            if not persona_id:
+                return
+            account_ids = relation_account_ids
+            if account_ids is None:
+                relation_resp = await self._request(
+                    "GET",
+                    "/rest/v1/cuenta_personas",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "persona_id": f"eq.{persona_id}",
+                        "activo": "is.true",
+                        "select": "cuenta_id",
+                        "order": "creado_en.asc",
+                        "limit": "100",
+                    },
+                )
+                relation_data = relation_resp.json()
+                account_ids = [
+                    str(item.get("cuenta_id"))
+                    for item in relation_data
+                    if isinstance(item, dict) and item.get("cuenta_id")
+                ] if isinstance(relation_data, list) else []
+            variants: list[str | None] = list(dict.fromkeys(account_ids or [])) or [None]
+            for account_id in variants:
+                try:
+                    account_uuid = _coerce_uuid(account_id, field="cuenta_id") if account_id else None
+                    contact_row = await self._persona_to_contact_row(
+                        persona=persona,
+                        organizacion_id=organizacion_id,
+                        cuenta_id=account_uuid,
+                    )
+                except CRMRepositoryError:
+                    continue
+                if not _is_visible_result(contact_row):
+                    continue
+                key = (persona_id, str(account_uuid or ""))
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                rows.append(contact_row)
+
         for row in data:
             if not isinstance(row, dict):
                 continue
-            try:
-                contact_row = await self._persona_to_contact_row(
-                    persona=row,
-                    organizacion_id=organizacion_id,
-                )
-            except CRMRepositoryError:
-                continue
-            contact_id = str(contact_row.get("id") or "")
-            if not contact_id or contact_id in seen_ids:
-                continue
-            if not _is_visible_result(contact_row):
-                continue
-            seen_ids.add(contact_id)
-            rows.append(contact_row)
+            await _append_persona_variants(row)
 
         account_search_clause = _build_search_clause(
             [
@@ -10013,33 +10056,32 @@ class CRMRepository:
                 params={
                     "organizacion_id": f"eq.{organizacion_id}",
                     "cuenta_id": f"in.({','.join(account_ids)})",
-                    "select": "persona_id",
+                    "activo": "is.true",
+                    "select": "persona_id,cuenta_id",
                     "limit": "1000",
                 },
             )
             relations_data = relations_resp.json()
-            persona_ids: list[str] = []
+            persona_account_ids: dict[str, list[str]] = {}
             if isinstance(relations_data, list):
                 for relation in relations_data:
                     if not isinstance(relation, dict):
                         continue
                     persona_id = relation.get("persona_id")
-                    if persona_id:
-                        persona_ids.append(str(persona_id))
-            unique_persona_ids = [pid for pid in dict.fromkeys(persona_ids) if pid and pid not in seen_ids]
+                    account_id = relation.get("cuenta_id")
+                    if persona_id and account_id:
+                        persona_account_ids.setdefault(str(persona_id), []).append(str(account_id))
+            unique_persona_ids = [pid for pid in persona_account_ids if pid]
             if unique_persona_ids:
                 extra_rows = await self.get_contacts_by_ids(
                     organizacion_id=organizacion_id,
                     contacto_ids=[UUID(pid) for pid in unique_persona_ids],
                 )
                 for contact_row in extra_rows:
-                    contact_id = str(contact_row.get("id") or "")
-                    if not contact_id or contact_id in seen_ids:
-                        continue
-                    if not _is_visible_result(contact_row):
-                        continue
-                    seen_ids.add(contact_id)
-                    rows.append(contact_row)
+                    await _append_persona_variants(
+                        contact_row,
+                        persona_account_ids.get(str(contact_row.get("id") or ""), []),
+                    )
         return rows[:limit]
 
     async def search_personas(
@@ -10106,6 +10148,7 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         persona_id: UUID,
+        cuenta_id: UUID | None = None,
     ) -> dict[str, Any] | None:
         relation_params = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -10114,6 +10157,8 @@ class CRMRepository:
             "limit": "1",
             "select": "cuenta_id,rol_en_cuenta,es_contacto_principal,es_contacto_facturacion,es_representante_legal,activo,metadata",
         }
+        if cuenta_id is not None:
+            relation_params["cuenta_id"] = f"eq.{cuenta_id}"
         relation_resp = await self._request("GET", "/rest/v1/cuenta_personas", params=relation_params)
         relation_data = relation_resp.json()
         if not isinstance(relation_data, list) or not relation_data:
@@ -10372,10 +10417,12 @@ class CRMRepository:
         *,
         persona: dict[str, Any],
         organizacion_id: UUID,
+        cuenta_id: UUID | None = None,
     ) -> dict[str, Any]:
         relation_bundle = await self._get_primary_account_for_persona(
             organizacion_id=organizacion_id,
             persona_id=_coerce_uuid(str(persona.get("id")), field="persona_id"),
+            cuenta_id=cuenta_id,
         )
         account = relation_bundle.get("account") if isinstance(relation_bundle, dict) else None
         relation = relation_bundle if isinstance(relation_bundle, dict) else None
@@ -10412,6 +10459,17 @@ class CRMRepository:
         contact_name_parts = [part for part in contact_name_parts if part]
         contact_name_from_parts = " ".join(contact_name_parts).strip() if contact_name_parts else None
         raw_full_name = _clean_text(persona.get("nombre_completo")) or None
+        name_value = _clean_text(persona.get("nombre")) or None
+        paternal_name = _clean_text(persona.get("apellido_paterno")) or None
+        maternal_name = _clean_text(persona.get("apellido_materno")) or None
+        # Some legacy rows stored the complete name in `personas.nombre` and
+        # left the surname columns empty. Normalize only the projection used by
+        # the UI; the write path will persist the separated fields afterward.
+        if name_value and not paternal_name and not maternal_name and " " in name_value:
+            split_name, split_paternal, split_maternal = self._split_full_name(name_value)
+            name_value = split_name or name_value
+            paternal_name = split_paternal
+            maternal_name = split_maternal
         preferred_name = raw_full_name or contact_name_from_parts or _clean_text(persona.get("nombre")) or None
         account_type = _clean_text(account.get("tipo")) if isinstance(account, dict) else None
         persona_fisica_moral = (
@@ -10424,6 +10482,7 @@ class CRMRepository:
             "id": persona.get("id"),
             "organizacion_id": persona.get("organizacion_id"),
             "cuenta_id": account.get("id") if isinstance(account, dict) else persona.get("cuenta_id"),
+            "cuenta_nombre": account_name,
             "nombre_completo": preferred_name or raw_full_name,
             "nombre": preferred_name or raw_full_name,
             "correo_principal": persona.get("correo_principal"),
@@ -10461,7 +10520,10 @@ class CRMRepository:
             "pais": persona.get("pais"),
             "latitud": persona.get("latitud"),
             "longitud": persona.get("longitud"),
-            "company_name": persona_company_name or account_name,
+            # When a person has multiple account relations, the selected
+            # account is authoritative for the opportunity form. The
+            # persona-level company_name is only a fallback without a relation.
+            "company_name": account_name or persona_company_name,
             "notes": persona.get("notas"),
             "necesidad_proposito": persona_need
             or (account.get("necesidad_proposito") if isinstance(account, dict) else None),
@@ -10471,9 +10533,9 @@ class CRMRepository:
             "codigo_cuenta": account.get("codigo_cuenta") if isinstance(account, dict) else None,
             "cuenta_propietario_usuario_id": account.get("propietario_usuario_id") if isinstance(account, dict) else None,
             "persona_fisica_moral": persona_fisica_moral,
-            "nombre_nombres": persona.get("nombre"),
-            "apellido_paterno": persona.get("apellido_paterno"),
-            "apellido_materno": persona.get("apellido_materno"),
+            "nombre_nombres": name_value,
+            "apellido_paterno": paternal_name,
+            "apellido_materno": maternal_name,
             "cuenta_correo_principal": account.get("correo_principal") if isinstance(account, dict) else None,
             "cuenta_correo_secundario": account.get("correo_secundario") if isinstance(account, dict) else None,
             "cuenta_telefono_principal_e164": account.get("telefono_principal_e164") if isinstance(account, dict) else None,
@@ -12800,6 +12862,58 @@ class CRMRepository:
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise CRMRepositoryError("cuenta_persona_create_failed")
         return data[0]
+
+    async def ensure_persona_account_relation(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+        cuenta_id: UUID,
+    ) -> dict[str, Any]:
+        """Ensure an opportunity-selected account is an active contact relation.
+
+        This preserves any other company relations of the person; it never
+        replaces the primary relation just because a new opportunity uses a
+        different account.
+        """
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "persona_id": f"eq.{persona_id}",
+            "cuenta_id": f"eq.{cuenta_id}",
+            "limit": "1",
+            "select": "id,organizacion_id,persona_id,cuenta_id,rol_en_cuenta,activo,metadata",
+        }
+        response = await self._request("GET", "/rest/v1/cuenta_personas", params=params)
+        data = response.json()
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            relation = data[0]
+            if relation.get("activo") is True:
+                return relation
+            relation_id = relation.get("id")
+            if relation_id:
+                update_response = await self._request(
+                    "PATCH",
+                    "/rest/v1/cuenta_personas",
+                    params={
+                        "organizacion_id": f"eq.{organizacion_id}",
+                        "id": f"eq.{relation_id}",
+                    },
+                    json={"activo": True, "fecha_fin": None},
+                    prefer="return=representation",
+                )
+                updated = update_response.json()
+                if isinstance(updated, list) and updated and isinstance(updated[0], dict):
+                    return updated[0]
+        return await self.create_persona_account_relation(
+            organizacion_id=organizacion_id,
+            persona_id=persona_id,
+            payload={
+                "cuenta_id": str(cuenta_id),
+                "rol_en_cuenta": "contacto_principal",
+                "activo": True,
+                "es_contacto_principal": False,
+            },
+        )
 
     async def update_persona_account_relation(
         self,

@@ -1384,10 +1384,12 @@ export function LeadDrawer({
 
   useEffect(() => {
     if (selectedContact) {
-      setValue("nombre", selectedContact.nombre ?? "", { shouldDirty: true });
+      setValue("nombre", selectedContact.nombre_nombres || selectedContact.nombre || "", { shouldDirty: true });
+      setValue("apellidoPaterno", selectedContact.apellido_paterno ?? "", { shouldDirty: true });
+      setValue("apellidoMaterno", selectedContact.apellido_materno ?? "", { shouldDirty: true });
       setValue("correo", selectedContact.correo ?? "", { shouldDirty: true });
       setValue("telefono", selectedContact.telefono ?? "", { shouldDirty: true });
-      setValue("empresa", selectedContact.empresa ?? "", { shouldDirty: true });
+      setValue("empresa", selectedContact.cuenta_nombre || selectedContact.empresa || "", { shouldDirty: true });
     }
   }, [selectedContact, setValue]);
 
@@ -1898,6 +1900,7 @@ export function LeadDrawer({
     const monedaRaw = (values.moneda ?? "").trim().toUpperCase();
     const probRaw = (values.probabilidad ?? "").trim();
     const empresaRaw = (values.empresa ?? "").trim();
+    const selectedCompanyName = (selectedContact?.cuenta_nombre || empresaRaw).trim();
     const razonSocialRaw = (values.razonSocial ?? "").trim();
     const rfcRaw = (values.rfc ?? "").trim().toUpperCase();
     const regimenCapitalRaw = (values.regimenCapital ?? "").trim();
@@ -1950,8 +1953,8 @@ export function LeadDrawer({
         rfc: rfcRaw.length ? rfcRaw : null,
         regimen_capital: regimenCapitalRaw.length ? regimenCapitalRaw : null,
       };
-      if (empresaRaw.length) {
-        contactoPayload.company_name = empresaRaw;
+      if (selectedCompanyName.length) {
+        contactoPayload.company_name = selectedCompanyName;
       }
       if (notasRaw.length) {
         contactoPayload.notes = notasRaw;
@@ -1961,6 +1964,9 @@ export function LeadDrawer({
       }
 
       const oportunidadPayload: Record<string, unknown> = {};
+      if (selectedContact?.cuenta_id) {
+        oportunidadPayload.cuenta_id = selectedContact.cuenta_id;
+      }
       if (montoRaw.length) {
         const montoParsed = parseNumberInput(montoRaw);
         if (montoParsed != null) {
@@ -1997,8 +2003,8 @@ export function LeadDrawer({
       if (nombreRaw.length) {
         metadata.contacto_nombre = nombreRaw;
       }
-      if (empresaRaw.length) {
-        metadata.contacto_empresa = empresaRaw;
+      if (selectedCompanyName.length) {
+        metadata.contacto_empresa = selectedCompanyName;
       }
       if (necesidadPropositoRaw.length) {
         metadata.contacto_necesidad = necesidadPropositoRaw;
@@ -3497,7 +3503,7 @@ export function LeadDrawer({
                     {contactSearchResults.length ? (
                       <ul className="space-y-1 rounded-lg border border-border/60 bg-background/60 p-2 text-sm">
                         {contactSearchResults.map((contact) => (
-                          <li key={contact.id}>
+                          <li key={`${contact.id}:${contact.cuenta_id ?? "sin-cuenta"}`}>
                             <button
                               type="button"
                               onClick={() => handleSelectExistingContact(contact)}
@@ -3506,7 +3512,7 @@ export function LeadDrawer({
                             >
                               <p className="font-medium text-foreground">{contact.nombre}</p>
                               <p className="text-xs text-muted-foreground">
-                                {[contact.correo, contact.telefono, contact.empresa]
+                                {[contact.cuenta_nombre || contact.empresa, contact.correo, contact.telefono]
                                   .filter(Boolean)
                                   .join(" · ") || "Sin datos adicionales"}
                               </p>
