@@ -1,4 +1,29 @@
-from app.services.google_places import normalize_place_for_result
+from app.services.google_places import _diagnose_google_http_error, normalize_place_for_result
+
+
+def test_diagnose_permission_denied_returns_safe_actionable_message() -> None:
+    code, message, action = _diagnose_google_http_error(
+        http_status=403,
+        provider_status="PERMISSION_DENIED",
+        provider_message="The caller does not have permission",
+    )
+
+    assert code == "google_places_permission_denied"
+    assert "permisos" in message
+    assert "Places API (New)" in action
+    assert "X-Goog-Api-Key" not in action
+
+
+def test_diagnose_billing_error_is_specific() -> None:
+    code, message, action = _diagnose_google_http_error(
+        http_status=403,
+        provider_status="PERMISSION_DENIED",
+        provider_message="Billing account is disabled",
+    )
+
+    assert code == "google_places_billing_required"
+    assert "facturación" in message
+    assert "facturación" in action
 
 
 def test_normalize_place_for_result_materializes_google_columns() -> None:

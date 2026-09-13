@@ -94,7 +94,7 @@ class GoogleSearchJobManager:
                 enrich_details=False,
             )
         except GooglePlacesError as exc:
-            await self._mark_failed(repo, job.busqueda_id, str(exc))
+            await self._mark_failed(repo, job.busqueda_id, exc)
             return
         normalized_items = [normalize_place_for_result(place) for place in places]
         try:
@@ -122,8 +122,28 @@ class GoogleSearchJobManager:
         except CRMRepositoryError as exc:
             logger.exception("google_job_update_final_failed", extra={"busqueda_id": str(job.busqueda_id), "error": str(exc)})
 
-    async def _mark_failed(self, repo: CRMRepository, busqueda_id: UUID, error: str) -> None:
-        failed_meta = {"status": "failed", "error": error}
+    async def _mark_failed(
+        self,
+        repo: CRMRepository,
+        busqueda_id: UUID,
+        error: GooglePlacesError | str,
+    ) -> None:
+        if isinstance(error, GooglePlacesError):
+            failed_meta: dict[str, Any] = {
+                "status": "failed",
+                "error": error.user_message,
+                "error_code": error.error_code,
+                "error_action": error.user_action,
+                "provider": "google_places",
+            }
+            if error.http_status is not None:
+                failed_meta["http_status"] = error.http_status
+            if error.provider_status:
+                failed_meta["provider_status"] = error.provider_status
+            if error.provider_reason:
+                failed_meta["provider_reason"] = error.provider_reason
+        else:
+            failed_meta = {"status": "failed", "error": error}
         try:
             await repo.worker_update_busqueda(
                 busqueda_id=busqueda_id,

@@ -120,6 +120,13 @@ function normalizeBusquedaLabel(value: string | null | undefined): string {
   return base.replace(/\s*\(recuperada desde resultados\)\s*/gi, "").trim() || "(Sin texto)";
 }
 
+function getGoogleBusquedaErrorMessage(meta: Record<string, unknown> | null | undefined): string {
+  const rawMessage = typeof meta?.error === "string" ? meta.error.trim() : "";
+  const action = typeof meta?.error_action === "string" ? meta.error_action.trim() : "";
+  const message = rawMessage || "La búsqueda falló. Intenta nuevamente.";
+  return action ? `${message}\n\nQué revisar: ${action}` : message;
+}
+
 function getGoogleActividadText(item: GoogleResultadoItem): string {
   if (typeof item.actividad === "string") return item.actividad.trim();
   if (item.actividad && typeof item.actividad === "object" && "text" in item.actividad) {
@@ -564,21 +571,16 @@ export function GoogleBusquedaView() {
       });
       setQueuedBusquedaId(null);
     } else if (activeBusquedaStatus === "failed") {
-      const rawError = activeBusqueda?.meta?.error;
-      const detail =
-        typeof rawError === "string" && rawError.trim()
-          ? rawError
-          : "La búsqueda falló. Intenta nuevamente.";
       setFeedback({
         type: "error",
-        message: detail,
+        message: getGoogleBusquedaErrorMessage(activeBusqueda?.meta),
       });
       setQueuedBusquedaId(null);
     }
   }, [
     activeBusquedaId,
     activeBusquedaStatus,
-    activeBusqueda?.meta?.error,
+    activeBusqueda?.meta,
     activeBusqueda?.total_encontrados,
     resultadosCount,
     queuedBusquedaId,
@@ -2384,7 +2386,7 @@ export function GoogleBusquedaView() {
               )}
             </div>
             <DialogTitle className="text-center">{feedbackDialog.title || "Estado del proceso"}</DialogTitle>
-            <DialogDescription className="text-center">
+            <DialogDescription className="whitespace-pre-line text-center">
               {feedbackDialog.message || "Procesando solicitud..."}
             </DialogDescription>
           </DialogHeader>

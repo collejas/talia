@@ -17,8 +17,76 @@ logger = get_logger(__name__)
 GoogleSearchStrategy = Literal["nearby", "text"]
 
 
+def _diagnose_google_http_error(
+    *,
+    http_status: int,
+    provider_status: str | None,
+    provider_message: str | None,
+    provider_reason: str | None = None,
+) -> tuple[str, str, str]:
+    """Convierte errores del proveedor en diagnóstico seguro para el tenant."""
+    normalized_status = str(provider_status or "").strip().upper()
+    normalized_message = str(provider_message or "").strip().lower()
+    normalized_reason = str(provider_reason or "").strip().lower()
+
+    if http_status in {401, 403} or normalized_status in {"UNAUTHENTICATED", "PERMISSION_DENIED"}:
+        if "billing" in normalized_message or "factur" in normalized_message or "billing" in normalized_reason:
+            return (
+                "google_places_billing_required",
+                "Google rechazó la búsqueda porque el proyecto no tiene facturación activa.",
+                "Revisa la cuenta de facturación del proyecto de Google Cloud asociado a esta clave.",
+            )
+        return (
+            "google_places_permission_denied",
+            "Google rechazó la búsqueda por permisos de la clave o del proyecto.",
+            "Verifica que Places API (New) esté habilitada, que el proyecto tenga facturación activa y que la clave permita esta API y la IP de este servidor.",
+        )
+    if http_status == 429 or normalized_status == "RESOURCE_EXHAUSTED":
+        return (
+            "google_places_quota_exceeded",
+            "Google rechazó la búsqueda porque se alcanzó una cuota o límite.",
+            "Revisa las cuotas y límites de Places API (New) en Google Cloud.",
+        )
+    if http_status == 400 or normalized_status == "INVALID_ARGUMENT":
+        return (
+            "google_places_invalid_request",
+            "Google rechazó los parámetros enviados para la búsqueda.",
+            "Revisa la clasificación, el radio y el centro de búsqueda. Si el problema continúa, contacta al administrador.",
+        )
+    if http_status >= 500:
+        return (
+            "google_places_provider_unavailable",
+            "Google Places no está disponible temporalmente.",
+            "Espera unos minutos y vuelve a intentar la búsqueda.",
+        )
+    return (
+        f"google_places_http_{http_status}",
+        "Google Places no pudo completar la búsqueda.",
+        "Vuelve a intentar. Si el problema continúa, contacta al administrador.",
+    )
+
+
 class GooglePlacesError(RuntimeError):
     """Error base al interactuar con Google Places."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str | None = None,
+        http_status: int | None = None,
+        provider_status: str | None = None,
+        provider_reason: str | None = None,
+        user_message: str | None = None,
+        user_action: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code or message
+        self.http_status = http_status
+        self.provider_status = provider_status
+        self.provider_reason = provider_reason
+        self.user_message = user_message or message
+        self.user_action = user_action
 
 
 class GooglePlacesClient:
@@ -194,10 +262,19 @@ class GooglePlacesClient:
             except ValueError:
                 detail = resp.text
             error_message = None
+            provider_status = None
+            provider_reason = None
             if isinstance(detail, dict):
                 google_error = detail.get("error")
                 if isinstance(google_error, dict):
                     error_message = google_error.get("message")
+                    provider_status = google_error.get("status")
+                    error_details = google_error.get("details")
+                    if isinstance(error_details, list):
+                        for error_detail in error_details:
+                            if isinstance(error_detail, dict) and isinstance(error_detail.get("reason"), str):
+                                provider_reason = error_detail["reason"]
+                                break
                 if not error_message:
                     error_message = detail.get("message")
             if not error_message:
@@ -209,11 +286,26 @@ class GooglePlacesClient:
                 "google.places_http_error",
                 extra={
                     "status": resp.status_code,
-                    "detail": detail,
+                    "provider_status": provider_status,
+                    "provider_reason": provider_reason,
                     "error_message": error_message,
                 },
             )
-            raise GooglePlacesError(error_message)
+            error_code, user_message, user_action = _diagnose_google_http_error(
+                http_status=resp.status_code,
+                provider_status=provider_status,
+                provider_message=error_message,
+                provider_reason=provider_reason,
+            )
+            raise GooglePlacesError(
+                error_message,
+                error_code=error_code,
+                http_status=resp.status_code,
+                provider_status=provider_status,
+                provider_reason=provider_reason,
+                user_message=user_message,
+                user_action=user_action,
+            )
         try:
             return resp.json()
         except ValueError as exc:
