@@ -21,6 +21,14 @@ La ocultación no sustituye autorización: los permisos, ownership y validacione
 - No guardar tokens dentro de `metadata`, plantillas o registros de envío.
 - Rotar tokens y documentar el procedimiento de sustitución.
 
+## Aislamiento por servidor
+
+- Cada tenant debe utilizar exclusivamente su servidor Postmark, su Server API Token y sus streams.
+- El backend debe resolver el servidor por el contexto autenticado y nunca aceptar `server_id`, `postmark_server_id`, token o stream como autoridad desde el frontend.
+- Las consultas de mensajes, eventos, cuotas, supresiones y webhooks deben validar simultáneamente `organizacion_id` y el servidor asociado.
+- La creación o retiro de servidores solo podrá ejecutarla una tarea administrativa de plataforma con el Account API Token.
+- La rotación de un token no debe cambiar el tenant asociado ni dejar credenciales en logs, respuestas o archivos públicos.
+
 ## Dominios y autorización
 
 - Un tenant solo puede crear, modificar, verificar, seleccionar o eliminar sus propios dominios.

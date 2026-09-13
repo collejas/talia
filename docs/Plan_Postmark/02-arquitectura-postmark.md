@@ -44,19 +44,19 @@ No exponer el nombre del proveedor en rutas tenant-facing, nombres de propiedade
 
 ## Cuenta y servidores
 
-Usar una cuenta central de GEOACTIV y separar el tráfico por servidores/streams según el volumen y el aislamiento requerido.
+Usar una cuenta central de GEOACTIV y crear un servidor Postmark independiente para cada tenant. El servidor es la unidad de aislamiento operativo del cliente: tiene su propio identificador, token, estadísticas, configuración de webhooks y dirección inbound.
 
-Configuración inicial sugerida:
+Dentro de cada servidor se separará el tráfico mediante streams propios:
 
-- servidor transaccional: invitaciones, confirmaciones, cotizaciones, notificaciones y correo operacional;
-- servidor broadcast: prospección/campañas que cumplan la política de Postmark;
-- servidor inbound: recepción y parseo de respuestas mediante Inbound Processing, obligatorio en la arquitectura nueva.
+- stream transaccional: invitaciones, confirmaciones, cotizaciones, notificaciones y correo operacional;
+- stream Broadcast: prospección y campañas permitidas;
+- stream inbound: recepción y parseo de respuestas, cuando el tenant tenga habilitado ese flujo.
 
-No crear un stream por tenant. Los tenants se aíslan en Talia mediante ownership, dominio, columnas explícitas de tenant, ledger y permisos. Los streams deben separar tipos de tráfico para proteger entregabilidad.
+No se compartirán servidores, tokens, streams Broadcast ni supresiones entre tenants. El servidor separado aísla la configuración y las métricas del cliente; no debe interpretarse como garantía de IP dedicada, porque Postmark puede operar con pools compartidos según el plan y el volumen.
 
 ## Dominios personalizados
 
-Postmark tiene Domains API a nivel de cuenta. El backend puede crear un dominio y obtener los datos de DKIM y Return-Path. El tenant debe publicar los DNS, salvo que Talia integre el proveedor DNS del tenant.
+Postmark tiene Domains API a nivel de cuenta. El backend puede crear un dominio, asociarlo al tenant y obtener los datos de DKIM y Return-Path. La asociación tenant-dominio-servidor debe persistirse en Talia y validarse antes de cada envío. El tenant debe publicar los DNS, salvo que Talia integre el proveedor DNS del tenant.
 
 El `From` de cada mensaje debe pertenecer a un dominio o sender signature confirmado. El dominio y el remitente seleccionado se resuelven desde PostgreSQL, nunca desde un valor libre enviado por el navegador.
 

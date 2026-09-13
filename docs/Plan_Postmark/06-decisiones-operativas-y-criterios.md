@@ -16,6 +16,8 @@ Estados permitidos: `pending`, `configuring`, `domain_verified`, `active`, `bloc
 
 El primer registro será el tenant maestro `00000000-0000-0000-0000-000000000001`.
 
+Cada tenant tendrá un servidor Postmark propio dentro de la cuenta maestra de GEOACTIV. Talia será la interfaz de configuración y operación para el cliente; el cliente no tendrá que administrar un usuario separado en Postmark. El Account API Token será global y permanecerá en backend; cada servidor tendrá un Server API Token propio administrado como secreto.
+
 ## 3. Activación y ausencia de fallback
 
 - Tenant no migrado: permanece en el sistema anterior durante su ventana de migración.
@@ -27,6 +29,8 @@ El primer registro será el tenant maestro `00000000-0000-0000-0000-000000000001
 ## 4. Modelo de datos, RLS e integridad
 
 Todas las tablas nuevas deben tener `organizacion_id` cuando corresponda, foreign keys reales, constraints de estado/formato, índices por tenant/estado/fechas/correlación, RLS o el mecanismo vigente de Supabase y separación de permisos de tenant y plataforma.
+
+La configuración de servidor, streams, dominios, Return-Path, webhooks y supresiones debe estar asociada explícitamente al tenant. No se permite reutilizar el servidor, token, stream Broadcast o lista de supresión de otro tenant.
 
 Dominio, remitente, campaña, envío, destinatario, estado, cuota, periodo, MessageID, evento, rebote, queja, apertura y clic serán columnas. No usar `metadata`, `json`, `jsonb`, `payload`, `config` o `settings` para esos datos. JSON solo podrá conservar payload crudo o extensiones variables no consultadas frecuentemente, con justificación en la migración.
 
@@ -79,4 +83,3 @@ La eliminación de tablas será una migración separada y posterior, nunca parte
 ## 15. Pruebas de aceptación
 
 Para el tenant maestro y cada tenant: dominio, prueba transaccional, prueba Broadcast, cuota concurrente, rebote, supresión, apertura, clic, webhook repetido, inbound, aislamiento cross-tenant, ocultamiento del proveedor, rollback y bloqueo de activación del siguiente tenant hasta cerrar el actual.
-

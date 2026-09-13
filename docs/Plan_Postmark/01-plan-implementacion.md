@@ -69,10 +69,11 @@ La creación de la infraestructura seguirá como guía operativa el [Postmark Ma
 1. Confirmar cuenta Postmark, plan Platform y aprobación de Bulk API.
 2. Confirmar volumen mensual, picos horarios, tipos de correo y política de consentimiento.
 3. Inventariar tenants activos, dominios remitentes, remitentes, plantillas, campañas programadas y envíos pendientes.
-4. Definir streams centrales:
-   - `outbound` o equivalente para transaccional.
-   - `broadcast` o el identificador equivalente configurado en Postmark para prospección/campañas permitidas.
-   - `inbound` para respuestas entrantes, obligatorio en la arquitectura nueva.
+4. Definir el modelo por tenant:
+   - un servidor Postmark por tenant dentro de la cuenta central;
+   - un stream transaccional propio por tenant;
+   - un stream Broadcast propio por tenant;
+   - un Inbound Message Stream propio por tenant cuando el flujo de respuestas esté habilitado.
 5. Aplicar la política de cuotas definida en [decisiones operativas](./06-decisiones-operativas-y-criterios.md).
 6. Fijar como tenant piloto `00000000-0000-0000-0000-000000000001` y definir una ventana de reversión.
 
@@ -83,6 +84,12 @@ Salida: decisión aprobada, credenciales provisionadas de forma segura y matriz 
 Crear una migración antes de escribir el código que dependa de estas columnas.
 
 La primera migración de esta fase es `supabase/migrations/20260812_130000_email_service_core.sql`. Su aplicación debe verificarse en la base de datos antes de iniciar backend. No modifica las tablas de Brevo ni las tablas actuales de prospección.
+
+### Servidores y credenciales por tenant
+
+Crear `public.tenant_email_servers` para relacionar cada organización con su servidor Postmark. Como mínimo debe incluir `id`, `organizacion_id`, `postmark_server_id`, nombres o identificadores de los streams, estado, fechas de provisión y verificación, configuración de webhooks y una referencia al secreto donde vive el Server API Token. La tabla nunca almacenará el token en claro.
+
+El Account API Token será global y solo se usará en backend para crear, consultar, editar y retirar servidores. El Server API Token será específico de cada servidor y se resolverá por `organizacion_id` antes de enviar. El navegador no podrá elegir el servidor, token ni stream de otro tenant.
 
 ### Regla obligatoria de modelado
 
@@ -165,7 +172,7 @@ Responsabilidades:
 - enviar usando el catálogo y contrato de plantillas propios definidos por Talia;
 - crear/listar/verificar/eliminar dominios con Account API;
 - consultar estado de dominio y credenciales DNS;
-- configurar webhooks/servers en tareas administrativas;
+- crear y configurar servidores, streams y webhooks por tenant en tareas administrativas;
 - normalizar errores y `MessageID`.
 
 El adaptador debe verificar el resultado de cada mensaje en respuestas batch: Postmark puede responder HTTP exitoso aunque existan errores individuales.
@@ -210,7 +217,8 @@ Permisos recomendados:
 - `settings.manage` para configuración del propio tenant.
 - permiso de plataforma para administrar dominios de cualquier tenant.
 - solo backend para tokens Account/Server de Postmark.
-- usar un único Server API Token por servidor y seleccionar el stream mediante `MessageStream`: `outbound` para transaccional y `broadcast` para comercial.
+- resolver el Server API Token y el `MessageStream` propios del tenant antes de cada envío.
+- rechazar el envío si el servidor, token, stream, dominio o remitente no pertenecen al tenant.
 
 ## Fase 5: migración de plantillas
 

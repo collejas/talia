@@ -29,8 +29,10 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 ## Decisiones iniciales
 
 - Usar Postmark con una cuenta central de GEOACTIV.
+- Crear un servidor Postmark independiente para cada tenant dentro de la cuenta central de GEOACTIV.
+- Mantener para cada tenant su propio Server API Token, streams, webhooks, métricas, supresiones y configuración de inbound.
 - Contratar el plan que permita dominios de envío personalizados ilimitados si el número de tenants supera el límite del plan inferior.
-- Mantener separación entre streams transaccionales y Broadcast.
+- Mantener separación entre los streams transaccionales y Broadcast de cada tenant.
 - Mantener la cuota de cada tenant en PostgreSQL, no inferirla desde el consumo global de Postmark.
 - La cuota mensual efectiva de cada tenant la define el tenant maestro según el contrato comercial y se administra desde la configuración comercial del tenant; la cola Postmark sólo ejecuta esa regla de forma atómica.
 - Usar la API de Postmark desde backend; ninguna API key debe llegar al panel.
@@ -52,6 +54,24 @@ Desde la migración `20260829_120000_provision_postmark_for_new_tenants.sql`, ca
 - el periodo mensual correspondiente en `tenant_email_usage_periods`.
 
 El aprovisionamiento se ejecuta mediante un trigger de PostgreSQL sobre `organizaciones`, por lo que cubre altas administrativas, checkout y futuras rutas de creación. No registra dominios, no define remitentes y no habilita envíos. El tenant debe configurar su dominio y DNS, y el tenant maestro debe aprobar la activación.
+
+El trigger solo aprovisiona la estructura interna de Talia. La creación del servidor Postmark, sus streams, webhooks y credenciales se ejecutará desde backend mediante la Account API y tareas administrativas seguras. Los tokens no se guardarán en la base de datos ni llegarán al panel.
+
+## Modelo de proveedor por tenant
+
+GEOACTIV operará una cuenta maestra de Postmark y Talia será la capa de administración para sus clientes. Cada tenant tendrá un servidor Postmark propio dentro de esa cuenta. El cliente no necesitará una cuenta de Postmark ni acceso al panel del proveedor: configurará su dominio, remitente, DNS, cuotas, plantillas, campañas, supresiones y métricas desde Talia.
+
+El aislamiento mínimo por tenant será:
+
+- servidor Postmark e identificador externo propios;
+- Server API Token propio, administrado como secreto de backend;
+- stream transaccional propio;
+- stream Broadcast propio;
+- configuración de webhooks e inbound propia;
+- dominios, remitentes y Return-Path propios;
+- supresiones y métricas propias.
+
+Un servidor Postmark separado aísla la operación, las estadísticas y la configuración del cliente. No implica por sí mismo una IP dedicada: la disponibilidad de IP compartida o dedicada depende de Postmark y del volumen contratado.
 
 ## Decisión de implementación aprobada
 

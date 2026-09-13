@@ -2,6 +2,21 @@
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-09-13]
+
+### Decisión confirmada
+
+- GEOACTIV operará una cuenta maestra de Postmark.
+- Cada tenant tendrá su propio servidor Postmark, Server API Token, streams, webhooks, inbound, dominios, Return-Path, supresiones, métricas y cuota.
+- Los clientes configurarán el servicio desde Talia y no necesitarán acceso directo a Postmark.
+- El Account API Token quedará restringido a backend y tareas de plataforma; los Server API Tokens se administrarán como secretos separados por tenant.
+- Se elimina del diseño objetivo el uso de servidores, tokens, streams Broadcast y supresiones compartidos entre tenants.
+
+### Corrección necesaria
+
+- La documentación anterior describía servidores globales por tipo de correo y un único token de servidor. Esa decisión queda reemplazada por el aislamiento completo por tenant.
+- La separación por servidor no garantiza una IP dedicada; la asignación de IP depende del plan, volumen y política de Postmark.
+
 ## [2026-09-04]
 
 ### Coordinación con prospección

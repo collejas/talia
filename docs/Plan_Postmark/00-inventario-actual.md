@@ -118,13 +118,12 @@ La configuración actual incluye:
 - Configuración SMTP de usuarios y tenant en `usuarios_correo_config`/runtime.
 - `mail_habilitado` como gate de algunos envíos de buzón.
 
-La nueva configuración global mínima será:
+La configuración global mínima será:
 
 - `POSTMARK_ACCOUNT_TOKEN`, solo backend y tareas administrativas de dominios/servers.
-- `POSTMARK_SERVER_TOKEN`, solo backend; es el token del servidor Postmark.
 - `POSTMARK_WORKER_ENABLED`, solo backend; debe permanecer en `false` hasta habilitar el piloto del tenant maestro.
-- `POSTMARK_TRANSACTIONAL_STREAM`, solo backend; por defecto `outbound`.
-- `POSTMARK_BROADCAST_STREAM`, solo backend; por defecto `broadcast`.
-- IDs de streams y configuración de webhooks.
+- configuración operativa de creación y rotación de servidores, sin guardar tokens de tenants en el repositorio.
 
-La configuración de cada tenant deberá persistir como columnas explícitas: dominio, estado, dominio DKIM, Return-Path, remitente, Reply-To y fecha de verificación. No se debe esconder esta información estructural en `metadata` o `config` JSONB.
+La configuración específica de cada tenant deberá resolver desde un almacén seguro de secretos el `Server API Token` de su servidor y persistir en columnas explícitas el identificador externo del servidor, los streams, el estado de provisión y la configuración de webhooks. Los tokens no se guardarán en Supabase, `metadata`, plantillas ni registros de envío.
+
+La configuración de cada tenant deberá persistir como columnas explícitas: servidor, dominio, estado, dominio DKIM, Return-Path, remitente, Reply-To y fecha de verificación. No se debe esconder esta información estructural en `metadata` o `config` JSONB.
