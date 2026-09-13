@@ -18,6 +18,10 @@ El primer registro será el tenant maestro `00000000-0000-0000-0000-000000000001
 
 Cada tenant tendrá un servidor Postmark propio dentro de la cuenta maestra de GEOACTIV. Talia será la interfaz de configuración y operación para el cliente; el cliente no tendrá que administrar un usuario separado en Postmark. El Account API Token será global y permanecerá en backend; cada servidor tendrá un Server API Token propio administrado como secreto.
 
+La provisión del servidor será automática después de un pago confirmado o de una activación manual por parte del tenant maestro. No se creará al iniciar el checkout. Ambos eventos deben utilizar el mismo proceso idempotente de backend y tarea asíncrona, con estados `pending`, `provisioning`, `active` y `failed`. Un tenant suspendido no pierde su servidor; al reactivarse se reutiliza el servidor existente.
+
+La activación comercial no equivale a autorización de envío. El tenant solo podrá enviar cuando el servidor esté activo, el dominio y sus DNS estén verificados, exista remitente autorizado y las pruebas de aceptación hayan concluido.
+
 ## 3. Activación y ausencia de fallback
 
 - Tenant no migrado: permanece en el sistema anterior durante su ventana de migración.

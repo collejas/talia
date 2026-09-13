@@ -91,6 +91,18 @@ Crear `public.tenant_email_servers` para relacionar cada organización con su se
 
 El Account API Token será global y solo se usará en backend para crear, consultar, editar y retirar servidores. El Server API Token será específico de cada servidor y se resolverá por `organizacion_id` antes de enviar. El navegador no podrá elegir el servidor, token ni stream de otro tenant.
 
+### Disparadores de provisión
+
+La creación del servidor externo no ocurrirá al iniciar un checkout ni desde el navegador del tenant. Se ejecutará desde backend cuando ocurra uno de estos eventos:
+
+- webhook de pago confirmado de la suscripción;
+- activación manual del tenant por una persona administradora del tenant maestro;
+- reactivación de un tenant suspendido, reutilizando su servidor existente.
+
+Los dos primeros caminos deben converger en el mismo servicio idempotente y en una tarea asíncrona/outbox. El flujo debe registrar `pending -> provisioning -> active` o `failed`, conservar el error técnico sin exponer secretos y permitir reintentos sin crear servidores duplicados. Suspender un tenant bloquea el envío, pero no elimina el servidor, token, dominios ni métricas históricas.
+
+La activación comercial del tenant y la activación técnica de Postmark son estados distintos: el pago o autorización inicia la provisión; el envío de producción solo se habilita después de dominio, DNS, remitente y pruebas aprobadas.
+
 ### Regla obligatoria de modelado
 
 Toda información importante de Postmark debe almacenarse en columnas explícitas. Esto incluye tenant, dominio, remitente, stream, campaña, batch, envío, destinatario, estado, cuota, periodo, MessageID, eventos, rebotes, quejas, aperturas, clics y fechas.

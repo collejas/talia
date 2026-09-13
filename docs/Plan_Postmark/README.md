@@ -57,6 +57,8 @@ El aprovisionamiento se ejecuta mediante un trigger de PostgreSQL sobre `organiz
 
 El trigger solo aprovisiona la estructura interna de Talia. La creación del servidor Postmark, sus streams, webhooks y credenciales se ejecutará desde backend mediante la Account API y tareas administrativas seguras. Los tokens no se guardarán en la base de datos ni llegarán al panel.
 
+La provisión externa del servidor será automática cuando la suscripción quede confirmada como pagada o cuando el tenant maestro active manualmente al tenant. Ambos caminos llamarán al mismo servicio idempotente de backend; iniciar un checkout no crea servidores. Un fallo deja el registro en `failed` para reintento y una suspensión bloquea envíos sin borrar el servidor ni su historial.
+
 ## Modelo de proveedor por tenant
 
 GEOACTIV operará una cuenta maestra de Postmark y Talia será la capa de administración para sus clientes. Cada tenant tendrá un servidor Postmark propio dentro de esa cuenta. El cliente no necesitará una cuenta de Postmark ni acceso al panel del proveedor: configurará su dominio, remitente, DNS, cuotas, plantillas, campañas, supresiones y métricas desde Talia.

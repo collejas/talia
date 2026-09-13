@@ -46,6 +46,12 @@ No exponer el nombre del proveedor en rutas tenant-facing, nombres de propiedade
 
 Usar una cuenta central de GEOACTIV y crear un servidor Postmark independiente para cada tenant. El servidor es la unidad de aislamiento operativo del cliente: tiene su propio identificador, token, estadísticas, configuración de webhooks y dirección inbound.
 
+### Ciclo de vida de provisión
+
+El servidor se crea automáticamente después de un pago confirmado o de una activación manual realizada por el tenant maestro. Ambos eventos usan el mismo servicio de backend y no se ejecutan dentro de la transacción de alta o checkout: se encolan como tarea idempotente para soportar reintentos y fallos temporales de Postmark.
+
+Un tenant puede estar comercialmente activo mientras su servidor se encuentra `pending`, `provisioning` o `failed`; en esos estados no se habilitan envíos. La suspensión cambia el servidor a un estado no enviable, pero no lo elimina. La reactivación reutiliza el servidor existente.
+
 Dentro de cada servidor se separará el tráfico mediante streams propios:
 
 - stream transaccional: invitaciones, confirmaciones, cotizaciones, notificaciones y correo operacional;

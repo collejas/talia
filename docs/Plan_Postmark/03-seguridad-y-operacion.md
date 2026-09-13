@@ -27,6 +27,9 @@ La ocultación no sustituye autorización: los permisos, ownership y validacione
 - El backend debe resolver el servidor por el contexto autenticado y nunca aceptar `server_id`, `postmark_server_id`, token o stream como autoridad desde el frontend.
 - Las consultas de mensajes, eventos, cuotas, supresiones y webhooks deben validar simultáneamente `organizacion_id` y el servidor asociado.
 - La creación o retiro de servidores solo podrá ejecutarla una tarea administrativa de plataforma con el Account API Token.
+- La creación automática solo podrá dispararse desde un pago confirmado o una activación manual autorizada del tenant maestro; nunca desde un dato enviado por el navegador.
+- La tarea debe ser idempotente por `organizacion_id`: si existe un servidor externo, no crea otro; los errores se registran como estado operativo y se reintentan sin exponer tokens.
+- La suspensión del tenant bloquea el envío, pero no elimina servidores ni secretos; el retiro definitivo requiere una operación administrativa separada y auditada.
 - La rotación de un token no debe cambiar el tenant asociado ni dejar credenciales en logs, respuestas o archivos públicos.
 
 ## Dominios y autorización
