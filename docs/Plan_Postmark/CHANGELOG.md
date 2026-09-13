@@ -8,6 +8,8 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Dominios y mensajes ya pueden conservar la referencia al servidor Postmark que les corresponde.
 - El worker resuelve el Server API Token desde `public.secretos` cifrado y deja de depender del token global para tenants reconciliados.
 - Se agregó provisión administrativa desde backend; la respuesta nunca expone tokens.
+- El servidor existente de Postmark (`20008586`) quedó reservado exclusivamente para el tenant maestro; los demás tenants no reutilizan ese servidor ni su token.
+- Se agregó integridad referencial compuesta para impedir que un dominio o mensaje se asigne al servidor de otro tenant.
 
 ## [2026-09-13]
 
