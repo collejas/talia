@@ -54,6 +54,10 @@ Postmark no ofrece actualmente firma HMAC para webhooks según su documentación
 
 No confiar en un `tenant_id` recibido en metadata sin buscar primero el `provider_message_id` en la base de datos.
 
+La provisión del servidor debe registrar y verificar sus webhooks antes de marcarlo como operativo. La URL puede ser común a nivel técnico, pero la autorización, el servidor, el tenant y el MessageID deben resolverse y validarse en backend. El receptor debe aceptar reintentos sin duplicar eventos y devolver un error `5xx` cuando no pueda persistir o encolar el evento, para que Postmark pueda reintentarlo.
+
+Eventos mínimos: Delivery, Bounce, SpamComplaint, Open, Click, SubscriptionChange e Inbound. Las quejas, bajas y rebotes permanentes deben reflejarse en las supresiones locales del tenant.
+
 ## Cuotas y abuso
 
 - Reservar cuota con transacción/lock o función SQL atómica.

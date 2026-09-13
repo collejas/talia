@@ -73,6 +73,10 @@ El aislamiento mínimo por tenant será:
 - dominios, remitentes y Return-Path propios;
 - supresiones y métricas propias.
 
+## Webhooks por tenant
+
+Cada servidor tendrá configurados desde backend sus webhooks de entrega, rebote, queja, apertura, clic, cambio de suscripción e inbound. Estos eventos actualizarán el estado y las métricas del tenant en Talia. La tabla `tenant_email_webhook_receipts` conservará la recepción idempotente para tolerar reintentos de Postmark; ningún evento se procesará confiando únicamente en un `tenant_id` enviado por el proveedor.
+
 Un servidor Postmark separado aísla la operación, las estadísticas y la configuración del cliente. No implica por sí mismo una IP dedicada: la disponibilidad de IP compartida o dedicada depende de Postmark y del volumen contratado.
 
 ## Decisión de implementación aprobada

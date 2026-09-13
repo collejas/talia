@@ -12,6 +12,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se agregó integridad referencial compuesta para impedir que un dominio o mensaje se asigne al servidor de otro tenant.
 - Se definió la provisión automática del servidor después de pago confirmado o activación manual del tenant maestro, mediante un proceso idempotente y asíncrono.
 - La suspensión bloquea envíos sin eliminar el servidor ni sus métricas; la reactivación reutiliza el servidor existente.
+- Se documentó que la provisión debe configurar y verificar automáticamente webhooks de entrega, rebote, queja, apertura, clic, suscripción e inbound por servidor/tenant.
 
 ## [2026-09-13]
 

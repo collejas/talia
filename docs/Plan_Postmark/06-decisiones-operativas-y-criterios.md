@@ -74,6 +74,8 @@ Guardar en columnas consentimiento, fecha, origen, baja, motivo, rebote, tipo de
 
 Medir envíos por tenant, cuota, aceptación, entregabilidad, rebotes, quejas, aperturas, clics, latencia, errores, webhooks, trabajos atrasados y dominios pendientes. No registrar tokens, contraseñas, cuerpos completos, listas completas ni payloads sensibles.
 
+La configuración del servidor Postmark no se considerará completa hasta que sus webhooks estén creados, verificados y asociados al tenant. La recepción debe ser idempotente y conservar evidencia de recepción, procesamiento, error y reintento en `tenant_email_webhook_receipts`.
+
 ## 13. Deploy, secretos y rollback
 
 Documentar secretos, rotación, workers, webhooks, DNS, orden de migraciones, deploy, health checks, feature flags, rollback y pausa de campañas. Rollback no borra envíos ni eventos; solo detiene nuevos envíos y deja auditoría.

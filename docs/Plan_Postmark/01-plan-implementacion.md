@@ -268,11 +268,15 @@ La Bulk API está orientada a broadcast y requiere confirmación/aprobación de 
 
 ## Fase 7: webhooks e inbound
 
+Cada servidor Postmark debe quedar configurado automáticamente durante su provisión para enviar eventos al backend de Talia. La configuración será por servidor/tenant; no se reutilizará una URL con credenciales compartidas entre clientes.
+
 Crear endpoints separados y protegidos:
 
 - `/webhooks/postmark/transactional`
 - `/webhooks/postmark/broadcast`
 - `/webhooks/postmark/inbound`
+
+Los eventos de salida que deben contemplarse son `Delivery`, `Bounce`, `SpamComplaint`, `Open`, `Click` y `SubscriptionChange`. El endpoint inbound recibirá respuestas del stream de entrada del tenant.
 
 El endpoint debe:
 
@@ -284,7 +288,9 @@ El endpoint debe:
 6. actualizar el ledger de envío y las supresiones;
 7. evitar confiar en un `tenant_id` enviado sin verificar contra el mensaje local.
 
-Postmark reintenta webhooks que no reciben 200. La deduplicación por MessageID/evento es obligatoria.
+Postmark reintenta webhooks que no reciben 200. La deduplicación por `MessageID`, tipo de evento y el identificador de trazabilidad del webhook es obligatoria. El receptor debe guardar primero una recepción idempotente en `tenant_email_webhook_receipts`, encolar el procesamiento y responder rápidamente.
+
+La configuración y verificación del webhook debe formar parte de la tarea de provisión del servidor. Si la configuración falla, el servidor no se considerará técnicamente listo para producción y la tarea quedará en estado `failed` para reintento. Las entregas, rebotes, quejas, aperturas, clics y bajas actualizarán `tenant_email_events`, `tenant_email_messages` y `tenant_email_suppressions` según corresponda.
 
 Para respuestas entrantes se implementará directamente un Inbound Message Stream de Postmark con webhook JSON. No se agregará una capa de compatibilidad con el lector IMAP/Brevo.
 
