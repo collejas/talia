@@ -31,6 +31,7 @@ from app.services.stripe_billing import (
     create_stripe_product_and_price,
 )
 from app.services.postmark.provisioning import PostmarkProvisioningError, PostmarkProvisioningService
+from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
 from app.services.supabase_admin import (
     SupabaseAdminError,
     create_supabase_user,
@@ -3612,6 +3613,15 @@ async def update_tenant_commercial_state(
             )
     except PlatformRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if payload.commercial_plan_id and payload.billing_status in {"active", "trialing"} and payload.commercial_access_status in {"active", "internal_free"}:
+        try:
+            await PostmarkRepository().enqueue_server_provision_job(
+                organizacion_id=organizacion_id,
+                source="manual:tenant_commercial_state",
+            )
+        except PostmarkRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="postmark_server_provision_queue_failed") from exc
 
     try:
         row = await repo.get_organizacion_details(organizacion_id=organizacion_id)

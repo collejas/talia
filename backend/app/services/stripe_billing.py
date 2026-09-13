@@ -16,6 +16,7 @@ import httpx
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
+from app.services.postmark.repository import PostmarkRepository
 from app.services.tenant_provisioning import provision_tenant_from_billing
 
 logger = get_logger("app.services.stripe_billing")
@@ -708,6 +709,10 @@ async def process_stripe_webhook(
                 )
             if billing_payload.get("billing_status") in {"active", "trialing"}:
                 await provision_tenant_from_billing(repo=repo, tenant_id=tenant_id, source=event_id)
+                await PostmarkRepository().enqueue_server_provision_job(
+                    organizacion_id=tenant_id,
+                    source=f"stripe:{event_type}:{event_id}",
+                )
 
         now_iso = datetime.now(tz=UTC).isoformat()
         await repo.mark_tenant_billing_event_processed(stripe_event_id=event_id, processed_at=now_iso)

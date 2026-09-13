@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.integrations.postmark.client import PostmarkClient
@@ -13,6 +13,7 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.tenant_runtime import get_secret_plaintext
 
 from .repository import PostmarkRepository, PostmarkRepositoryError
+from .provisioning import PostmarkProvisioningError, PostmarkProvisioningService
 from .service import PostmarkService
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ class PostmarkWorker:
     async def run_once(self) -> int:
         repository = PostmarkRepository()
         service = PostmarkService(repository=repository)
-        processed = 0
+        processed = await self._process_provision_jobs(repository)
         for organizacion_id in await repository.list_enabled_organizations():
             server = await repository.get_server(organizacion_id=organizacion_id)
             if not server or server.get("server_status") != "active":
@@ -106,6 +107,54 @@ class PostmarkWorker:
                             "error": str(exc),
                         },
                     )
+        return processed
+
+    async def _process_provision_jobs(self, repository: PostmarkRepository) -> int:
+        """Procesa provisiones externas fuera de la transacción comercial."""
+        jobs = await repository.claim_server_provision_jobs(limit=10)
+        processed = 0
+        provisioning = PostmarkProvisioningService(repository=repository)
+        for job in jobs:
+            try:
+                job_id = UUID(str(job["id"]))
+                organizacion_id = UUID(str(job["organizacion_id"]))
+                server = await repository.get_server(organizacion_id=organizacion_id)
+                server_name = str((server or {}).get("server_name") or f"Talia - {organizacion_id}")
+                await provisioning.provision_tenant_server(
+                    organizacion_id=organizacion_id,
+                    server_name=server_name,
+                )
+                await repository.update_server_provision_job(
+                    job_id=job_id,
+                    payload={
+                        "status": "completed",
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                        "locked_at": None,
+                        "last_error": None,
+                    },
+                )
+                processed += 1
+            except (PostmarkError, PostmarkProvisioningError, PostmarkRepositoryError, ValueError) as exc:
+                attempts = int(job.get("attempts") or 1)
+                retry = attempts < 5
+                try:
+                    await repository.update_server_provision_job(
+                        job_id=UUID(str(job["id"])),
+                        payload={
+                            "status": "queued" if retry else "failed",
+                            "available_at": (
+                                datetime.now(timezone.utc) + timedelta(minutes=min(attempts * 5, 60))
+                            ).isoformat(),
+                            "locked_at": None,
+                            "last_error": str(exc)[:500],
+                        },
+                    )
+                except PostmarkRepositoryError:
+                    logger.exception("postmark.worker_provision_job_update_failed")
+                logger.exception(
+                    "postmark.worker_provision_job_failed",
+                    extra={"organizacion_id": str(job.get("organizacion_id")), "attempts": attempts},
+                )
         return processed
 
     @staticmethod

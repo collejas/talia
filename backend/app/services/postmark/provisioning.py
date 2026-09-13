@@ -34,6 +34,8 @@ class PostmarkProvisioningService:
         current = await self.repository.get_server(organizacion_id=organizacion_id)
         if current and current.get("server_status") == "active":
             return self._public_status(current)
+        if current and current.get("postmark_server_id"):
+            raise PostmarkProvisioningError("postmark_server_reconciliation_required")
 
         record = current or await self.repository.create_server_record(
             organizacion_id=organizacion_id,
@@ -47,6 +49,15 @@ class PostmarkProvisioningService:
 
         try:
             provider = await PostmarkClient().create_server(server_name)
+            # Persistir el ID antes de cifrar el token evita crear un segundo
+            # servidor si el almacenamiento seguro falla después de la alta.
+            await self.repository.update_server(
+                server_id=server_id,
+                payload={
+                    "postmark_server_id": provider.external_server_id,
+                    "server_name": provider.server_name,
+                },
+            )
             secret_key = str(record.get("server_token_secret_key") or "postmark.server_token").strip().lower()
             master_key = settings.secrets_master_key
             if not master_key:

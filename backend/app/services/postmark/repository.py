@@ -72,6 +72,37 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("server_record_update_failed")
         return data[0]
 
+    async def enqueue_server_provision_job(self, *, organizacion_id: UUID, source: str) -> dict[str, Any]:
+        current = await self.get_server(organizacion_id=organizacion_id)
+        if current and current.get("server_status") == "active" and current.get("postmark_server_id"):
+            return {"job_id": None, "job_status": "completed"}
+        data = await self._rpc(
+            "tenant_email_enqueue_server_provision_job",
+            {"p_organizacion_id": str(organizacion_id), "p_source": source[:120]},
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("server_provision_job_enqueue_failed")
+        return data[0]
+
+    async def claim_server_provision_jobs(self, *, limit: int = 10) -> list[dict[str, Any]]:
+        data = await self._rpc(
+            "tenant_email_claim_server_provision_jobs",
+            {"p_limit": max(1, min(limit, 100))},
+        )
+        if not isinstance(data, list):
+            raise PostmarkRepositoryError("server_provision_job_claim_failed")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def update_server_provision_job(self, *, job_id: UUID, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest_patch(
+            "/rest/v1/tenant_email_server_provision_jobs",
+            params={"id": f"eq.{job_id}"},
+            payload=payload,
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("server_provision_job_update_failed")
+        return data[0]
+
     async def get_verified_domain(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         return await self._get_one(
             "/rest/v1/tenant_email_domains",
