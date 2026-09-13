@@ -19387,6 +19387,68 @@ class CRMRepository:
             raise CRMRepositoryError("prospeccion_transaction_invalid_response")
         return data
 
+    async def record_google_places_call(
+        self,
+        *,
+        organizacion_id: UUID,
+        busqueda_id: UUID | None,
+        http_status: int | None,
+        outcome: str,
+    ) -> dict[str, Any]:
+        """Registra una llamada HTTP real a Google Places en el ledger mensual."""
+        response = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/google_places_register_call",
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_busqueda_id": str(busqueda_id) if busqueda_id else None,
+                "p_http_status": http_status,
+                "p_outcome": outcome,
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError("google_places_usage_invalid_response")
+
+    async def get_google_places_usage(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> dict[str, Any]:
+        """Obtiene el consumo mensual real del tenant desde el ledger."""
+        now = datetime.now(timezone.utc)
+        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if period_start.month == 12:
+            period_end = period_start.replace(year=period_start.year + 1, month=1)
+        else:
+            period_end = period_start.replace(month=period_start.month + 1)
+        response = await self._request_service_role(
+            "GET",
+            "/rest/v1/tenant_google_places_usage_periods",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "period_start": f"eq.{period_start.isoformat()}",
+                "period_end": f"eq.{period_end.isoformat()}",
+                "select": "period_start,period_end,free_calls_limit,calls_attempted,calls_with_response",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json() or []
+        rows = data if isinstance(data, list) else []
+        row = rows[0] if rows else {}
+        limit = int(row.get("free_calls_limit") or 1000)
+        attempted = int(row.get("calls_attempted") or 0)
+        return {
+            "period": {"start": period_start.isoformat(), "end": period_end.isoformat()},
+            "free_calls_limit": limit,
+            "calls_attempted": attempted,
+            "calls_with_response": int(row.get("calls_with_response") or 0),
+            "free_calls_remaining": max(limit - attempted, 0),
+        }
+
     async def record_denue_raw_results(
         self,
         *,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from math import asin, ceil, cos, radians, sin, sqrt
 from typing import Any, Literal, Sequence
 
@@ -15,6 +16,7 @@ from app.services.result_identity import build_result_dedupe_key
 logger = get_logger(__name__)
 
 GoogleSearchStrategy = Literal["nearby", "text"]
+GoogleCallRecorder = Callable[[int | None, str], Awaitable[None]]
 
 
 def _diagnose_google_http_error(
@@ -107,6 +109,7 @@ class GooglePlacesClient:
         pause_between_pages: float = 2.0,
         grid_max_tile_radius_m: int = 1200,
         details_concurrency: int = 20,
+        on_call: GoogleCallRecorder | None = None,
     ) -> None:
         self.api_key = api_key or settings.google_places_api_key
         self.nearby_url = nearby_url or settings.google_places_nearby_url
@@ -126,6 +129,15 @@ class GooglePlacesClient:
         self._details_cache: dict[str, dict[str, Any]] = {}
         self.grid_max_tile_radius_m = max(200, grid_max_tile_radius_m)
         self.details_concurrency = max(5, min(details_concurrency, 50))
+        self.on_call = on_call
+
+    async def _record_call(self, *, http_status: int | None, outcome: str) -> None:
+        if self.on_call is None:
+            return
+        try:
+            await self.on_call(http_status, outcome)
+        except Exception as exc:  # pragma: no cover - el contador no debe romper la búsqueda
+            logger.warning("google.places_call_record_failed", extra={"error": str(exc)})
 
     async def search_places(
         self,
@@ -150,7 +162,7 @@ class GooglePlacesClient:
         if strategy == "text" and not query:
             raise GooglePlacesError("text_query_required")
 
-        normalized_radius = max(50, min(radius_m, 50_000))
+        normalized_radius = max(50, min(radius_m, 5_000))
         grid = self._select_grid_config(normalized_radius)
         limit = max_results if max_results and max_results > 0 else None
         if strategy == "text" and query:
@@ -165,65 +177,37 @@ class GooglePlacesClient:
                 max_results=limit,
             )
         else:
-            results = await self._collect_pages_for_strategy(
+            # Nearby usa el centro principal y después los centros de la
+            # cuadrícula. No se agregan búsquedas Text Search como fallback.
+            tile_radius = grid["tile_radius_m"]
+            initial = await self._collect_pages_for_strategy(
                 strategy=strategy,
                 query=query,
                 latitude=latitude,
                 longitude=longitude,
-                radius_m=normalized_radius,
+                radius_m=tile_radius,
                 included_types=included_types,
                 max_results=limit,
                 language_code=language_code,
                 region_code=region_code,
             )
-            if (
-                strategy == "nearby"
-                and allow_text_fallback
-                and included_types
-                and (limit is None or len(results) < limit)
-            ):
-                remaining_limit = None if limit is None else max(limit - len(results), 0)
+            results = list(initial)
+            if strategy == "nearby" and included_types:
                 existing_ids = {place.get("id") for place in results if place.get("id")}
-                extra_nearby = await self._search_nearby_additional_centers(
-                    included_types=included_types,
-                    remaining_limit=remaining_limit,
-                    latitude=latitude,
-                    longitude=longitude,
-                    radius_m=normalized_radius,
-                    grid_config=grid,
-                    language_code=language_code,
-                    region_code=region_code,
-                    existing_ids=existing_ids,
-                )
-                results.extend(extra_nearby)
-            if (
-                strategy == "nearby"
-                and allow_text_fallback
-                and included_types
-                and (limit is None or len(results) < limit)
-            ):
                 remaining_limit = None if limit is None else max(limit - len(results), 0)
-                fallback_results = await self._search_text_fallback(
-                    included_types=included_types,
-                    remaining_limit=remaining_limit,
-                    query=query,
-                    latitude=latitude,
-                    longitude=longitude,
-                    radius_m=radius_m,
-                    language_code=language_code,
-                    region_code=region_code,
+                results.extend(
+                    await self._search_nearby_additional_centers(
+                        included_types=included_types,
+                        remaining_limit=remaining_limit,
+                        latitude=latitude,
+                        longitude=longitude,
+                        radius_m=normalized_radius,
+                        grid_config=grid,
+                        language_code=language_code,
+                        region_code=region_code,
+                        existing_ids=existing_ids,
+                    )
                 )
-                if fallback_results:
-                    dedup_ids = {place.get("id") for place in results if place.get("id")}
-                    for place in fallback_results:
-                        place_id = place.get("id")
-                        if place_id and place_id in dedup_ids:
-                            continue
-                        results.append(place)
-                        if place_id:
-                            dedup_ids.add(place_id)
-                        if limit is not None and len(results) >= limit:
-                            break
 
         filtered = self._filter_results_by_radius(
             results=results,
@@ -253,8 +237,14 @@ class GooglePlacesClient:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(url, headers=headers, json=payload)
         except httpx.RequestError as exc:  # pragma: no cover - depende de red
+            await self._record_call(http_status=None, outcome="network_error")
             logger.exception("google.places_request_error", extra={"error": str(exc)})
             raise GooglePlacesError("google_places_request_failed") from exc
+
+        await self._record_call(
+            http_status=resp.status_code,
+            outcome="success" if resp.status_code < 400 else "provider_error",
+        )
 
         if resp.status_code >= 400:
             try:
@@ -374,9 +364,11 @@ class GooglePlacesClient:
         max_results: int | None,
         language_code: str | None,
         region_code: str | None,
+        max_pages: int | None = None,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         page_token: str | None = None
+        pages = 0
         limit = max_results if max_results and max_results > 0 else None
         base_payload = self._build_payload(
             strategy=strategy,
@@ -400,6 +392,7 @@ class GooglePlacesClient:
             if page_token:
                 payload["pageToken"] = page_token
             data = await self._post(url=self._resolve_url(strategy), payload=payload)
+            pages += 1
             places = data.get("places") or []
             logger.debug(
                 "google.places_page_received",
@@ -414,6 +407,8 @@ class GooglePlacesClient:
                 logger.warning("google.places_unexpected_payload", extra={"payload": data})
                 break
             results.extend(places)
+            if max_pages is not None and pages >= max_pages:
+                break
             page_token = data.get("nextPageToken")
             if not page_token:
                 logger.debug(

@@ -57,6 +57,15 @@ export type GoogleBusquedasResponse = {
   offset: number;
 };
 
+export type GooglePlacesUsageResponse = {
+  ok: boolean;
+  period: { start: string; end: string };
+  free_calls_limit: number;
+  calls_attempted: number;
+  calls_with_response: number;
+  free_calls_remaining: number;
+};
+
 export type GooglePlacesTypeItem = {
   categoria_codigo: string;
   categoria_nombre_en: string;
@@ -265,7 +274,7 @@ export async function createGoogleBusqueda(
   return requestJson<CreateGoogleSearchResponse>("/api/prospeccion/google/busquedas", {
     method: "POST",
     body,
-  });
+  }, true, false);
 }
 
 export async function listGooglePlacesTypes(params: {
@@ -278,6 +287,10 @@ export async function listGooglePlacesTypes(params: {
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit));
   if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset));
   return requestJson<GooglePlacesTypesResponse>(url.toString());
+}
+
+export async function getGooglePlacesUsage(): Promise<GooglePlacesUsageResponse> {
+  return requestJson<GooglePlacesUsageResponse>(buildClientUrl("/api/prospeccion/google/usage").toString());
 }
 
 function buildClientUrl(path: string): URL {

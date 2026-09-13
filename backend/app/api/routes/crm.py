@@ -5296,7 +5296,7 @@ class GoogleProspeccionBusquedaPayload(BaseModel):
     radio_m: int = Field(
         default=1000,
         ge=50,
-        le=50000,
+        le=5000,
         description="Radio en metros para limitar la búsqueda.",
     )
     included_types: list[str] | None = Field(
@@ -32908,6 +32908,20 @@ async def listar_tipos_google_places(
         offset=offset,
         version_catalogo=version_catalogo,
     )
+
+
+@router.get("/prospeccion/google/usage")
+async def obtener_uso_google_places(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("busquedas.view")),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> dict[str, Any]:
+    """Devuelve llamadas reales a Google Places del tenant en el mes UTC actual."""
+    try:
+        return {"ok": True, **await repo.get_google_places_usage(organizacion_id=organizacion_id)}
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="google_places_usage_unavailable") from exc
 
 
 @router.get("/prospeccion/usage")

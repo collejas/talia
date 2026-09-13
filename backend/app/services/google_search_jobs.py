@@ -57,6 +57,16 @@ class GoogleSearchJobManager:
         google_settings = await tenant_runtime.get_google_places_runtime_settings(
             organizacion_id=organizacion_id
         )
+        async def record_google_call(http_status: int | None, outcome: str) -> None:
+            if organizacion_id is None:
+                return
+            await repo.record_google_places_call(
+                organizacion_id=organizacion_id,
+                busqueda_id=job.busqueda_id,
+                http_status=http_status,
+                outcome=outcome,
+            )
+
         grid_radius = (
             google_settings.dense_grid_max_tile_radius_m
             if dense
@@ -79,6 +89,7 @@ class GoogleSearchJobManager:
             pause_between_pages=pause_between,
             details_url=google_settings.details_url,
             details_concurrency=20,
+            on_call=record_google_call,
         )
         try:
             places = await client.search_places(

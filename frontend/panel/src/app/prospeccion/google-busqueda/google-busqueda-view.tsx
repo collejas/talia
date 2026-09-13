@@ -29,6 +29,7 @@ import {
   createGoogleBusqueda,
   deleteGoogleBusqueda,
   deleteGoogleResultados,
+  getGooglePlacesUsage,
   listGoogleBusquedas,
   listGoogleResultados,
   listGoogleResultadosMap,
@@ -106,7 +107,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
-const RADIUS_MAX = 10_000;
+const RADIUS_MAX = 5_000;
 const DEFAULT_TYPES = "restaurant,store";
 const LIST_PAGE_SIZE = 1000;
 const MAP_RESULTS_LIMIT = 1000;
@@ -201,6 +202,11 @@ export function GoogleBusquedaView() {
   const [googlePlacesTypesLoading, setGooglePlacesTypesLoading] = useState(false);
   const [googlePlacesTypesError, setGooglePlacesTypesError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [googleUsage, setGoogleUsage] = useState<{
+    free_calls_limit: number;
+    calls_attempted: number;
+    free_calls_remaining: number;
+  } | null>(null);
   const [busquedas, setBusquedas] = useState<GoogleBusquedaItem[]>([]);
   const busquedasRef = useRef<GoogleBusquedaItem[]>([]);
   const [isLoadingBusquedas, setIsLoadingBusquedas] = useState(true);
@@ -248,11 +254,23 @@ export function GoogleBusquedaView() {
   );
   const activeBusquedaStatus = activeBusqueda?.meta?.status ?? activeBusqueda?.status ?? null;
   const resultadosCount = resultados.length;
-  const [denseMode, setDenseMode] = useState(false);
   const selectedActividadesList = useMemo(
     () => Array.from(selectedActividades).sort((a, b) => a.localeCompare(b, "es")),
     [selectedActividades],
   );
+
+  const loadGoogleUsage = useCallback(async () => {
+    try {
+      const usage = await getGooglePlacesUsage();
+      setGoogleUsage(usage);
+    } catch {
+      setGoogleUsage(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGoogleUsage();
+  }, [loadGoogleUsage]);
 
   const selectedGooglePlaceTypeCodes = useMemo(
     () =>
@@ -435,10 +453,11 @@ export function GoogleBusquedaView() {
         includedTypesText: selectedTypes.length ? selectedTypes.join(",") : prev.includedTypesText,
         lat: typeof selectedBusqueda.lat === "number" ? selectedBusqueda.lat : prev.lat,
         lng: typeof selectedBusqueda.lng === "number" ? selectedBusqueda.lng : prev.lng,
-        radio_m: typeof selectedBusqueda.radio_m === "number" ? selectedBusqueda.radio_m : prev.radio_m,
+        radio_m:
+          typeof selectedBusqueda.radio_m === "number"
+            ? Math.min(selectedBusqueda.radio_m, RADIUS_MAX)
+            : prev.radio_m,
       }));
-      const denseFlag = Boolean(selectedBusqueda.meta?.dense_mode);
-      setDenseMode(denseFlag);
     }
     setMapItems([]);
     setMapTruncated(false);
@@ -741,6 +760,7 @@ export function GoogleBusquedaView() {
         const latest = items.find((item) => item.id === activeBusquedaId) ?? null;
         const latestStatus = latest?.meta?.status ?? latest?.status ?? null;
         if ((latestStatus === "completed" || latestStatus === "failed") && latest?.id === activeBusquedaId) {
+          await loadGoogleUsage();
           if (latestStatus === "completed") {
             setResultReloadToken((current) => current + 1);
           }
@@ -759,7 +779,7 @@ export function GoogleBusquedaView() {
         clearTimeout(timer);
       }
     };
-  }, [activeBusquedaId, activeBusquedaStatus, loadBusquedas]);
+  }, [activeBusquedaId, activeBusquedaStatus, loadBusquedas, loadGoogleUsage]);
 
   useEffect(() => {
     if (!activeBusquedaId || !mapViewport) {
@@ -1249,7 +1269,6 @@ export function GoogleBusquedaView() {
       strategy: formValues.strategy,
       language_code: formValues.language_code || undefined,
       region_code: formValues.region_code || undefined,
-      dense_mode: denseMode,
       meta: {
         source: "panel",
       },
@@ -1271,6 +1290,7 @@ export function GoogleBusquedaView() {
       }
       await loadBusquedas();
       await loadResultadosForBusqueda(response.busqueda_id);
+      void loadGoogleUsage();
     } catch (error) {
       setFeedback({
         type: "error",
@@ -1280,7 +1300,7 @@ export function GoogleBusquedaView() {
     } finally {
       setIsSearching(false);
     }
-  }, [denseMode, formValues, loadBusquedas, loadResultadosForBusqueda]);
+  }, [formValues, loadBusquedas, loadGoogleUsage, loadResultadosForBusqueda]);
 
   const handleAction = useCallback(
     (action: (typeof ACTIONS)[number]["key"]) => {
@@ -1657,15 +1677,6 @@ export function GoogleBusquedaView() {
                   />
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Checkbox
-                  checked={denseMode}
-                  onCheckedChange={(value) => setDenseMode(Boolean(value))}
-                />
-                <span className="text-xs text-muted-foreground">
-                  Modo denso (más tiles y sin límite, aunque tarde más)
-                </span>
-              </div>
               <div className="flex flex-wrap items-center gap-2 pt-2">
                 {canRunBusquedas ? (
                   <Button onClick={runBusqueda} disabled={isSearching}>
@@ -1690,6 +1701,33 @@ export function GoogleBusquedaView() {
                 >
                   Restablecer centro
                 </Button>
+                <div className="basis-full text-xs text-muted-foreground">
+                  {googleUsage ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>
+                        Google Places: {numberFormatter.format(googleUsage.calls_attempted)} llamadas este mes.
+                      </span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Información sobre el consumo de Google Places"
+                              className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            El crédito gratuito lo otorga Google Cloud por proyecto y tipo de llamada; no es un saldo de búsquedas de TalIA.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </span>
+                  ) : (
+                    "Consumo de Google Places no disponible en este momento."
+                  )}
+                </div>
               </div>
           </CardContent>
         </Card>
