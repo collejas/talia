@@ -200,7 +200,7 @@ export function TenantFiscalAddressFields({ values, disabled = false, showRequir
       mounted = false
       controller.abort()
     }
-  }, [countryCode, stateCode, municipalityCode, cityText])
+  }, [countryCode, stateCode, municipalityCode, cityText, municipalityName])
 
   const selectedCountry = countries.find((item) => item.code === countryCode)
   const stateSelectDisabled = disabled || countryCode !== "MX" || loadingStates

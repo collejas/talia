@@ -310,6 +310,8 @@ export async function updateTenantCommercialStateAction(
   _: CrudActionState,
   _formData: FormData,
 ): Promise<CrudActionState> {
+  void _;
+  void _formData;
   return { status: "error", message: "La edición comercial no está disponible desde Variables." }
 }
 

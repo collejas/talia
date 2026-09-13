@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 
@@ -12,6 +13,7 @@ type TenantContextActionButtonProps = {
 
 export function TenantContextActionButton({ tenantId, tab, children }: TenantContextActionButtonProps) {
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   async function handleClick() {
     if (loading) return
@@ -27,7 +29,7 @@ export function TenantContextActionButton({ tenantId, tab, children }: TenantCon
         throw new Error(payload?.error || "No se pudo activar la organización seleccionada.")
       }
 
-      window.location.assign(`/settings/variables?tab=${encodeURIComponent(tab)}`)
+      router.push(`/settings/variables?tab=${encodeURIComponent(tab)}`)
     } catch (error) {
       setLoading(false)
       window.alert(error instanceof Error ? error.message : "No se pudo activar la organización seleccionada.")

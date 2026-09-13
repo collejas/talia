@@ -429,7 +429,6 @@ export function DenueBusquedaView() {
   const [searchMode, setSearchMode] = useState<SearchMode>("radial");
   const [geoLookups, setGeoLookups] = useState<GeoLookups | null>(null);
   const [scianLookups, setScianLookups] = useState<ScianLookups | null>(null);
-  const [scianCatalogs, setScianCatalogs] = useState<DenueCatalogosResponse["scian"] | null>(null);
   const scianTitles = scianLookups?.titles;
   const [geoStatesCatalog, setGeoStatesCatalog] = useState<DenueCatalogosResponse["geo"]["states"]>([]);
   const [geoEstadoFilter, setGeoEstadoFilter] = useState<string>("any");
@@ -646,14 +645,12 @@ export function DenueBusquedaView() {
         if (cancelled) return;
         setGeoLookups(buildGeoLookups(response.geo.states ?? []));
         setScianLookups(buildScianLookups(response.scian));
-        setScianCatalogs(response.scian);
         setGeoStatesCatalog(response.geo.states ?? []);
-      } catch (error) {
+      } catch {
         // Sin catálogos: mostrar códigos como fallback.
         if (cancelled) return;
         setGeoLookups(null);
         setScianLookups(null);
-        setScianCatalogs(null);
         setGeoStatesCatalog([]);
       }
     })();
@@ -781,10 +778,10 @@ export function DenueBusquedaView() {
             radio_m: typeof selectedBusqueda.radio_m === "number" ? selectedBusqueda.radio_m : prev.radio_m,
           }));
         }
-      } catch (error) {
+      } catch {
         setFeedback({
           type: "error",
-          message: error instanceof Error ? error.message : "No fue posible consultar los resultados.",
+          message: "No fue posible consultar los resultados.",
         });
       }
     },

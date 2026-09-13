@@ -31,9 +31,6 @@ import {
   deleteContactoTemplate,
   deleteWhatsProspTemplate,
   deleteProspeccionCampana,
-  importBrevoContactoTemplate,
-  listWhatsAppAtribucionReglas,
-  listBrevoCatalogTemplates,
   listContactoTemplates,
   listCrmCampaigns,
   listProspectos,
@@ -41,7 +38,6 @@ import {
   updateContactoTemplate,
   updateProspeccionCampana,
   getProspeccionCampanas,
-  type BrevoCatalogTemplate,
   type CrmCampaign,
   type ContactoTemplate,
   type ContactoTemplateImagenVariable,
@@ -225,20 +221,17 @@ export function CampanasMetricsClient() {
   const [campaignFormCanal, setCampaignFormCanal] = useState<"correo" | "whatsapp" | "llamada">("whatsapp")
   const [campaignSaving, setCampaignSaving] = useState(false)
   const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false)
-  const [templatesCampanaId, setTemplatesCampanaId] = useState<string | null>(null)
-  const [templatesCampanaNombre, setTemplatesCampanaNombre] = useState<string>("")
-  const [templatesCampanaCanal, setTemplatesCampanaCanal] = useState<"correo" | "whatsapp" | "llamada" | null>(null)
+  const [templatesCampanaId] = useState<string | null>(null)
+  const [templatesCampanaNombre] = useState<string>("")
+  const [templatesCampanaCanal] = useState<"correo" | "whatsapp" | "llamada" | null>(null)
   const [templatesItems, setTemplatesItems] = useState<ContactoTemplate[]>([])
   const [templateCountByCampaign, setTemplateCountByCampaign] = useState<Record<string, number>>({})
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [templateSaving, setTemplateSaving] = useState(false)
   const [templateDeletingId, setTemplateDeletingId] = useState<string | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
-  const [brevoCatalog, setBrevoCatalog] = useState<BrevoCatalogTemplate[]>([])
-  const [brevoLoading, setBrevoLoading] = useState(false)
-  const [brevoImportingId, setBrevoImportingId] = useState<number | null>(null)
-  const [waRules, setWaRules] = useState<WhatsAppAtribucionRule[]>([])
-  const [waRulesLoading, setWaRulesLoading] = useState(false)
+  const [waRules] = useState<WhatsAppAtribucionRule[]>([])
+  const [waRulesLoading] = useState(false)
   const [tenantBaseUrl, setTenantBaseUrl] = useState<string>("")
   const [tenantPhone, setTenantPhone] = useState<string>("")
   const [logos, setLogos] = useState<LogoAsset[]>([])
@@ -1197,37 +1190,6 @@ ${secondCellHtml}
     }
   }, [crmCampaigns])
 
-  const loadBrevoCatalog = useCallback(async (canalOverride?: "correo" | "whatsapp" | "llamada" | null) => {
-    const effectiveCanal = canalOverride ?? templatesCampanaCanal
-    if (!effectiveCanal || effectiveCanal !== "correo") {
-      setBrevoCatalog([])
-      return
-    }
-    setBrevoLoading(true)
-    try {
-      const response = await listBrevoCatalogTemplates({ limit: 50 })
-      setBrevoCatalog(Array.isArray(response?.items) ? response.items : [])
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo cargar el catálogo Brevo."
-      setTemplateError(message)
-      setBrevoCatalog([])
-    } finally {
-      setBrevoLoading(false)
-    }
-  }, [templatesCampanaCanal])
-
-  const loadWaRules = useCallback(async () => {
-    setWaRulesLoading(true)
-    try {
-      const response = await listWhatsAppAtribucionReglas({ limit: 500, activo: true })
-      setWaRules(Array.isArray(response?.items) ? response.items : [])
-    } catch {
-      setWaRules([])
-    } finally {
-      setWaRulesLoading(false)
-    }
-  }, [])
-
   const handleManageTemplates = useCallback(
     (campanaId: string) => {
       router.push(`/prospeccion/campanas/plantillas?campana_id=${encodeURIComponent(campanaId)}`)
@@ -1497,6 +1459,7 @@ ${secondCellHtml}
   }, [
     effectiveTemplateSlug,
     loadCampaignTemplates,
+    logos,
     normalizeLogoUrl,
     normalizeWaPhone,
     resetTemplateForm,
@@ -1511,6 +1474,7 @@ ${secondCellHtml}
     waRules,
     whatsappCtaUrl,
     whatsappMediaUrl,
+    whatsappUsesHeaderImage,
   ])
 
   const handleTemplateDelete = useCallback(
@@ -1534,36 +1498,9 @@ ${secondCellHtml}
         setTemplateDeletingId(null)
       }
     },
-    [loadCampaignTemplates, resetTemplateForm, templateForm.id, templatesCampanaId]
+    [loadCampaignTemplates, resetTemplateForm, templateForm.id, templatesCampanaId, templatesItems]
   )
 
-  const handleImportBrevoTemplate = useCallback(
-    async (brevoTemplateId: number) => {
-      if (!templatesCampanaId) {
-        setTemplateError("Selecciona una campaña.")
-        return
-      }
-      setBrevoImportingId(brevoTemplateId)
-      setTemplateError(null)
-      try {
-        await importBrevoContactoTemplate({
-          brevo_template_id: brevoTemplateId,
-          campana_id: templatesCampanaId,
-        })
-        await loadCampaignTemplates(templatesCampanaId)
-        setBanner({
-          type: "success",
-          message: "Plantilla importada. Revísala y guárdala para usarla.",
-        })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "No se pudo importar la plantilla Brevo."
-        setTemplateError(message)
-      } finally {
-        setBrevoImportingId(null)
-      }
-    },
-    [loadCampaignTemplates, templatesCampanaId]
-  )
 
   return (
     <div className="space-y-6">
@@ -2816,11 +2753,13 @@ ${secondCellHtml}
                         <div className="max-w-[92%] overflow-hidden rounded-2xl rounded-bl-md bg-white text-sm leading-6 text-foreground shadow-sm">
                           {whatsappPreviewImageUrl ? (
                             <div className="border-b bg-muted/20">
-                              <img
+                              <Image
                                 src={whatsappPreviewImageUrl}
                                 alt={whatsappPreviewImageLabel}
                                 className="h-48 w-full object-cover"
                                 loading="lazy"
+                                width={640}
+                                height={192}
                               />
                             </div>
                           ) : null}

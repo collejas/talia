@@ -110,13 +110,6 @@ function metaCategoryLabel(category: string): string {
   return category === "unknown" ? "Sin categoría Meta" : category
 }
 
-function localDateValue(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-
 function localDateStart(value: string): Date {
   const [year, month, day] = value.split("-").map(Number)
   return new Date(year, month - 1, day)
@@ -223,7 +216,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
   const [direction, setDirection] = React.useState("all")
   const [selectedTenant, setSelectedTenant] = React.useState("all")
   const [tenantOptions, setTenantOptions] = React.useState<TenantOption[]>([])
-  const [tenantsLoading, setTenantsLoading] = React.useState(false)
+  const [, setTenantsLoading] = React.useState(false)
   const [page, setPage] = React.useState(1)
   const [loading, setLoading] = React.useState(true)
   const [messageLoading, setMessageLoading] = React.useState(false)
@@ -399,7 +392,7 @@ export function MessageBillingPageClient({ isOwner }: { isOwner: boolean }) {
       .catch((fetchError) => { if ((fetchError as Error).name !== "AbortError") setError(fetchError instanceof Error ? fetchError.message : "No se pudo cargar el detalle.") })
       .finally(() => setMessageLoading(false))
     return () => controller.abort()
-  }, [category, direction, isOwner, manualRangeInvalid, messagesUrl, page, range?.desde, range?.hasta, refreshToken, selectedTenant])
+  }, [category, direction, isOwner, manualRangeInvalid, messagesUrl, page, range, refreshToken, selectedTenant])
 
   const saveRate = async (kind: "app" | "provider") => {
     setSaving(true); setSaveMessage(null)

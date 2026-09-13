@@ -63,7 +63,7 @@ function rowToContact(row: Record<string, unknown>): ContactImportItem | null {
 }
 
 async function parseFile(file: File, correoObligatorio: boolean): Promise<{ items: ContactImportItem[]; preview: PreviewRow[]; errors: string[] }> {
-  const xlsx = await import("xlsx")
+  const xlsx = await import("@e965/xlsx")
   const workbook = file.name.toLowerCase().endsWith(".csv")
     ? xlsx.read(await file.text(), { type: "string" })
     : xlsx.read(await file.arrayBuffer(), { type: "array" })
@@ -96,7 +96,7 @@ async function parseFile(file: File, correoObligatorio: boolean): Promise<{ item
 }
 
 function downloadTemplate() {
-  void import("xlsx").then((xlsx) => {
+  void import("@e965/xlsx").then((xlsx) => {
     const sheet = xlsx.utils.aoa_to_sheet([TEMPLATE_HEADERS, ["Ana", "López", "García", "ana@ejemplo.com", "+525500000000", "Empresa Demo"]])
     const workbook = xlsx.utils.book_new()
     xlsx.utils.book_append_sheet(workbook, sheet, "Contactos")

@@ -2698,7 +2698,7 @@ export function LeadDrawer({
       alerts.push("El descuento debe estar entre 0% y el importe de la partida.");
     }
     return alerts;
-  }, [quoteChannel, quoteDiscountWarning, quoteEmailTo, quoteItems, quoteValidoHasta, quoteWhatsappTo]);
+  }, [quoteChannel, quoteEmailTo, quoteItems, quoteValidoHasta, quoteWhatsappTo]);
   const quoteDiscountBlocked = Boolean(quoteDiscountWarning) || quoteItems.some((item) => {
     const quantity = parseNumberInput(item.cantidad) ?? 1;
     const price = parseNumberInput(item.precioUnitario) ?? 0;

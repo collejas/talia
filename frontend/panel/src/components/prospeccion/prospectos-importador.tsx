@@ -42,7 +42,7 @@ type ParsedProspectoPreview = {
   address: string
 }
 
-const ACCEPTED_FILE_EXT = ".csv,.xlsx,.xls"
+const ACCEPTED_FILE_EXT = ".csv,.xlsx"
 const MAX_IMPORT_ROWS = 2000
 const PROSPECT_TEMPLATE_HEADERS = [
   "Empresa / nombre comercial",
@@ -313,14 +313,11 @@ function rowToProspecto(row: Record<string, unknown>): ProspectoManualInput | nu
 }
 
 async function downloadProspectTemplate(): Promise<void> {
-  const workbookModule = await import("xlsx")
-  const worksheet = workbookModule.utils.aoa_to_sheet([
-    [...PROSPECT_TEMPLATE_HEADERS],
-    [...PROSPECT_TEMPLATE_EXAMPLE],
-  ])
-  const workbook = workbookModule.utils.book_new()
-  workbookModule.utils.book_append_sheet(workbook, worksheet, "Prospectos")
-  const buffer = workbookModule.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer
+  const xlsx = await import("@e965/xlsx")
+  const worksheet = xlsx.utils.aoa_to_sheet([[...PROSPECT_TEMPLATE_HEADERS], [...PROSPECT_TEMPLATE_EXAMPLE]])
+  const workbook = xlsx.utils.book_new()
+  xlsx.utils.book_append_sheet(workbook, worksheet, "Prospectos")
+  const buffer = xlsx.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer
   downloadBlob(
     "plantilla_importacion_prospectos.xlsx",
     new Blob([buffer], {
@@ -334,20 +331,18 @@ async function parseImportedFile(file: File): Promise<{
   preview: ParsedProspectoPreview[]
   errors: ProspectoImportError[]
 }> {
-  const workbookModule = await import("xlsx")
-  const workbook =
-    file.name.toLowerCase().endsWith(".csv")
-      ? workbookModule.read(await file.text(), { type: "string" })
-      : workbookModule.read(await file.arrayBuffer(), { type: "array" })
+  if (file.name.toLowerCase().endsWith(".xls")) {
+    return { items: [], preview: [], errors: [{ row: 0, message: "El formato XLS no está disponible. Usa XLSX o CSV." }] }
+  }
+  const xlsx = await import("@e965/xlsx")
+  const workbook = file.name.toLowerCase().endsWith(".csv")
+    ? xlsx.read(await file.text(), { type: "string" })
+    : xlsx.read(await file.arrayBuffer(), { type: "array" })
   const sheetName = workbook.SheetNames[0]
   if (!sheetName) {
     return { items: [], preview: [], errors: [{ row: 0, message: "El archivo no contiene hojas válidas." }] }
   }
-  const sheet = workbook.Sheets[sheetName]
-  const rows = workbookModule.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: "",
-    raw: false,
-  })
+  const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: "", raw: false })
   const items: ProspectoManualInput[] = []
   const preview: ParsedProspectoPreview[] = []
   const errors: ProspectoImportError[] = []

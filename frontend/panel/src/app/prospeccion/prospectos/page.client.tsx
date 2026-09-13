@@ -31,7 +31,6 @@ import { ProspectosImportador } from "@/components/prospeccion/prospectos-import
 import { getActiveTimeZone } from "@/lib/timezone"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
@@ -2075,17 +2074,7 @@ function ProspectosView() {
         setQueryOptionsLoading(false)
       }
     }
-  }, [
-    filters.campanaId,
-    filters.conEnvioCanales,
-    filters.conEnvioModo,
-    filters.enviosCorreoMax,
-    filters.enviosCorreoMin,
-    filters.enviosVozMax,
-    filters.enviosVozMin,
-    filters.enviosWhatsappMax,
-    filters.enviosWhatsappMin,
-  ])
+  }, [filters])
 
   const loadActivitiesForQueries = useCallback(
     async (selectedQueries: string[]) => {
@@ -2146,7 +2135,7 @@ function ProspectosView() {
         }
       }
     },
-    [filters.customDateFrom, filters.customDateTo, filters.dateOption, filters.fuente]
+    [filters]
   )
 
   useEffect(() => {

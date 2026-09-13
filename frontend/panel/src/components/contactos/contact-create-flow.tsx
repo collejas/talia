@@ -1030,6 +1030,7 @@ export function ContactCreateFlow({
     state.persona.apellido_paterno,
     state.persona.apellido_materno,
     state.cuenta.razon_social,
+    state.persona,
   ]);
 
   const dedupeClipboardText = React.useMemo(() => buildDedupeClipboardText(pendingDedupe), [pendingDedupe]);

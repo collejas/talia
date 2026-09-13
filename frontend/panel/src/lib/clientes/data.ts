@@ -177,13 +177,6 @@ function resolvePrincipal(responsables: ClienteRecord["responsables"]): ClienteR
   return responsables.find((responsable) => responsable.es_responsable_principal) || responsables[0];
 }
 
-function formatStatus(value: string | null | undefined): string {
-  if (!value) return "Pendiente";
-  if (value === "en_progreso") return "En progreso";
-  if (value === "completado") return "Completado";
-  return "Pendiente";
-}
-
 function formatCurrency(value: number | null | undefined, currency = "MXN"): string {
   if (value == null || Number.isNaN(value)) return "—";
   try {

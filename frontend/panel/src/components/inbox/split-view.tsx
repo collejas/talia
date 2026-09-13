@@ -174,22 +174,12 @@ function getAttributionBadgeClass(kind: "regla" | "canal" | "campana"): string {
   return "border-amber-300 bg-amber-50 text-amber-800";
 }
 
-const SERVER_SHORT_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-  timeZone: "UTC",
-});
 const SERVER_FULL_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
   day: "numeric",
   month: "short",
   hour: "2-digit",
   minute: "2-digit",
   timeZone: "UTC",
-});
-const CLIENT_SHORT_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
-  hour: "2-digit",
-  minute: "2-digit",
 });
 const CLIENT_FULL_TIME_FORMAT = new Intl.DateTimeFormat("es-MX", {
   day: "numeric",
@@ -276,14 +266,6 @@ function emptyPromoteFormState(): InboxPromoteFormState {
 }
 
 type PendingAttachment = InboxAttachment & { id: string };
-
-function formatShortTimeLabel(timestamp: string | null | undefined, hydrated: boolean): string {
-  if (!timestamp) return "—";
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "—";
-  const formatter = hydrated ? CLIENT_SHORT_TIME_FORMAT : SERVER_SHORT_TIME_FORMAT;
-  return formatter.format(date);
-}
 
 function formatFullTimeLabel(timestamp: string | null | undefined, hydrated: boolean): string {
   if (!timestamp) return "";
@@ -2197,7 +2179,7 @@ export function InboxSplitView({
         setSending(false);
       }
     },
-    [currentMessages, selectedId, threadItems, manualAgentMetadata],
+    [selectedId, threadItems, manualAgentMetadata],
   );
 
   const handleToggleManualMode = React.useCallback(async () => {

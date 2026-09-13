@@ -447,10 +447,6 @@ export function EmbudoBoardClient({
         .map((quote) => {
           if (!quote || typeof quote !== "object" || Array.isArray(quote)) return null;
           const row = quote as Record<string, unknown>;
-          const metadataRecord =
-            row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-              ? (row.metadata as Record<string, unknown>)
-              : {};
           return {
             id: String(row.id ?? ""),
             version: Number.isFinite(Number(row.version)) ? Number(row.version) : 1,
@@ -832,7 +828,6 @@ export function EmbudoBoardClient({
       let blockMessage: string | null = null;
 
       for (const stage of pathStages) {
-        const stageCode = normalizeStageCode(stage);
         const missingRequirement = getMissingStageRequirementFromPrep(stage, progressionStagePrep);
         if (missingRequirement) {
           blockMessage = `Falta “${missingRequirement}” para completar la etapa “${stage.nombre}”.`;

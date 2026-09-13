@@ -941,7 +941,6 @@ export function LocationComparisonChart({
       mapScope,
       resolveScopedEntryTotal,
       setHoveredKey,
-      stageKeys,
     ],
   );
 

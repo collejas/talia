@@ -31,7 +31,6 @@ import {
   type ProspeccionCampanaAtribucionItem,
 } from "@/lib/prospeccion/prospectos-client"
 
-const money = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 })
 const moneyPrecise = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 4, maximumFractionDigits: 4 })
 const number = new Intl.NumberFormat("es-MX")
 const shortDate = new Intl.DateTimeFormat("es-MX", { month: "short", day: "2-digit" })
