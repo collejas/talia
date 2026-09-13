@@ -2,6 +2,13 @@
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-09-13] — Inicio del refactor de aislamiento por tenant
+
+- Se agregó la migración `20260913_220000_postmark_tenant_servers.sql` con un registro explícito por tenant en `tenant_email_servers`.
+- Dominios y mensajes ya pueden conservar la referencia al servidor Postmark que les corresponde.
+- El worker resuelve el Server API Token desde `public.secretos` cifrado y deja de depender del token global para tenants reconciliados.
+- Se agregó provisión administrativa desde backend; la respuesta nunca expone tokens.
+
 ## [2026-09-13]
 
 ### Decisión confirmada

@@ -35,11 +35,48 @@ class PostmarkRepository:
             },
         )
 
+    async def get_server(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
+        """Obtiene el servidor Postmark exclusivo del tenant."""
+        return await self._get_one(
+            "/rest/v1/tenant_email_servers",
+            params={
+                "select": "id,organizacion_id,postmark_server_id,server_name,server_status,transactional_stream,broadcast_stream,inbound_stream,server_token_secret_key,provisioned_at",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "server_status": "not.eq.retired",
+                "limit": "1",
+            },
+        )
+
+    async def create_server_record(self, *, organizacion_id: UUID, server_name: str) -> dict[str, Any]:
+        data = await self._rest_post(
+            "/rest/v1/tenant_email_servers",
+            payload={
+                "organizacion_id": str(organizacion_id),
+                "server_name": server_name.strip(),
+                "server_status": "provisioning",
+            },
+            prefer="resolution=merge-duplicates,return=representation",
+            params={"on_conflict": "organizacion_id"},
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("server_record_create_failed")
+        return data[0]
+
+    async def update_server(self, *, server_id: UUID, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest_patch(
+            "/rest/v1/tenant_email_servers",
+            params={"id": f"eq.{server_id}"},
+            payload=payload,
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("server_record_update_failed")
+        return data[0]
+
     async def get_verified_domain(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         return await self._get_one(
             "/rest/v1/tenant_email_domains",
             params={
-                "select": "id,organizacion_id,domain_name,external_domain_id,status,verified_at,default_from_email,default_from_name,reply_to_email",
+                "select": "id,organizacion_id,server_id,domain_name,external_domain_id,status,verified_at,default_from_email,default_from_name,reply_to_email",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "status": "eq.verified",
                 "limit": "1",
@@ -50,7 +87,7 @@ class PostmarkRepository:
         data = await self._get_many(
             "/rest/v1/tenant_email_domains",
             params={
-                "select": "id,organizacion_id,domain_name,status,dkim_host,dkim_record_value,return_path_domain,return_path_cname_target,dkim_verified_at,return_path_verified_at,verified_at,blocked_at,default_from_email,default_from_name,reply_to_email",
+                "select": "id,organizacion_id,server_id,domain_name,status,dkim_host,dkim_record_value,return_path_domain,return_path_cname_target,dkim_verified_at,return_path_verified_at,verified_at,blocked_at,default_from_email,default_from_name,reply_to_email",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "status": "not.eq.removed",
                 "order": "created_at.asc",
@@ -123,7 +160,7 @@ class PostmarkRepository:
         return await self._get_one(
             "/rest/v1/tenant_email_domains",
             params={
-                "select": "id,organizacion_id,domain_name,external_domain_id,status,dkim_host,dkim_record_value,return_path_domain,return_path_cname_target,dkim_verified_at,return_path_verified_at,verified_at,default_from_email,default_from_name,reply_to_email",
+                "select": "id,organizacion_id,server_id,domain_name,external_domain_id,status,dkim_host,dkim_record_value,return_path_domain,return_path_cname_target,dkim_verified_at,return_path_verified_at,verified_at,default_from_email,default_from_name,reply_to_email",
                 "id": f"eq.{domain_id}",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "limit": "1",

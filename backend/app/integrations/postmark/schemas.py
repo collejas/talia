@@ -26,6 +26,16 @@ class PostmarkDomainResult(BaseModel):
     return_path_verified: bool = False
 
 
+class PostmarkServerResult(BaseModel):
+    """Servidor creado en la cuenta central y su token inicial."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    external_server_id: int
+    server_name: str
+    server_token: str
+
+
 class PostmarkMessage(BaseModel):
     """Mensaje ya validado por Talia antes de enviarse al proveedor."""
 

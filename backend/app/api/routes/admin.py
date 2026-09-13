@@ -30,6 +30,7 @@ from app.services.stripe_billing import (
     create_stripe_portal_session,
     create_stripe_product_and_price,
 )
+from app.services.postmark.provisioning import PostmarkProvisioningError, PostmarkProvisioningService
 from app.services.supabase_admin import (
     SupabaseAdminError,
     create_supabase_user,
@@ -73,6 +74,22 @@ class AdminCloseLeadPolicyUpsert(BaseModel):
     notes_requerido: bool = True
     correo_requerido: bool = False
     company_name_requerido: bool = False
+
+
+class ProvisionPostmarkServerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    server_name: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class ProvisionPostmarkServerResponse(BaseModel):
+    ok: bool = True
+    server_id: UUID
+    postmark_server_id: int | None = None
+    server_name: str
+    server_status: str
+    transactional_stream: str
+    broadcast_stream: str
 
 
 def _resolve_matrix_path(value: str) -> Path:
@@ -4022,6 +4039,32 @@ async def set_tenant_secret(
         "actualizado_en": row.get("actualizado_en"),
     }
     return SetTenantSecretResponse(secret=SecretMetadata.model_validate(safe_row))
+
+
+@router.post(
+    "/tenants/{organizacion_id}/email-service/server",
+    response_model=ProvisionPostmarkServerResponse,
+)
+async def provision_tenant_postmark_server(
+    organizacion_id: UUID,
+    payload: ProvisionPostmarkServerRequest | None = None,
+    _: UUID = Depends(require_platform_admin),
+    repo: PlatformRepository = Depends(get_platform_repo),
+) -> ProvisionPostmarkServerResponse:
+    """Provisiona el servidor Postmark del tenant desde la cuenta maestra."""
+    tenant = await repo.get_organizacion_details(organizacion_id=organizacion_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="tenant_not_found")
+    requested_name = payload.server_name.strip() if payload and payload.server_name else ""
+    server_name = requested_name or f"Talia - {str(tenant.get('nombre') or organizacion_id).strip()}"
+    try:
+        result = await PostmarkProvisioningService().provision_tenant_server(
+            organizacion_id=organizacion_id,
+            server_name=server_name[:120],
+        )
+    except PostmarkProvisioningError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return ProvisionPostmarkServerResponse.model_validate(result)
 
 
 @router.delete("/tenants/{organizacion_id}/secrets/{clave:path}", status_code=204)

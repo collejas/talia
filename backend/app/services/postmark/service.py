@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.core.config import settings
 from app.integrations.postmark.client import PostmarkClient
 from app.integrations.postmark.errors import PostmarkError, PostmarkRequestError
 from app.integrations.postmark.schemas import MessageKind, PostmarkMessage
@@ -21,6 +20,7 @@ class PostmarkSendContext:
     migration_id: UUID
     domain_id: UUID
     plan_id: UUID
+    server_id: UUID
     domain_name: str
     stream_name: str
 
@@ -76,6 +76,7 @@ class PostmarkService:
             "created": bool(queued.get("created")),
             "message_status": queued.get("message_status"),
             "stream_name": context.stream_name,
+            "server_id": str(context.server_id),
         }
 
     async def deliver_queued_message(
@@ -163,6 +164,15 @@ class PostmarkService:
         domain = await self.repository.get_verified_domain(organizacion_id=organizacion_id)
         if not domain:
             raise PostmarkError("verified_sending_domain_required")
+        server = await self.repository.get_server(organizacion_id=organizacion_id)
+        if not server or server.get("server_status") != "active":
+            raise PostmarkError("postmark_server_not_ready")
+        try:
+            server_id = UUID(str(server["id"]))
+        except (KeyError, ValueError, TypeError) as exc:
+            raise PostmarkError("email_server_configuration_invalid") from exc
+        if domain.get("server_id") != str(server_id):
+            raise PostmarkError("domain_server_mismatch")
         plan = await self.repository.get_active_plan(organizacion_id=organizacion_id)
         if not plan:
             raise PostmarkError("active_email_plan_required")
@@ -180,7 +190,10 @@ class PostmarkService:
         if message_kind == "broadcast" and not message.tag:
             raise PostmarkError("broadcast_tag_required")
 
-        stream_name = self._stream_name_for(message_kind)
+        stream_key = "transactional_stream" if message_kind == "transactional" else "broadcast_stream"
+        stream_name = str(server.get(stream_key) or "").strip()
+        if not stream_name:
+            raise PostmarkError("message_stream_missing")
 
         try:
             return PostmarkSendContext(
@@ -188,22 +201,11 @@ class PostmarkService:
                 migration_id=UUID(str(migration["id"])),
                 domain_id=UUID(str(domain["id"])),
                 plan_id=UUID(str(plan["id"])),
+                server_id=server_id,
                 domain_name=domain_name,
                 stream_name=stream_name,
             )
         except (KeyError, ValueError, TypeError) as exc:
             raise PostmarkError("email_configuration_invalid") from exc
-
-    @staticmethod
-    def _stream_name_for(message_kind: MessageKind) -> str:
-        stream_name = (
-            settings.postmark_transactional_stream
-            if message_kind == "transactional"
-            else settings.postmark_broadcast_stream
-        ).strip()
-        if not stream_name:
-            raise PostmarkError("message_stream_missing")
-        return stream_name
-
 
 __all__ = ["PostmarkService", "PostmarkSendContext"]

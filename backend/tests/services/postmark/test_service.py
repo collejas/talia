@@ -10,12 +10,26 @@ from app.services.postmark.service import PostmarkService
 class FakeRepository:
     def __init__(self, *, suppressed: bool = False):
         self.suppressed = suppressed
+        self.server_id = uuid4()
 
     async def get_migration(self, *, organizacion_id):
         return {"id": str(uuid4()), "feature_enabled": True, "status": "active"}
 
     async def get_verified_domain(self, *, organizacion_id):
-        return {"id": str(uuid4()), "domain_name": "geoactiv.mx", "status": "verified"}
+        return {
+            "id": str(uuid4()),
+            "server_id": str(self.server_id),
+            "domain_name": "geoactiv.mx",
+            "status": "verified",
+        }
+
+    async def get_server(self, *, organizacion_id):
+        return {
+            "id": str(self.server_id),
+            "server_status": "active",
+            "transactional_stream": "outbound",
+            "broadcast_stream": "broadcast",
+        }
 
     async def get_active_plan(self, *, organizacion_id):
         return {"id": str(uuid4()), "status": "active"}

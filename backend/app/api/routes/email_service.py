@@ -66,6 +66,9 @@ async def _create_domain(
     if await repository.find_domain(domain_name=domain_name):
         raise HTTPException(status_code=409, detail="sending_domain_already_registered")
     await repository.ensure_migration(organizacion_id=organizacion_id)
+    server = await repository.get_server(organizacion_id=organizacion_id)
+    if not server or server.get("server_status") != "active":
+        raise HTTPException(status_code=409, detail="postmark_server_not_ready")
     client = PostmarkClient()
     try:
         provider_domain = next(
@@ -87,6 +90,7 @@ async def _create_domain(
             organizacion_id=organizacion_id,
             domain={
                 "domain_name": provider_domain.domain_name,
+                "server_id": server["id"],
                 "external_domain_id": provider_domain.external_domain_id,
                 "status": "verified" if both_verified else "pending_dns",
                 "dkim_host": provider_domain.dkim_host,

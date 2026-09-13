@@ -19,6 +19,7 @@ from .schemas import (
     PostmarkBatchResult,
     PostmarkDomainResult,
     PostmarkMessage,
+    PostmarkServerResult,
     PostmarkSendResult,
 )
 
@@ -99,6 +100,31 @@ class PostmarkClient:
         """Crea un dominio en la cuenta central y normaliza sus DNS."""
         response = await self._account_request("POST", "/domains", payload={"Name": domain_name})
         return self._parse_domain(response.json())
+
+    async def create_server(self, server_name: str) -> PostmarkServerResult:
+        """Crea un servidor aislado y devuelve su token solo al servicio interno."""
+        response = await self._account_request(
+            "POST",
+            "/servers",
+            payload={"Name": server_name.strip()},
+        )
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("ID") is None:
+            raise PostmarkRequestError("invalid_provider_server_response")
+        tokens = payload.get("ApiTokens")
+        token = None
+        if isinstance(tokens, list):
+            for item in tokens:
+                if isinstance(item, dict) and item.get("Token"):
+                    token = str(item["Token"])
+                    break
+        if not token:
+            raise PostmarkRequestError("provider_server_token_missing")
+        return PostmarkServerResult(
+            external_server_id=int(payload["ID"]),
+            server_name=str(payload.get("Name") or server_name).strip(),
+            server_token=token,
+        )
 
     async def list_domains(self) -> list[PostmarkDomainResult]:
         """Lista los dominios de la cuenta y obtiene sus datos DNS completos."""

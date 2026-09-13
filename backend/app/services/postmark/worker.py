@@ -10,6 +10,7 @@ from uuid import UUID
 from app.integrations.postmark.client import PostmarkClient
 from app.integrations.postmark.errors import PostmarkError
 from app.repositories.crm import CRMRepository, CRMRepositoryError
+from app.services.tenant_runtime import get_secret_plaintext
 
 from .repository import PostmarkRepository, PostmarkRepositoryError
 from .service import PostmarkService
@@ -29,9 +30,30 @@ class PostmarkWorker:
     async def run_once(self) -> int:
         repository = PostmarkRepository()
         service = PostmarkService(repository=repository)
-        client = PostmarkClient()
         processed = 0
         for organizacion_id in await repository.list_enabled_organizations():
+            server = await repository.get_server(organizacion_id=organizacion_id)
+            if not server or server.get("server_status") != "active":
+                logger.warning(
+                    "postmark.worker_tenant_server_not_ready",
+                    extra={"organizacion_id": str(organizacion_id)},
+                )
+                continue
+            token = await get_secret_plaintext(
+                organizacion_id=organizacion_id,
+                clave=str(server.get("server_token_secret_key") or "postmark.server_token"),
+            )
+            if not token:
+                logger.error(
+                    "postmark.worker_tenant_server_token_missing",
+                    extra={"organizacion_id": str(organizacion_id)},
+                )
+                continue
+            client = PostmarkClient(
+                server_token=token,
+                transactional_stream=str(server.get("transactional_stream") or "outbound"),
+                broadcast_stream=str(server.get("broadcast_stream") or "broadcast"),
+            )
             claimed = await repository.claim_messages(
                 organizacion_id=organizacion_id,
                 limit=self.batch_size,
