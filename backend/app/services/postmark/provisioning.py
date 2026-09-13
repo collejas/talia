@@ -11,6 +11,7 @@ from app.integrations.postmark.client import PostmarkClient
 from app.integrations.postmark.errors import PostmarkError
 from app.repositories.platform_admin import PlatformRepository
 from app.services.tenant_runtime import invalidate_runtime_cache
+from app.services.tenant_runtime import get_secret_plaintext
 
 from .repository import PostmarkRepository
 
@@ -33,6 +34,7 @@ class PostmarkProvisioningService:
     ) -> dict[str, object]:
         current = await self.repository.get_server(organizacion_id=organizacion_id)
         if current and current.get("server_status") == "active":
+            await self.ensure_webhooks(organizacion_id=organizacion_id, server=current)
             return self._public_status(current)
         if current and current.get("postmark_server_id"):
             raise PostmarkProvisioningError("postmark_server_reconciliation_required")
@@ -96,8 +98,10 @@ class PostmarkProvisioningService:
                     "provisioning_error_message": None,
                 },
             )
+            await self.ensure_webhooks(organizacion_id=organizacion_id, server=updated, token=provider.server_token)
             invalidate_runtime_cache(organizacion_id=organizacion_id)
-            return self._public_status(updated)
+            final = await self.repository.get_server(organizacion_id=organizacion_id) or updated
+            return self._public_status(final)
         except Exception as exc:
             await self.repository.update_server(
                 server_id=server_id,
@@ -110,6 +114,90 @@ class PostmarkProvisioningService:
             if isinstance(exc, PostmarkError):
                 raise
             raise PostmarkProvisioningError("postmark_server_provision_failed") from exc
+
+    async def ensure_webhooks(
+        self,
+        *,
+        organizacion_id: UUID,
+        server: dict[str, object] | None = None,
+        token: str | None = None,
+    ) -> None:
+        """Configura los hooks salientes de cada stream del servidor del tenant."""
+        server = server or await self.repository.get_server(organizacion_id=organizacion_id)
+        if not server or not server.get("postmark_server_id"):
+            raise PostmarkProvisioningError("postmark_server_not_created")
+        base_url = (settings.postmark_webhook_base_url or "").strip().rstrip("/")
+        username = (settings.postmark_webhook_username or "").strip()
+        password = settings.postmark_webhook_password or ""
+        if not base_url or not username or not password:
+            raise PostmarkProvisioningError("postmark_webhook_configuration_missing")
+        if not token:
+            token = await get_secret_plaintext(
+                organizacion_id=organizacion_id,
+                clave=str(server.get("server_token_secret_key") or "postmark.server_token"),
+                force_refresh=True,
+            )
+        if not token:
+            raise PostmarkProvisioningError("postmark_server_token_missing")
+        client = PostmarkClient(
+            server_token=token,
+            transactional_stream=str(server.get("transactional_stream") or "outbound"),
+            broadcast_stream=str(server.get("broadcast_stream") or "broadcast"),
+        )
+        for stream in (
+            str(server.get("transactional_stream") or "outbound"),
+            str(server.get("broadcast_stream") or "broadcast"),
+        ):
+            existing = await self.repository.get_server_webhook(
+                server_id=UUID(str(server["id"])), message_stream=stream
+            )
+            if existing and existing.get("status") == "verified":
+                continue
+            endpoint = f"{base_url}/webhooks/postmark/{server['id']}/{stream}"
+            try:
+                if existing and existing.get("provider_webhook_id"):
+                    response = await client.edit_webhook(
+                        webhook_id=int(existing["provider_webhook_id"]),
+                        url=endpoint,
+                        username=username,
+                        password=password,
+                    )
+                else:
+                    response = await client.create_webhook(
+                        url=endpoint,
+                        message_stream=stream,
+                        username=username,
+                        password=password,
+                    )
+                status = str(response.get("Status") or "pending").lower()
+                await self.repository.upsert_server_webhook(
+                    payload={
+                        "organizacion_id": str(organizacion_id),
+                        "server_id": str(server["id"]),
+                        "message_stream": stream,
+                        "provider_webhook_id": int(response["ID"]),
+                        "endpoint_url": endpoint,
+                        "status": "verified" if status == "verified" else "pending",
+                        "verified_at": datetime.now(timezone.utc).isoformat() if status == "verified" else None,
+                        "last_error": None,
+                    }
+                )
+                if status != "verified":
+                    raise PostmarkProvisioningError("postmark_webhook_not_verified")
+            except Exception as exc:
+                if "response" in locals() and response.get("ID"):
+                    await self.repository.upsert_server_webhook(
+                        payload={
+                            "organizacion_id": str(organizacion_id),
+                            "server_id": str(server["id"]),
+                            "message_stream": stream,
+                            "provider_webhook_id": int(response["ID"]),
+                            "endpoint_url": endpoint,
+                            "status": "failed",
+                            "last_error": str(exc)[:500],
+                        }
+                    )
+                raise
 
     @staticmethod
     def _public_status(row: dict[str, object]) -> dict[str, object]:

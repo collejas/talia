@@ -42,6 +42,10 @@ La ocultación no sustituye autorización: los permisos, ownership y validacione
 
 ## Webhooks
 
+La implementación registra un webhook por servidor Postmark y por Message Stream (`outbound` y `broadcast`). La URL pública incluye el UUID interno del servidor, se protege con Basic Auth configurada fuera de la base de datos y Postmark debe verificarla antes de que el servidor quede operativo. El endpoint valida también que el stream recibido corresponda al servidor de la URL.
+
+Cada recepción se persiste en `tenant_email_webhook_receipts` y se procesa de forma idempotente. Los eventos Delivery, Bounce, Open, Click y SpamComplaint actualizan el mensaje; los rebotes y quejas crean una supresión activa para el mismo tenant. Los reintentos de una recepción fallida pueden volver a procesarse; una recepción ya procesada se confirma sin duplicar el evento.
+
 Postmark no ofrece actualmente firma HMAC para webhooks según su documentación. Usar:
 
 - HTTPS obligatorio;

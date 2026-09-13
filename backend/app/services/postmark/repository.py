@@ -47,6 +47,17 @@ class PostmarkRepository:
             },
         )
 
+    async def get_server_by_id(self, *, server_id: UUID) -> dict[str, Any] | None:
+        return await self._get_one(
+            "/rest/v1/tenant_email_servers",
+            params={
+                "select": "id,organizacion_id,postmark_server_id,server_name,server_status,transactional_stream,broadcast_stream,inbound_stream,server_token_secret_key,provisioned_at",
+                "id": f"eq.{server_id}",
+                "server_status": "not.eq.retired",
+                "limit": "1",
+            },
+        )
+
     async def create_server_record(self, *, organizacion_id: UUID, server_name: str) -> dict[str, Any]:
         data = await self._rest_post(
             "/rest/v1/tenant_email_servers",
@@ -71,6 +82,119 @@ class PostmarkRepository:
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise PostmarkRepositoryError("server_record_update_failed")
         return data[0]
+
+    async def get_server_webhook(
+        self, *, server_id: UUID, message_stream: str
+    ) -> dict[str, Any] | None:
+        return await self._get_one(
+            "/rest/v1/tenant_email_server_webhooks",
+            params={
+                "select": "id,organizacion_id,server_id,message_stream,provider_webhook_id,endpoint_url,status,verified_at,last_error",
+                "server_id": f"eq.{server_id}",
+                "message_stream": f"eq.{message_stream}",
+                "limit": "1",
+            },
+        )
+
+    async def get_message_by_external_id(
+        self, *, organizacion_id: UUID, server_id: UUID, external_message_id: str
+    ) -> dict[str, Any] | None:
+        return await self._get_one(
+            "/rest/v1/tenant_email_messages",
+            params={
+                "select": "id,organizacion_id,server_id,external_message_id,status",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "server_id": f"eq.{server_id}",
+                "external_message_id": f"eq.{external_message_id}",
+                "limit": "1",
+            },
+        )
+
+    async def upsert_server_webhook(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest_post(
+            "/rest/v1/tenant_email_server_webhooks",
+            payload=payload,
+            prefer="resolution=merge-duplicates,return=representation",
+            params={"on_conflict": "server_id,message_stream"},
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("server_webhook_upsert_failed")
+        return data[0]
+
+    async def record_webhook_receipt(self, *, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """Registra una recepción; None significa que fue un reintento duplicado."""
+        data = await self._rest_post(
+            "/rest/v1/tenant_email_webhook_receipts",
+            payload=payload,
+            prefer="resolution=ignore-duplicates,return=representation",
+        )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        params = {
+            "select": "id,processing_status",
+            "organizacion_id": f"eq.{payload.get('organizacion_id')}",
+            "event_type": f"eq.{payload.get('event_type')}",
+            "external_event_id": f"eq.{payload.get('external_event_id')}",
+            "external_message_id": (
+                f"eq.{payload['external_message_id']}"
+                if payload.get("external_message_id") else "is.null"
+            ),
+            "limit": "1",
+        }
+        existing = await self._get_one("/rest/v1/tenant_email_webhook_receipts", params=params)
+        if existing and existing.get("processing_status") != "processed":
+            return existing
+        return None
+
+    async def finish_webhook_receipt(
+        self, *, receipt_id: UUID, status: str, error_code: str | None = None
+    ) -> None:
+        await self._rest_patch(
+            "/rest/v1/tenant_email_webhook_receipts",
+            params={"id": f"eq.{receipt_id}"},
+            payload={
+                "processing_status": status,
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "error_code": error_code,
+            },
+        )
+
+    async def create_event(self, *, payload: dict[str, Any]) -> dict[str, Any] | None:
+        data = await self._rest_post(
+            "/rest/v1/tenant_email_events",
+            payload=payload,
+            prefer="resolution=ignore-duplicates,return=representation",
+        )
+        return data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
+
+    async def update_message_from_webhook(
+        self,
+        *,
+        organizacion_id: UUID,
+        server_id: UUID,
+        external_message_id: str,
+        payload: dict[str, Any],
+        status_filter: str | None = None,
+    ) -> None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "server_id": f"eq.{server_id}",
+            "external_message_id": f"eq.{external_message_id}",
+        }
+        if status_filter:
+            params["status"] = status_filter
+        await self._rest_patch(
+            "/rest/v1/tenant_email_messages",
+            params=params,
+            payload=payload,
+        )
+
+    async def upsert_suppression(self, *, payload: dict[str, Any]) -> None:
+        await self._rest_post(
+            "/rest/v1/tenant_email_suppressions",
+            payload=payload,
+            prefer="resolution=merge-duplicates,return=representation",
+        )
 
     async def enqueue_server_provision_job(self, *, organizacion_id: UUID, source: str) -> dict[str, Any]:
         current = await self.get_server(organizacion_id=organizacion_id)

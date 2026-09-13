@@ -126,6 +126,61 @@ class PostmarkClient:
             server_token=token,
         )
 
+    async def create_webhook(
+        self,
+        *,
+        url: str,
+        message_stream: str,
+        username: str,
+        password: str,
+    ) -> dict[str, object]:
+        """Crea y verifica la recepción de eventos de un Message Stream."""
+        if not self._server_token:
+            raise PostmarkRequestError("server_token_missing")
+        response = await self._server_request(
+            "POST",
+            "/webhooks",
+            payload=self._webhook_payload(url=url, message_stream=message_stream, username=username, password=password),
+        )
+        data = response.json()
+        if not isinstance(data, dict) or data.get("ID") is None:
+            raise PostmarkRequestError("invalid_provider_webhook_response")
+        return data
+
+    async def edit_webhook(
+        self, *, webhook_id: int, url: str, username: str, password: str
+    ) -> dict[str, object]:
+        response = await self._server_request(
+            "PUT",
+            f"/webhooks/{webhook_id}",
+            payload=self._webhook_payload(url=url, message_stream=None, username=username, password=password),
+        )
+        data = response.json()
+        if not isinstance(data, dict) or data.get("ID") is None:
+            raise PostmarkRequestError("invalid_provider_webhook_response")
+        return data
+
+    @staticmethod
+    def _webhook_payload(
+        *, url: str, message_stream: str | None, username: str, password: str
+    ) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "Url": url,
+            "Verify": True,
+            "HttpAuth": {"Username": username, "Password": password},
+            "Triggers": {
+                "Open": {"Enabled": True, "PostFirstOpenOnly": False},
+                "Click": {"Enabled": True},
+                "Delivery": {"Enabled": True},
+                "Bounce": {"Enabled": True, "IncludeContent": False},
+                "SpamComplaint": {"Enabled": True, "IncludeContent": False},
+                "SubscriptionChange": {"Enabled": True},
+            },
+        }
+        if message_stream:
+            payload["MessageStream"] = message_stream
+        return payload
+
     async def list_domains(self) -> list[PostmarkDomainResult]:
         """Lista los dominios de la cuenta y obtiene sus datos DNS completos."""
         response = await self._account_request(
@@ -211,6 +266,37 @@ class PostmarkClient:
                     headers=headers,
                     json=payload,
                     params=params,
+                )
+        except (httpx.TimeoutException, httpx.NetworkError) as exc:
+            raise PostmarkRequestError("provider_unreachable") from exc
+        if response.status_code < 200 or response.status_code >= 300:
+            provider_code, provider_message = self._provider_error(response)
+            raise PostmarkRequestError(
+                "provider_rejected_request",
+                status_code=response.status_code,
+                provider_code=provider_code,
+                provider_message=provider_message,
+            )
+        return response
+
+    async def _server_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: dict[str, object] | None = None,
+    ) -> httpx.Response:
+        if not self._server_token:
+            raise PostmarkRequestError("server_token_missing")
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Postmark-Server-Token": self._server_token,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, transport=self.transport) as client:
+                response = await client.request(
+                    method, f"{self.base_url}{path}", headers=headers, json=payload
                 )
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise PostmarkRequestError("provider_unreachable") from exc

@@ -40,6 +40,16 @@ class PostmarkWorker:
                     extra={"organizacion_id": str(organizacion_id)},
                 )
                 continue
+            try:
+                await PostmarkProvisioningService(repository=repository).ensure_webhooks(
+                    organizacion_id=organizacion_id, server=server
+                )
+            except (PostmarkError, PostmarkProvisioningError, PostmarkRepositoryError) as exc:
+                logger.error(
+                    "postmark.worker_webhooks_not_ready",
+                    extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+                )
+                continue
             token = await get_secret_plaintext(
                 organizacion_id=organizacion_id,
                 clave=str(server.get("server_token_secret_key") or "postmark.server_token"),

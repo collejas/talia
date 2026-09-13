@@ -263,6 +263,25 @@ class Settings(BaseSettings):
             "POSTMARK_TIMEOUT_SECONDS", "TALIA_POSTMARK_TIMEOUT_SECONDS"
         ),
     )
+    postmark_webhook_base_url: str | None = Field(
+        default=None,
+        description="URL pública HTTPS donde Talia recibe webhooks aislados por servidor Postmark.",
+        validation_alias=AliasChoices(
+            "POSTMARK_WEBHOOK_BASE_URL", "TALIA_POSTMARK_WEBHOOK_BASE_URL"
+        ),
+    )
+    postmark_webhook_username: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "POSTMARK_WEBHOOK_USERNAME", "TALIA_POSTMARK_WEBHOOK_USERNAME"
+        ),
+    )
+    postmark_webhook_password: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "POSTMARK_WEBHOOK_PASSWORD", "TALIA_POSTMARK_WEBHOOK_PASSWORD"
+        ),
+    )
     stripe_webhook_secret: str | None = Field(
         default=None,
         validation_alias=AliasChoices("STRIPE_WEBHOOK_SECRET", "TALIA_STRIPE_WEBHOOK_SECRET"),
