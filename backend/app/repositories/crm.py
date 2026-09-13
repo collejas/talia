@@ -470,8 +470,9 @@ def _postgrest_eq_literal(value: str) -> str:
 
 def _postgrest_ilike_literal(value: str) -> str:
     """Build a PostgREST literal for case-insensitive ilike filters."""
-    literal = _postgrest_eq_literal(value)
-    return f"*{literal}*"
+    # The request client encodes query parameters. Pre-encoding here causes
+    # values with accents or special characters to be encoded twice.
+    return f"*{value}*"
 
 
 def _postgrest_presence_clause(fields: Sequence[str], present: bool) -> str:
@@ -545,13 +546,36 @@ def _search_variants(value: str | None) -> list[str]:
 
 
 def _build_search_clause(fields: Sequence[str], value: str | None) -> str | None:
-    variants = _search_variants(value)
-    if not variants:
+    sanitized = _sanitize_search_pattern(value)
+    if not sanitized:
         return None
+
+    # Each word accepts its original and accent-free form. Different words
+    # remain conjunctive so "José Pérez" still requires both name parts.
+    term_groups: list[list[str]] = []
+    raw_terms = re.findall(r"[^\W_]+", sanitized, flags=re.UNICODE) or [sanitized]
+    for raw_term in raw_terms:
+        variants: list[str] = []
+        seen: set[str] = set()
+        for candidate in (
+            raw_term,
+            unicodedata.normalize("NFKD", raw_term).encode("ascii", "ignore").decode("ascii"),
+        ):
+            text = candidate.strip()
+            key = text.casefold()
+            if text and key not in seen:
+                seen.add(key)
+                variants.append(text)
+        if variants:
+            term_groups.append(variants)
+
     groups: list[str] = []
-    for term in variants:
-        pattern = _postgrest_ilike_literal(term)
-        groups.append("or(" + ",".join(f"{field}.ilike.{pattern}" for field in fields) + ")")
+    for variants in term_groups:
+        clauses: list[str] = []
+        for term in variants:
+            pattern = _postgrest_ilike_literal(term)
+            clauses.extend(f"{field}.ilike.{pattern}" for field in fields)
+        groups.append("or(" + ",".join(clauses) + ")")
     if len(groups) == 1:
         return groups[0]
     return "and(" + ",".join(groups) + ")"
