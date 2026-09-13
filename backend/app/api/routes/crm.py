@@ -52040,6 +52040,15 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         or None
     )
     proyecto_necesidades = _clean_text(metadata.get("proyecto_necesidades")) or _clean_text(row.get("descripcion")) or None
+    # Las notas del contacto pertenecen al contacto. No deben aparecer como
+    # "Resumen del contexto" en oportunidades creadas manualmente desde el
+    # embudo; esa sección queda reservada para insights de Tal-IA.
+    oportunidad_creada_desde_embudo = str(metadata.get("created_via") or "").strip() == "embudo_manual"
+    resumen_contexto = (
+        None
+        if oportunidad_creada_desde_embudo
+        else (_clean_text(metadata.get("contacto_notas")) or contacto.get("notas") or contacto.get("notes"))
+    )
 
     nombre_nombres = _clean_text(contacto.get("nombre_nombres") or contacto.get("nombre")) or None
     apellido_paterno = _clean_text(contacto.get("apellido_paterno")) or None
@@ -52080,7 +52089,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         correo=contacto_correo,
         telefono=contacto_telefono,
         empresa=contacto_empresa,
-        notas=_clean_text(metadata.get("contacto_notas")) or contacto.get("notas") or contacto.get("notes"),
+        notas=resumen_contexto,
         necesidad_proposito=necesidad_proposito,
         canal=canal,
         estado=contacto.get("estado") or contacto.get("captura_estado"),
