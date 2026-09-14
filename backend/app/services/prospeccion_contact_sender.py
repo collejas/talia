@@ -40,6 +40,7 @@ DEFAULT_SENDER_ERROR_THRESHOLD = 5
 DEFAULT_SENDER_BACKPRESSURE_COOLDOWN_SECONDS = 60
 BACKPRESSURE_TWILIO_ERROR_CODES = {"63024", "63049", "63032"}
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
+POSTMARK_UNSUBSCRIBE_PLACEHOLDER = "{{{ pm:unsubscribe }}}"
 NUMERIC_PLACEHOLDER_PATTERN = re.compile(r"{{\s*(\d+)\s*}}")
 LEGACY_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*DATA:IMAGE:[^}]+}}", re.IGNORECASE)
 WHATSAPP_IMAGE_PLACEHOLDER_KEYS = {
@@ -474,6 +475,20 @@ def _append_tracking_params_to_anchor_hrefs(body_html: str, tracking_url: str) -
         return f"{prefix}{html_lib.escape(patched_href, quote=True)}{suffix}"
 
     return ANCHOR_HREF_PATTERN.sub(_replace, body_html)
+
+
+def _ensure_broadcast_unsubscribe(*, body: str, body_html: str | None) -> tuple[str, str | None]:
+    """Añade el enlace administrado por Postmark a todo Broadcast."""
+    unsubscribe_text = f"\n\nPara dejar de recibir estos correos: {POSTMARK_UNSUBSCRIBE_PLACEHOLDER}"
+    normalized_body = body if POSTMARK_UNSUBSCRIBE_PLACEHOLDER in body else f"{body}{unsubscribe_text}"
+    if not body_html or POSTMARK_UNSUBSCRIBE_PLACEHOLDER in body_html:
+        return normalized_body, body_html
+    unsubscribe_html = (
+        '<p style="margin-top:24px;font-size:12px;color:#667085;">'
+        f'<a href="{POSTMARK_UNSUBSCRIBE_PLACEHOLDER}">Darme de baja</a>'
+        "</p>"
+    )
+    return normalized_body, f"{body_html}\n{unsubscribe_html}"
 
 
 def _append_tracking_params_to_plain_urls(body_text: str, tracking_url: str) -> str:
@@ -1069,6 +1084,12 @@ async def _run_envio_correo(
     if body_html:
         body_html = _wrap_images_with_tracking_link(body_html, tracking_url)
         body_html = _append_tracking_params_to_anchor_hrefs(body_html, tracking_url)
+    metadata = effective_payload.get("metadata") if isinstance(effective_payload.get("metadata"), dict) else {}
+    message_kind = _clean_text(
+        effective_payload.get("email_message_kind") or metadata.get("email_message_kind")
+    )
+    if message_kind == "broadcast":
+        body, body_html = _ensure_broadcast_unsubscribe(body=body, body_html=body_html)
     if not subject or not body:
         return ContactEnvioResult(
             estado="error",

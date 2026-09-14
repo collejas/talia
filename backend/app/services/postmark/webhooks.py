@@ -119,10 +119,23 @@ async def process_postmark_event(
             record_type == "SubscriptionChange"
             and str(payload.get("SuppressionReason") or "").strip() == "HardBounce"
         )
-        if (is_hard_bounce or is_subscription_hard_bounce or record_type == "SpamComplaint") and recipient:
+        suppression_reason = str(payload.get("SuppressionReason") or "").strip().lower()
+        is_subscription_unsubscribe = (
+            record_type == "SubscriptionChange"
+            and bool(payload.get("SuppressSending"))
+            and str(payload.get("Origin") or "").strip().lower() == "recipient"
+            and suppression_reason not in {"hardbounce", "spamcomplaint"}
+        )
+        if (is_hard_bounce or is_subscription_hard_bounce or is_subscription_unsubscribe or record_type == "SpamComplaint") and recipient:
             await repository.upsert_suppression(payload={
                 "organizacion_id": str(organizacion_id), "email_address": recipient,
-                "suppression_type": "spam_complaint" if record_type == "SpamComplaint" else "bounce",
+                "suppression_type": (
+                    "spam_complaint"
+                    if record_type == "SpamComplaint"
+                    else "unsubscribe"
+                    if is_subscription_unsubscribe
+                    else "bounce"
+                ),
                 "reason": str(payload.get("Description") or payload.get("Details") or record_type)[:500],
                 "source": "system" if source == "polling" else "webhook", "active": True, "suppressed_at": timestamp,
             })
