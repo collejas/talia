@@ -142,8 +142,16 @@ class PostmarkRepository:
         params = {
             "select": "id,processing_status",
             "organizacion_id": f"eq.{payload.get('organizacion_id')}",
+            "server_id": (
+                f"eq.{payload['server_id']}" if payload.get("server_id") else "is.null"
+            ),
             "event_type": f"eq.{payload.get('event_type')}",
             "external_event_id": f"eq.{payload.get('external_event_id')}",
+            "webhook_trace_id": (
+                f"eq.{payload['webhook_trace_id']}"
+                if payload.get("webhook_trace_id")
+                else "is.null"
+            ),
             "external_message_id": (
                 f"eq.{payload['external_message_id']}"
                 if payload.get("external_message_id") else "is.null"

@@ -24,7 +24,8 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 5. [Seguridad y operación](./03-seguridad-y-operacion.md)
 6. [Runbook de dominios por tenant](./05-runbook-dominio-tenant.md)
 7. [Decisiones operativas y criterios](./06-decisiones-operativas-y-criterios.md)
-8. [Changelog](./CHANGELOG.md)
+8. [Sincronización Postmark por tenant](./07-sincronizacion-postmark-por-tenant.md)
+9. [Changelog](./CHANGELOG.md)
 
 ## Decisiones iniciales
 
@@ -44,6 +45,8 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 - Evitar `metadata`, `json`, `jsonb`, `payload`, `config` y estructuras similares para datos de negocio; usarlos solo para información cruda, opcional y no consultada frecuentemente.
 - No mostrar el nombre del proveedor en vistas, configuraciones, respuestas API, errores ni textos visibles para tenants.
 - No eliminar tablas históricas de Brevo hasta demostrar que ningún reporte, auditoría, función SQL, job o migración activa depende de ellas y conservar un respaldo.
+- Sincronizar por tenant la información histórica que Postmark exponga mediante API y recibir en tiempo real los eventos mediante webhooks; el backend debe conservar checkpoints, idempotencia y auditoría.
+- Usar Postmark como fuente de verdad para eventos y estado del proveedor, y Talia como fuente de verdad para atribución de negocio, cuota contratada y reglas operativas.
 
 ## Alta automática de tenants
 
@@ -76,6 +79,8 @@ El aislamiento mínimo por tenant será:
 ## Webhooks por tenant
 
 Cada servidor tendrá configurados desde backend sus webhooks de entrega, rebote, queja, apertura, clic, cambio de suscripción e inbound. Estos eventos actualizarán el estado y las métricas del tenant en Talia. La tabla `tenant_email_webhook_receipts` conservará la recepción idempotente para tolerar reintentos de Postmark; ningún evento se procesará confiando únicamente en un `tenant_id` enviado por el proveedor.
+
+Postmark no proporciona actualmente firma HMAC para estos webhooks. La protección será HTTPS, Basic Auth, validación del payload y allowlist de los rangos IP de Postmark cuando sea compatible con el firewall. La deduplicación usará `X-PM-Webhook-Trace-Id` junto con `MessageID` y el tipo de evento. La verificación y el estado se controlarán por evento, porque Postmark puede pausar un tipo que falle persistentemente sin detener los demás.
 
 Un servidor Postmark separado aísla la operación, las estadísticas y la configuración del cliente. No implica por sí mismo una IP dedicada: la disponibilidad de IP compartida o dedicada depende de Postmark y del volumen contratado.
 
@@ -118,6 +123,9 @@ Los nombres exactos podrán ajustarse al patrón final del repositorio, pero Pos
 - [Bulk Email API](https://postmarkapp.com/developer/api/bulk-email)
 - [Message Streams](https://postmarkapp.com/message-streams)
 - [Domains API](https://postmarkapp.com/developer/api/domains-api)
+- [Messages API](https://postmarkapp.com/developer/api/messages-api)
+- [Bounce API](https://postmarkapp.com/developer/api/bounce-api)
+- [Stats API](https://postmarkapp.com/developer/api/stats-api)
 - [Sender Signatures API](https://postmarkapp.com/developer/api/signatures-api)
 - [Templates API](https://postmarkapp.com/developer/api/templates-api)
 - [Webhooks overview](https://postmarkapp.com/developer/webhooks/webhooks-overview)

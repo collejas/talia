@@ -17,11 +17,11 @@ _VERIFICATION_MESSAGE_ID = "00000000-0000-0000-0000-000000000000"
 
 
 def _event_id(payload: dict[str, Any], trace_id: str | None) -> str:
+    if trace_id:
+        return trace_id[:200]
     provider_id = payload.get("ID") or payload.get("MessageID")
     if provider_id:
         return str(provider_id)
-    if trace_id:
-        return trace_id[:200]
     stable = repr(sorted((str(k), str(v)) for k, v in payload.items()))
     return hashlib.sha256(stable.encode("utf-8")).hexdigest()
 
@@ -79,6 +79,7 @@ async def process_postmark_event(
             "external_message_id": external_message_id,
             "event_type": record_type,
             "external_event_id": event_id,
+            "webhook_trace_id": trace_id[:200] if trace_id else None,
             "processing_status": "received",
         }
     )

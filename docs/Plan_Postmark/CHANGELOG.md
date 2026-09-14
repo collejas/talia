@@ -2,6 +2,18 @@
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-09-14] — Sincronización integral por tenant
+
+- Se inició la implementación segura del sincronizador: las recepciones de webhook ahora quedan preparadas para persistir `X-PM-Webhook-Trace-Id` junto con tenant, servidor, tipo y mensaje.
+- Se documentó la sincronización de mensajes, entregas, rebotes, quejas, aperturas, clics, cambios de suscripción, estadísticas e inbound que Postmark permita recuperar.
+- Se separaron los dos mecanismos necesarios: webhooks para tiempo real y API histórica para carga inicial, conciliación y recuperación de ventanas faltantes.
+- Se definió que cada consulta debe usar el Server API Token y el servidor propio del tenant, con checkpoints, paginación, reintentos, deduplicación y auditoría.
+- Se documentó la diferencia entre mensajes, destinatarios y eventos, incluyendo que los totales de Messages API no sustituyen los contadores por destinatario.
+- Se ajustó la operación de webhooks con la documentación oficial: `X-PM-Webhook-Trace-Id` para deduplicar reintentos, `X-PM-Retries-Remaining` para diagnóstico, allowlist de rangos IP de Postmark y reglas distintas para fallos reintentables y 4xx permanentes.
+- Se documentó que la verificación y posible pausa se gestionan por tipo de evento, por lo que la provisión debe verificar cada evento habilitado.
+- Se estableció que una coincidencia ambigua no marcará automáticamente un correo como enviado y que borrar filas locales no modifica el historial de Postmark.
+- La implementación existente ya cuenta con cliente/servicio para consultas parciales; queda pendiente completar el importador de todos los eventos disponibles, sus checkpoints y la conciliación validada en producción.
+
 ## [2026-09-13] — Inicio del refactor de aislamiento por tenant
 
 - Se agregó la migración `20260913_220000_postmark_tenant_servers.sql` con un registro explícito por tenant en `tenant_email_servers`.

@@ -288,11 +288,21 @@ El endpoint debe:
 6. actualizar el ledger de envío y las supresiones;
 7. evitar confiar en un `tenant_id` enviado sin verificar contra el mensaje local.
 
-Postmark reintenta webhooks que no reciben 200. La deduplicación por `MessageID`, tipo de evento y el identificador de trazabilidad del webhook es obligatoria. El receptor debe guardar primero una recepción idempotente en `tenant_email_webhook_receipts`, encolar el procesamiento y responder rápidamente.
+Postmark no firma actualmente los webhooks con HMAC. La protección será HTTPS, Basic Auth, validación del payload y allowlist de los rangos IP publicados por Postmark cuando el firewall lo permita. La deduplicación debe usar `X-PM-Webhook-Trace-Id`, que permanece estable durante los reintentos del mismo evento, junto con `MessageID` y el tipo de evento; `MessageID` solo no basta porque un mismo mensaje genera varios eventos. El receptor debe guardar primero una recepción idempotente en `tenant_email_webhook_receipts`, encolar el procesamiento y responder rápidamente.
+
+Postmark reintenta errores 5xx, `408`, `429` y fallos de red con backoff; no reintenta los demás 4xx. La verificación del webhook se controla por tipo de evento y una falla persistente puede pausar únicamente ese tipo. La provisión debe comprobar y volver a verificar cada evento habilitado.
 
 La configuración y verificación del webhook debe formar parte de la tarea de provisión del servidor. Si la configuración falla, el servidor no se considerará técnicamente listo para producción y la tarea quedará en estado `failed` para reintento. Las entregas, rebotes, quejas, aperturas, clics y bajas actualizarán `tenant_email_events`, `tenant_email_messages` y `tenant_email_suppressions` según corresponda.
 
 Para respuestas entrantes se implementará directamente un Inbound Message Stream de Postmark con webhook JSON. No se agregará una capa de compatibilidad con el lector IMAP/Brevo.
+
+## Fase 7.1: sincronización histórica y conciliación por tenant
+
+Los webhooks mantienen el tiempo real, pero no sustituyen la recuperación histórica ni corrigen una ventana en la que el endpoint estuvo caído. Se implementará un sincronizador backend por tenant que use el Server API Token propio y consulte, con paginación y checkpoints, `Messages API`, `Bounce API`, estadísticas y las APIs históricas de aperturas/clics disponibles. Los eventos que Postmark no permita recuperar históricamente quedarán documentados como no recuperables; no se inferirán.
+
+El proceso hará carga inicial y conciliaciones periódicas con ventanas solapadas, upserts idempotentes, backoff y métricas de coincidencias exactas, ambiguas y no encontradas. No se tomará una decisión de negocio usando solamente el correo del destinatario, ni se modificará cuota o estado durante el primer dry-run. La relación principal será el `MessageID` persistido al aceptar el envío, complementado por las referencias de `Metadata` ya definidas.
+
+La sincronización distinguirá mensajes, destinatarios y eventos. En particular, el total de Messages API no se comparará directamente con un contador por destinatario. Los ajustes de cuota se escribirán como movimientos auditables; borrar datos locales nunca cambia el total de Postmark. El diseño completo, el modelo de checkpoints y los criterios de aceptación están en [Sincronización Postmark por tenant](./07-sincronizacion-postmark-por-tenant.md).
 
 ## Fase 8: métricas y atribución
 
