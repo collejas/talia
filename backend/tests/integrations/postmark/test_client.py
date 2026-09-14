@@ -128,6 +128,38 @@ async def test_send_exposes_provider_error_details_without_exposing_token():
     assert "server-secret" not in str(error.value)
 
 
+@pytest.mark.asyncio
+async def test_list_bounces_filters_hard_bounces_by_stream_and_paginates():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"TotalCount": 1, "Bounces": [{"ID": 7, "Type": "HardBounce"}]})
+
+    client = PostmarkClient(
+        base_url="https://mail.test",
+        server_token="server-secret",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await client.list_bounces(
+        message_stream="broadcast",
+        from_date="2026-09-13",
+        to_date="2026-09-14",
+        count=50,
+        offset=100,
+    )
+
+    assert result["TotalCount"] == 1
+    assert captured["params"] == {
+        "count": "50",
+        "offset": "100",
+        "type": "HardBounce",
+        "messagestream": "broadcast",
+        "fromdate": "2026-09-13",
+        "todate": "2026-09-14",
+    }
+
+
 def test_batch_rejects_more_than_provider_limit():
     client = PostmarkClient(server_token="secret")
 

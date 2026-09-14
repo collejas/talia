@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 from uuid import UUID
 
@@ -19,6 +20,7 @@ from .admin import get_platform_repo
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 postmark_basic = HTTPBasic(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 @router.post("/postmark/{server_id}/{message_stream}", summary="Webhook Postmark aislado por servidor")
@@ -67,6 +69,30 @@ async def postmark_webhook(
     except HTTPException:
         raise
     except (PostmarkRepositoryError, ValueError) as exc:
+        logger.exception(
+            "postmark.webhook_processing_failed",
+            extra={
+                "server_id": str(server_id),
+                "message_stream": message_stream,
+                "record_type": str(payload.get("RecordType") or ""),
+                "message_id_present": bool(payload.get("MessageID")),
+                "trace_id": request.headers.get("X-PM-Webhook-Trace-Id"),
+                "error_type": type(exc).__name__,
+            },
+        )
+        raise HTTPException(status_code=500, detail="postmark_webhook_processing_failed") from exc
+    except Exception as exc:
+        logger.exception(
+            "postmark.webhook_unexpected_failure",
+            extra={
+                "server_id": str(server_id),
+                "message_stream": message_stream,
+                "record_type": str(payload.get("RecordType") or ""),
+                "message_id_present": bool(payload.get("MessageID")),
+                "trace_id": request.headers.get("X-PM-Webhook-Trace-Id"),
+                "error_type": type(exc).__name__,
+            },
+        )
         raise HTTPException(status_code=500, detail="postmark_webhook_processing_failed") from exc
 
 

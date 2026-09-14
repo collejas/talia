@@ -33,7 +33,7 @@ from app.services.stripe_billing import (
 from app.services.postmark.provisioning import PostmarkProvisioningError, PostmarkProvisioningService
 from app.integrations.postmark.errors import PostmarkRequestError
 from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
-from app.services.postmark.synchronization import synchronize_outbound_messages
+from app.services.postmark.synchronization import synchronize_hard_bounces, synchronize_outbound_messages
 from app.services.supabase_admin import (
     SupabaseAdminError,
     create_supabase_user,
@@ -103,6 +103,16 @@ class SynchronizePostmarkMessagesResponse(BaseModel):
     processed_events: int
     from_date: str
     to_date: str
+
+
+class SynchronizePostmarkHardBouncesResponse(BaseModel):
+    ok: bool = True
+    provider_total: int
+    imported: int
+    new_suppressions: int
+    from_date: str | None = None
+    to_date: str | None = None
+    message_stream: str
 
 
 def _resolve_matrix_path(value: str) -> Path:
@@ -4119,6 +4129,34 @@ async def synchronize_tenant_postmark_messages(
     except (PostmarkRepositoryError, PostmarkRequestError, RuntimeError) as exc:
         raise HTTPException(status_code=502, detail="postmark_synchronization_failed") from exc
     return SynchronizePostmarkMessagesResponse.model_validate(result)
+
+
+@router.post(
+    "/tenants/{organizacion_id}/email-service/synchronize-hard-bounces",
+    response_model=SynchronizePostmarkHardBouncesResponse,
+)
+async def synchronize_tenant_postmark_hard_bounces(
+    organizacion_id: UUID,
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    message_stream: Literal["outbound", "broadcast"] = Query("broadcast"),
+    _: UUID = Depends(require_platform_admin),
+    repository: PostmarkRepository = Depends(lambda: PostmarkRepository()),
+) -> SynchronizePostmarkHardBouncesResponse:
+    """Importa HardBounce históricos y bloquea sus destinatarios en el tenant."""
+    if from_date and to_date and to_date < from_date:
+        raise HTTPException(status_code=422, detail="postmark_date_range_invalid")
+    try:
+        result = await synchronize_hard_bounces(
+            repository=repository,
+            organizacion_id=organizacion_id,
+            from_date=from_date.isoformat() if from_date else None,
+            to_date=to_date.isoformat() if to_date else None,
+            message_stream=message_stream,
+        )
+    except (PostmarkRepositoryError, PostmarkRequestError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="postmark_hard_bounce_synchronization_failed") from exc
+    return SynchronizePostmarkHardBouncesResponse.model_validate(result)
 
 
 @router.delete("/tenants/{organizacion_id}/secrets/{clave:path}", status_code=204)

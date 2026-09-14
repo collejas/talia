@@ -201,6 +201,33 @@ class PostmarkClient:
             raise PostmarkRequestError("invalid_provider_message_details_response")
         return data
 
+    async def list_bounces(
+        self,
+        *,
+        message_stream: str,
+        bounce_type: str = "HardBounce",
+        from_date: str | None = None,
+        to_date: str | None = None,
+        count: int = 500,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        """Consulta rebotes del servidor, sin exponer el token del tenant."""
+        params: dict[str, str | int] = {
+            "count": max(1, min(count, 500)),
+            "offset": max(offset, 0),
+            "type": bounce_type,
+            "messagestream": message_stream,
+        }
+        if from_date:
+            params["fromdate"] = from_date
+        if to_date:
+            params["todate"] = to_date
+        response = await self._server_request("GET", "/bounces", params=params)
+        data = response.json()
+        if not isinstance(data, dict) or not isinstance(data.get("Bounces"), list):
+            raise PostmarkRequestError("invalid_provider_bounces_response")
+        return data
+
     @staticmethod
     def _webhook_payload(
         *, url: str, message_stream: str | None, username: str, password: str

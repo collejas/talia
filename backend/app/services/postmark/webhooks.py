@@ -114,7 +114,12 @@ async def process_postmark_event(
                 external_message_id=external_message_id or "",
                 payload={"status": status, timestamp_field: timestamp}, status_filter=status_filter,
             )
-        if record_type in {"Bounce", "SpamComplaint"} and recipient:
+        is_hard_bounce = record_type == "Bounce" and str(payload.get("Type") or "").strip() == "HardBounce"
+        is_subscription_hard_bounce = (
+            record_type == "SubscriptionChange"
+            and str(payload.get("SuppressionReason") or "").strip() == "HardBounce"
+        )
+        if (is_hard_bounce or is_subscription_hard_bounce or record_type == "SpamComplaint") and recipient:
             await repository.upsert_suppression(payload={
                 "organizacion_id": str(organizacion_id), "email_address": recipient,
                 "suppression_type": "spam_complaint" if record_type == "SpamComplaint" else "bounce",

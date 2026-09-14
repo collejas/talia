@@ -117,3 +117,89 @@ async def synchronize_outbound_messages(
         "from_date": from_date,
         "to_date": to_date,
     }
+
+
+async def synchronize_hard_bounces(
+    *,
+    repository: PostmarkRepository,
+    organizacion_id: UUID,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    message_stream: str = "broadcast",
+    count: int = 500,
+) -> dict[str, int | str | None]:
+    """Importa HardBounce históricos y crea supresiones por tenant."""
+    server = await repository.get_server(organizacion_id=organizacion_id)
+    if not server or server.get("server_status") != "active":
+        raise RuntimeError("postmark_server_not_active")
+    token = await get_secret_plaintext(
+        organizacion_id=organizacion_id,
+        clave=str(server.get("server_token_secret_key") or "postmark.server_token"),
+        force_refresh=True,
+    )
+    if not token:
+        raise RuntimeError("postmark_server_token_missing")
+    client = PostmarkClient(server_token=token)
+    page_size = max(1, min(count, 500))
+    offset = 0
+    provider_total = 0
+    imported = 0
+    suppressed = 0
+    while True:
+        response = await client.list_bounces(
+            message_stream=message_stream,
+            bounce_type="HardBounce",
+            from_date=from_date,
+            to_date=to_date,
+            count=page_size,
+            offset=offset,
+        )
+        bounces = [item for item in response.get("Bounces", []) if isinstance(item, dict)]
+        provider_total = int(response.get("TotalCount") or provider_total or len(bounces))
+        for bounce in bounces:
+            recipient = str(bounce.get("Email") or "").strip().lower()
+            if not recipient or "@" not in recipient:
+                continue
+            message_id = str(bounce.get("MessageID") or "").strip() or None
+            payload = {
+                "RecordType": "Bounce",
+                "MessageID": message_id,
+                "Recipient": recipient,
+                "Email": recipient,
+                "ID": bounce.get("ID"),
+                "BouncedAt": bounce.get("BouncedAt"),
+                "Type": "HardBounce",
+                "TypeCode": bounce.get("TypeCode"),
+                "Description": bounce.get("Description"),
+                "Details": bounce.get("Details"),
+                "Tag": bounce.get("Tag"),
+                "ServerID": bounce.get("ServerID"),
+                "MessageStream": bounce.get("MessageStream") or message_stream,
+            }
+            before = await repository.is_suppressed(
+                organizacion_id=organizacion_id,
+                email_address=recipient,
+            )
+            await process_postmark_event(
+                repository=repository,
+                organizacion_id=organizacion_id,
+                server_id=UUID(str(server["id"])),
+                message_stream=message_stream,
+                payload=payload,
+                trace_id=f"polling-bounce:{bounce.get('ID')}:{message_id}",
+                source="polling",
+            )
+            imported += 1
+            if not before:
+                suppressed += 1
+        if len(bounces) < page_size or offset + len(bounces) >= provider_total:
+            break
+        offset += len(bounces)
+    return {
+        "provider_total": provider_total,
+        "imported": imported,
+        "new_suppressions": suppressed,
+        "from_date": from_date,
+        "to_date": to_date,
+        "message_stream": message_stream,
+    }

@@ -188,6 +188,7 @@ class PostmarkRepository:
             "/rest/v1/tenant_email_events",
             payload=payload,
             prefer="resolution=ignore-duplicates,return=representation",
+            params={"on_conflict": "message_id,event_type,event_at"},
         )
         return data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
 
