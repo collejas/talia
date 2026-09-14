@@ -11,6 +11,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se documentó la diferencia entre mensajes, destinatarios y eventos, incluyendo que los totales de Messages API no sustituyen los contadores por destinatario.
 - Se ajustó la operación de webhooks con la documentación oficial: `X-PM-Webhook-Trace-Id` para deduplicar reintentos, `X-PM-Retries-Remaining` para diagnóstico, allowlist de rangos IP de Postmark y reglas distintas para fallos reintentables y 4xx permanentes.
 - Se documentó que la verificación y posible pausa se gestionan por tipo de evento, por lo que la provisión debe verificar cada evento habilitado.
+- Se estableció que la retención de Postmark no limita el historial de Talia: el sincronizador será incremental, sólo hará upsert y nunca borrará datos locales por ausencia o expiración en Postmark.
 - Se estableció que una coincidencia ambigua no marcará automáticamente un correo como enviado y que borrar filas locales no modifica el historial de Postmark.
 - La implementación existente ya cuenta con cliente/servicio para consultas parciales; queda pendiente completar el importador de todos los eventos disponibles, sus checkpoints y la conciliación validada en producción.
 

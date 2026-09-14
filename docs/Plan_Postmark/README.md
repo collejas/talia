@@ -47,6 +47,7 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 - No eliminar tablas históricas de Brevo hasta demostrar que ningún reporte, auditoría, función SQL, job o migración activa depende de ellas y conservar un respaldo.
 - Sincronizar por tenant la información histórica que Postmark exponga mediante API y recibir en tiempo real los eventos mediante webhooks; el backend debe conservar checkpoints, idempotencia y auditoría.
 - Usar Postmark como fuente de verdad para eventos y estado del proveedor, y Talia como fuente de verdad para atribución de negocio, cuota contratada y reglas operativas.
+- Conservar en Talia el historial local completo: la sincronización histórica nunca eliminará datos porque hayan expirado de la retención de Postmark.
 
 ## Alta automática de tenants
 

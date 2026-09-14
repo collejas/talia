@@ -24,6 +24,8 @@ Esto no significa copiar ciegamente toda la interfaz de Postmark. Postmark es la
 
 La ventana histórica está limitada por la retención configurada en Postmark (por defecto 45 días, configurable entre 7 y 365). Los webhooks son necesarios para no perder eventos posteriores a esa ventana.
 
+La retención de Postmark no será la retención de Talia. Una vez que un mensaje, evento, rebote, queja, apertura, clic o cambio de suscripción se haya persistido correctamente en Talia, formará parte del historial local y no será eliminado porque desaparezca de Postmark. El job histórico sólo agregará o actualizará información del proveedor que todavía no exista; nunca ejecutará `DELETE`, truncará tablas ni reemplazará el historial local completo por la ventana actual del proveedor.
+
 ## APIs históricas
 
 El sincronizador usará exclusivamente el backend y el Server API Token del tenant:
@@ -55,14 +57,14 @@ Un job por tenant hará la carga inicial y las conciliaciones periódicas:
 1. Resolver el servidor activo y su secreto.
 2. Reclamar un checkpoint para impedir dos sincronizaciones simultáneas del mismo tenant/stream.
 3. Consultar cada stream y ventana de fechas con paginación.
-4. Hacer upsert idempotente de mensajes y eventos.
+4. Hacer upsert idempotente de mensajes y eventos sin eliminar registros ausentes en la respuesta del proveedor.
 5. Consultar rebotes y eventos históricos disponibles.
 6. Aplicar estados de forma monotónica: un evento tardío puede completar un mensaje, pero no regresarlo a un estado anterior.
 7. Relacionar el `MessageID` con el envío local mediante `provider_message_id`, `Metadata` o referencias persistidas.
 8. Guardar métricas, diferencias y checkpoint.
 9. Reintentar errores transitorios con backoff y generar alerta ante errores persistentes.
 
-La carga inicial debe ejecutarse en modo de sólo lectura/reporte. No marcará envíos ni cambiará cuotas hasta validar las coincidencias. Una coincidencia sólo por correo electrónico no es suficiente: si hay varios candidatos se marcará `ambiguous`, y si no existe relación segura se marcará `unmatched` para revisión.
+La carga inicial debe ejecutarse en modo de sólo lectura/reporte. No marcará envíos ni cambiará cuotas hasta validar las coincidencias. Una coincidencia sólo por correo electrónico no es suficiente: si hay varios candidatos se marcará `ambiguous`, y si no existe relación segura se marcará `unmatched` para revisión. La ausencia de un registro en una respuesta de Postmark no significa que deba borrarse de Talia: puede estar fuera de la retención, pertenecer a otra ventana o ser un dato histórico local válido.
 
 ## Modelo de datos requerido
 
@@ -102,6 +104,7 @@ Un mensaje a varios destinatarios no debe confundirse con varios mensajes: la Me
 - El receptor conserva `X-PM-Retries-Remaining` y `X-PM-Webhook-Trace-Id` para diagnóstico, sin exponerlos al tenant.
 - La pérdida temporal del job no debe perder eventos: el siguiente ciclo repite una ventana solapada y usa idempotencia.
 - Suspender un tenant detiene envíos nuevos, pero no borra mensajes, eventos ni historial.
+- La sincronización no tiene permisos ni código de purga sobre las tablas históricas de Talia; la limpieza, si algún día se requiere, será un proceso separado con política de retención, autorización y auditoría propias.
 
 Métricas mínimas: última sincronización exitosa por tenant, mensajes consultados, eventos insertados, duplicados, coincidencias exactas, ambiguas y no encontradas, errores por endpoint y diferencia entre Postmark y Talia.
 
@@ -114,7 +117,7 @@ Métricas mínimas: última sincronización exitosa por tenant, mensajes consult
 5. Repetir tenant por tenant, siempre con su servidor y token propios.
 6. Habilitar ajustes de contadores sólo después de revisar las diferencias y conservar la auditoría.
 
-Casos obligatorios: respuesta batch con errores individuales, mensaje sin relación local, destinatario duplicado, evento repetido, evento tardío, mensaje fuera de la retención, token de otro servidor, webhook duplicado, timeout después de procesar, respuesta 429, respuesta 401/403, verificación fallida de un único tipo de evento y tenant suspendido.
+Casos obligatorios: respuesta batch con errores individuales, mensaje sin relación local, destinatario duplicado, evento repetido, evento tardío, mensaje fuera de la retención, registro local ausente en Postmark sin borrarlo, token de otro servidor, webhook duplicado, timeout después de procesar, respuesta 429, respuesta 401/403, verificación fallida de un único tipo de evento y tenant suspendido.
 
 ## Resultado esperado
 

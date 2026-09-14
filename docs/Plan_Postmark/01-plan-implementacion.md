@@ -302,7 +302,7 @@ Los webhooks mantienen el tiempo real, pero no sustituyen la recuperación hist�
 
 El proceso hará carga inicial y conciliaciones periódicas con ventanas solapadas, upserts idempotentes, backoff y métricas de coincidencias exactas, ambiguas y no encontradas. No se tomará una decisión de negocio usando solamente el correo del destinatario, ni se modificará cuota o estado durante el primer dry-run. La relación principal será el `MessageID` persistido al aceptar el envío, complementado por las referencias de `Metadata` ya definidas.
 
-La sincronización distinguirá mensajes, destinatarios y eventos. En particular, el total de Messages API no se comparará directamente con un contador por destinatario. Los ajustes de cuota se escribirán como movimientos auditables; borrar datos locales nunca cambia el total de Postmark. El diseño completo, el modelo de checkpoints y los criterios de aceptación están en [Sincronización Postmark por tenant](./07-sincronizacion-postmark-por-tenant.md).
+La sincronización distinguirá mensajes, destinatarios y eventos. En particular, el total de Messages API no se comparará directamente con un contador por destinatario. Los ajustes de cuota se escribirán como movimientos auditables. El job será incremental y sólo hará upsert: no borrará mensajes, eventos, rebotes ni métricas de Talia cuando ya no aparezcan en la ventana de retención de Postmark. El diseño completo, el modelo de checkpoints y los criterios de aceptación están en [Sincronización Postmark por tenant](./07-sincronizacion-postmark-por-tenant.md).
 
 ## Fase 8: métricas y atribución
 
