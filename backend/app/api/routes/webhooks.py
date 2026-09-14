@@ -46,9 +46,10 @@ async def postmark_webhook(
         raise HTTPException(status_code=400, detail="postmark_webhook_invalid_json") from exc
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="postmark_webhook_invalid_payload")
-    provider_stream = str(payload.get("MessageStream") or "").strip()
-    if provider_stream and provider_stream != message_stream:
-        raise HTTPException(status_code=400, detail="postmark_webhook_stream_mismatch")
+    # La URL ya está fijada al servidor y al stream. Postmark puede enviar
+    # nombres descriptivos distintos en las cargas de verificación (por
+    # ejemplo, Broadcasts), por lo que MessageStream no es una comparación
+    # textual segura ni debe bloquear la verificación.
     try:
         repository = PostmarkRepository()
         server = await repository.get_server_by_id(server_id=server_id)

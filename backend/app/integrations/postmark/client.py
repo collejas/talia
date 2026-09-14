@@ -160,6 +160,47 @@ class PostmarkClient:
             raise PostmarkRequestError("invalid_provider_webhook_response")
         return data
 
+    async def get_webhook(self, *, webhook_id: int) -> dict[str, object]:
+        response = await self._server_request("GET", f"/webhooks/{webhook_id}")
+        data = response.json()
+        if not isinstance(data, dict) or data.get("ID") is None:
+            raise PostmarkRequestError("invalid_provider_webhook_response")
+        return data
+
+    async def list_outbound_messages(
+        self,
+        *,
+        from_date: str,
+        to_date: str,
+        message_stream: str,
+        count: int = 500,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        """Consulta el historial de mensajes del servidor, sin enviar nada."""
+        response = await self._server_request(
+            "GET",
+            "/messages/outbound",
+            params={
+                "count": max(1, min(count, 500)),
+                "offset": max(offset, 0),
+                "fromdate": from_date,
+                "todate": to_date,
+                "messagestream": message_stream,
+            },
+        )
+        data = response.json()
+        if not isinstance(data, dict) or not isinstance(data.get("Messages"), list):
+            raise PostmarkRequestError("invalid_provider_messages_response")
+        return data
+
+    async def get_outbound_message_details(self, message_id: str) -> dict[str, object]:
+        """Obtiene los eventos completos de un mensaje outbound."""
+        response = await self._server_request("GET", f"/messages/outbound/{message_id}/details")
+        data = response.json()
+        if not isinstance(data, dict) or not isinstance(data.get("MessageEvents"), list):
+            raise PostmarkRequestError("invalid_provider_message_details_response")
+        return data
+
     @staticmethod
     def _webhook_payload(
         *, url: str, message_stream: str | None, username: str, password: str
@@ -285,6 +326,7 @@ class PostmarkClient:
         path: str,
         *,
         payload: dict[str, object] | None = None,
+        params: dict[str, object] | None = None,
     ) -> httpx.Response:
         if not self._server_token:
             raise PostmarkRequestError("server_token_missing")
@@ -296,7 +338,7 @@ class PostmarkClient:
         try:
             async with httpx.AsyncClient(timeout=self.timeout, transport=self.transport) as client:
                 response = await client.request(
-                    method, f"{self.base_url}{path}", headers=headers, json=payload
+                    method, f"{self.base_url}{path}", headers=headers, json=payload, params=params
                 )
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise PostmarkRequestError("provider_unreachable") from exc

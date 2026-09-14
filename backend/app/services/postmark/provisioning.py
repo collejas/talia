@@ -154,14 +154,35 @@ class PostmarkProvisioningService:
             if existing and existing.get("status") == "verified":
                 continue
             endpoint = f"{base_url}/webhooks/postmark/{server['id']}/{stream}"
+            response: dict[str, object] = {}
             try:
                 if existing and existing.get("provider_webhook_id"):
-                    response = await client.edit_webhook(
-                        webhook_id=int(existing["provider_webhook_id"]),
-                        url=endpoint,
-                        username=username,
-                        password=password,
+                    response = await client.get_webhook(
+                        webhook_id=int(existing["provider_webhook_id"])
                     )
+                    provider_stream = str(response.get("MessageStream") or "").lower()
+                    expected_provider_streams = {stream.lower()}
+                    if stream.lower() == "broadcast":
+                        expected_provider_streams.add("broadcasts")
+                    provider_triggers = response.get("Triggers") if isinstance(response, dict) else None
+                    provider_trigger_statuses = [
+                        str(value.get("Status") or "").lower()
+                        for value in provider_triggers.values()
+                        if isinstance(value, dict) and value.get("Enabled")
+                    ] if isinstance(provider_triggers, dict) else []
+                    provider_verified = provider_stream in expected_provider_streams and (
+                        str(response.get("Status") or "").lower() == "verified" or (
+                        bool(provider_trigger_statuses)
+                        and all(item == "verified" for item in provider_trigger_statuses)
+                        )
+                    )
+                    if not provider_verified:
+                        response = await client.edit_webhook(
+                            webhook_id=int(existing["provider_webhook_id"]),
+                            url=endpoint,
+                            username=username,
+                            password=password,
+                        )
                 else:
                     response = await client.create_webhook(
                         url=endpoint,
@@ -169,7 +190,15 @@ class PostmarkProvisioningService:
                         username=username,
                         password=password,
                     )
-                status = str(response.get("Status") or "pending").lower()
+                triggers = response.get("Triggers") if isinstance(response, dict) else None
+                trigger_statuses = [
+                    str(value.get("Status") or "").lower()
+                    for value in triggers.values()
+                    if isinstance(value, dict) and value.get("Enabled")
+                ] if isinstance(triggers, dict) else []
+                status = str(response.get("Status") or "").lower()
+                if not status and trigger_statuses and all(item == "verified" for item in trigger_statuses):
+                    status = "verified"
                 await self.repository.upsert_server_webhook(
                     payload={
                         "organizacion_id": str(organizacion_id),
@@ -185,7 +214,8 @@ class PostmarkProvisioningService:
                 if status != "verified":
                     raise PostmarkProvisioningError("postmark_webhook_not_verified")
             except Exception as exc:
-                if "response" in locals() and response.get("ID"):
+                response_stream = str(response.get("MessageStream") or "").lower()
+                if response.get("ID") and (response_stream in {stream.lower(), "broadcasts"}):
                     await self.repository.upsert_server_webhook(
                         payload={
                             "organizacion_id": str(organizacion_id),

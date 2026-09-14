@@ -110,6 +110,22 @@ class PostmarkRepository:
             },
         )
 
+    async def list_messages_by_external_ids(
+        self, *, organizacion_id: UUID, server_id: UUID, external_ids: list[str]
+    ) -> list[dict[str, Any]]:
+        if not external_ids:
+            return []
+        values = ",".join(external_ids)
+        return await self._get_many(
+            "/rest/v1/tenant_email_messages",
+            params={
+                "select": "id,organizacion_id,server_id,external_message_id,status",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "server_id": f"eq.{server_id}",
+                "external_message_id": f"in.({values})",
+            },
+        )
+
     async def upsert_server_webhook(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         data = await self._rest_post(
             "/rest/v1/tenant_email_server_webhooks",
@@ -123,13 +139,6 @@ class PostmarkRepository:
 
     async def record_webhook_receipt(self, *, payload: dict[str, Any]) -> dict[str, Any] | None:
         """Registra una recepción; None significa que fue un reintento duplicado."""
-        data = await self._rest_post(
-            "/rest/v1/tenant_email_webhook_receipts",
-            payload=payload,
-            prefer="resolution=ignore-duplicates,return=representation",
-        )
-        if isinstance(data, list) and data and isinstance(data[0], dict):
-            return data[0]
         params = {
             "select": "id,processing_status",
             "organizacion_id": f"eq.{payload.get('organizacion_id')}",
@@ -142,8 +151,23 @@ class PostmarkRepository:
             "limit": "1",
         }
         existing = await self._get_one("/rest/v1/tenant_email_webhook_receipts", params=params)
-        if existing and existing.get("processing_status") != "processed":
-            return existing
+        if existing:
+            return existing if existing.get("processing_status") != "processed" else None
+        try:
+            data = await self._rest_post(
+                "/rest/v1/tenant_email_webhook_receipts",
+                payload=payload,
+                prefer="resolution=ignore-duplicates,return=representation",
+            )
+        except PostmarkRepositoryError:
+            # Evita que una carrera entre dos webhooks/sincronizaciones rompa
+            # toda la conciliación; la segunda lectura confirma el duplicado.
+            existing = await self._get_one("/rest/v1/tenant_email_webhook_receipts", params=params)
+            if existing:
+                return existing if existing.get("processing_status") != "processed" else None
+            raise
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
         return None
 
     async def finish_webhook_receipt(
@@ -190,6 +214,27 @@ class PostmarkRepository:
         )
 
     async def upsert_suppression(self, *, payload: dict[str, Any]) -> None:
+        # El índice de negocio es parcial y usa lower(email_address), por lo
+        # que no se puede delegar ciegamente en PostgREST on_conflict. Se
+        # actualiza el registro activo existente y solo se inserta si no existe.
+        current = await self._get_one(
+            "/rest/v1/tenant_email_suppressions",
+            params={
+                "select": "id",
+                "organizacion_id": f"eq.{payload['organizacion_id']}",
+                "email_address": f"eq.{payload['email_address']}",
+                "suppression_type": f"eq.{payload['suppression_type']}",
+                "active": "eq.true",
+                "limit": "1",
+            },
+        )
+        if current:
+            await self._rest_patch(
+                "/rest/v1/tenant_email_suppressions",
+                params={"id": f"eq.{current['id']}"},
+                payload={key: value for key, value in payload.items() if key not in {"organizacion_id", "email_address", "suppression_type"}},
+            )
+            return
         await self._rest_post(
             "/rest/v1/tenant_email_suppressions",
             payload=payload,

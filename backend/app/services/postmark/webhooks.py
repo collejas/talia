@@ -13,6 +13,7 @@ from .repository import PostmarkRepository
 
 
 EVENTS = {"Delivery", "Bounce", "Open", "Click", "SpamComplaint", "SubscriptionChange"}
+_VERIFICATION_MESSAGE_ID = "00000000-0000-0000-0000-000000000000"
 
 
 def _event_id(payload: dict[str, Any], trace_id: str | None) -> str:
@@ -26,7 +27,7 @@ def _event_id(payload: dict[str, Any], trace_id: str | None) -> str:
 
 
 def _event_at(payload: dict[str, Any]) -> str:
-    for key in ("DeliveredAt", "BouncedAt", "ComplainedAt", "ReadAt", "ClickedAt", "ChangedAt"):
+    for key in ("DeliveredAt", "BouncedAt", "ComplainedAt", "ReadAt", "ClickedAt", "ChangedAt", "ReceivedAt"):
         value = payload.get(key)
         if value:
             try:
@@ -44,11 +45,22 @@ async def process_postmark_event(
     message_stream: str,
     payload: dict[str, Any],
     trace_id: str | None,
+    source: str = "webhook",
 ) -> dict[str, object]:
     record_type = str(payload.get("RecordType") or "").strip()
     if record_type not in EVENTS:
         raise ValueError("postmark_event_type_invalid")
-    external_message_id = str(payload.get("MessageID") or "").strip() or None
+    raw_external_message_id = str(payload.get("MessageID") or "").strip() or None
+    try:
+        external_message_id = str(UUID(raw_external_message_id)) if raw_external_message_id else None
+    except ValueError:
+        # Las cargas sintéticas de verificación de Postmark pueden usar un
+        # identificador que no es UUID; no debe romper la verificación.
+        external_message_id = None
+    if external_message_id == _VERIFICATION_MESSAGE_ID:
+        # Postmark usa el UUID cero en sus payloads de verificación. Es una
+        # prueba del endpoint, no un envío de un tenant.
+        return {"accepted": True, "verification": True}
     message = (
         await repository.get_message_by_external_id(
             organizacion_id=organizacion_id,
@@ -85,7 +97,7 @@ async def process_postmark_event(
                 "event_status": event_status, "recipient_email": recipient, "event_at": _event_at(payload),
                 "error_code": str(payload.get("TypeCode")) if payload.get("TypeCode") is not None else None,
                 "error_description": str(payload.get("Description") or payload.get("Details") or "")[:2000] or None,
-                "bounce_type": str(payload.get("Type") or "")[:100] or None, "source": "webhook",
+                "bounce_type": str(payload.get("Type") or "")[:100] or None, "source": source,
             })
 
         timestamp = _event_at(payload)
@@ -107,7 +119,7 @@ async def process_postmark_event(
                 "organizacion_id": str(organizacion_id), "email_address": recipient,
                 "suppression_type": "spam_complaint" if record_type == "SpamComplaint" else "bounce",
                 "reason": str(payload.get("Description") or payload.get("Details") or record_type)[:500],
-                "source": "webhook", "active": True, "suppressed_at": timestamp,
+                "source": "system" if source == "polling" else "webhook", "active": True, "suppressed_at": timestamp,
             })
         await repository.finish_webhook_receipt(receipt_id=UUID(str(receipt["id"])), status="processed")
     except Exception as exc:

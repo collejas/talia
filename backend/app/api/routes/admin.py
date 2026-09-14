@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal, Sequence
 from uuid import UUID
@@ -31,7 +31,9 @@ from app.services.stripe_billing import (
     create_stripe_product_and_price,
 )
 from app.services.postmark.provisioning import PostmarkProvisioningError, PostmarkProvisioningService
+from app.integrations.postmark.errors import PostmarkRequestError
 from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
+from app.services.postmark.synchronization import synchronize_outbound_messages
 from app.services.supabase_admin import (
     SupabaseAdminError,
     create_supabase_user,
@@ -91,6 +93,16 @@ class ProvisionPostmarkServerResponse(BaseModel):
     server_status: str
     transactional_stream: str
     broadcast_stream: str
+
+
+class SynchronizePostmarkMessagesResponse(BaseModel):
+    ok: bool = True
+    provider_messages: int
+    provider_total: int
+    matched_messages: int
+    processed_events: int
+    from_date: str
+    to_date: str
 
 
 def _resolve_matrix_path(value: str) -> Path:
@@ -4075,6 +4087,38 @@ async def provision_tenant_postmark_server(
     except PostmarkProvisioningError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return ProvisionPostmarkServerResponse.model_validate(result)
+
+
+@router.post(
+    "/tenants/{organizacion_id}/email-service/synchronize",
+    response_model=SynchronizePostmarkMessagesResponse,
+)
+async def synchronize_tenant_postmark_messages(
+    organizacion_id: UUID,
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    message_stream: Literal["outbound", "broadcast"] = Query("outbound"),
+    count: int = Query(500, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    _: UUID = Depends(require_platform_admin),
+    repository: PostmarkRepository = Depends(lambda: PostmarkRepository()),
+) -> SynchronizePostmarkMessagesResponse:
+    """Concilia mensajes y eventos históricos de un servidor Postmark tenant-scoped."""
+    if to_date < from_date:
+        raise HTTPException(status_code=422, detail="postmark_date_range_invalid")
+    try:
+        result = await synchronize_outbound_messages(
+            repository=repository,
+            organizacion_id=organizacion_id,
+            from_date=from_date.isoformat(),
+            to_date=to_date.isoformat(),
+            message_stream=message_stream,
+            count=count,
+            offset=offset,
+        )
+    except (PostmarkRepositoryError, PostmarkRequestError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail="postmark_synchronization_failed") from exc
+    return SynchronizePostmarkMessagesResponse.model_validate(result)
 
 
 @router.delete("/tenants/{organizacion_id}/secrets/{clave:path}", status_code=204)
