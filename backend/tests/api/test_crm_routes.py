@@ -2043,6 +2043,56 @@ def test_build_contact_envios_entries_creates_sublots_and_balances_templates() -
     assert entries[2]["programado_en"] == "2026-09-05T12:01:00+00:00"
 
 
+def test_resolve_contact_channels_uses_each_whatsapp_template_body() -> None:
+    first_id = uuid.uuid4()
+    second_id = uuid.uuid4()
+    payload = crm_routes.ProspectoContactarPayload(
+        prospecto_ids=[uuid.uuid4()],
+        campana_id=uuid.uuid4(),
+        canales=[
+            crm_routes.ProspeccionCanalConfig(
+                canal="whatsapp",
+                template_id=first_id,
+                template_ids=[first_id, second_id],
+                body="Hola {{nombre}} {{empresa}}",
+            )
+        ],
+    )
+    template_map = {
+        str(first_id): {
+            "id": str(first_id),
+            "canal": "whatsapp",
+            "provider": "meta",
+            "usage_scope": "whats_prosp",
+            "template_name": "plantilla_dos_variables",
+            "language_code": "es_MX",
+            "cuerpo_texto": "Hola {{nombre}} {{empresa}}",
+        },
+        str(second_id): {
+            "id": str(second_id),
+            "canal": "whatsapp",
+            "provider": "meta",
+            "usage_scope": "whats_prosp",
+            "template_name": "plantilla_una_variable",
+            "language_code": "es_MX",
+            "cuerpo_texto": "Hola {{display_name}}",
+        },
+    }
+
+    canales, programacion = crm_routes._resolve_contact_channels(
+        payload,
+        template_map=template_map,
+    )
+
+    assert programacion == {}
+    variants = canales["whatsapp"]["template_variants"]
+    assert [variant["template_id"] for variant in variants] == [str(first_id), str(second_id)]
+    assert [variant["body"] for variant in variants] == [
+        "Hola {{nombre}} {{empresa}}",
+        "Hola {{display_name}}",
+    ]
+
+
 class _FrozenCampaignScheduleDateTime(crm_routes.datetime):
     @classmethod
     def now(cls, tz=None):  # type: ignore[override]

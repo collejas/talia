@@ -10508,9 +10508,16 @@ def _resolve_contact_channels(
                 if body_html:
                     entry["body_html"] = body_html
             elif canal == "whatsapp":
-                message = _clean_text(canal_config.body or canal_config.message)
-                if not message and template_row:
+                # La plantilla aprobada en Meta es la fuente canónica de su
+                # cuerpo y de sus placeholders. Cuando se seleccionan varias
+                # plantillas, ``canal_config.body`` contiene el cuerpo de la
+                # primera y no se puede reutilizar para las demás variantes.
+                if _is_whats_prosp_meta_template_row(template_row):
                     message = _clean_text(template_row.get("cuerpo_texto"))
+                else:
+                    message = _clean_text(canal_config.body or canal_config.message)
+                    if not message and template_row:
+                        message = _clean_text(template_row.get("cuerpo_texto"))
                 twilio_sid = _clean_text((entry_metadata or {}).get("twilio_content_sid"))
                 meta_template_name = _clean_text(
                     entry.get("template_name")
