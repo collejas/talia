@@ -5,6 +5,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 ## [2026-09-14] — Sincronización integral por tenant
 
 - Se inició la implementación segura del sincronizador: las recepciones de webhook ahora quedan preparadas para persistir `X-PM-Webhook-Trace-Id` junto con tenant, servidor, tipo y mensaje.
+- Se agregaron y aplicaron `tenant_email_sync_runs` y `tenant_email_sync_checkpoints` para reanudar la sincronización por tenant/servidor/stream y auditar resultados sin habilitar purgas.
 - Se documentó la sincronización de mensajes, entregas, rebotes, quejas, aperturas, clics, cambios de suscripción, estadísticas e inbound que Postmark permita recuperar.
 - Se separaron los dos mecanismos necesarios: webhooks para tiempo real y API histórica para carga inicial, conciliación y recuperación de ventanas faltantes.
 - Se definió que cada consulta debe usar el Server API Token y el servidor propio del tenant, con checkpoints, paginación, reintentos, deduplicación y auditoría.
