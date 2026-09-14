@@ -158,11 +158,12 @@ class PostmarkRepository:
         return data[0]
 
     async def upsert_sync_checkpoint(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        payload.setdefault("provider_filter", "HardBounce")
         data = await self._rest_post(
             "/rest/v1/tenant_email_sync_checkpoints",
             payload=payload,
             prefer="resolution=merge-duplicates,return=representation",
-            params={"on_conflict": "organizacion_id,server_id,sync_type,message_stream"},
+            params={"on_conflict": "organizacion_id,server_id,sync_type,message_stream,provider_filter"},
         )
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise PostmarkRepositoryError("sync_checkpoint_upsert_failed")
@@ -175,15 +176,17 @@ class PostmarkRepository:
         server_id: UUID,
         sync_type: str,
         message_stream: str,
+        provider_filter: str = "HardBounce",
     ) -> dict[str, Any] | None:
         return await self._get_one(
             "/rest/v1/tenant_email_sync_checkpoints",
             params={
-                "select": "id,window_from,window_to,next_offset,last_provider_total,last_success_at,locked_at",
+                "select": "id,window_from,window_to,next_offset,last_provider_total,last_success_at,locked_at,provider_filter",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "server_id": f"eq.{server_id}",
                 "sync_type": f"eq.{sync_type}",
                 "message_stream": f"eq.{message_stream}",
+                "provider_filter": f"eq.{provider_filter}",
                 "limit": "1",
             },
         )
@@ -197,6 +200,7 @@ class PostmarkRepository:
         message_stream: str,
         window_from: str,
         window_to: str,
+        provider_filter: str = "HardBounce",
     ) -> dict[str, Any] | None:
         data = await self._rpc(
             "tenant_email_claim_sync_checkpoint",
@@ -208,6 +212,7 @@ class PostmarkRepository:
                 "p_window_from": window_from,
                 "p_window_to": window_to,
                 "p_lock_timeout_seconds": 1800,
+                "p_provider_filter": provider_filter,
             },
         )
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):

@@ -32,7 +32,7 @@ El sincronizador usará exclusivamente el backend y el Server API Token del tena
 
 - `GET /messages/outbound`: inventario de mensajes de salida, filtrado por fechas, stream, destinatario, tag y estado. Se paginará con `count` y `offset`; cada página tendrá como máximo 500 registros y se usarán ventanas de fecha para no depender del límite total de la consulta.
 - `GET /messages/outbound/{messageid}/details`: detalle bajo demanda o para reconciliar un mensaje concreto. No se almacenará el cuerpo completo salvo que exista una necesidad funcional y una política explícita de retención.
-- `GET /bounces`: rebotes y sus datos de supresión, con paginación y filtros por fechas, tipo, correo y `MessageID`. El worker importa `HardBounce` por páginas y checkpoint para ambos streams (`outbound` y `broadcast`); las quejas históricas que Postmark exponga como tipo `SpamComplaint` deberán conservarse como una clase de evento separada cuando se habilite ese cursor.
+- `GET /bounces`: rebotes y sus datos de supresión, con paginación y filtros por fechas, tipo, correo y `MessageID`. El worker importa `HardBounce`, `SpamComplaint` y `Unsubscribe` por páginas y checkpoints independientes para ambos streams (`outbound` y `broadcast`).
 - `GET /deliverystats`: totales agregados para comparar la salud del servidor y detectar diferencias; no se usará para inventar filas por destinatario.
 - APIs históricas de aperturas y clics, cuando estén disponibles para la versión contratada, o los webhooks como fuente histórica a partir de su activación. Si Postmark no expone una clase de evento histórica, se documentará como no recuperable y no se inferirá.
 
@@ -75,8 +75,8 @@ Se reutilizarán las tablas Postmark existentes cuando su contrato sea suficient
 - `tenant_email_messages`: un registro por mensaje/proveedor y destinatario operativo, con `organizacion_id`, `tenant_email_server_id`, `provider_message_id`, stream, correo, tag, estado, fechas de estado y referencias a campaña, batch y `envio_id`.
 - `tenant_email_events`: un registro por evento normalizado, con tipo, `provider_message_id`, destinatario, fecha del evento, tipo/código del proveedor, origen (`webhook` o `api_sync`) y referencias de negocio.
 - `tenant_email_webhook_receipts`: recepción idempotente y estado de procesamiento.
-- `tenant_email_sync_runs`: ejecución, tenant, servidor, stream, ventana, origen, inicio/fin, páginas, mensajes, eventos, coincidencias, diferencias, estado y error.
-- `tenant_email_sync_checkpoints`: última ventana/página confirmada por tenant, servidor y stream, con bloqueo y fecha de actualización.
+- `tenant_email_sync_runs`: ejecución, tenant, servidor, stream, filtro del proveedor, ventana, origen, inicio/fin, páginas, mensajes, eventos, coincidencias, diferencias, estado y error.
+- `tenant_email_sync_checkpoints`: última ventana/página confirmada por tenant, servidor, stream y filtro del proveedor (`HardBounce`, `SpamComplaint` o `Unsubscribe`), con bloqueo y fecha de actualización.
 
 Los identificadores y relaciones consultadas por el negocio serán columnas e índices reales, no campos JSON. El payload crudo, si se conserva, será únicamente auxiliar, redacted y sujeto a retención; nunca será la fuente de los contadores.
 

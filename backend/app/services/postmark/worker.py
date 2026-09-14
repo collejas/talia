@@ -198,55 +198,60 @@ class PostmarkWorker:
                         extra={"organizacion_id": str(organizacion_id), "stream": message_stream, "error": str(exc)},
                     )
             for message_stream in ("outbound", "broadcast"):
-                bounce_checkpoint = await repository.claim_sync_checkpoint(
-                    organizacion_id=organizacion_id,
-                    server_id=server_id,
-                    sync_type="bounces",
-                    message_stream=message_stream,
-                    window_from=from_date,
-                    window_to=to_date,
-                )
-                if not bounce_checkpoint:
-                    continue
-                provider_total = int(bounce_checkpoint.get("last_provider_total") or 0)
-                offset = int(bounce_checkpoint.get("next_offset") or 0)
-                if bounce_checkpoint.get("last_provider_total") is not None and offset >= provider_total:
-                    await repository.upsert_sync_checkpoint(
-                        payload={
-                            "organizacion_id": str(organizacion_id),
-                            "server_id": str(server_id),
-                            "sync_type": "bounces",
-                            "message_stream": message_stream,
-                            "window_from": from_date,
-                            "window_to": to_date,
-                            "next_offset": offset,
-                            "last_provider_total": provider_total,
-                            "last_success_at": bounce_checkpoint.get("last_success_at"),
-                            "locked_at": None,
-                        }
-                    )
-                    continue
-                try:
-                    bounce_result = await synchronize_hard_bounces(
-                        repository=repository,
+                for bounce_type in ("HardBounce", "SpamComplaint", "Unsubscribe"):
+                    bounce_checkpoint = await repository.claim_sync_checkpoint(
                         organizacion_id=organizacion_id,
-                        from_date=from_date,
-                        to_date=to_date,
+                        server_id=server_id,
+                        sync_type="bounces",
                         message_stream=message_stream,
-                        count=500,
-                        offset=offset,
-                        single_page=True,
+                        window_from=from_date,
+                        window_to=to_date,
+                        provider_filter=bounce_type,
                     )
-                    processed += int(bounce_result.get("imported") or 0)
-                except (PostmarkError, PostmarkRepositoryError, RuntimeError, ValueError) as exc:
-                    logger.error(
-                        "postmark.worker_hard_bounce_sync_failed",
-                        extra={
-                            "organizacion_id": str(organizacion_id),
-                            "stream": message_stream,
-                            "error": str(exc),
-                        },
-                    )
+                    if not bounce_checkpoint:
+                        continue
+                    provider_total = int(bounce_checkpoint.get("last_provider_total") or 0)
+                    offset = int(bounce_checkpoint.get("next_offset") or 0)
+                    if bounce_checkpoint.get("last_provider_total") is not None and offset >= provider_total:
+                        await repository.upsert_sync_checkpoint(
+                            payload={
+                                "organizacion_id": str(organizacion_id),
+                                "server_id": str(server_id),
+                                "sync_type": "bounces",
+                                "message_stream": message_stream,
+                                "provider_filter": bounce_type,
+                                "window_from": from_date,
+                                "window_to": to_date,
+                                "next_offset": offset,
+                                "last_provider_total": provider_total,
+                                "last_success_at": bounce_checkpoint.get("last_success_at"),
+                                "locked_at": None,
+                            }
+                        )
+                        continue
+                    try:
+                        bounce_result = await synchronize_hard_bounces(
+                            repository=repository,
+                            organizacion_id=organizacion_id,
+                            from_date=from_date,
+                            to_date=to_date,
+                            message_stream=message_stream,
+                            count=500,
+                            offset=offset,
+                            single_page=True,
+                            bounce_type=bounce_type,
+                        )
+                        processed += int(bounce_result.get("imported") or 0)
+                    except (PostmarkError, PostmarkRepositoryError, RuntimeError, ValueError) as exc:
+                        logger.error(
+                            "postmark.worker_bounce_sync_failed",
+                            extra={
+                                "organizacion_id": str(organizacion_id),
+                                "stream": message_stream,
+                                "bounce_type": bounce_type,
+                                "error": str(exc),
+                            },
+                        )
         return processed
 
     async def _process_provision_jobs(self, repository: PostmarkRepository) -> int:

@@ -231,6 +231,13 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 ```
 ## [2026-09-14]
 
+### Sincronización histórica de quejas y bajas
+
+- Se agregó el filtro explícito del proveedor al checkpoint para separar cursores de `HardBounce`, `SpamComplaint` y `Unsubscribe`.
+- El worker consulta e importa esos tres tipos mediante Bounce API para cada tenant y cada stream.
+- `SpamComplaint` se persiste como queja y `Unsubscribe` como cambio de suscripción con supresión activa.
+- La migración `20260914_150000_postmark_sync_provider_filter.sql` fue aplicada y verificada en Supabase.
+
 ### Sincronización histórica: pasos 3 y 4
 
 - Se completó la importación histórica de eventos expuestos por `MessageEvents`: entrega, apertura, clic, rebote y cambio de suscripción, con deduplicación común entre webhook y API.
@@ -238,7 +245,7 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - Los rebotes ahora se procesan por páginas de hasta 500 registros, con reanudación por `offset`, ejecución auditable y liberación del bloqueo ante error.
 - El worker procesa rebotes por separado para cada tenant y para ambos streams, `outbound` y `broadcast`.
 - No se eliminan registros locales cuando desaparecen de Postmark por la retención del proveedor.
-- Postmark documenta que `MessageEvents` expone `SubscriptionChanged`, `Delivered`, `Opened`, `LinkClicked` y `Bounced`; el Bounce API también expone tipos como `HardBounce` y `SpamComplaint`. La importación histórica de `SpamComplaint` queda identificada como siguiente cursor específico porque no debe confundirse con un `HardBounce`.
+- Postmark documenta que `MessageEvents` expone `SubscriptionChanged`, `Delivered`, `Opened`, `LinkClicked` y `Bounced`; Bounce API expone tipos separados como `HardBounce`, `SpamComplaint` y `Unsubscribe`.
 
 ### Validaciones
 

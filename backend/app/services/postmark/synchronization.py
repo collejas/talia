@@ -227,8 +227,9 @@ async def synchronize_hard_bounces(
     count: int = 500,
     offset: int = 0,
     single_page: bool = False,
+    bounce_type: str = "HardBounce",
 ) -> dict[str, int | str | None]:
-    """Importa HardBounce históricos y crea supresiones por tenant.
+    """Importa un tipo de rebote histórico y crea supresiones por tenant.
 
     ``single_page`` permite que el worker avance por checkpoint sin mantener
     una ejecución larga ni repetir páginas ya confirmadas.
@@ -252,6 +253,7 @@ async def synchronize_hard_bounces(
             "server_id": str(server_id),
             "sync_type": "bounces",
             "message_stream": message_stream,
+            "provider_filter": bounce_type,
             "from_date": run_from,
             "to_date": run_to,
             "status": "running",
@@ -269,7 +271,7 @@ async def synchronize_hard_bounces(
         while True:
             response = await client.list_bounces(
                 message_stream=message_stream,
-                bounce_type="HardBounce",
+                bounce_type=bounce_type,
                 from_date=from_date,
                 to_date=to_date,
                 count=page_size,
@@ -283,20 +285,26 @@ async def synchronize_hard_bounces(
                 if not recipient or "@" not in recipient:
                     continue
                 message_id = str(bounce.get("MessageID") or "").strip() or None
+                record_type = "SpamComplaint" if bounce_type == "SpamComplaint" else "SubscriptionChange" if bounce_type == "Unsubscribe" else "Bounce"
                 payload = {
-                    "RecordType": "Bounce",
+                    "RecordType": record_type,
                     "MessageID": message_id,
                     "Recipient": recipient,
                     "Email": recipient,
                     "ID": bounce.get("ID"),
                     "BouncedAt": bounce.get("BouncedAt"),
-                    "Type": "HardBounce",
+                    "ComplainedAt": bounce.get("BouncedAt") if record_type == "SpamComplaint" else None,
+                    "ChangedAt": bounce.get("BouncedAt") if record_type == "SubscriptionChange" else None,
+                    "Type": bounce_type,
                     "TypeCode": bounce.get("TypeCode"),
                     "Description": bounce.get("Description"),
                     "Details": bounce.get("Details"),
                     "Tag": bounce.get("Tag"),
                     "ServerID": bounce.get("ServerID"),
                     "MessageStream": bounce.get("MessageStream") or message_stream,
+                    "Origin": "Recipient" if record_type == "SubscriptionChange" else None,
+                    "SuppressSending": True if record_type == "SubscriptionChange" else None,
+                    "SuppressionReason": "Unsubscribe" if record_type == "SubscriptionChange" else None,
                 }
                 before = await repository.is_suppressed(
                     organizacion_id=organizacion_id,
@@ -323,6 +331,7 @@ async def synchronize_hard_bounces(
                     "server_id": str(server_id),
                     "sync_type": "bounces",
                     "message_stream": message_stream,
+                    "provider_filter": bounce_type,
                     "window_from": run_from,
                     "window_to": run_to,
                     "next_offset": next_offset,
@@ -370,6 +379,7 @@ async def synchronize_hard_bounces(
                 "server_id": str(server_id),
                 "sync_type": "bounces",
                 "message_stream": message_stream,
+                "provider_filter": bounce_type,
                 "window_from": run_from,
                 "window_to": run_to,
                 "next_offset": offset,
