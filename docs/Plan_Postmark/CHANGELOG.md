@@ -229,3 +229,18 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 
 - ...
 ```
+## [2026-09-14]
+
+### Sincronización histórica: pasos 3 y 4
+
+- Se completó la importación histórica de eventos expuestos por `MessageEvents`: entrega, apertura, clic, rebote y cambio de suscripción, con deduplicación común entre webhook y API.
+- Se integró `HardBounce` a `tenant_email_sync_runs` y `tenant_email_sync_checkpoints`.
+- Los rebotes ahora se procesan por páginas de hasta 500 registros, con reanudación por `offset`, ejecución auditable y liberación del bloqueo ante error.
+- El worker procesa rebotes por separado para cada tenant y para ambos streams, `outbound` y `broadcast`.
+- No se eliminan registros locales cuando desaparecen de Postmark por la retención del proveedor.
+- Postmark documenta que `MessageEvents` expone `SubscriptionChanged`, `Delivered`, `Opened`, `LinkClicked` y `Bounced`; el Bounce API también expone tipos como `HardBounce` y `SpamComplaint`. La importación histórica de `SpamComplaint` queda identificada como siguiente cursor específico porque no debe confundirse con un `HardBounce`.
+
+### Validaciones
+
+- `backend/.venv/bin/python -m compileall` pasó para los módulos Postmark.
+- `10` pruebas de integración del cliente Postmark pasaron.

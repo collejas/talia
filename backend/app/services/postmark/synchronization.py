@@ -111,14 +111,16 @@ async def synchronize_outbound_messages(
     if not token:
         raise RuntimeError("postmark_server_token_missing")
     server_id = UUID(str(server["id"]))
+    run_from = from_date or "1970-01-01T00:00:00+00:00"
+    run_to = to_date or datetime.now(timezone.utc).isoformat()
     run = await repository.create_sync_run(
         payload={
             "organizacion_id": str(organizacion_id),
             "server_id": str(server_id),
             "sync_type": "messages",
             "message_stream": message_stream,
-            "from_date": from_date,
-            "to_date": to_date,
+            "from_date": run_from,
+            "to_date": run_to,
             "status": "running",
         }
     )
@@ -223,8 +225,14 @@ async def synchronize_hard_bounces(
     to_date: str | None = None,
     message_stream: str = "broadcast",
     count: int = 500,
+    offset: int = 0,
+    single_page: bool = False,
 ) -> dict[str, int | str | None]:
-    """Importa HardBounce históricos y crea supresiones por tenant."""
+    """Importa HardBounce históricos y crea supresiones por tenant.
+
+    ``single_page`` permite que el worker avance por checkpoint sin mantener
+    una ejecución larga ni repetir páginas ya confirmadas.
+    """
     server = await repository.get_server(organizacion_id=organizacion_id)
     if not server or server.get("server_status") != "active":
         raise RuntimeError("postmark_server_not_active")
@@ -235,67 +243,139 @@ async def synchronize_hard_bounces(
     )
     if not token:
         raise RuntimeError("postmark_server_token_missing")
+    server_id = UUID(str(server["id"]))
+    run_from = from_date or "1970-01-01T00:00:00+00:00"
+    run_to = to_date or datetime.now(timezone.utc).isoformat()
+    run = await repository.create_sync_run(
+        payload={
+            "organizacion_id": str(organizacion_id),
+            "server_id": str(server_id),
+            "sync_type": "bounces",
+            "message_stream": message_stream,
+            "from_date": run_from,
+            "to_date": run_to,
+            "status": "running",
+        }
+    )
+    run_id = UUID(str(run["id"]))
     client = PostmarkClient(server_token=token)
     page_size = max(1, min(count, 500))
-    offset = 0
+    offset = max(offset, 0)
     provider_total = 0
     imported = 0
     suppressed = 0
-    while True:
-        response = await client.list_bounces(
-            message_stream=message_stream,
-            bounce_type="HardBounce",
-            from_date=from_date,
-            to_date=to_date,
-            count=page_size,
-            offset=offset,
-        )
-        bounces = [item for item in response.get("Bounces", []) if isinstance(item, dict)]
-        provider_total = int(response.get("TotalCount") or provider_total or len(bounces))
-        for bounce in bounces:
-            recipient = str(bounce.get("Email") or "").strip().lower()
-            if not recipient or "@" not in recipient:
-                continue
-            message_id = str(bounce.get("MessageID") or "").strip() or None
-            payload = {
-                "RecordType": "Bounce",
-                "MessageID": message_id,
-                "Recipient": recipient,
-                "Email": recipient,
-                "ID": bounce.get("ID"),
-                "BouncedAt": bounce.get("BouncedAt"),
-                "Type": "HardBounce",
-                "TypeCode": bounce.get("TypeCode"),
-                "Description": bounce.get("Description"),
-                "Details": bounce.get("Details"),
-                "Tag": bounce.get("Tag"),
-                "ServerID": bounce.get("ServerID"),
-                "MessageStream": bounce.get("MessageStream") or message_stream,
-            }
-            before = await repository.is_suppressed(
-                organizacion_id=organizacion_id,
-                email_address=recipient,
-            )
-            await process_postmark_event(
-                repository=repository,
-                organizacion_id=organizacion_id,
-                server_id=UUID(str(server["id"])),
+    pages_processed = 0
+    try:
+        while True:
+            response = await client.list_bounces(
                 message_stream=message_stream,
-                payload=payload,
-                trace_id=f"polling-bounce:{bounce.get('ID')}:{message_id}",
-                source="polling",
+                bounce_type="HardBounce",
+                from_date=from_date,
+                to_date=to_date,
+                count=page_size,
+                offset=offset,
             )
-            imported += 1
-            if not before:
-                suppressed += 1
-        if len(bounces) < page_size or offset + len(bounces) >= provider_total:
-            break
-        offset += len(bounces)
-    return {
-        "provider_total": provider_total,
-        "imported": imported,
-        "new_suppressions": suppressed,
-        "from_date": from_date,
-        "to_date": to_date,
-        "message_stream": message_stream,
-    }
+            bounces = [item for item in response.get("Bounces", []) if isinstance(item, dict)]
+            provider_total = int(response.get("TotalCount") or provider_total or len(bounces))
+            pages_processed += 1
+            for bounce in bounces:
+                recipient = str(bounce.get("Email") or "").strip().lower()
+                if not recipient or "@" not in recipient:
+                    continue
+                message_id = str(bounce.get("MessageID") or "").strip() or None
+                payload = {
+                    "RecordType": "Bounce",
+                    "MessageID": message_id,
+                    "Recipient": recipient,
+                    "Email": recipient,
+                    "ID": bounce.get("ID"),
+                    "BouncedAt": bounce.get("BouncedAt"),
+                    "Type": "HardBounce",
+                    "TypeCode": bounce.get("TypeCode"),
+                    "Description": bounce.get("Description"),
+                    "Details": bounce.get("Details"),
+                    "Tag": bounce.get("Tag"),
+                    "ServerID": bounce.get("ServerID"),
+                    "MessageStream": bounce.get("MessageStream") or message_stream,
+                }
+                before = await repository.is_suppressed(
+                    organizacion_id=organizacion_id,
+                    email_address=recipient,
+                )
+                await process_postmark_event(
+                    repository=repository,
+                    organizacion_id=organizacion_id,
+                    server_id=server_id,
+                    message_stream=message_stream,
+                    payload=payload,
+                    trace_id=f"polling-bounce:{bounce.get('ID')}:{message_id}",
+                    source="polling",
+                )
+                imported += 1
+                if not before:
+                    suppressed += 1
+
+            next_offset = offset + len(bounces)
+            finished = len(bounces) < page_size or next_offset >= provider_total
+            await repository.upsert_sync_checkpoint(
+                payload={
+                    "organizacion_id": str(organizacion_id),
+                    "server_id": str(server_id),
+                    "sync_type": "bounces",
+                    "message_stream": message_stream,
+                    "window_from": run_from,
+                    "window_to": run_to,
+                    "next_offset": next_offset,
+                    "last_provider_total": provider_total,
+                    "last_run_id": str(run_id),
+                    "last_success_at": datetime.now(timezone.utc).isoformat() if finished else None,
+                    "locked_at": None if (finished or single_page) else datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            if single_page or finished:
+                await repository.update_sync_run(
+                    run_id=run_id,
+                    payload={
+                        "status": "completed",
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
+                        "pages_processed": pages_processed,
+                        "provider_records": imported,
+                        "matched_records": imported,
+                    },
+                )
+                return {
+                    "provider_total": provider_total,
+                    "imported": imported,
+                    "new_suppressions": suppressed,
+                    "next_offset": next_offset,
+                    "complete": finished,
+                    "from_date": from_date,
+                    "to_date": to_date,
+                    "message_stream": message_stream,
+                }
+            offset = next_offset
+    except Exception as exc:
+        await repository.update_sync_run(
+            run_id=run_id,
+            payload={
+                "status": "failed",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "error_code": type(exc).__name__,
+                "error_message": str(exc)[:2000],
+            },
+        )
+        await repository.upsert_sync_checkpoint(
+            payload={
+                "organizacion_id": str(organizacion_id),
+                "server_id": str(server_id),
+                "sync_type": "bounces",
+                "message_stream": message_stream,
+                "window_from": run_from,
+                "window_to": run_to,
+                "next_offset": offset,
+                "last_provider_total": provider_total or None,
+                "last_run_id": str(run_id),
+                "locked_at": None,
+            }
+        )
+        raise

@@ -32,7 +32,7 @@ El sincronizador usará exclusivamente el backend y el Server API Token del tena
 
 - `GET /messages/outbound`: inventario de mensajes de salida, filtrado por fechas, stream, destinatario, tag y estado. Se paginará con `count` y `offset`; cada página tendrá como máximo 500 registros y se usarán ventanas de fecha para no depender del límite total de la consulta.
 - `GET /messages/outbound/{messageid}/details`: detalle bajo demanda o para reconciliar un mensaje concreto. No se almacenará el cuerpo completo salvo que exista una necesidad funcional y una política explícita de retención.
-- `GET /bounces`: rebotes y sus datos de supresión, con paginación y filtros por fechas, tipo, correo y `MessageID`.
+- `GET /bounces`: rebotes y sus datos de supresión, con paginación y filtros por fechas, tipo, correo y `MessageID`. El worker importa `HardBounce` por páginas y checkpoint para ambos streams (`outbound` y `broadcast`); las quejas históricas que Postmark exponga como tipo `SpamComplaint` deberán conservarse como una clase de evento separada cuando se habilite ese cursor.
 - `GET /deliverystats`: totales agregados para comparar la salud del servidor y detectar diferencias; no se usará para inventar filas por destinatario.
 - APIs históricas de aperturas y clics, cuando estén disponibles para la versión contratada, o los webhooks como fuente histórica a partir de su activación. Si Postmark no expone una clase de evento histórica, se documentará como no recuperable y no se inferirá.
 
@@ -64,7 +64,7 @@ Un job por tenant hará la carga inicial y las conciliaciones periódicas:
 8. Guardar métricas, diferencias y checkpoint.
 9. Reintentar errores transitorios con backoff y generar alerta ante errores persistentes.
 
-El worker ejecutará la conciliación con activación explícita (`POSTMARK_SYNC_ENABLED`) y un intervalo configurable (`POSTMARK_SYNC_INTERVAL_SECONDS`). Reclama el checkpoint mediante una operación atómica con bloqueo temporal y procesa como máximo una página por tenant y stream en cada ciclo para no competir con la entrega de correo. La activación inicial permanecerá deshabilitada hasta validar el tenant maestro.
+El worker ejecutará la conciliación con activación explícita (`POSTMARK_SYNC_ENABLED`) y un intervalo configurable (`POSTMARK_SYNC_INTERVAL_SECONDS`). Reclama el checkpoint mediante una operación atómica con bloqueo temporal y procesa como máximo una página por tenant, stream y tipo de sincronización en cada ciclo para no competir con la entrega de correo. Los mensajes, sus eventos históricos y los `HardBounce` se registran en `tenant_email_sync_runs`; los rebotes avanzan por su propio cursor para no volver a recorrer indefinidamente las primeras 500 filas. La activación inicial permanecerá deshabilitada hasta validar el tenant maestro.
 
 La carga inicial debe ejecutarse en modo de sólo lectura/reporte. No marcará envíos ni cambiará cuotas hasta validar las coincidencias. Una coincidencia sólo por correo electrónico no es suficiente: si hay varios candidatos se marcará `ambiguous`, y si no existe relación segura se marcará `unmatched` para revisión. La ausencia de un registro en una respuesta de Postmark no significa que deba borrarse de Talia: puede estar fuera de la retención, pertenecer a otra ventana o ser un dato histórico local válido.
 
@@ -108,7 +108,7 @@ Un mensaje a varios destinatarios no debe confundirse con varios mensajes: la Me
 - Suspender un tenant detiene envíos nuevos, pero no borra mensajes, eventos ni historial.
 - La sincronización no tiene permisos ni código de purga sobre las tablas históricas de Talia; la limpieza, si algún día se requiere, será un proceso separado con política de retención, autorización y auditoría propias.
 
-Métricas mínimas: última sincronización exitosa por tenant, mensajes consultados, eventos insertados, duplicados, coincidencias exactas, ambiguas y no encontradas, errores por endpoint y diferencia entre Postmark y Talia.
+Métricas mínimas: última sincronización exitosa por tenant, mensajes consultados, eventos insertados, rebotes consultados, supresiones nuevas, duplicados, coincidencias exactas, ambiguas y no encontradas, errores por endpoint y diferencia entre Postmark y Talia. Un `sync_run` fallido conserva su error y libera el checkpoint para reintento; una ejecución parcial sólo confirma la página que terminó correctamente.
 
 ## Despliegue progresivo y aceptación
 
