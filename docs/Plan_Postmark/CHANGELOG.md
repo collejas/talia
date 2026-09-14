@@ -8,6 +8,10 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Se agregaron y aplicaron `tenant_email_sync_runs` y `tenant_email_sync_checkpoints` para reanudar la sincronización por tenant/servidor/stream y auditar resultados sin habilitar purgas.
 - El worker quedó preparado para ejecutar una página histórica por tenant y stream en cada ciclo de conciliación, con ventana de 45 días y activación explícita mediante `POSTMARK_SYNC_ENABLED`; permanece desactivado hasta completar la validación del piloto.
 - Se agregó y aplicó la reclamación atómica de checkpoints mediante `tenant_email_claim_sync_checkpoint`, con expiración de bloqueo de 30 minutos para recuperar trabajos interrumpidos sin duplicar ciclos concurrentes.
+- Se agregó un timeout configurable por página (`POSTMARK_SYNC_PAGE_TIMEOUT_SECONDS`, 120 segundos por defecto); la activación automática queda pausada hasta optimizar la consulta de detalles históricos.
+- Se corrigió la ventana del worker para usar fechas diarias estables en lugar de timestamps variables; así el checkpoint puede continuar desde el siguiente `offset` durante el mismo día.
+- El worker ahora libera y omite un checkpoint ya completo durante el mismo día, evitando descargar repetidamente la misma página; los nuevos eventos continúan llegando por webhook.
+- La sincronización diaria del worker incorpora la `Bounce API` de Broadcast para mantener hard bounces y supresiones del tenant sin depender de una ejecución manual.
 - Se documentó la sincronización de mensajes, entregas, rebotes, quejas, aperturas, clics, cambios de suscripción, estadísticas e inbound que Postmark permita recuperar.
 - Se separaron los dos mecanismos necesarios: webhooks para tiempo real y API histórica para carga inicial, conciliación y recuperación de ventanas faltantes.
 - Se definió que cada consulta debe usar el Server API Token y el servidor propio del tenant, con checkpoints, paginación, reintentos, deduplicación y auditoría.

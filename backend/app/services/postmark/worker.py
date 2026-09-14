@@ -16,7 +16,7 @@ from app.core.config import settings
 from .repository import PostmarkRepository, PostmarkRepositoryError
 from .provisioning import PostmarkProvisioningError, PostmarkProvisioningService
 from .service import PostmarkService
-from .synchronization import synchronize_outbound_messages
+from .synchronization import synchronize_hard_bounces, synchronize_outbound_messages
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class PostmarkWorker:
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._last_sync_at: datetime | None = None
+        self._last_bounce_sync_day: str | None = None
 
     async def run_once(self) -> int:
         repository = PostmarkRepository()
@@ -135,8 +136,11 @@ class PostmarkWorker:
         self._last_sync_at = datetime.now(timezone.utc)
         processed = 0
         now = datetime.now(timezone.utc)
-        from_date = now - timedelta(days=45)
-        to_date = now
+        # Postmark recibe filtros de fecha, no timestamps. Usar la fecha del
+        # día hace estable la ventana durante el ciclo y permite reanudar el
+        # offset sin reiniciarlo por cada segundo que pasa.
+        from_date = (now - timedelta(days=45)).date().isoformat()
+        to_date = now.date().isoformat()
         for organizacion_id in await repository.list_enabled_organizations():
             server = await repository.get_server(organizacion_id=organizacion_id)
             if not server or server.get("server_status") != "active":
@@ -148,8 +152,8 @@ class PostmarkWorker:
                     server_id=server_id,
                     sync_type="messages",
                     message_stream=message_stream,
-                    window_from=from_date.isoformat(),
-                    window_to=to_date.isoformat(),
+                    window_from=from_date,
+                    window_to=to_date,
                 )
                 if not checkpoint:
                     continue
@@ -157,17 +161,36 @@ class PostmarkWorker:
                 if checkpoint:
                     provider_total = int(checkpoint.get("last_provider_total") or 0)
                     next_offset = int(checkpoint.get("next_offset") or 0)
+                    if checkpoint.get("last_provider_total") is not None and next_offset >= provider_total:
+                        await repository.upsert_sync_checkpoint(
+                            payload={
+                                "organizacion_id": str(organizacion_id),
+                                "server_id": str(server_id),
+                                "sync_type": "messages",
+                                "message_stream": message_stream,
+                                "window_from": from_date,
+                                "window_to": to_date,
+                                "next_offset": next_offset,
+                                "last_provider_total": provider_total,
+                                "last_success_at": checkpoint.get("last_success_at"),
+                                "locked_at": None,
+                            }
+                        )
+                        continue
                     if next_offset < provider_total:
                         offset = next_offset
                 try:
-                    result = await synchronize_outbound_messages(
-                        repository=repository,
-                        organizacion_id=organizacion_id,
-                        from_date=from_date.isoformat(),
-                        to_date=to_date.isoformat(),
-                        message_stream=message_stream,
-                        count=500,
-                        offset=offset,
+                    result = await asyncio.wait_for(
+                        synchronize_outbound_messages(
+                            repository=repository,
+                            organizacion_id=organizacion_id,
+                            from_date=from_date,
+                            to_date=to_date,
+                            message_stream=message_stream,
+                            count=500,
+                            offset=offset,
+                        ),
+                        timeout=settings.postmark_sync_page_timeout_seconds,
                     )
                     processed += int(result.get("provider_messages") or 0)
                 except (PostmarkError, PostmarkRepositoryError, RuntimeError, ValueError) as exc:
@@ -175,6 +198,23 @@ class PostmarkWorker:
                         "postmark.worker_history_sync_failed",
                         extra={"organizacion_id": str(organizacion_id), "stream": message_stream, "error": str(exc)},
                     )
+            if self._last_bounce_sync_day != to_date:
+                try:
+                    bounce_result = await synchronize_hard_bounces(
+                        repository=repository,
+                        organizacion_id=organizacion_id,
+                        from_date=from_date,
+                        to_date=to_date,
+                        message_stream="broadcast",
+                        count=500,
+                    )
+                    processed += int(bounce_result.get("imported") or 0)
+                except (PostmarkError, PostmarkRepositoryError, RuntimeError, ValueError) as exc:
+                    logger.error(
+                        "postmark.worker_hard_bounce_sync_failed",
+                        extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+                    )
+        self._last_bounce_sync_day = to_date
         return processed
 
     async def _process_provision_jobs(self, repository: PostmarkRepository) -> int:

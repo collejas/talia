@@ -183,8 +183,8 @@ class PostmarkClient:
             params={
                 "count": max(1, min(count, 500)),
                 "offset": max(offset, 0),
-                "fromdate": from_date,
-                "todate": to_date,
+                "fromdate": _postmark_date_filter(from_date),
+                "todate": _postmark_date_filter(to_date),
                 "messagestream": message_stream,
             },
         )
@@ -219,9 +219,9 @@ class PostmarkClient:
             "messagestream": message_stream,
         }
         if from_date:
-            params["fromdate"] = from_date
+            params["fromdate"] = _postmark_date_filter(from_date)
         if to_date:
-            params["todate"] = to_date
+            params["todate"] = _postmark_date_filter(to_date)
         response = await self._server_request("GET", "/bounces", params=params)
         data = response.json()
         if not isinstance(data, dict) or not isinstance(data.get("Bounces"), list):
@@ -478,6 +478,14 @@ def _first_text(value: dict[str, object], *keys: str) -> str | None:
         if item is not None and str(item).strip():
             return str(item).strip()
     return None
+
+
+def _postmark_date_filter(value: str) -> str:
+    """Normaliza filtros Postmark a la fecha ISO que acepta su API."""
+    normalized = str(value).strip()
+    if len(normalized) >= 10 and normalized[4] == "-" and normalized[7] == "-":
+        return normalized[:10]
+    raise PostmarkRequestError("invalid_provider_date_filter")
 
 
 __all__ = ["PostmarkClient"]

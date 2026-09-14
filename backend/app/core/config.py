@@ -259,6 +259,16 @@ class Settings(BaseSettings):
             "TALIA_POSTMARK_SYNC_INTERVAL_SECONDS",
         ),
     )
+    postmark_sync_page_timeout_seconds: int = Field(
+        default=120,
+        ge=30,
+        le=600,
+        description="Tiempo máximo para procesar una página histórica de Postmark.",
+        validation_alias=AliasChoices(
+            "POSTMARK_SYNC_PAGE_TIMEOUT_SECONDS",
+            "TALIA_POSTMARK_SYNC_PAGE_TIMEOUT_SECONDS",
+        ),
+    )
     postmark_transactional_stream: str = Field(
         default="outbound",
         validation_alias=AliasChoices(
