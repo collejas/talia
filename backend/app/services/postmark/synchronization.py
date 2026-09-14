@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -51,72 +52,126 @@ async def synchronize_outbound_messages(
     )
     if not token:
         raise RuntimeError("postmark_server_token_missing")
+    server_id = UUID(str(server["id"]))
+    run = await repository.create_sync_run(
+        payload={
+            "organizacion_id": str(organizacion_id),
+            "server_id": str(server_id),
+            "sync_type": "messages",
+            "message_stream": message_stream,
+            "from_date": from_date,
+            "to_date": to_date,
+            "status": "running",
+        }
+    )
+    run_id = UUID(str(run["id"]))
     client = PostmarkClient(server_token=token)
-    response = await client.list_outbound_messages(
-        from_date=from_date,
-        to_date=to_date,
-        message_stream=message_stream,
-        count=max(1, min(count, 500)),
-        offset=max(offset, 0),
-    )
-    messages = [item for item in response.get("Messages", []) if isinstance(item, dict)]
-    external_ids = [str(item.get("MessageID")) for item in messages if item.get("MessageID")]
-    local_rows = await repository.list_messages_by_external_ids(
-        organizacion_id=organizacion_id,
-        server_id=UUID(str(server["id"])),
-        external_ids=external_ids,
-    )
-    local_by_external = {str(row.get("external_message_id")): row for row in local_rows}
-    matched = 0
-    events = 0
-    for item in messages:
-        message_id = str(item.get("MessageID") or "").strip()
-        if not message_id or message_id not in local_by_external:
-            continue
-        matched += 1
-        details = await client.get_outbound_message_details(message_id)
-        recipient = _recipient(details) or _recipient(item)
-        for event in details.get("MessageEvents") or []:
-            if not isinstance(event, dict):
+    try:
+        response = await client.list_outbound_messages(
+            from_date=from_date,
+            to_date=to_date,
+            message_stream=message_stream,
+            count=max(1, min(count, 500)),
+            offset=max(offset, 0),
+        )
+        messages = [item for item in response.get("Messages", []) if isinstance(item, dict)]
+        external_ids = [str(item.get("MessageID")) for item in messages if item.get("MessageID")]
+        local_rows = await repository.list_messages_by_external_ids(
+            organizacion_id=organizacion_id,
+            server_id=server_id,
+            external_ids=external_ids,
+        )
+        local_by_external = {str(row.get("external_message_id")): row for row in local_rows}
+        matched = 0
+        events = 0
+        for item in messages:
+            message_id = str(item.get("MessageID") or "").strip()
+            if not message_id or message_id not in local_by_external:
                 continue
-            record_type = _EVENT_TYPES.get(str(event.get("Type") or ""))
-            if not record_type:
-                continue
-            received_at = event.get("ReceivedAt")
-            payload = {
-                "RecordType": record_type,
-                "MessageID": message_id,
-                "Recipient": recipient,
-                "Email": recipient,
-                "ID": event.get("ID"),
-                "ReceivedAt": received_at,
-                "DeliveredAt": received_at if record_type == "Delivery" else None,
-                "BouncedAt": received_at if record_type == "Bounce" else None,
-                "ReadAt": received_at if record_type == "Open" else None,
-                "ClickedAt": received_at if record_type == "Click" else None,
-                "ChangedAt": received_at if record_type == "SubscriptionChange" else None,
-                "Description": event.get("Description"),
-                "Type": event.get("Type"),
-                "TypeCode": event.get("TypeCode"),
+            matched += 1
+            details = await client.get_outbound_message_details(message_id)
+            recipient = _recipient(details) or _recipient(item)
+            for event in details.get("MessageEvents") or []:
+                if not isinstance(event, dict):
+                    continue
+                record_type = _EVENT_TYPES.get(str(event.get("Type") or ""))
+                if not record_type:
+                    continue
+                received_at = event.get("ReceivedAt")
+                payload = {
+                    "RecordType": record_type,
+                    "MessageID": message_id,
+                    "Recipient": recipient,
+                    "Email": recipient,
+                    "ID": event.get("ID"),
+                    "ReceivedAt": received_at,
+                    "DeliveredAt": received_at if record_type == "Delivery" else None,
+                    "BouncedAt": received_at if record_type == "Bounce" else None,
+                    "ReadAt": received_at if record_type == "Open" else None,
+                    "ClickedAt": received_at if record_type == "Click" else None,
+                    "ChangedAt": received_at if record_type == "SubscriptionChange" else None,
+                    "Description": event.get("Description"),
+                    "Type": event.get("Type"),
+                    "TypeCode": event.get("TypeCode"),
+                }
+                await process_postmark_event(
+                    repository=repository,
+                    organizacion_id=organizacion_id,
+                    server_id=server_id,
+                    message_stream=message_stream,
+                    payload=payload,
+                    trace_id=f"polling:{message_id}:{record_type}:{received_at}",
+                    source="polling",
+                )
+                events += 1
+        provider_total = int(response.get("TotalCount") or len(messages))
+        next_offset = max(offset, 0) + len(messages)
+        await repository.update_sync_run(
+            run_id=run_id,
+            payload={
+                "status": "completed",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "pages_processed": 1,
+                "provider_records": len(messages),
+                "events_processed": events,
+                "matched_records": matched,
+                "unmatched_records": max(0, len(messages) - matched),
+            },
+        )
+        await repository.upsert_sync_checkpoint(
+            payload={
+                "organizacion_id": str(organizacion_id),
+                "server_id": str(server_id),
+                "sync_type": "messages",
+                "message_stream": message_stream,
+                "window_from": from_date,
+                "window_to": to_date,
+                "next_offset": next_offset,
+                "last_provider_total": provider_total,
+                "last_run_id": str(run_id),
+                "last_success_at": datetime.now(timezone.utc).isoformat(),
+                "locked_at": None,
             }
-            await process_postmark_event(
-                repository=repository,
-                organizacion_id=organizacion_id,
-                server_id=UUID(str(server["id"])),
-                message_stream=message_stream,
-                payload=payload,
-                trace_id=f"polling:{message_id}:{record_type}:{received_at}",
-                source="polling",
-            )
-            events += 1
-    return {
-        "provider_messages": len(messages),
-        "provider_total": int(response.get("TotalCount") or len(messages)),
-        "matched_messages": matched,
-        "processed_events": events,
-        "from_date": from_date,
-        "to_date": to_date,
-    }
+        )
+        return {
+            "provider_messages": len(messages),
+            "provider_total": provider_total,
+            "matched_messages": matched,
+            "processed_events": events,
+            "from_date": from_date,
+            "to_date": to_date,
+        }
+    except Exception as exc:
+        await repository.update_sync_run(
+            run_id=run_id,
+            payload={
+                "status": "failed",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "error_code": type(exc).__name__,
+                "error_message": str(exc)[:2000],
+            },
+        )
+        raise
 
 
 async def synchronize_hard_bounces(

@@ -11,10 +11,12 @@ from app.integrations.postmark.client import PostmarkClient
 from app.integrations.postmark.errors import PostmarkError
 from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.services.tenant_runtime import get_secret_plaintext
+from app.core.config import settings
 
 from .repository import PostmarkRepository, PostmarkRepositoryError
 from .provisioning import PostmarkProvisioningError, PostmarkProvisioningService
 from .service import PostmarkService
+from .synchronization import synchronize_outbound_messages
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,7 @@ class PostmarkWorker:
         self.batch_size = max(min(batch_size, 500), 1)
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
+        self._last_sync_at: datetime | None = None
 
     async def run_once(self) -> int:
         repository = PostmarkRepository()
@@ -116,6 +119,61 @@ class PostmarkWorker:
                             "message_id": str(message_id),
                             "error": str(exc),
                         },
+                    )
+        if settings.postmark_sync_enabled and self._sync_is_due():
+            processed += await self._synchronize_history(repository)
+        return processed
+
+    def _sync_is_due(self) -> bool:
+        if self._last_sync_at is None:
+            return True
+        elapsed = datetime.now(timezone.utc) - self._last_sync_at
+        return elapsed.total_seconds() >= settings.postmark_sync_interval_seconds
+
+    async def _synchronize_history(self, repository: PostmarkRepository) -> int:
+        """Procesa una página por stream y tenant; nunca purga datos locales."""
+        self._last_sync_at = datetime.now(timezone.utc)
+        processed = 0
+        now = datetime.now(timezone.utc)
+        from_date = now - timedelta(days=45)
+        to_date = now
+        for organizacion_id in await repository.list_enabled_organizations():
+            server = await repository.get_server(organizacion_id=organizacion_id)
+            if not server or server.get("server_status") != "active":
+                continue
+            server_id = UUID(str(server["id"]))
+            for message_stream in ("outbound", "broadcast"):
+                checkpoint = await repository.claim_sync_checkpoint(
+                    organizacion_id=organizacion_id,
+                    server_id=server_id,
+                    sync_type="messages",
+                    message_stream=message_stream,
+                    window_from=from_date.isoformat(),
+                    window_to=to_date.isoformat(),
+                )
+                if not checkpoint:
+                    continue
+                offset = 0
+                if checkpoint:
+                    provider_total = int(checkpoint.get("last_provider_total") or 0)
+                    next_offset = int(checkpoint.get("next_offset") or 0)
+                    if next_offset < provider_total:
+                        offset = next_offset
+                try:
+                    result = await synchronize_outbound_messages(
+                        repository=repository,
+                        organizacion_id=organizacion_id,
+                        from_date=from_date.isoformat(),
+                        to_date=to_date.isoformat(),
+                        message_stream=message_stream,
+                        count=500,
+                        offset=offset,
+                    )
+                    processed += int(result.get("provider_messages") or 0)
+                except (PostmarkError, PostmarkRepositoryError, RuntimeError, ValueError) as exc:
+                    logger.error(
+                        "postmark.worker_history_sync_failed",
+                        extra={"organizacion_id": str(organizacion_id), "stream": message_stream, "error": str(exc)},
                     )
         return processed
 

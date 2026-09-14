@@ -64,6 +64,8 @@ Un job por tenant hará la carga inicial y las conciliaciones periódicas:
 8. Guardar métricas, diferencias y checkpoint.
 9. Reintentar errores transitorios con backoff y generar alerta ante errores persistentes.
 
+El worker ejecutará la conciliación con activación explícita (`POSTMARK_SYNC_ENABLED`) y un intervalo configurable (`POSTMARK_SYNC_INTERVAL_SECONDS`). Reclama el checkpoint mediante una operación atómica con bloqueo temporal y procesa como máximo una página por tenant y stream en cada ciclo para no competir con la entrega de correo. La activación inicial permanecerá deshabilitada hasta validar el tenant maestro.
+
 La carga inicial debe ejecutarse en modo de sólo lectura/reporte. No marcará envíos ni cambiará cuotas hasta validar las coincidencias. Una coincidencia sólo por correo electrónico no es suficiente: si hay varios candidatos se marcará `ambiguous`, y si no existe relación segura se marcará `unmatched` para revisión. La ausencia de un registro en una respuesta de Postmark no significa que deba borrarse de Talia: puede estar fuera de la retención, pertenecer a otra ventana o ser un dato histórico local válido.
 
 ## Modelo de datos requerido

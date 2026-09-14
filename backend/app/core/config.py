@@ -241,6 +241,24 @@ class Settings(BaseSettings):
             "TALIA_POSTMARK_WORKER_ENABLED",
         ),
     )
+    postmark_sync_enabled: bool = Field(
+        default=False,
+        description="Habilita la conciliación histórica no destructiva de Postmark.",
+        validation_alias=AliasChoices(
+            "POSTMARK_SYNC_ENABLED",
+            "TALIA_POSTMARK_SYNC_ENABLED",
+        ),
+    )
+    postmark_sync_interval_seconds: int = Field(
+        default=900,
+        ge=60,
+        le=86400,
+        description="Intervalo mínimo entre ciclos de conciliación histórica Postmark.",
+        validation_alias=AliasChoices(
+            "POSTMARK_SYNC_INTERVAL_SECONDS",
+            "TALIA_POSTMARK_SYNC_INTERVAL_SECONDS",
+        ),
+    )
     postmark_transactional_stream: str = Field(
         default="outbound",
         validation_alias=AliasChoices(

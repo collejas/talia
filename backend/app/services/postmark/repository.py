@@ -137,6 +137,83 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("server_webhook_upsert_failed")
         return data[0]
 
+    async def create_sync_run(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest_post(
+            "/rest/v1/tenant_email_sync_runs",
+            payload=payload,
+            prefer="return=representation",
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("sync_run_create_failed")
+        return data[0]
+
+    async def update_sync_run(self, *, run_id: UUID, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest_patch(
+            "/rest/v1/tenant_email_sync_runs",
+            params={"id": f"eq.{run_id}"},
+            payload=payload,
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("sync_run_update_failed")
+        return data[0]
+
+    async def upsert_sync_checkpoint(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest_post(
+            "/rest/v1/tenant_email_sync_checkpoints",
+            payload=payload,
+            prefer="resolution=merge-duplicates,return=representation",
+            params={"on_conflict": "organizacion_id,server_id,sync_type,message_stream"},
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("sync_checkpoint_upsert_failed")
+        return data[0]
+
+    async def get_sync_checkpoint(
+        self,
+        *,
+        organizacion_id: UUID,
+        server_id: UUID,
+        sync_type: str,
+        message_stream: str,
+    ) -> dict[str, Any] | None:
+        return await self._get_one(
+            "/rest/v1/tenant_email_sync_checkpoints",
+            params={
+                "select": "id,window_from,window_to,next_offset,last_provider_total,last_success_at,locked_at",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "server_id": f"eq.{server_id}",
+                "sync_type": f"eq.{sync_type}",
+                "message_stream": f"eq.{message_stream}",
+                "limit": "1",
+            },
+        )
+
+    async def claim_sync_checkpoint(
+        self,
+        *,
+        organizacion_id: UUID,
+        server_id: UUID,
+        sync_type: str,
+        message_stream: str,
+        window_from: str,
+        window_to: str,
+    ) -> dict[str, Any] | None:
+        data = await self._rpc(
+            "tenant_email_claim_sync_checkpoint",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_server_id": str(server_id),
+                "p_sync_type": sync_type,
+                "p_message_stream": message_stream,
+                "p_window_from": window_from,
+                "p_window_to": window_to,
+                "p_lock_timeout_seconds": 1800,
+            },
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        return data[0]
+
     async def record_webhook_receipt(self, *, payload: dict[str, Any]) -> dict[str, Any] | None:
         """Registra una recepción; None significa que fue un reintento duplicado."""
         params = {

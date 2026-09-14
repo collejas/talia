@@ -6,6 +6,8 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 - Se inició la implementación segura del sincronizador: las recepciones de webhook ahora quedan preparadas para persistir `X-PM-Webhook-Trace-Id` junto con tenant, servidor, tipo y mensaje.
 - Se agregaron y aplicaron `tenant_email_sync_runs` y `tenant_email_sync_checkpoints` para reanudar la sincronización por tenant/servidor/stream y auditar resultados sin habilitar purgas.
+- El worker quedó preparado para ejecutar una página histórica por tenant y stream en cada ciclo de conciliación, con ventana de 45 días y activación explícita mediante `POSTMARK_SYNC_ENABLED`; permanece desactivado hasta completar la validación del piloto.
+- Se agregó y aplicó la reclamación atómica de checkpoints mediante `tenant_email_claim_sync_checkpoint`, con expiración de bloqueo de 30 minutos para recuperar trabajos interrumpidos sin duplicar ciclos concurrentes.
 - Se documentó la sincronización de mensajes, entregas, rebotes, quejas, aperturas, clics, cambios de suscripción, estadísticas e inbound que Postmark permita recuperar.
 - Se separaron los dos mecanismos necesarios: webhooks para tiempo real y API histórica para carga inicial, conciliación y recuperación de ventanas faltantes.
 - Se definió que cada consulta debe usar el Server API Token y el servidor propio del tenant, con checkpoints, paginación, reintentos, deduplicación y auditoría.
