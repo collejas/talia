@@ -911,12 +911,22 @@ async def _restrict_visitantes_payload_whatsapp_to_conversions(
         for row in conversion_rows
         if isinstance(row, dict) and _safe_uuid(str(row.get("conversacion_id") or "").strip())
     }
+    if not campana_id and not campaign_ids and not campana_tipo:
+        conversion_ids.update(
+            await repo.list_opportunity_conversation_ids(
+                organizacion_id=organizacion_id,
+                date_from=date_from,
+                date_to=date_to,
+                limit=5000,
+            )
+        )
     items = visitantes_payload.get("items")
     if not isinstance(items, list):
         return
 
     # The demographic RPC includes outbound-only sends. Reset WhatsApp fields,
-    # then add back only distinct conversations present in campana_conversion.
+    # then add back only distinct converted conversations and conversations
+    # that already have an operational opportunity.
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -947,7 +957,17 @@ async def _restrict_visitantes_payload_whatsapp_to_conversions(
         include_persona_details=True,
         conversation_ids=conversion_ids,
     )
+    conversation_ids_for_cta = [
+        str(row.get("id") or "").strip()
+        for row in rows
+        if isinstance(row, dict) and str(row.get("id") or "").strip()
+    ]
+    cta_events = await repo.worker_list_whatsapp_atribucion_events_by_conversations(
+        organizacion_id=organizacion_id,
+        conversation_ids=conversation_ids_for_cta,
+    ) if conversation_ids_for_cta else []
     aggregates: dict[str, dict[str, Any]] = {}
+    cta_by_location: dict[str, dict[str, int]] = {}
     for row in rows:
         phone_value = _extract_whatsapp_phone_value(row)
         if not phone_value:
@@ -961,6 +981,16 @@ async def _restrict_visitantes_payload_whatsapp_to_conversions(
         bucket["count"] += 1
         if name:
             bucket["name"] = name
+        conversation_id = str(row.get("id") or "").strip()
+        for event in cta_events:
+            if str(event.get("conversacion_id") or "").strip() != conversation_id:
+                continue
+            channel = _clean_text(event.get("canal_publicitario")) or "sin_canal"
+            campaign = _clean_text(event.get("campana_publicitaria")) or "sin_campana"
+            cta_key = f"{channel}::{campaign}"
+            location_ctas = cta_by_location.setdefault(key, {})
+            location_ctas[cta_key] = location_ctas.get(cta_key, 0) + 1
+            break
 
     item_by_key = {
         str(item.get("key") or "UNK"): item
@@ -989,6 +1019,18 @@ async def _restrict_visitantes_payload_whatsapp_to_conversions(
         _apply_whatsapp_bucket_counts(
             item=item, count=count, level=nivel, name=str(payload.get("name") or "")
         )
+        cta_rows = [
+            {
+                "canal_publicitario": cta_key.split("::", 1)[0],
+                "campana_publicitaria": cta_key.split("::", 1)[1],
+                "total": total,
+            }
+            for cta_key, total in cta_by_location.get(key, {}).items()
+            if total > 0
+        ]
+        if cta_rows:
+            item["wa_atribucion_top"] = cta_rows
+            item["wa_atribucion_total"] = sum(row["total"] for row in cta_rows)
         total_conversions += count
     if isinstance(totals, dict):
         totals["whatsapp_total"] = total_conversions
@@ -41165,6 +41207,18 @@ async def get_visits_whatsapp_conversations(
                 for row in conversion_rows
                 if _safe_uuid(str(row.get("conversacion_id") or "").strip())
             }
+            # Una oportunidad creada al iniciar una conversación también es
+            # una conversión operativa, aunque no exista una fila en
+            # campana_conversion (que solo representa atribución de campañas).
+            if not campana_id_value and not campana_tipo_value:
+                conversion_conversation_ids.update(
+                    await repo.list_opportunity_conversation_ids(
+                        organizacion_id=organizacion_id,
+                        date_from=date_from,
+                        date_to=date_to,
+                        limit=5000,
+                    )
+                )
         rows = await repo.visitas_persona_whatsapp_conversaciones(
             usuario_token=_normalize_reports_user_token(user_token),
             organizacion_id=organizacion_id,
@@ -45952,25 +46006,66 @@ async def demografia_campanas_atribucion(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    if campana_uuid is None:
+        cta_opportunities = await repo.list_whatsapp_cta_opportunities(
+            organizacion_id=organizacion_id,
+            date_from=date_from,
+            date_to=date_to,
+            limit=5000,
+        )
+        cta_groups: dict[str, dict[str, set[str]]] = {}
+        for opportunity in cta_opportunities:
+            metadata = opportunity.get("metadata") if isinstance(opportunity.get("metadata"), dict) else {}
+            attribution = metadata.get("publicidad_whatsapp_atribucion")
+            if not isinstance(attribution, dict):
+                continue
+            campaign = _clean_text(attribution.get("campana_publicitaria")) or "sin_campana"
+            group = cta_groups.setdefault(campaign, {"opportunities": set(), "conversations": set()})
+            opportunity_id = _clean_text(opportunity.get("id"))
+            conversation_id = _clean_text(metadata.get("conversation_id"))
+            if opportunity_id:
+                group["opportunities"].add(opportunity_id)
+            if conversation_id:
+                group["conversations"].add(conversation_id)
+        for campaign, group in cta_groups.items():
+            whatsapp_rows.append(
+                {
+                    "campana_id": None,
+                    "campana_nombre": campaign,
+                    "canal": "whatsapp",
+                    "template_id": None,
+                    "template_nombre": None,
+                    "template_slug": None,
+                    "version_id": None,
+                    "envios_totales": 0,
+                    "oportunidades_total": len(group["opportunities"]),
+                    "conversaciones_total": len(group["conversations"]),
+                }
+            )
+
     # Una conversión puede conservar campaña/oportunidad aunque se haya
     # eliminado el envío o no exista ya una atribución saliente relacionable.
     # No es seguro inventar una plantilla, pero sí debemos mantenerla visible
     # para todos los tenants como conversión histórica sin plantilla.
-    try:
-        legacy_conversion_rows = await repo.get_campana_conversion_resumen_rango(
-            organizacion_id=organizacion_id,
-            campana_id=campana_uuid,
-            date_from_iso=date_from.isoformat() if date_from else None,
-            date_to_iso=date_to.isoformat() if date_to else None,
-            limit=1000,
-            offset=0,
-        )
-    except CRMRepositoryError:
-        logger.warning(
-            "crm.demografia.campanas_atribucion.legacy_conversion_fallback_failed",
-            extra={"organizacion_id": str(organizacion_id)},
-        )
-        legacy_conversion_rows = []
+    # Con un rango explícito, la RPC por campaña/plantilla ya es la fuente
+    # canónica. El resumen legado no tiene granularidad de plantilla y puede
+    # reintroducir conversiones históricas como "sin plantilla".
+    legacy_conversion_rows: list[dict[str, Any]] = []
+    if date_from is None and date_to is None:
+        try:
+            legacy_conversion_rows = await repo.get_campana_conversion_resumen_rango(
+                organizacion_id=organizacion_id,
+                campana_id=campana_uuid,
+                date_from_iso=None,
+                date_to_iso=None,
+                limit=1000,
+                offset=0,
+            )
+        except CRMRepositoryError:
+            logger.warning(
+                "crm.demografia.campanas_atribucion.legacy_conversion_fallback_failed",
+                extra={"organizacion_id": str(organizacion_id)},
+            )
 
     mapa_campaign_rows: list[dict[str, Any]] = []
     for row in campaign_rows:
@@ -46531,6 +46626,55 @@ async def demografia_resumen_v2(
                 if len(page_rows) < 500:
                     break
                 offset += len(page_rows)
+            cta_opportunities = (
+                await repo.list_whatsapp_cta_opportunities(
+                    organizacion_id=organizacion_id,
+                    date_from=date_from,
+                    date_to=date_to,
+                    limit=5000,
+                )
+                if not campana_uuid_value and not campana_tipo_value
+                else []
+            )
+            cta_groups: dict[str, dict[str, Any]] = {}
+            for opportunity in cta_opportunities:
+                metadata = opportunity.get("metadata") if isinstance(opportunity.get("metadata"), dict) else {}
+                attribution = metadata.get("publicidad_whatsapp_atribucion")
+                if not isinstance(attribution, dict):
+                    continue
+                campaign = _clean_text(attribution.get("campana_publicitaria")) or "sin_campana"
+                group = cta_groups.setdefault(
+                    campaign,
+                    {
+                        "campana_id": None,
+                        "campana_nombre": campaign,
+                        "canal": "whatsapp",
+                        "template_id": None,
+                        "template_nombre": None,
+                        "template_slug": None,
+                        "oportunidad_ids": set(),
+                        "conversation_ids": set(),
+                    },
+                )
+                opportunity_id = str(opportunity.get("id") or "").strip()
+                conversation_id = str(metadata.get("conversation_id") or "").strip()
+                if opportunity_id:
+                    group["oportunidad_ids"].add(opportunity_id)
+                if conversation_id:
+                    group["conversation_ids"].add(conversation_id)
+            for group in cta_groups.values():
+                rows.append(
+                    {
+                        "campana_id": group["campana_id"],
+                        "campana_nombre": group["campana_nombre"],
+                        "canal": group["canal"],
+                        "template_id": group["template_id"],
+                        "template_nombre": group["template_nombre"],
+                        "template_slug": group["template_slug"],
+                        "oportunidades_total": len(group["oportunidad_ids"]),
+                        "conversaciones_total": len(group["conversation_ids"]),
+                    }
+                )
             return rows
 
         async def load_whatsapp_rules() -> list[dict[str, Any]]:
@@ -46854,9 +46998,11 @@ async def demografia_resumen_v2(
             campana_nombre_value = _clean_text(row.get("campana_nombre")) or campaign_name_by_id.get(campana_id_key)
             canal_value = _clean_text(row.get("canal")) or "whatsapp"
             template_reference = template_reference_by_campaign.get(campana_id_key) or {}
-            template_id_key = str(template_reference.get("template_id") or "").strip()
+            template_id_key = str(row.get("template_id") or template_reference.get("template_id") or "").strip()
             template_label_value = (
                 template_labels.get(template_id_key)
+                or _clean_text(row.get("template_nombre"))
+                or _clean_text(row.get("template_slug"))
                 or _clean_text(template_reference.get("template_nombre"))
                 or _clean_text(template_reference.get("template_slug"))
                 or (f"Plantilla {template_id_key[:8]}" if template_id_key else None)

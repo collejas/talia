@@ -654,7 +654,9 @@ export async function loadDemografiaData(
     resumenParams.solo_conversiones = true;
     mapaParams.solo_conversiones = true;
   }
-  mapaParams.skip_visitantes = true;
+  // En modo conversiones el mapa debe recibir el mismo universo filtrado que
+  // los KPIs; de lo contrario conserva el conteo histórico del dataset de leads.
+  mapaParams.skip_visitantes = options.soloConversiones ? false : true;
 
   const [summary, map] = await Promise.all([
     callDemografiaEndpoint<DemografiaSummaryResponse>("resumen-v2", resumenParams),

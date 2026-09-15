@@ -840,8 +840,8 @@ export function AcquisitionSummary({
           <TrafficAttributionCard rows={topUtmRows} campaignLabels={campaignLabels} />
         </div>
       </div> : null}
-      {mode === "conversations" ? <div className="grid gap-4 xl:grid-cols-2">
-        {mode === "conversations" ? <Card className="h-full">
+      {mode === "conversations" || mode === "campaigns" ? <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="h-full">
           <CardHeader>
             <CardTitle>CTAs de WhatsApp</CardTitle>
             <CardDescription>
@@ -908,7 +908,7 @@ export function AcquisitionSummary({
               <p className="text-muted-foreground text-sm">No hay atribución de WhatsApp en este filtro.</p>
             )}
           </CardContent>
-        </Card> : null}
+        </Card>
       </div> : null}
 
       {mode === "campaigns" ? <div className="grid gap-4 xl:grid-cols-2">

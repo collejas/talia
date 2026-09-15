@@ -17688,10 +17688,13 @@ class CRMRepository:
                 return []
             ordered_ids = sorted(str(value) for value in campana_ids)
             params["campana_id"] = f"in.({','.join(ordered_ids)})"
+        date_filters: list[str] = []
         if date_from:
-            params["creado_en"] = f"gte.{date_from.isoformat()}"
+            date_filters.append(f"creado_en.gte.{date_from.isoformat()}")
         if date_to:
-            params["creado_en"] = f"lte.{date_to.isoformat()}"
+            date_filters.append(f"creado_en.lte.{date_to.isoformat()}")
+        if date_filters:
+            params["and"] = f"({','.join(date_filters)})"
         resp = await self._request(
             "GET",
             "/rest/v1/campana_conversion",
@@ -17701,6 +17704,77 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada en campana_conversion: {data!r}")
         return [row for row in data if isinstance(row, dict)]
+
+    async def list_opportunity_conversation_ids(
+        self,
+        *,
+        organizacion_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        limit: int = 5000,
+    ) -> set[str]:
+        """Obtiene conversaciones WhatsApp que ya tienen una oportunidad."""
+        params: dict[str, str] = {
+            "select": "metadata",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "canal": "eq.whatsapp",
+            "metadata->>conversation_id": "not.is.null",
+            "order": "creado_en.desc",
+            "limit": str(max(1, min(int(limit), 5000))),
+        }
+        date_filters: list[str] = []
+        if date_from:
+            date_filters.append(f"creado_en.gte.{date_from.isoformat()}")
+        if date_to:
+            date_filters.append(f"creado_en.lte.{date_to.isoformat()}")
+        if date_filters:
+            params["and"] = f"({','.join(date_filters)})"
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada en oportunidades: {data!r}")
+        conversation_ids: set[str] = set()
+        for row in data:
+            if not isinstance(row, dict) or not isinstance(row.get("metadata"), dict):
+                continue
+            conversation_id = str(row["metadata"].get("conversation_id") or "").strip()
+            if _safe_uuid(conversation_id):
+                conversation_ids.add(conversation_id)
+        return conversation_ids
+
+    async def list_whatsapp_cta_opportunities(
+        self,
+        *,
+        organizacion_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        limit: int = 5000,
+    ) -> list[dict[str, Any]]:
+        """Lista oportunidades WhatsApp con atribución publicitaria CTA."""
+        params: dict[str, str] = {
+            "select": "id,metadata,creado_en",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "canal": "eq.whatsapp",
+            "order": "creado_en.desc",
+            "limit": str(max(1, min(int(limit), 5000))),
+        }
+        date_filters: list[str] = []
+        if date_from:
+            date_filters.append(f"creado_en.gte.{date_from.isoformat()}")
+        if date_to:
+            date_filters.append(f"creado_en.lte.{date_to.isoformat()}")
+        if date_filters:
+            params["and"] = f"({','.join(date_filters)})"
+        resp = await self._request_service_role("GET", "/rest/v1/oportunidades", params=params, organizacion_id=organizacion_id)
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada en oportunidades CTA: {data!r}")
+        return [
+            row for row in data
+            if isinstance(row, dict)
+            and isinstance(row.get("metadata"), dict)
+            and isinstance(row["metadata"].get("publicidad_whatsapp_atribucion"), dict)
+        ]
 
     async def list_whatsapp_sales_assignments(
         self,
