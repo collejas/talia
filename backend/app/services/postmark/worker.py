@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class PostmarkWorker:
     """Procesa únicamente mensajes de tenants con Postmark habilitado."""
 
-    def __init__(self, *, interval_seconds: float = 10.0, batch_size: int = 25) -> None:
+    def __init__(self, *, interval_seconds: float = 10.0, batch_size: int = 500) -> None:
         self.interval_seconds = max(interval_seconds, 1.0)
         self.batch_size = max(min(batch_size, 500), 1)
         self._task: asyncio.Task[None] | None = None
@@ -72,27 +72,25 @@ class PostmarkWorker:
                 organizacion_id=organizacion_id,
                 limit=self.batch_size,
             )
-            for row in claimed:
-                message_id = row.get("message_id")
-                if not message_id:
-                    continue
+            if claimed:
                 try:
-                    message_uuid = UUID(str(message_id))
-                    idempotency_key = await repository.get_message_idempotency_key(message_id=message_uuid)
-                    envio_id = self._prospeccion_envio_id(idempotency_key)
-                    if envio_id:
-                        reservation = await CRMRepository().worker_reserve_envio_dispatch(envio_id=envio_id)
-                        if not reservation.get("permitido"):
-                            await repository.defer_message(message_id=message_uuid)
-                            continue
-
-                    delivery = await service.deliver_queued_message(
+                    deliveries = await service.deliver_claimed_batch(
                         organizacion_id=organizacion_id,
-                        message_id=message_uuid,
+                        claimed_rows=claimed,
                         client=client,
+                        inter_batch_seconds=5.0,
                     )
-                    if envio_id:
-                        crm_repo = CRMRepository()
+                    crm_repo = CRMRepository()
+                    for delivery in deliveries:
+                        message_id = delivery.get("message_id")
+                        if not message_id:
+                            continue
+                        idempotency_key = await repository.get_message_idempotency_key(
+                            message_id=UUID(str(message_id))
+                        )
+                        envio_id = self._prospeccion_envio_id(idempotency_key)
+                        if not envio_id:
+                            continue
                         if delivery.get("provider_accepted") and delivery.get("provider_message_id"):
                             await crm_repo.worker_complete_envio(
                                 envio_id=envio_id,
@@ -110,15 +108,11 @@ class PostmarkWorker:
                                     "procesado_en": datetime.now(timezone.utc).isoformat(),
                                 },
                             )
-                    processed += 1
+                    processed += len(deliveries)
                 except (PostmarkError, PostmarkRepositoryError, CRMRepositoryError, ValueError) as exc:
                     logger.exception(
-                        "postmark.worker_message_failed",
-                        extra={
-                            "organizacion_id": str(organizacion_id),
-                            "message_id": str(message_id),
-                            "error": str(exc),
-                        },
+                        "postmark.worker_batch_failed",
+                        extra={"organizacion_id": str(organizacion_id), "batch_size": len(claimed), "error": str(exc)},
                     )
         if settings.postmark_sync_enabled and self._sync_is_due():
             processed += await self._synchronize_history(repository)

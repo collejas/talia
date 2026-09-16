@@ -1,3 +1,9 @@
+# Próxima entrega
+
+- El worker de entrega usa `/email/batch` para agrupar hasta 500 mensajes por tenant, tipo y stream, conservando el resultado individual de cada destinatario.
+- La separación operativa de 5 segundos se aplica entre lotes y no entre correos individuales; se mantiene una única ejecución concurrente por worker para no sobrecargar Talia ni mezclar tenants.
+- Los lotes `broadcast` y `transactional` se envían por separado (`broadcast` y `outbound`) y continúan usando la cuota, la idempotencia y los webhooks existentes.
+
 # Changelog — Plan Postmark
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.

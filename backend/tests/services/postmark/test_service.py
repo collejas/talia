@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.integrations.postmark.errors import PostmarkError, PostmarkRequestError
-from app.integrations.postmark.schemas import PostmarkMessage, PostmarkSendResult
+from app.integrations.postmark.schemas import PostmarkBatchResult, PostmarkMessage, PostmarkSendResult
 from app.services.postmark.service import PostmarkService
 
 
@@ -179,6 +179,57 @@ async def test_deliver_queued_message_finishes_rejected_provider_attempt():
     assert repository.finished_payload["p_accepted"] is False
     assert repository.finished_payload["p_error_code"] == "412"
     assert repository.finished_payload["p_error_message"] == "Account pending approval"
+
+
+@pytest.mark.asyncio
+async def test_deliver_claimed_batch_groups_messages_and_finishes_each_result():
+    class BatchRepository(FakeRepository):
+        def __init__(self):
+            super().__init__()
+            self.finished = []
+
+        async def start_attempt(self, *, organizacion_id, message_id):
+            return {
+                "attempt_id": str(message_id),
+                "from_email": "noreply@geoactiv.mx",
+                "to_email": f"{message_id}@example.com",
+                "subject": "Aviso",
+                "text_body": "Contenido",
+                "message_kind": "broadcast",
+                "stream_name": "broadcast",
+                "tag": "campana",
+            }
+
+        async def finish_attempt(self, *, payload):
+            self.finished.append(payload)
+            return {"message_status": "submitted" if payload["p_accepted"] else "failed"}
+
+    class BatchClient:
+        async def send_batch(self, messages, *, message_kind, message_stream):
+            assert len(messages) == 2
+            assert message_kind == "broadcast"
+            assert message_stream == "broadcast"
+            return PostmarkBatchResult(
+                items=[
+                    PostmarkSendResult(
+                        accepted=True,
+                        provider_message_id=UUID("11111111-1111-1111-1111-111111111111"),
+                    ),
+                    PostmarkSendResult(accepted=False, error_code=406, error_message="Inactive recipient"),
+                ]
+            )
+
+    message_ids = [uuid4(), uuid4()]
+    repository = BatchRepository()
+    deliveries = await PostmarkService(repository=repository).deliver_claimed_batch(
+        organizacion_id=UUID("00000000-0000-0000-0000-000000000001"),
+        claimed_rows=[{"message_id": str(value)} for value in message_ids],
+        client=BatchClient(),
+    )
+
+    assert [item["provider_accepted"] for item in deliveries] == [True, False]
+    assert len(repository.finished) == 2
+    assert repository.finished[1]["p_error_code"] == "406"
 
 
 @pytest.mark.asyncio

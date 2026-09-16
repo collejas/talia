@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -144,6 +145,128 @@ class PostmarkService:
             "provider_message_id": str(result.provider_message_id) if result.provider_message_id else None,
             "state": finish.get("message_status"),
         }
+
+    async def deliver_claimed_batch(
+        self,
+        *,
+        organizacion_id: UUID,
+        claimed_rows: list[dict[str, object]],
+        client: PostmarkClient,
+        inter_batch_seconds: float = 5.0,
+    ) -> list[dict[str, object]]:
+        """Entrega mensajes reclamados en batches homogéneos de Postmark.
+
+        Los mensajes se agrupan por tipo y stream para no mezclar outbound con
+        broadcast. La respuesta de Postmark conserva la posición de cada
+        destinatario y se cierra cada intento individualmente.
+        """
+        prepared: list[dict[str, object]] = []
+        for row in claimed_rows:
+            message_id = row.get("message_id")
+            if not message_id:
+                continue
+            try:
+                message_uuid = UUID(str(message_id))
+                attempt = await self.repository.start_attempt(
+                    organizacion_id=organizacion_id,
+                    message_id=message_uuid,
+                )
+                kind = attempt.get("message_kind")
+                if kind not in {"transactional", "broadcast"}:
+                    raise PostmarkError("email_message_kind_invalid")
+                stream_name = str(attempt.get("stream_name") or "").strip()
+                if not stream_name:
+                    raise PostmarkError("message_stream_missing")
+                prepared.append(
+                    {
+                        "message_id": message_uuid,
+                        "attempt_id": UUID(str(attempt["attempt_id"])),
+                        "message_kind": kind,
+                        "stream_name": stream_name,
+                        "message": PostmarkMessage(
+                            from_email=str(attempt["from_email"]),
+                            from_name=attempt.get("from_name"),
+                            reply_to=attempt.get("reply_to_email"),
+                            to_email=str(attempt["to_email"]),
+                            subject=str(attempt["subject"]),
+                            html_body=attempt.get("html_body"),
+                            text_body=attempt.get("text_body"),
+                            tag=attempt.get("tag"),
+                        ),
+                    }
+                )
+            except (PostmarkError, PostmarkRepositoryError, KeyError, TypeError, ValueError):
+                try:
+                    await self.repository.defer_message(message_id=UUID(str(message_id)))
+                except (PostmarkRepositoryError, ValueError):
+                    pass
+
+        deliveries: list[dict[str, object]] = []
+        groups: dict[tuple[str, str], list[dict[str, object]]] = {}
+        for item in prepared:
+            key = (str(item["message_kind"]), str(item["stream_name"]))
+            groups.setdefault(key, []).append(item)
+
+        for group_index, ((kind, stream_name), items) in enumerate(groups.items()):
+            if group_index:
+                await asyncio.sleep(max(inter_batch_seconds, 0.0))
+            messages = [item["message"] for item in items]
+            try:
+                batch_result = await client.send_batch(
+                    messages,  # type: ignore[arg-type]
+                    message_kind=kind,  # type: ignore[arg-type]
+                    message_stream=stream_name,
+                )
+            except PostmarkRequestError as exc:
+                for item in items:
+                    finish = await self.repository.finish_attempt(
+                        payload={
+                            "p_organizacion_id": str(organizacion_id),
+                            "p_message_id": str(item["message_id"]),
+                            "p_attempt_id": str(item["attempt_id"]),
+                            "p_accepted": False,
+                            "p_external_message_id": None,
+                            "p_error_code": str(exc.provider_code or exc.status_code or exc.code),
+                            "p_error_message": exc.provider_message or exc.code,
+                        }
+                    )
+                    deliveries.append(
+                        {
+                            "message_id": str(item["message_id"]),
+                            "provider_accepted": False,
+                            "provider_message_id": None,
+                            "state": finish.get("message_status"),
+                        }
+                    )
+                continue
+
+            if len(batch_result.items) != len(items):
+                raise PostmarkError("invalid_batch_response")
+            for item, result in zip(items, batch_result.items):
+                finish = await self.repository.finish_attempt(
+                    payload={
+                        "p_organizacion_id": str(organizacion_id),
+                        "p_message_id": str(item["message_id"]),
+                        "p_attempt_id": str(item["attempt_id"]),
+                        "p_accepted": result.accepted,
+                        "p_external_message_id": (
+                            str(result.provider_message_id) if result.provider_message_id else None
+                        ),
+                        "p_error_code": str(result.error_code) if result.error_code is not None else None,
+                        "p_error_message": result.error_message,
+                    }
+                )
+                deliveries.append(
+                    {
+                        "message_id": str(item["message_id"]),
+                        "provider_accepted": result.accepted,
+                        "provider_message_id": (
+                            str(result.provider_message_id) if result.provider_message_id else None
+                        ),
+                        "state": finish.get("message_status"),
+                    }
+                )
+        return deliveries
 
     async def validate_send(
         self,
