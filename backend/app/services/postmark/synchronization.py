@@ -21,6 +21,7 @@ _EVENT_TYPES = {
     "LinkClicked": "Click",
     "SubscriptionChanged": "SubscriptionChange",
 }
+_DETAIL_SYNC_CONCURRENCY = 5
 
 
 def _recipient(message: dict[str, Any]) -> str | None:
@@ -142,7 +143,10 @@ async def synchronize_outbound_messages(
             external_ids=external_ids,
         )
         local_by_external = {str(row.get("external_message_id")): row for row in local_rows}
-        semaphore = asyncio.Semaphore(20)
+        # Postmark puede responder 429 si se consultan demasiados detalles en
+        # paralelo. La conciliación debe priorizar completitud e idempotencia
+        # sobre vaciar una página en el menor tiempo posible.
+        semaphore = asyncio.Semaphore(_DETAIL_SYNC_CONCURRENCY)
         matched_items = [
             item for item in messages
             if str(item.get("MessageID") or "").strip() in local_by_external
