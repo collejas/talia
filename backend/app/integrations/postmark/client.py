@@ -103,18 +103,57 @@ class PostmarkClient:
 
     async def create_server(self, server_name: str) -> PostmarkServerResult:
         """Crea un servidor aislado y devuelve su token solo al servicio interno."""
+        try:
+            response = await self._account_request(
+                "POST",
+                "/servers",
+                payload={"Name": server_name.strip()},
+            )
+        except PostmarkRequestError as exc:
+            # Un intento anterior puede haber creado el servidor y fallado al
+            # persistir su respuesta. Reconciliarlo evita duplicados y permite
+            # recuperar el token del servidor existente.
+            if exc.provider_code == 603:
+                existing = await self.find_server_by_name(server_name)
+                if existing is not None:
+                    return existing
+            raise
+        payload = response.json()
+        return self._parse_server_result(payload, fallback_name=server_name)
+
+    async def find_server_by_name(self, server_name: str) -> PostmarkServerResult | None:
+        """Busca un servidor existente por nombre y obtiene su token."""
         response = await self._account_request(
-            "POST",
+            "GET",
             "/servers",
-            payload={"Name": server_name.strip()},
+            params={"offset": 0, "count": 500},
         )
         payload = response.json()
+        servers = payload.get("Servers") if isinstance(payload, dict) else None
+        expected_name = server_name.strip()
+        if not isinstance(servers, list):
+            return None
+        for item in servers:
+            if not isinstance(item, dict) or str(item.get("Name") or "").strip() != expected_name:
+                continue
+            external_id = item.get("ID")
+            if external_id is None:
+                return None
+            detail = await self._account_request("GET", f"/servers/{int(external_id)}")
+            return self._parse_server_result(detail.json(), fallback_name=expected_name)
+        return None
+
+    @staticmethod
+    def _parse_server_result(payload: object, *, fallback_name: str) -> PostmarkServerResult:
         if not isinstance(payload, dict) or payload.get("ID") is None:
             raise PostmarkRequestError("invalid_provider_server_response")
         tokens = payload.get("ApiTokens")
         token = None
         if isinstance(tokens, list):
             for item in tokens:
+                if isinstance(item, str) and item.strip():
+                    token = item.strip()
+                    break
                 if isinstance(item, dict) and item.get("Token"):
                     token = str(item["Token"])
                     break
@@ -122,7 +161,7 @@ class PostmarkClient:
             raise PostmarkRequestError("provider_server_token_missing")
         return PostmarkServerResult(
             external_server_id=int(payload["ID"]),
-            server_name=str(payload.get("Name") or server_name).strip(),
+            server_name=str(payload.get("Name") or fallback_name).strip(),
             server_token=token,
         )
 

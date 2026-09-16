@@ -35,6 +35,16 @@ class PostmarkRepository:
             },
         )
 
+    async def update_migration(self, *, organizacion_id: UUID, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rest_patch(
+            "/rest/v1/tenant_email_migrations",
+            params={"organizacion_id": f"eq.{organizacion_id}"},
+            payload=payload,
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("migration_update_failed")
+        return data[0]
+
     async def get_server(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         """Obtiene el servidor Postmark exclusivo del tenant."""
         return await self._get_one(

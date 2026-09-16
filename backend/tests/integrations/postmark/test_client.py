@@ -204,6 +204,51 @@ async def test_create_domain_uses_account_token_and_normalizes_dns():
 
 
 @pytest.mark.asyncio
+async def test_create_server_accepts_postmark_string_api_tokens():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == "/servers"
+        return httpx.Response(
+            200,
+            json={"ID": 456, "Name": "Tenant server", "ApiTokens": ["server-token"]},
+        )
+
+    client = PostmarkClient(
+        base_url="https://mail.test",
+        account_token="account-secret",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await client.create_server("Tenant server")
+
+    assert result.external_server_id == 456
+    assert result.server_token == "server-token"
+
+
+@pytest.mark.asyncio
+async def test_create_server_reconciles_duplicate_name():
+    requests = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        if request.method == "POST":
+            return httpx.Response(422, json={"ErrorCode": 603, "Message": "Server already exists"})
+        if request.url.path == "/servers":
+            return httpx.Response(200, json={"TotalCount": 1, "Servers": [{"ID": 456, "Name": "Tenant server"}]})
+        return httpx.Response(200, json={"ID": 456, "Name": "Tenant server", "ApiTokens": ["server-token"]})
+
+    client = PostmarkClient(
+        base_url="https://mail.test",
+        account_token="account-secret",
+        transport=httpx.MockTransport(handler),
+    )
+    result = await client.create_server("Tenant server")
+
+    assert result.external_server_id == 456
+    assert result.server_token == "server-token"
+    assert requests == [("POST", "/servers"), ("GET", "/servers"), ("GET", "/servers/456")]
+
+
+@pytest.mark.asyncio
 async def test_account_request_requires_account_token(monkeypatch):
     monkeypatch.setattr(settings, "postmark_account_token", "")
     client = PostmarkClient(base_url="https://mail.test", transport=httpx.MockTransport(lambda _: None))

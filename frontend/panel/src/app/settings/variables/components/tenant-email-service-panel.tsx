@@ -55,6 +55,7 @@ type Props = {
   verifyDomainAction?: EmailServiceAction
   removeDomainAction?: EmailServiceAction
   updateSenderAction?: EmailServiceAction
+  activateAction?: EmailServiceAction
   configurationComplete?: boolean
   actionTenantId?: string
   showRequiredMarkers?: boolean
@@ -207,16 +208,17 @@ function SenderForm({
   )
 }
 
-export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, removeDomainAction, updateSenderAction, configurationComplete = false, actionTenantId, showRequiredMarkers = false }: Props) {
+export function TenantEmailServicePanel({ data, createDomainAction, verifyDomainAction, removeDomainAction, updateSenderAction, activateAction, configurationComplete = false, actionTenantId, showRequiredMarkers = false }: Props) {
   const plan = data?.plan
   const usage = data?.usage
+  const [activationState, activationFormAction] = useActionState(activateAction ?? (async () => ({ status: "idle" as const })), { status: "idle" } satisfies EmailServiceActionState)
 
   return (
     <Card>
       <CardHeader className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="flex items-center gap-2"><Mail className="size-5" /> Servicio de correo</CardTitle>
-          <Badge variant={configurationComplete ? "secondary" : "outline"}>{data ? (configurationComplete ? "Configuración completa" : "Pendiente") : "No disponible"}</Badge>
+          <Badge variant={data?.feature_enabled ? "secondary" : "outline"}>{data ? (data.feature_enabled ? "Activo" : "Pendiente de activación") : "No disponible"}</Badge>
         </div>
         <CardDescription>
           Consulta el dominio autorizado, los registros DNS y la cuota asignada para los envíos de este tenant.
@@ -230,6 +232,19 @@ export function TenantEmailServicePanel({ data, createDomainAction, verifyDomain
           </p>
         ) : (
           <>
+            {activateAction && !data.feature_enabled ? (
+              <section className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+                <div>
+                  <h3 className="font-medium">Activar servicio de correo</h3>
+                  <p className="text-sm text-muted-foreground">La cuenta maestra provisionará el servidor de este tenant y habilitará sus envíos cuando el dominio y el plan estén listos.</p>
+                </div>
+                <form action={activationFormAction} className="flex flex-wrap items-center gap-3">
+                  <input type="hidden" name="tenant_id" value={actionTenantId ?? ""} />
+                  <Button type="submit">Activar servicio</Button>
+                  {activationState.message ? <p className={activationState.status === "error" ? "text-sm text-destructive" : "text-sm text-emerald-600"}>{activationState.message}</p> : null}
+                </form>
+              </section>
+            ) : null}
             {createDomainAction ? (
               <section className="space-y-3 rounded-lg border border-dashed p-4">
                 <div><h3 className="font-medium">Registrar un dominio</h3><p className="text-sm text-muted-foreground">Después de registrarlo, publica los registros DNS que aparecerán abajo.</p></div>

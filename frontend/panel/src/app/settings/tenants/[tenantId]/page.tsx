@@ -14,6 +14,7 @@ import {
   verifyAdminTenantEmailDomainAction,
   removeAdminTenantEmailDomainAction,
   updateAdminTenantEmailSenderAction,
+  activateTenantEmailServiceAction,
 } from "./actions"
 import { fetchTenantCloseLeadPolicy } from "@/app/settings/close-lead/actions"
 import { CloseLeadPolicyPanel } from "@/components/settings/close-lead-policy-panel"
@@ -559,6 +560,7 @@ export default async function TenantDetailSettingsPage({ params }: { params: Pro
                     verifyDomainAction={verifyAdminTenantEmailDomainAction}
                     removeDomainAction={removeAdminTenantEmailDomainAction}
                     updateSenderAction={updateAdminTenantEmailSenderAction}
+                    activateAction={activateTenantEmailServiceAction}
                   />
                 </div>
               ) : null}

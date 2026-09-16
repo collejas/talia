@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timezone
 from uuid import UUID
@@ -22,12 +23,15 @@ from app.schemas.postmark import (
     TenantEmailQuotaUpdate,
     TenantEmailDomainCreate,
     TenantEmailSenderUpdate,
+    TenantEmailActivationResponse,
 )
 from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
+from app.services.postmark.provisioning import PostmarkProvisioningError, PostmarkProvisioningService
 
 router = APIRouter(prefix="/tenant/me/email-service", tags=["email-service"])
 admin_router = APIRouter(prefix="/admin/tenants", tags=["email-service-admin"])
 _DOMAIN_PATTERN = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+logger = logging.getLogger(__name__)
 
 
 def get_postmark_repository() -> PostmarkRepository:
@@ -356,6 +360,83 @@ async def get_admin_tenant_email_service(
 ) -> TenantEmailServiceResponse:
     """Permite al owner maestro revisar el correo de un tenant específico."""
     return await _read_email_service(organizacion_id, repository)
+
+
+@admin_router.post("/{organizacion_id}/email-service/activate", response_model=TenantEmailActivationResponse)
+async def activate_admin_tenant_email_service(
+    organizacion_id: UUID,
+    _: UUID = Depends(require_master_tenant_owner),
+    repository: PostmarkRepository = Depends(get_postmark_repository),
+) -> TenantEmailActivationResponse:
+    """Provisiona y activa el correo Postmark de un tenant desde la cuenta maestra."""
+    migration = await repository.get_migration(organizacion_id=organizacion_id)
+    if not migration:
+        await repository.ensure_migration(organizacion_id=organizacion_id)
+        migration = await repository.get_migration(organizacion_id=organizacion_id)
+    if not migration:
+        raise HTTPException(status_code=409, detail="email_migration_not_available")
+
+    domain = await repository.get_verified_domain(organizacion_id=organizacion_id)
+    if not domain:
+        raise HTTPException(status_code=409, detail="verified_sending_domain_required")
+    if not await repository.get_active_plan(organizacion_id=organizacion_id):
+        raise HTTPException(status_code=409, detail="active_email_plan_required")
+
+    server = await repository.get_server(organizacion_id=organizacion_id)
+    if not server or server.get("server_status") != "active" or not server.get("postmark_server_id"):
+        server_name = f"Talia - {organizacion_id}"
+        try:
+            await PostmarkProvisioningService(repository=repository).provision_tenant_server(
+                organizacion_id=organizacion_id,
+                server_name=server_name[:120],
+            )
+        except PostmarkRequestError as exc:
+            # No exponer al panel el mensaje bruto del proveedor: puede contener
+            # detalles de cuenta o configuración. El código queda disponible en
+            # los logs para diagnosticar la cuenta Postmark central.
+            logger.warning(
+                "postmark.tenant_server_activation_provider_rejected",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "error_code": exc.code,
+                    "provider_status_code": exc.status_code,
+                    "provider_error_code": exc.provider_code,
+                },
+            )
+            if exc.code == "account_token_missing":
+                raise HTTPException(status_code=503, detail="postmark_account_token_missing") from exc
+            raise HTTPException(status_code=502, detail="postmark_server_provider_rejected") from exc
+        except (PostmarkProvisioningError, PostmarkRepositoryError) as exc:
+            raise HTTPException(status_code=502, detail="postmark_server_provision_failed") from exc
+        server = await repository.get_server(organizacion_id=organizacion_id)
+
+    if not server or server.get("server_status") != "active":
+        raise HTTPException(status_code=409, detail="postmark_server_not_ready")
+    if str(domain.get("server_id") or "") != str(server.get("id") or ""):
+        raise HTTPException(status_code=409, detail="domain_server_mismatch")
+
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        updated = await repository.update_migration(
+            organizacion_id=organizacion_id,
+            payload={
+                "status": "active",
+                "feature_enabled": True,
+                "started_at": migration.get("started_at") or now,
+                "domain_verified_at": migration.get("domain_verified_at") or domain.get("verified_at") or now,
+                "production_enabled_at": now,
+                "blocked_at": None,
+                "rollback_at": None,
+                "last_error_code": None,
+                "last_error_at": None,
+            },
+        )
+    except PostmarkRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="email_service_activation_failed") from exc
+    return TenantEmailActivationResponse(
+        migration_status=str(updated.get("status") or "active"),
+        feature_enabled=bool(updated.get("feature_enabled")),
+    )
 
 
 @admin_router.patch("/{organizacion_id}/email-service/quota", response_model=TenantEmailQuotaResponse)

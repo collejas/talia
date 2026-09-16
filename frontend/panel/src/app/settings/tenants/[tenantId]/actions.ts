@@ -209,6 +209,24 @@ export async function updateTenantEmailQuotaAction(
   }
 }
 
+export async function activateTenantEmailServiceAction(
+  _: CrudActionState,
+  formData: FormData,
+): Promise<CrudActionState> {
+  try {
+    const tenantId = requireTenantId(formData)
+    const response = await callCrmApi<{ ok: boolean }>(
+      `/admin/tenants/${tenantId}/email-service/activate`,
+      { method: "POST", organizacionId: null, withUserToken: true },
+    )
+    if (!response.ok) throw new Error(response.error)
+    revalidatePath(`/settings/tenants/${tenantId}`)
+    return success("Servicio de correo activado para este tenant.")
+  } catch (error) {
+    return failure(error, "No se pudo activar el servicio de correo.")
+  }
+}
+
 export async function createAdminTenantEmailDomainAction(_: CrudActionState, formData: FormData): Promise<CrudActionState> {
   try {
     const tenantId = requireTenantId(formData)

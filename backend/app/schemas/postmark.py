@@ -62,6 +62,14 @@ class TenantEmailServiceResponse(BaseModel):
     usage: TenantEmailUsage | None = None
 
 
+class TenantEmailActivationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool = True
+    migration_status: str
+    feature_enabled: bool
+
+
 class TenantEmailQuotaUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
