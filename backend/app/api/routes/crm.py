@@ -46006,43 +46006,6 @@ async def demografia_campanas_atribucion(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    if campana_uuid is None:
-        cta_opportunities = await repo.list_whatsapp_cta_opportunities(
-            organizacion_id=organizacion_id,
-            date_from=date_from,
-            date_to=date_to,
-            limit=5000,
-        )
-        cta_groups: dict[str, dict[str, set[str]]] = {}
-        for opportunity in cta_opportunities:
-            metadata = opportunity.get("metadata") if isinstance(opportunity.get("metadata"), dict) else {}
-            attribution = metadata.get("publicidad_whatsapp_atribucion")
-            if not isinstance(attribution, dict):
-                continue
-            campaign = _clean_text(attribution.get("campana_publicitaria")) or "sin_campana"
-            group = cta_groups.setdefault(campaign, {"opportunities": set(), "conversations": set()})
-            opportunity_id = _clean_text(opportunity.get("id"))
-            conversation_id = _clean_text(metadata.get("conversation_id"))
-            if opportunity_id:
-                group["opportunities"].add(opportunity_id)
-            if conversation_id:
-                group["conversations"].add(conversation_id)
-        for campaign, group in cta_groups.items():
-            whatsapp_rows.append(
-                {
-                    "campana_id": None,
-                    "campana_nombre": campaign,
-                    "canal": "whatsapp",
-                    "template_id": None,
-                    "template_nombre": None,
-                    "template_slug": None,
-                    "version_id": None,
-                    "envios_totales": 0,
-                    "oportunidades_total": len(group["opportunities"]),
-                    "conversaciones_total": len(group["conversations"]),
-                }
-            )
-
     # Una conversión puede conservar campaña/oportunidad aunque se haya
     # eliminado el envío o no exista ya una atribución saliente relacionable.
     # No es seguro inventar una plantilla, pero sí debemos mantenerla visible
@@ -46626,55 +46589,6 @@ async def demografia_resumen_v2(
                 if len(page_rows) < 500:
                     break
                 offset += len(page_rows)
-            cta_opportunities = (
-                await repo.list_whatsapp_cta_opportunities(
-                    organizacion_id=organizacion_id,
-                    date_from=date_from,
-                    date_to=date_to,
-                    limit=5000,
-                )
-                if not campana_uuid_value and not campana_tipo_value
-                else []
-            )
-            cta_groups: dict[str, dict[str, Any]] = {}
-            for opportunity in cta_opportunities:
-                metadata = opportunity.get("metadata") if isinstance(opportunity.get("metadata"), dict) else {}
-                attribution = metadata.get("publicidad_whatsapp_atribucion")
-                if not isinstance(attribution, dict):
-                    continue
-                campaign = _clean_text(attribution.get("campana_publicitaria")) or "sin_campana"
-                group = cta_groups.setdefault(
-                    campaign,
-                    {
-                        "campana_id": None,
-                        "campana_nombre": campaign,
-                        "canal": "whatsapp",
-                        "template_id": None,
-                        "template_nombre": None,
-                        "template_slug": None,
-                        "oportunidad_ids": set(),
-                        "conversation_ids": set(),
-                    },
-                )
-                opportunity_id = str(opportunity.get("id") or "").strip()
-                conversation_id = str(metadata.get("conversation_id") or "").strip()
-                if opportunity_id:
-                    group["oportunidad_ids"].add(opportunity_id)
-                if conversation_id:
-                    group["conversation_ids"].add(conversation_id)
-            for group in cta_groups.values():
-                rows.append(
-                    {
-                        "campana_id": group["campana_id"],
-                        "campana_nombre": group["campana_nombre"],
-                        "canal": group["canal"],
-                        "template_id": group["template_id"],
-                        "template_nombre": group["template_nombre"],
-                        "template_slug": group["template_slug"],
-                        "oportunidades_total": len(group["oportunidad_ids"]),
-                        "conversaciones_total": len(group["conversation_ids"]),
-                    }
-                )
             return rows
 
         async def load_whatsapp_rules() -> list[dict[str, Any]]:
