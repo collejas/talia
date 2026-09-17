@@ -17,14 +17,14 @@ type InboxWorkspaceProps = {
   threads: InboxThread[];
   totalThreads: number;
   reengageTagOptions: string[];
-  batchOptions?: Array<{ value: string; label: string }>;
   campanaOptions?: Array<{ value: string; label: string }>;
   initialFilters?: {
     estado?: string | null;
     source?: string | null;
     channel?: string | null;
     date?: string | null;
-    batchId?: string | null;
+    dateFrom?: string | null;
+    dateTo?: string | null;
     campanaId?: string | null;
     search?: string | null;
   };
@@ -35,17 +35,17 @@ export function InboxWorkspace({
   threads,
   totalThreads,
   reengageTagOptions,
-  batchOptions: initialBatchOptions,
   campanaOptions: initialCampanaOptions,
   initialFilters,
 }: InboxWorkspaceProps) {
   const pathname = usePathname();
   const [sourceFilterValue, setSourceFilterValue] = React.useState(initialFilters?.source ?? "");
   const [channelFilterValue, setChannelFilterValue] = React.useState(initialFilters?.channel ?? "");
-  const [batchFilterValue, setBatchFilterValue] = React.useState(initialFilters?.batchId ?? "");
   const [campanaFilterValue, setCampanaFilterValue] = React.useState(initialFilters?.campanaId ?? "");
   const [estadoFilterValue, setEstadoFilterValue] = React.useState(initialFilters?.estado ?? "");
   const [dateFilterValue, setDateFilterValue] = React.useState(initialFilters?.date ?? "");
+  const [dateFromValue, setDateFromValue] = React.useState(initialFilters?.dateFrom ?? "");
+  const [dateToValue, setDateToValue] = React.useState(initialFilters?.dateTo ?? "");
   const [searchValue, setSearchValue] = React.useState(initialFilters?.search ?? "");
   const [reengageFilter, setReengageFilter] = React.useState("");
   const [visibleThreadsCount, setVisibleThreadsCount] = React.useState(threads.length);
@@ -77,26 +77,6 @@ export function InboxWorkspace({
     () => [...derivedReengageOptions, ...normalizedTagOptions],
     [derivedReengageOptions, normalizedTagOptions],
   );
-  const batchOptions = React.useMemo(() => {
-    const base = Array.isArray(initialBatchOptions) ? initialBatchOptions : [];
-    const seen = new Set<string>();
-    const values: Array<{ value: string; label: string }> = [];
-    for (const item of base) {
-      const value = item.value?.trim();
-      if (!value || seen.has(value)) continue;
-      seen.add(value);
-      values.push({ value, label: item.label?.trim() || "Batch" });
-    }
-    for (const thread of threads) {
-      const value = thread.batchId?.trim();
-      if (!value || seen.has(value)) continue;
-      seen.add(value);
-      values.push({ value, label: "Batch" });
-    }
-    values.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
-    return values;
-  }, [threads, initialBatchOptions]);
-
   const campanaOptions = React.useMemo(() => {
     const base = Array.isArray(initialCampanaOptions) ? initialCampanaOptions : [];
     const seen = new Set<string>();
@@ -147,9 +127,13 @@ export function InboxWorkspace({
 
     upsert("source", sourceFilterValue, { skipAll: true });
     upsert("channel", channelFilterValue, { skipAll: true });
-    upsert("batchId", batchFilterValue);
+    params.delete("batchId");
+    params.delete("batch_id");
     upsert("campanaId", campanaFilterValue);
-    upsert("date", dateFilterValue, { skipAll: true });
+    const customRangeReady = dateFilterValue === "custom" && dateFromValue && dateToValue;
+    upsert("date", dateFilterValue === "custom" && !customRangeReady ? "" : dateFilterValue, { skipAll: true });
+    upsert("date_from", customRangeReady ? dateFromValue : "");
+    upsert("date_to", customRangeReady ? dateToValue : "");
     upsert("reengage", reengageFilter, { skipAll: true });
 
     upsert("estado", estadoFilterValue, { skipAll: true });
@@ -166,9 +150,10 @@ export function InboxWorkspace({
     sourceFilterValue,
     channelFilterValue,
     estadoFilterValue,
-    batchFilterValue,
     campanaFilterValue,
     dateFilterValue,
+    dateFromValue,
+    dateToValue,
     reengageFilter,
     searchValue,
   ]);
@@ -179,7 +164,6 @@ export function InboxWorkspace({
     channelFilterValue && channelFilterValue !== "all" ? channelFilterValue : null;
   const activeEstadoFilter =
     estadoFilterValue?.trim() && estadoFilterValue !== "all" ? estadoFilterValue.trim() : null;
-  const activeBatchFilter = batchFilterValue?.trim() || null;
   const activeCampanaFilter = campanaFilterValue?.trim() || null;
   const activeDateFilter: DateFilterOption = (dateFilterValue || "all") as DateFilterOption;
 
@@ -196,14 +180,15 @@ export function InboxWorkspace({
         onSourceFilterValueChange={setSourceFilterValue}
         channelFilterValue={channelFilterValue}
         onChannelFilterValueChange={setChannelFilterValue}
-        batchFilterValue={batchFilterValue}
-        onBatchFilterValueChange={setBatchFilterValue}
-        batchOptions={batchOptions}
         campanaFilterValue={campanaFilterValue}
         onCampanaFilterValueChange={setCampanaFilterValue}
         campanaOptions={campanaOptions}
         dateFilterValue={dateFilterValue}
         onDateFilterValueChange={setDateFilterValue}
+        dateFromValue={dateFromValue}
+        dateToValue={dateToValue}
+        onDateFromValueChange={setDateFromValue}
+        onDateToValueChange={setDateToValue}
         reengageFilter={reengageFilter}
         onReengageFilterChange={setReengageFilter}
         reengageOptions={combinedReengageOptions}
@@ -211,13 +196,13 @@ export function InboxWorkspace({
       <InboxSplitView
         threads={threads}
         initialTotalThreads={totalThreads}
-        batchOptions={batchOptions}
         campanaOptions={campanaOptions}
         sourceFilter={activeSourceFilter}
         channelFilter={activeChannelFilter}
         estadoFilter={activeEstadoFilter}
-        batchFilter={activeBatchFilter}
         campanaFilter={activeCampanaFilter}
+        dateFrom={dateFilterValue === "custom" ? dateFromValue : null}
+        dateTo={dateFilterValue === "custom" ? dateToValue : null}
         dateFilter={activeDateFilter}
         search={searchValue}
         reengageFilter={reengageFilter}

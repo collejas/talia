@@ -27,7 +27,8 @@ export type InboxThreadsFilters = {
   source?: string | null;
   channel?: string | null;
   date?: string | null;
-  batchId?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
   campanaId?: string | null;
   search?: string | null;
 };
@@ -121,14 +122,16 @@ export async function loadInboxData(filters?: InboxThreadsFilters): Promise<Inbo
   const normalizedSource = filters?.source?.trim();
   const normalizedChannel = filters?.channel?.trim();
   const normalizedDate = filters?.date?.trim();
-  const normalizedBatchId = filters?.batchId?.trim();
+  const normalizedDateFrom = filters?.dateFrom?.trim();
+  const normalizedDateTo = filters?.dateTo?.trim();
   const normalizedCampanaId = filters?.campanaId?.trim();
   const normalizedSearch = filters?.search?.trim();
   if (normalizedEstado) normalizedFilters.estado = normalizedEstado;
   if (normalizedSource) normalizedFilters.source = normalizedSource;
   if (normalizedChannel) normalizedFilters.channel = normalizedChannel;
   if (normalizedDate) normalizedFilters.date = normalizedDate;
-  if (normalizedBatchId) normalizedFilters.batch_id = normalizedBatchId;
+  if (normalizedDateFrom) normalizedFilters.date_from = normalizedDateFrom;
+  if (normalizedDateTo) normalizedFilters.date_to = normalizedDateTo;
   if (normalizedCampanaId) normalizedFilters.campana_id = normalizedCampanaId;
   if (normalizedSearch) normalizedFilters.search = normalizedSearch;
   normalizedFilters.enrich = sourceRequiresEnrichment ? "true" : "false";

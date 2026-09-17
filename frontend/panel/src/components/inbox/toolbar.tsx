@@ -7,14 +7,31 @@ import { Input } from "@/components/ui/input";
 import type { InboxSummary } from "@/lib/inbox/data";
 import type { ReengageFilterOption } from "@/lib/inbox/reengage-filter";
 
-export type DateFilterOption = "all" | "today" | "yesterday" | "last_week" | "last_month";
+export type DateFilterOption =
+  | "all"
+  | "today"
+  | "yesterday"
+  | "last_3_days"
+  | "last_week"
+  | "last_month"
+  | "last_90_days"
+  | "this_month"
+  | "previous_month"
+  | "this_year"
+  | "custom";
 
 const DATE_FILTER_OPTIONS: { value: DateFilterOption; label: string }[] = [
   { value: "all", label: "Todo" },
   { value: "today", label: "Hoy" },
   { value: "yesterday", label: "Ayer" },
+  { value: "last_3_days", label: "Últimos 3 días" },
   { value: "last_week", label: "Última semana" },
   { value: "last_month", label: "Último mes" },
+  { value: "last_90_days", label: "Últimos 90 días" },
+  { value: "this_month", label: "Este mes" },
+  { value: "previous_month", label: "Mes anterior" },
+  { value: "this_year", label: "Este año" },
+  { value: "custom", label: "Fechas manuales" },
 ];
 
 const CHANNEL_FILTER_OPTIONS = [
@@ -51,14 +68,15 @@ type InboxToolbarProps = {
   onChannelFilterValueChange?: (value: string) => void;
   sourceFilterValue: string;
   onSourceFilterValueChange?: (value: string) => void;
-  batchFilterValue: string;
-  onBatchFilterValueChange?: (value: string) => void;
-  batchOptions: Array<{ value: string; label: string }>;
   campanaFilterValue: string;
   onCampanaFilterValueChange?: (value: string) => void;
   campanaOptions: Array<{ value: string; label: string }>;
   dateFilterValue: string;
   onDateFilterValueChange?: (value: string) => void;
+  dateFromValue: string;
+  dateToValue: string;
+  onDateFromValueChange?: (value: string) => void;
+  onDateToValueChange?: (value: string) => void;
   reengageFilter: string;
   reengageOptions: ReengageFilterOption[];
   onReengageFilterChange?: (value: string) => void;
@@ -75,14 +93,15 @@ export function InboxToolbar({
   onChannelFilterValueChange,
   sourceFilterValue,
   onSourceFilterValueChange,
-  batchFilterValue,
-  onBatchFilterValueChange,
-  batchOptions,
   campanaFilterValue,
   onCampanaFilterValueChange,
   campanaOptions,
   dateFilterValue,
   onDateFilterValueChange,
+  dateFromValue,
+  dateToValue,
+  onDateFromValueChange,
+  onDateToValueChange,
   reengageFilter,
   reengageOptions,
   onReengageFilterChange,
@@ -162,20 +181,6 @@ export function InboxToolbar({
           <div className="flex items-center">
             <select
               className="h-8 w-[7rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
-              value={batchFilterValue}
-              onChange={(event) => onBatchFilterValueChange?.(event.target.value)}
-            >
-              <option value="">Batch</option>
-              {batchOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center">
-            <select
-              className="h-8 w-[7rem] rounded-md border border-muted-foreground/40 bg-background px-3 text-[10px] uppercase tracking-wider text-muted-foreground leading-none focus-visible:border-ring focus-visible:ring-ring/50"
               value={campanaFilterValue}
               onChange={(event) => onCampanaFilterValueChange?.(event.target.value)}
             >
@@ -227,6 +232,26 @@ export function InboxToolbar({
           </div>
         </div>
       </div>
+      {dateFilterValue === "custom" ? (
+        <div className="flex flex-wrap items-center justify-end gap-1.5 border-t pt-1.5">
+          <span className="text-[10px] text-muted-foreground">Desde</span>
+          <Input
+            type="date"
+            value={dateFromValue}
+            onChange={(event) => onDateFromValueChange?.(event.target.value)}
+            aria-label="Fecha inicial"
+            className="w-[8.5rem]"
+          />
+          <span className="text-[10px] text-muted-foreground">hasta</span>
+          <Input
+            type="date"
+            value={dateToValue}
+            onChange={(event) => onDateToValueChange?.(event.target.value)}
+            aria-label="Fecha final"
+            className="w-[8.5rem]"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

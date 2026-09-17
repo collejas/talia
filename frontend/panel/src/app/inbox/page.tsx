@@ -23,7 +23,8 @@ export default async function Page({ searchParams }: InboxPageProps) {
     source: pickQueryParam(resolvedSearchParams, "source"),
     channel: pickQueryParam(resolvedSearchParams, "channel"),
     date: pickQueryParam(resolvedSearchParams, "date"),
-    batchId: pickQueryParam(resolvedSearchParams, "batchId") ?? pickQueryParam(resolvedSearchParams, "batch_id"),
+    dateFrom: pickQueryParam(resolvedSearchParams, "dateFrom") ?? pickQueryParam(resolvedSearchParams, "date_from"),
+    dateTo: pickQueryParam(resolvedSearchParams, "dateTo") ?? pickQueryParam(resolvedSearchParams, "date_to"),
     campanaId:
       pickQueryParam(resolvedSearchParams, "campanaId") ?? pickQueryParam(resolvedSearchParams, "campana_id"),
     search: pickQueryParam(resolvedSearchParams, "search"),
@@ -64,7 +65,6 @@ export default async function Page({ searchParams }: InboxPageProps) {
                   threads={inboxData.threads}
                   totalThreads={inboxData.totalThreads}
                   reengageTagOptions={inboxData.reengageTags}
-                  batchOptions={inboxData.batchOptions}
                   campanaOptions={inboxData.campanaOptions}
                   initialFilters={initialFilters}
                 />

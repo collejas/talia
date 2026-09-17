@@ -7601,6 +7601,8 @@ def _resolve_inbox_date_filter_range(
     *,
     date_filter: str | None,
     timezone_name: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> tuple[datetime | None, datetime | None]:
     normalized = (date_filter or "").strip().lower()
     if not normalized or normalized == "all":
@@ -7608,6 +7610,20 @@ def _resolve_inbox_date_filter_range(
 
     zone = ZoneInfo(timezone_name)
     now_local = datetime.now(zone)
+
+    if normalized == "custom":
+        if not date_from or not date_to:
+            raise HTTPException(status_code=400, detail="custom_date_range_required")
+        try:
+            start_date = date.fromisoformat(date_from.strip())
+            end_date = date.fromisoformat(date_to.strip())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="custom_date_range_invalid") from exc
+        if end_date < start_date:
+            raise HTTPException(status_code=400, detail="custom_date_range_invalid")
+        start_local = datetime.combine(start_date, datetime.min.time(), tzinfo=zone)
+        end_local = datetime.combine(end_date, datetime.max.time(), tzinfo=zone)
+        return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
     if normalized == "today":
         start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -7620,13 +7636,30 @@ def _resolve_inbox_date_filter_range(
         end_local = target.replace(hour=23, minute=59, second=59, microsecond=999999)
         return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
-    if normalized == "last_week":
-        start_local = now_local - timedelta(days=7)
+    if normalized in {"last_3_days", "last_week", "last_month", "last_90_days"}:
+        days_by_filter = {
+            "last_3_days": 3,
+            "last_week": 7,
+            "last_month": 30,
+            "last_90_days": 90,
+        }
+        start_local = now_local - timedelta(days=days_by_filter[normalized])
         return start_local.astimezone(timezone.utc), now_local.astimezone(timezone.utc)
 
-    if normalized == "last_month":
-        start_local = now_local - timedelta(days=30)
-        return start_local.astimezone(timezone.utc), now_local.astimezone(timezone.utc)
+    if normalized in {"this_month", "previous_month", "this_year"}:
+        if normalized == "this_year":
+            start_date = now_local.date().replace(month=1, day=1)
+            end_date = now_local.date()
+        elif normalized == "this_month":
+            start_date = now_local.date().replace(day=1)
+            end_date = now_local.date()
+        else:
+            first_this_month = now_local.date().replace(day=1)
+            end_date = first_this_month - timedelta(days=1)
+            start_date = end_date.replace(day=1)
+        start_local = datetime.combine(start_date, datetime.min.time(), tzinfo=zone)
+        end_local = datetime.combine(end_date, datetime.max.time(), tzinfo=zone)
+        return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
     raise HTTPException(status_code=400, detail="date_filter_invalid")
 
@@ -27934,6 +27967,8 @@ async def get_inbox_threads(
     source: str | None = Query(default=None, max_length=80),
     channel: str | None = Query(default=None, max_length=30),
     date: str | None = Query(default=None, max_length=20),
+    date_from: str | None = Query(default=None, max_length=10),
+    date_to: str | None = Query(default=None, max_length=10),
     batch_id: UUID | None = Query(default=None),
     campana_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None, max_length=120),
@@ -27970,6 +28005,8 @@ async def get_inbox_threads(
     date_from, date_to = _resolve_inbox_date_filter_range(
         date_filter=date,
         timezone_name=effective_timezone,
+        date_from=date_from,
+        date_to=date_to,
     )
     cache_key = _build_inbox_threads_cache_key(
         {
@@ -28135,6 +28172,24 @@ async def get_inbox_threads(
                         "regla_id": _clean_text(conversation_attribution.get("regla_id")),
                         "atribuido_en": _clean_text(conversation_attribution.get("creado_en")),
                     }
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            current_source = (_clean_text(row.get("source")) or "").lower()
+            has_prospeccion_context = any(
+                _clean_text(row.get(field_name))
+                for field_name in ("batch_id", "campana_id", "template_id", "template_slug", "template_label")
+            )
+            if has_prospeccion_context and current_source in {
+                "",
+                "prospeccion",
+                "prospeccion_whatsapp",
+                "whatsapp",
+                "general_whatsapp",
+                "assistant",
+                "whatsapp_inbound",
+            }:
+                row["source"] = "prospeccion"
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -28830,7 +28885,18 @@ async def get_inbox_threads(
                 "atribuido_en": _clean_text(conversation_attribution.get("creado_en")),
             }
             current_source = _clean_text(row_payload.get("source"))
-        if not current_source and (batch_value or campana_value or resolved_template_id or resolved_template_slug):
+        if (
+            (batch_value or campana_value or resolved_template_id or resolved_template_slug or template_label)
+            and current_source.lower() in {
+                "",
+                "prospeccion",
+                "prospeccion_whatsapp",
+                "whatsapp",
+                "general_whatsapp",
+                "assistant",
+                "whatsapp_inbound",
+            }
+        ):
             row_payload["source"] = "prospeccion"
         contact_id_value = _clean_text(row_payload.get("contacto_id"))
         if contact_id_value:
@@ -29126,6 +29192,8 @@ async def get_inbox_bootstrap(
     source: str | None = Query(default=None, max_length=80),
     channel: str | None = Query(default=None, max_length=30),
     date: str | None = Query(default=None, max_length=20),
+    date_from: str | None = Query(default=None, max_length=10),
+    date_to: str | None = Query(default=None, max_length=10),
     batch_id: UUID | None = Query(default=None),
     campana_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None, max_length=120),
@@ -29156,6 +29224,8 @@ async def get_inbox_bootstrap(
             source=source,
             channel=channel,
             date=date,
+            date_from=date_from,
+            date_to=date_to,
             batch_id=batch_id,
             campana_id=campana_id,
             search=search,
@@ -29257,6 +29327,8 @@ async def get_inbox_conversation_detail(
     source: str | None = Query(default=None, max_length=80),
     channel: str | None = Query(default=None, max_length=30),
     date: str | None = Query(default=None, max_length=20),
+    date_from: str | None = Query(default=None, max_length=10),
+    date_to: str | None = Query(default=None, max_length=10),
     batch_id: UUID | None = Query(default=None),
     campana_id: UUID | None = Query(default=None),
     asignado_id: UUID | None = Query(default=None),
@@ -29273,6 +29345,8 @@ async def get_inbox_conversation_detail(
         source=source,
         channel=channel,
         date=date,
+        date_from=date_from,
+        date_to=date_to,
         batch_id=batch_id,
         campana_id=campana_id,
         asignado_id=asignado_id,

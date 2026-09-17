@@ -992,14 +992,14 @@ const InboxMessageRow = React.memo(function InboxMessageRow({
 type InboxSplitViewProps = {
   threads: InboxThread[];
   initialTotalThreads: number;
-  batchOptions?: Array<{ value: string; label: string }>;
   campanaOptions?: Array<{ value: string; label: string }>;
   sourceFilter?: string | null;
   channelFilter?: string | null;
   estadoFilter?: string | null;
-  batchFilter?: string | null;
   campanaFilter?: string | null;
   dateFilter: DateFilterOption;
+  dateFrom?: string | null;
+  dateTo?: string | null;
   search?: string | null;
   reengageFilter: string;
   onVisibleThreadsCountChange?: (count: number) => void;
@@ -1009,14 +1009,14 @@ type InboxSplitViewProps = {
 export function InboxSplitView({
   threads,
   initialTotalThreads,
-  batchOptions,
   campanaOptions,
   sourceFilter,
   channelFilter,
   estadoFilter,
-  batchFilter,
   campanaFilter,
   dateFilter,
+  dateFrom,
+  dateTo,
   search,
   reengageFilter,
   onVisibleThreadsCountChange,
@@ -1070,10 +1070,10 @@ export function InboxSplitView({
   const messagesRefreshingRef = React.useRef<string | null>(null);
   const activeThreadsFilterKey = React.useMemo(
     () =>
-      [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, search]
+      [sourceFilter, channelFilter, estadoFilter, campanaFilter, dateFilter, dateFrom, dateTo, search]
         .map((value) => String(value ?? "").trim().toLowerCase())
         .join("|"),
-    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, search],
+    [sourceFilter, channelFilter, estadoFilter, campanaFilter, dateFilter, dateFrom, dateTo, search],
   );
   const lastThreadsFilterKeyRef = React.useRef(activeThreadsFilterKey);
   const messagesContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -1096,10 +1096,6 @@ export function InboxSplitView({
         roles.some((role) => role.trim().toLowerCase() === "admin_operativo"),
     );
   }, [permissionContext.es_admin, permissionContext.es_owner, permissionContext.roles]);
-  const batchLabelMap = React.useMemo(
-    () => new Map((batchOptions ?? []).map((item) => [item.value, item.label?.trim() || "Lote"])),
-    [batchOptions],
-  );
   const campanaLabelMap = React.useMemo(
     () => new Map((campanaOptions ?? []).map((item) => [item.value, item.label?.trim() || "Campaña"])),
     [campanaOptions],
@@ -1237,7 +1233,6 @@ export function InboxSplitView({
     const normalizedSourceFilter = sourceFilter ? sourceFilter.toLowerCase() : null;
     const normalizedChannelFilter = channelFilter ? channelFilter.toLowerCase() : null;
     const normalizedEstadoFilter = estadoFilter ? estadoFilter.toLowerCase() : null;
-    const normalizedBatchFilter = batchFilter ? batchFilter.toLowerCase() : null;
     const normalizedCampanaFilter = campanaFilter ? campanaFilter.toLowerCase() : null;
     return threadItems
       .filter((thread) => {
@@ -1268,10 +1263,6 @@ export function InboxSplitView({
         return (thread.estado ?? "").toLowerCase() === normalizedEstadoFilter;
       })
       .filter((thread) => {
-        if (!normalizedBatchFilter) return true;
-        return (thread.batchId ?? "").toLowerCase() === normalizedBatchFilter;
-      })
-      .filter((thread) => {
         if (!normalizedCampanaFilter) return true;
         return (thread.campanaId ?? "").toLowerCase() === normalizedCampanaFilter;
       })
@@ -1281,7 +1272,6 @@ export function InboxSplitView({
     sourceFilter,
     channelFilter,
     estadoFilter,
-    batchFilter,
     campanaFilter,
     reengageFilter,
   ]);
@@ -1489,21 +1479,22 @@ export function InboxSplitView({
       if (estadoFilter) {
         params.set("estado", estadoFilter);
       }
-      if (batchFilter) {
-        params.set("batch_id", batchFilter);
-      }
       if (campanaFilter) {
         params.set("campana_id", campanaFilter);
       }
-      if (dateFilter && dateFilter !== "all") {
+      if (dateFilter && dateFilter !== "all" && (dateFilter !== "custom" || (dateFrom && dateTo))) {
         params.set("date", dateFilter);
+      }
+      if (dateFilter === "custom" && dateFrom && dateTo) {
+        params.set("date_from", dateFrom);
+        params.set("date_to", dateTo);
       }
       if (search?.trim()) {
         params.set("search", search.trim());
       }
       return params;
     },
-    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, search],
+    [sourceFilter, channelFilter, estadoFilter, campanaFilter, dateFilter, dateFrom, dateTo, search],
   );
 
   const shouldEnrichThreads = React.useMemo(() => {
@@ -1529,21 +1520,22 @@ export function InboxSplitView({
       if (estadoFilter) {
         params.set("estado", estadoFilter);
       }
-      if (batchFilter) {
-        params.set("batch_id", batchFilter);
-      }
       if (campanaFilter) {
         params.set("campana_id", campanaFilter);
       }
-      if (dateFilter && dateFilter !== "all") {
+      if (dateFilter && dateFilter !== "all" && (dateFilter !== "custom" || (dateFrom && dateTo))) {
         params.set("date", dateFilter);
+      }
+      if (dateFilter === "custom" && dateFrom && dateTo) {
+        params.set("date_from", dateFrom);
+        params.set("date_to", dateTo);
       }
       if (search?.trim()) {
         params.set("search", search.trim());
       }
       return params;
     },
-    [sourceFilter, channelFilter, estadoFilter, batchFilter, campanaFilter, dateFilter, search],
+    [sourceFilter, channelFilter, estadoFilter, campanaFilter, dateFilter, dateFrom, dateTo, search],
   );
 
   const needsThreadEnrichment = React.useCallback((thread: InboxThread | null | undefined): boolean => {
@@ -2519,13 +2511,6 @@ export function InboxSplitView({
                               {thread.templateLabel}
                             </Badge>
                           ) : null}
-                          {thread.batchId ? (
-                            <Badge variant="outline" className={`max-w-[160px] truncate ${compactKpiTagClass}`}>
-                              {thread.batchLabel ??
-                                batchLabelMap.get(thread.batchId) ??
-                                "Lote"}
-                            </Badge>
-                          ) : null}
                           {thread.asignadoNombre ? <span>Asignado a {thread.asignadoNombre}</span> : null}
                         </div>
                         <p className="h-[1rem] overflow-hidden whitespace-nowrap text-ellipsis text-[10px] leading-none text-muted-foreground">
@@ -2627,13 +2612,6 @@ export function InboxSplitView({
                 {selectedThread.templateLabel ? (
                   <Badge variant="outline" className={`max-w-[220px] truncate ${compactKpiTagClass}`}>
                     {selectedThread.templateLabel}
-                  </Badge>
-                ) : null}
-                {selectedThread.batchId ? (
-                  <Badge variant="outline" className={`max-w-[220px] truncate ${compactKpiTagClass}`}>
-                    {selectedThread.batchLabel ??
-                      batchLabelMap.get(selectedThread.batchId) ??
-                      "Lote"}
                   </Badge>
                 ) : null}
                 {formatCountryLabel(
