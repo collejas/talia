@@ -1,0 +1,23 @@
+[Unit]
+Description=TalIA IMAP mailbox worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/talia/backend
+ExecStart=/var/www/talia/backend/scripts/run_mailbox_worker.sh
+EnvironmentFile=/var/www/talia/backend/.env
+Environment=TALIA_MAILBOX_WORKER_IN_API=false
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+User=jorge
+Group=jorge
+NoNewPrivileges=true
+PrivateTmp=true
+MemoryMax=384M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

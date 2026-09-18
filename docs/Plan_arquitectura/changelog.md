@@ -10,7 +10,10 @@ Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIO
 - [x] Diseño de arquitectura objetivo.
 - [x] Definición inicial de límites operativos.
 - [x] Definición de pruebas, criterios de aceptación y rollback.
-- [ ] Implementación de la separación.
+- [ ] Implementación completa de la separación.
+- [x] Entry points independientes preparados para Postmark e IMAP.
+- [ ] Extracción completa de envíos Brevo.
+- [x] Switches de migración para retirar Postmark e IMAP del API.
 - [ ] Pruebas de carga.
 - [ ] Migración gradual en producción.
 - [ ] Retiro de workers del proceso API.
@@ -45,7 +48,7 @@ Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIO
 
 ### Fase 0 — Observabilidad
 
-Estado: pendiente.
+Estado: preparación completada; habilitación pendiente.
 
 - [ ] Crear métricas por servicio, proveedor, tenant y tipo de job.
 - [ ] Medir duración de consultas y llamadas HTTP.
@@ -58,8 +61,11 @@ Estado: pendiente.
 
 Estado: pendiente.
 
-- [ ] Crear `talia-mailbox-worker.service`.
-- [ ] Mover `email_inbound_reader` fuera de `backend/app/main.py`.
+- [x] Crear entrypoint independiente `app.workers.mailbox_worker`.
+- [x] Preparar `talia-mailbox-worker.service`.
+- [x] Agregar switch `MAILBOX_WORKER_IN_API` para retirar el lector del API.
+- [ ] Habilitar el servicio en systemd.
+- [ ] Mover efectivamente `email_inbound_reader` fuera de `backend/app/main.py` en producción.
 - [ ] Conservar estado, deduplicación y tenant.
 - [ ] Agregar límite de reintentos y circuit breaker para credenciales inválidas.
 - [ ] Verificar que un error IMAP no afecte la API.
@@ -67,10 +73,13 @@ Estado: pendiente.
 
 ### Fase 2 — Worker de Brevo y Postmark
 
-Estado: pendiente.
+Estado: preparación inicial completada; habilitación pendiente.
 
-- [ ] Crear `talia-email-worker.service`.
-- [ ] Mover entrega Postmark fuera de `talia-api.service`.
+- [x] Crear entrypoint independiente `app.workers.email_worker`.
+- [x] Preparar `talia-email-worker.service`.
+- [x] Agregar switch `POSTMARK_WORKER_IN_API` para retirar Postmark del API.
+- [ ] Habilitar el servicio en systemd.
+- [ ] Mover efectivamente entrega Postmark fuera de `talia-api.service` en producción.
 - [ ] Mover sincronización histórica Postmark.
 - [ ] Reutilizar checkpoints existentes.
 - [ ] Mover envíos Brevo a una cola durable.
@@ -117,6 +126,35 @@ Estado: pendiente.
 - [ ] Confirmar que el API no inicia conexiones a Brevo, Postmark o IMAP por jobs.
 - [ ] Confirmar que no quedan procesos de sincronización histórica en el API.
 
+## 2026-09-18 — Primera implementación reversible
+
+### Cambios aplicados
+
+- Se agregaron los entrypoints `backend/app/workers/email_worker.py` y `backend/app/workers/mailbox_worker.py`.
+- Se agregaron `backend/scripts/run_email_worker.sh` y `backend/scripts/run_mailbox_worker.sh`.
+- Se prepararon `infra/systemd/talia-email-worker.service` y `infra/systemd/talia-mailbox-worker.service`.
+- Se agregaron los switches `POSTMARK_WORKER_IN_API` y `MAILBOX_WORKER_IN_API`.
+- El lifespan de FastAPI respeta ambos switches.
+- Los defaults mantienen el comportamiento actual hasta habilitar los workers externos.
+- Los servicios preparados incluyen límites iniciales de CPU/memoria.
+- El entrypoint de correo de esta fase procesa Postmark; los envíos Brevo permanecen en el flujo actual hasta implementar su cola durable.
+
+### Verificación
+
+- Compilación de módulos Python: exitosa.
+- Pruebas enfocadas IMAP/Postmark: 12 passed.
+- Servicios systemd: preparados en el repositorio, todavía no instalados ni habilitados.
+- `POSTMARK_SYNC_ENABLED` permanece en `false`.
+
+### Pendiente antes de habilitar
+
+- Revisar el diff y aprobar los límites systemd.
+- Instalar/cargar las unidades mediante el procedimiento autorizado de deploy.
+- Configurar `POSTMARK_WORKER_IN_API=false` y `MAILBOX_WORKER_IN_API=false` para `talia-api.service`.
+- Iniciar primero los workers nuevos en modo controlado.
+- Confirmar que las colas mantienen tenant, lote, plantilla, estado e idempotencia.
+- Ejecutar smoke tests y medir la API antes de reactivar sincronización histórica.
+
 ## Criterios para marcar la separación como completada
 
 - [ ] `talia-api.service` no inicia workers de comunicaciones.
@@ -135,4 +173,3 @@ Estado: pendiente.
 ## Regla de control
 
 No marcar una fase como completada por compilación, reinicio, healthcheck o existencia del servicio. Cada fase requiere evidencia funcional y, cuando corresponda, persistencia validada, entrega del proveedor y medición posterior.
-

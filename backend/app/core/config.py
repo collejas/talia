@@ -241,6 +241,17 @@ class Settings(BaseSettings):
             "TALIA_POSTMARK_WORKER_ENABLED",
         ),
     )
+    postmark_worker_in_api: bool = Field(
+        default=True,
+        description=(
+            "Mantiene el worker de Postmark dentro del proceso API durante la migración. "
+            "Debe desactivarse cuando talia-email-worker.service esté operativo."
+        ),
+        validation_alias=AliasChoices(
+            "POSTMARK_WORKER_IN_API",
+            "TALIA_POSTMARK_WORKER_IN_API",
+        ),
+    )
     postmark_sync_enabled: bool = Field(
         default=False,
         description="Habilita la conciliación histórica no destructiva de Postmark.",
@@ -1477,6 +1488,17 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "MAIL_INCOMING_PORT_IMAP",
             "TALIA_MAIL_INCOMING_PORT_IMAP",
+        ),
+    )
+    mailbox_worker_in_api: bool = Field(
+        default=True,
+        description=(
+            "Mantiene el lector IMAP dentro del proceso API durante la migración. "
+            "Debe desactivarse cuando talia-mailbox-worker.service esté operativo."
+        ),
+        validation_alias=AliasChoices(
+            "MAILBOX_WORKER_IN_API",
+            "TALIA_MAILBOX_WORKER_IN_API",
         ),
     )
     mail_outgoing_server: str | None = Field(

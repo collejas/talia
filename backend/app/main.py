@@ -77,9 +77,10 @@ async def app_lifespan(_: FastAPI):
 
     await maybe_sync_role_permissions_on_start()
     await contact_sender.start()
-    if settings.postmark_worker_enabled:
+    if settings.postmark_worker_enabled and settings.postmark_worker_in_api:
         await postmark_worker.start()
-    await email_inbound_reader.start()
+    if settings.mailbox_worker_in_api:
+        await email_inbound_reader.start()
     await whatsapp_followup_runner.start()
     await webchat_followup_runner.start()
     await webchat_closure_rescue_runner.start()
@@ -148,7 +149,7 @@ async def app_lifespan(_: FastAPI):
                 coro=contact_sender.shutdown(),
             ),
         ]
-        if settings.postmark_worker_enabled:
+        if settings.postmark_worker_enabled and settings.postmark_worker_in_api:
             shutdown_coroutines.insert(
                 1,
                 _shutdown_with_timeout(

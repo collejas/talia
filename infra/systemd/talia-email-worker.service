@@ -1,0 +1,23 @@
+[Unit]
+Description=TalIA Postmark worker (Brevo extraction pending)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/talia/backend
+ExecStart=/var/www/talia/backend/scripts/run_email_worker.sh
+EnvironmentFile=/var/www/talia/backend/.env
+Environment=TALIA_POSTMARK_WORKER_IN_API=false
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+User=jorge
+Group=jorge
+NoNewPrivileges=true
+PrivateTmp=true
+MemoryMax=384M
+CPUQuota=70%
+
+[Install]
+WantedBy=multi-user.target
