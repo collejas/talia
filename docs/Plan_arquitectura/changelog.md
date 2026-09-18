@@ -11,6 +11,7 @@ Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIO
 - [x] Definición inicial de límites operativos.
 - [x] Definición de pruebas, criterios de aceptación y rollback.
 - [ ] Implementación completa de la separación.
+- [x] Worker independiente de WhatsApp/Meta preparado (campañas, follow-ups, webhooks y reconciliación).
 - [x] Entry points independientes preparados para Postmark e IMAP.
 - [ ] Extracción completa de envíos Brevo.
 - [x] Switches de migración para retirar Postmark e IMAP del API.
@@ -103,17 +104,32 @@ Estado: pendiente.
 
 ### Fase 4 — Worker de WhatsApp y Meta
 
-Estado: pendiente.
+Estado: implementación preparada; migración y activación controlada pendientes.
 
-- [ ] Crear `talia-whatsapp-worker.service`.
-- [ ] Mover follow-ups WhatsApp.
-- [ ] Mover reconciliación Meta.
-- [ ] Encolar mensajes y callbacks recibidos.
-- [ ] Sustituir trabajos críticos en `BackgroundTasks`.
-- [ ] Mantener resolución por `phone_number_id`.
-- [ ] Probar duplicados y callbacks fuera de orden.
+- [x] Crear `talia-whatsapp-worker.service`.
+- [x] Mover follow-ups WhatsApp mediante switches del API y el worker nuevo.
+- [x] Mover reconciliación Meta mediante switches del API y el worker nuevo.
+- [x] Crear cola durable `whatsapp_webhook_jobs` para webhooks Meta.
+- [x] Hacer que el webhook Meta responda después de persistir el job, sin ejecutar el procesamiento en `BackgroundTasks`.
+- [x] Procesar mensajes y callbacks Meta en el worker con reintentos, leases e idempotencia.
+- [x] Mantener resolución por `phone_number_id` durante la validación del webhook.
+- [ ] Aplicar la migración en Supabase y activar el servicio en producción.
+- [ ] Probar duplicados y callbacks fuera de orden en producción controlada.
 - [ ] Probar aislamiento entre tenants.
 - [ ] Validar límites por tenant y proveedor.
+
+### 2026-09-18 — Implementación del worker WhatsApp/Meta
+
+- Se agregó `backend/app/workers/whatsapp_worker.py` para campañas `canal=whatsapp`, follow-ups, reconciliación Meta y webhooks encolados.
+- Se agregó `infra/systemd/talia-whatsapp-worker.service` con `CPUQuota=50%`, `MemoryMax=384M`, usuario sin privilegios y reinicio automático.
+- Se agregó `backend/scripts/run_whatsapp_worker.sh`.
+- Se agregaron switches para retirar follow-ups y reconciliación del API sin cambiar sus defaults durante la migración.
+- Se agregó `supabase/migrations/20260918_030000_whatsapp_worker_queue.sql` con tenant explícito, estado, leases, intentos, índices y clave única `(provider, organizacion_id, event_key)`.
+- El webhook Meta conserva la verificación de firma y tenant en el API, y delega el procesamiento a la cola cuando `TALIA_WHATSAPP_WEBHOOK_QUEUE_ENABLED=true`.
+- Los duplicados exactos de webhook no reinician jobs ya procesados: la inserción usa `resolution=ignore-duplicates`.
+- No se reactivó la sincronización histórica de Postmark.
+- Verificación local: importación/compilación correcta y `31 passed` en las pruebas enfocadas de WhatsApp, follow-ups, schemas Meta y sender de prospección.
+- No se activó el servicio ni la cola remota todavía: primero debe aplicarse la migración y después ejecutarse el smoke test controlado.
 
 ### Fase 5 — Limpieza de la API
 

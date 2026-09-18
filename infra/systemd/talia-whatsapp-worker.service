@@ -1,21 +1,25 @@
 [Unit]
-Description=TalIA FastAPI service
+Description=TalIA WhatsApp and Meta worker
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/var/www/talia/backend
-ExecStart=/var/www/talia/backend/scripts/run_api.sh
+ExecStart=/var/www/talia/backend/scripts/run_whatsapp_worker.sh
 EnvironmentFile=/var/www/talia/backend/.env
 Environment=TALIA_WHATSAPP_FOLLOWUP_IN_API=false
 Environment=TALIA_META_DELIVERY_RECONCILIATION_IN_API=false
 Environment=TALIA_WHATSAPP_WEBHOOK_QUEUE_ENABLED=true
+Environment=PYTHONUNBUFFERED=1
 Restart=always
 RestartSec=5
-Environment=PYTHONUNBUFFERED=1
 User=jorge
 Group=jorge
+NoNewPrivileges=true
+PrivateTmp=true
+MemoryMax=384M
+CPUQuota=50%
 
 [Install]
 WantedBy=multi-user.target

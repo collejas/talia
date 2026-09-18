@@ -1,4 +1,6 @@
 """Endpoints del canal WhatsApp."""
+import hashlib
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
@@ -8,6 +10,7 @@ from . import schemas, service
 from .deps import verify_meta_signature, verify_twilio_signature
 from app.core.config import settings
 from app.services import tenant_runtime
+from app.repositories.crm import CRMRepository, CRMRepositoryError
 
 router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 
@@ -71,9 +74,30 @@ async def whatsapp_meta_verify_webhook(
 async def whatsapp_meta_webhook(
     background_tasks: BackgroundTasks,
     organizacion_id: UUID,
+    request: Request,
     payload: dict = Depends(verify_meta_signature),
 ) -> dict[str, str]:
     """Procesa mensajes entrantes y estados desde WhatsApp Cloud API."""
+    if settings.whatsapp_webhook_queue_enabled:
+        resolved_organizacion_id = getattr(
+            request.state,
+            "whatsapp_organizacion_id",
+            organizacion_id,
+        )
+        event_key = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        try:
+            await CRMRepository().worker_enqueue_whatsapp_webhook(
+                organizacion_id=resolved_organizacion_id,
+                event_key=event_key,
+                payload=payload,
+                max_attempts=settings.whatsapp_webhook_max_attempts,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=503, detail="whatsapp_webhook_queue_unavailable") from exc
+        return {"status": "accepted"}
+
     background_payloads = schemas.MetaWhatsAppIncomingMessage.from_webhook_payload(payload)
     for message in background_payloads:
         background_tasks.add_task(

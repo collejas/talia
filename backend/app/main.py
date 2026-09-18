@@ -82,7 +82,8 @@ async def app_lifespan(_: FastAPI):
         await postmark_worker.start()
     if settings.mailbox_worker_in_api:
         await email_inbound_reader.start()
-    await whatsapp_followup_runner.start()
+    if settings.whatsapp_followup_in_api:
+        await whatsapp_followup_runner.start()
     await webchat_followup_runner.start()
     await webchat_closure_rescue_runner.start()
     await inbox_threads_metrics_snapshot_runner.start()
@@ -91,7 +92,8 @@ async def app_lifespan(_: FastAPI):
     await opportunity_followup_state_runner.start()
     await deleted_busquedas_purge_runner.start()
     await sales_notification_jobs_runner.start()
-    await meta_delivery_reconciliation_runner.start()
+    if settings.meta_delivery_reconciliation_in_api:
+        await meta_delivery_reconciliation_runner.start()
     await message_billing_alert_runner.start()
     try:
         yield
@@ -114,10 +116,6 @@ async def app_lifespan(_: FastAPI):
                 coro=sales_notification_jobs_runner.shutdown(),
             ),
             _shutdown_with_timeout(
-                name="meta_delivery_reconciliation_runner",
-                coro=meta_delivery_reconciliation_runner.shutdown(),
-            ),
-            _shutdown_with_timeout(
                 name="message_billing_alert_runner",
                 coro=message_billing_alert_runner.shutdown(),
             ),
@@ -138,14 +136,24 @@ async def app_lifespan(_: FastAPI):
                 coro=webchat_followup_runner.shutdown(),
             ),
             _shutdown_with_timeout(
-                name="whatsapp_followup_runner",
-                coro=whatsapp_followup_runner.shutdown(),
-            ),
-            _shutdown_with_timeout(
                 name="email_inbound_reader",
                 coro=email_inbound_reader.shutdown(),
             ),
         ]
+        if settings.meta_delivery_reconciliation_in_api:
+            shutdown_coroutines.append(
+                _shutdown_with_timeout(
+                    name="meta_delivery_reconciliation_runner",
+                    coro=meta_delivery_reconciliation_runner.shutdown(),
+                )
+            )
+        if settings.whatsapp_followup_in_api:
+            shutdown_coroutines.append(
+                _shutdown_with_timeout(
+                    name="whatsapp_followup_runner",
+                    coro=whatsapp_followup_runner.shutdown(),
+                )
+            )
         if settings.contact_sender_in_api:
             shutdown_coroutines.append(
                 _shutdown_with_timeout(

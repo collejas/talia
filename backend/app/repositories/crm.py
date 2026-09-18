@@ -26141,6 +26141,182 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_whatsapp_followup_retry_row_invalid:{row!r}")
         return row
 
+    async def worker_enqueue_whatsapp_webhook(
+        self,
+        *,
+        organizacion_id: UUID,
+        event_key: str,
+        payload: dict[str, Any],
+        max_attempts: int,
+    ) -> dict[str, Any]:
+        row_payload = {
+            "provider": "meta",
+            "event_key": str(event_key).strip(),
+            "organizacion_id": str(organizacion_id),
+            "payload": payload,
+            "state": "pending",
+            "max_attempts": max(1, int(max_attempts)),
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/whatsapp_webhook_jobs",
+            params={"on_conflict": "provider,organizacion_id,event_key"},
+            json=[row_payload],
+            prefer="resolution=ignore-duplicates,return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_webhook_enqueue_invalid:{data!r}")
+        if data and isinstance(data[0], dict):
+            return data[0]
+        existing = await self._request(
+            "GET",
+            "/rest/v1/whatsapp_webhook_jobs",
+            params={
+                "provider": "eq.meta",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "event_key": f"eq.{event_key}",
+                "select": "*",
+                "limit": "1",
+            },
+        )
+        existing_data = existing.json() or []
+        if existing_data and isinstance(existing_data[0], dict):
+            return existing_data[0]
+        raise CRMRepositoryError(f"worker_whatsapp_webhook_enqueue_invalid:{data!r}")
+
+    async def worker_requeue_expired_whatsapp_webhook_jobs(self, *, limit: int = 100) -> int:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_webhook_jobs",
+            params={
+                "state": "eq.processing",
+                "lease_until": f"lt.{now_iso}",
+                "limit": str(max(1, int(limit))),
+            },
+            json={
+                "state": "pending",
+                "lease_until": None,
+                "updated_at": now_iso,
+                "last_error": "lease_expired_auto_requeue",
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_webhook_requeue_invalid:{data!r}")
+        return len(data)
+
+    async def worker_list_ready_whatsapp_webhook_jobs(self, *, limit: int = 25) -> list[dict[str, Any]]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        resp = await self._request(
+            "GET",
+            "/rest/v1/whatsapp_webhook_jobs",
+            params={
+                "select": "*",
+                "state": "eq.pending",
+                "available_at": f"lte.{now_iso}",
+                "order": "available_at.asc,created_at.asc",
+                "limit": str(max(1, int(limit))),
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_webhook_list_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def worker_claim_whatsapp_webhook_job(
+        self,
+        *,
+        job_id: UUID,
+        expected_attempt_count: int,
+        lease_seconds: int,
+    ) -> dict[str, Any] | None:
+        now_dt = datetime.now(timezone.utc)
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_webhook_jobs",
+            params={
+                "id": f"eq.{job_id}",
+                "state": "eq.pending",
+                "attempt_count": f"eq.{max(0, int(expected_attempt_count))}",
+                "available_at": f"lte.{now_dt.isoformat()}",
+            },
+            json={
+                "state": "processing",
+                "attempt_count": max(0, int(expected_attempt_count)) + 1,
+                "lease_until": (now_dt + timedelta(seconds=max(30, int(lease_seconds)))).isoformat(),
+                "updated_at": now_dt.isoformat(),
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_webhook_claim_invalid:{data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"worker_whatsapp_webhook_claim_row_invalid:{row!r}")
+        return row
+
+    async def worker_mark_whatsapp_webhook_done(self, *, job_id: UUID) -> dict[str, Any] | None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_webhook_jobs",
+            params={"id": f"eq.{job_id}", "state": "eq.processing"},
+            json={
+                "state": "done",
+                "lease_until": None,
+                "processed_at": now_iso,
+                "updated_at": now_iso,
+                "last_error": None,
+            },
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_webhook_done_invalid:{data!r}")
+        return data[0] if data and isinstance(data[0], dict) else None
+
+    async def worker_mark_whatsapp_webhook_retry_or_failed(
+        self,
+        *,
+        job_id: UUID,
+        attempt_count: int,
+        max_attempts: int,
+        error: str,
+        retry_delay_seconds: int,
+    ) -> dict[str, Any] | None:
+        now_dt = datetime.now(timezone.utc)
+        attempts_done = max(0, int(attempt_count))
+        should_retry = attempts_done < max(1, int(max_attempts))
+        payload: dict[str, Any] = {
+            "updated_at": now_dt.isoformat(),
+            "last_error": str(error or "unknown_error").strip()[:1000] or "unknown_error",
+            "lease_until": None,
+        }
+        if should_retry:
+            payload.update({
+                "state": "pending",
+                "available_at": (now_dt + timedelta(seconds=max(5, int(retry_delay_seconds)))).isoformat(),
+            })
+        else:
+            payload.update({"state": "failed", "processed_at": now_dt.isoformat()})
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_webhook_jobs",
+            params={"id": f"eq.{job_id}", "state": "eq.processing"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_whatsapp_webhook_retry_invalid:{data!r}")
+        return data[0] if data and isinstance(data[0], dict) else None
+
     async def get_whatsapp_conversation_for_followup_job(self, *, conversation_id: UUID) -> dict[str, Any] | None:
         resp = await self._request(
             "GET",

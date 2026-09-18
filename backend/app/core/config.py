@@ -1023,6 +1023,17 @@ class Settings(BaseSettings):
             "TALIA_META_DELIVERY_RECONCILIATION_BATCH_SIZE",
         ),
     )
+    meta_delivery_reconciliation_in_api: bool = Field(
+        default=True,
+        description=(
+            "Mantiene la conciliacion Meta dentro del proceso API durante la migracion. "
+            "Debe desactivarse cuando talia-whatsapp-worker.service este operativo."
+        ),
+        validation_alias=AliasChoices(
+            "META_DELIVERY_RECONCILIATION_IN_API",
+            "TALIA_META_DELIVERY_RECONCILIATION_IN_API",
+        ),
+    )
     billing_alerts_interval_seconds: int = Field(
         default=300,
         ge=30,
@@ -1106,6 +1117,55 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "WHATSAPP_FOLLOWUP_JOB_LEASE_SECONDS",
             "TALIA_WHATSAPP_FOLLOWUP_JOB_LEASE_SECONDS",
+        ),
+    )
+    whatsapp_followup_in_api: bool = Field(
+        default=True,
+        description=(
+            "Mantiene los followups de WhatsApp dentro del proceso API durante la migracion. "
+            "Debe desactivarse cuando talia-whatsapp-worker.service este operativo."
+        ),
+        validation_alias=AliasChoices(
+            "WHATSAPP_FOLLOWUP_IN_API",
+            "TALIA_WHATSAPP_FOLLOWUP_IN_API",
+        ),
+    )
+    whatsapp_webhook_queue_enabled: bool = Field(
+        default=False,
+        description="Encola webhooks Meta para procesamiento durable por el worker de WhatsApp.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_WEBHOOK_QUEUE_ENABLED",
+            "TALIA_WHATSAPP_WEBHOOK_QUEUE_ENABLED",
+        ),
+    )
+    whatsapp_webhook_worker_interval_seconds: int = Field(
+        default=5,
+        ge=1,
+        le=300,
+        description="Intervalo del worker para procesar webhooks Meta encolados.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_WEBHOOK_WORKER_INTERVAL_SECONDS",
+            "TALIA_WHATSAPP_WEBHOOK_WORKER_INTERVAL_SECONDS",
+        ),
+    )
+    whatsapp_webhook_job_lease_seconds: int = Field(
+        default=120,
+        ge=30,
+        le=900,
+        description="Lease por webhook Meta en procesamiento.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_WEBHOOK_JOB_LEASE_SECONDS",
+            "TALIA_WHATSAPP_WEBHOOK_JOB_LEASE_SECONDS",
+        ),
+    )
+    whatsapp_webhook_max_attempts: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Máximo de intentos para procesar un webhook Meta.",
+        validation_alias=AliasChoices(
+            "WHATSAPP_WEBHOOK_MAX_ATTEMPTS",
+            "TALIA_WHATSAPP_WEBHOOK_MAX_ATTEMPTS",
         ),
     )
     sales_notification_max_attempts: int = Field(

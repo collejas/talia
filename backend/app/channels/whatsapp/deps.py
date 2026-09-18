@@ -86,6 +86,7 @@ async def verify_meta_signature(
 
     if not _verify_hub_signature(body, x_hub_signature_256 or "", app_secret):
         raise HTTPException(status_code=403, detail="invalid_meta_signature")
+    request.state.whatsapp_organizacion_id = resolved_organizacion_id
     return payload
 
 
