@@ -80,11 +80,18 @@ sudo systemctl is-active --quiet talia-api.service
 
 6) Si hubo cambios de FRONTEND y BACKEND al mismo tiempo
 cd /var/www/talia
-RESTART_API=1 bash scripts/deploy_panel_atomic.sh
+RESTART_API=1 bash /var/www/talia/scripts/deploy_panel_atomic.sh
+
+sudo systemctl restart talia-email-worker.service
+sudo systemctl restart talia-mailbox-worker.service
+sudo systemctl restart talia-whatsapp-worker.service
 
 Variante rápida:
 cd /var/www/talia
 RESTART_API=1 SKIP_LINT=1 bash scripts/deploy_panel_atomic.sh
+sudo systemctl restart talia-email-worker.service
+sudo systemctl restart talia-mailbox-worker.service
+sudo systemctl restart talia-whatsapp-worker.service
 
 7) Verificación post-deploy en producción
 Verificación operativa:

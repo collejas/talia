@@ -148,9 +148,9 @@ async def _run() -> None:
         loop.add_signal_handler(signum, stop_event.set)
 
     sender = ProspeccionContactSender(
-        batch_size=getattr(settings, "prospeccion_sender_batch_size", 10),
-        max_concurrency=getattr(settings, "prospeccion_sender_max_concurrency", 2),
-        per_minute_limit=getattr(settings, "prospeccion_sender_per_minute_limit", 40),
+        batch_size=settings.prospeccion_whatsapp_batch_size,
+        max_concurrency=settings.prospeccion_whatsapp_max_concurrency,
+        per_minute_limit=settings.prospeccion_sender_per_minute_limit,
         channels=("whatsapp",),
     )
     await sender.start()

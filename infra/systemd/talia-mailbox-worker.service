@@ -16,8 +16,8 @@ User=jorge
 Group=jorge
 NoNewPrivileges=true
 PrivateTmp=true
-MemoryMax=384M
-CPUQuota=50%
+MemoryMax=192M
+CPUQuota=25%
 
 [Install]
 WantedBy=multi-user.target

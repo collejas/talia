@@ -293,3 +293,22 @@ def test_build_envio_update_payload_persists_local_and_provider_message_ids() ->
 
     assert payload["mensaje_id"] == "brevo-123@smtp-relay.sendinblue.com"
     assert payload["mensaje_id_interno"] == "local-123@sinergialidera.com"
+
+
+@pytest.mark.asyncio
+async def test_sender_rate_limits_are_atomic_across_scopes() -> None:
+    sender = ProspeccionContactSender(per_minute_limit=10)
+    tenant_key = ("tenant-1", "meta", "__tenant__")
+    provider_key = ("global", "meta", "__provider__")
+    recipient_key = ("tenant-1", "whatsapp", "5215555555555")
+
+    allowed, reason = await sender._acquire_send_slots(
+        ((tenant_key, 1), (provider_key, 1), (recipient_key, 10))
+    )
+    assert (allowed, reason) == (True, "ok")
+
+    allowed, reason = await sender._acquire_send_slots(
+        ((tenant_key, 1), (provider_key, 1), (recipient_key, 10))
+    )
+    assert (allowed, reason) == (False, "per_minute_limit")
+    assert len(sender._send_events[recipient_key]) == 1

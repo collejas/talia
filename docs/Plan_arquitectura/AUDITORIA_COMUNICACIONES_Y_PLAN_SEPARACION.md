@@ -316,23 +316,25 @@ Para el servidor actual de 1 vCPU y 1 GB:
 
 | Área | Límite inicial |
 |---|---:|
-| Brevo | 2 solicitudes concurrentes globales |
-| Postmark entrega | 1–2 por tenant |
+| Brevo | 2 tareas concurrentes en el worker de correo |
+| Postmark entrega | 25 mensajes reclamados por tenant/ciclo; pausa de 5 s entre grupos |
 | Postmark histórico | 1 tenant y stream a la vez |
-| WhatsApp/Meta | 2 globales; 1 por tenant |
-| Lote normal | 25–50 |
-| Lote histórico | 100–250 |
-| Envíos por tenant | conservar inicialmente 40/minuto |
-| Reintentos máximos | 5 |
+| WhatsApp/Meta | 2 tareas concurrentes en el worker; máximo 30/minuto por tenant |
+| Lote normal | 10 por ciclo de correo/WhatsApp |
+| Lote histórico | 100 por página Postmark |
+| Envíos por tenant | 30/minuto por proveedor/canal |
+| Proveedor agregado | 60/minuto |
+| Destinatario | 2/minuto |
+| Reintentos máximos | 3 intentos totales |
 | Lease de envío | 10 minutos |
 | Lease de webhook | 2–5 minutos |
-| Memoria por worker | 256–384 MB |
-| CPU por worker | 50–70% |
+| Memoria por worker | email 256 MB; IMAP 192 MB; WhatsApp 256 MB |
+| CPU por worker | email 40%; IMAP 25%; WhatsApp 40% |
 
 Backoff propuesto:
 
 ```text
-1 s, 5 s, 30 s, 120 s, 600 s + jitter
+30 s, 120 s, 300 s, 600 s; errores específicos pueden añadir 180–300 s.
 ```
 
 Los errores 4xx permanentes no se reintentan. Los 429 respetan `Retry-After`. Los timeouts y errores 5xx se reintentan hasta el máximo.
@@ -461,5 +463,4 @@ Migraciones bajo `supabase/migrations/` relacionadas con:
 
 ## 14. Estado de implementación
 
-Este documento contiene el diagnóstico y el plan. No se ha aplicado ninguna modificación. La primera implementación autorizada debería ser la instrumentación y extracción de IMAP, seguida por la separación de Postmark/Brevo y finalmente WhatsApp/Meta.
-
+Este documento contiene el diagnóstico y el plan original. Desde entonces se aplicaron de forma gradual la extracción de IMAP, la separación de correo/WhatsApp y estos límites operativos. La sincronización histórica Postmark continúa deliberadamente desactivada.

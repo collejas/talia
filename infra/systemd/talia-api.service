@@ -16,6 +16,8 @@ RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 User=jorge
 Group=jorge
+MemoryMax=512M
+CPUQuota=85%
 
 [Install]
 WantedBy=multi-user.target

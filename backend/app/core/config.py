@@ -291,6 +291,36 @@ class Settings(BaseSettings):
             "TALIA_POSTMARK_SYNC_PAGE_TIMEOUT_SECONDS",
         ),
     )
+    postmark_sync_page_size: int = Field(
+        default=100,
+        ge=25,
+        le=500,
+        description="Cantidad máxima de mensajes por página durante la sincronización histórica Postmark.",
+        validation_alias=AliasChoices(
+            "POSTMARK_SYNC_PAGE_SIZE",
+            "TALIA_POSTMARK_SYNC_PAGE_SIZE",
+        ),
+    )
+    postmark_worker_batch_size: int = Field(
+        default=25,
+        ge=1,
+        le=100,
+        description="Cantidad máxima de mensajes Postmark reclamados por tenant y ciclo.",
+        validation_alias=AliasChoices(
+            "POSTMARK_WORKER_BATCH_SIZE",
+            "TALIA_POSTMARK_WORKER_BATCH_SIZE",
+        ),
+    )
+    postmark_worker_inter_batch_seconds: float = Field(
+        default=5.0,
+        ge=0.0,
+        le=60.0,
+        description="Pausa entre lotes Postmark para evitar ráfagas contra el proveedor.",
+        validation_alias=AliasChoices(
+            "POSTMARK_WORKER_INTER_BATCH_SECONDS",
+            "TALIA_POSTMARK_WORKER_INTER_BATCH_SECONDS",
+        ),
+    )
     postmark_transactional_stream: str = Field(
         default="outbound",
         validation_alias=AliasChoices(
@@ -581,6 +611,96 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "PROSPECCION_SENDER_PER_MINUTE_LIMIT",
             "TALIA_PROSPECCION_SENDER_PER_MINUTE_LIMIT",
+        ),
+    )
+    prospeccion_sender_tenant_per_minute_limit: int = Field(
+        default=30,
+        ge=1,
+        le=2000,
+        description="Límite de envíos por minuto por tenant y canal/proveedor.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_TENANT_PER_MINUTE_LIMIT",
+            "TALIA_PROSPECCION_SENDER_TENANT_PER_MINUTE_LIMIT",
+        ),
+    )
+    prospeccion_sender_provider_per_minute_limit: int = Field(
+        default=60,
+        ge=1,
+        le=5000,
+        description="Límite de envíos por minuto agregado por proveedor.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_PROVIDER_PER_MINUTE_LIMIT",
+            "TALIA_PROSPECCION_SENDER_PROVIDER_PER_MINUTE_LIMIT",
+        ),
+    )
+    prospeccion_sender_max_retries: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Máximo global de intentos de envío, incluido el intento inicial.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_SENDER_MAX_RETRIES",
+            "TALIA_PROSPECCION_SENDER_MAX_RETRIES",
+        ),
+    )
+    prospeccion_email_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Cantidad de envíos de correo por ciclo del worker de correo.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_EMAIL_BATCH_SIZE",
+            "TALIA_PROSPECCION_EMAIL_BATCH_SIZE",
+        ),
+    )
+    prospeccion_email_max_concurrency: int = Field(
+        default=2,
+        ge=1,
+        le=20,
+        description="Concurrencia máxima del sender Brevo/Postmark de prospección.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_EMAIL_MAX_CONCURRENCY",
+            "TALIA_PROSPECCION_EMAIL_MAX_CONCURRENCY",
+        ),
+    )
+    prospeccion_whatsapp_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Cantidad de envíos WhatsApp por ciclo del worker Meta.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_WHATSAPP_BATCH_SIZE",
+            "TALIA_PROSPECCION_WHATSAPP_BATCH_SIZE",
+        ),
+    )
+    prospeccion_whatsapp_max_concurrency: int = Field(
+        default=2,
+        ge=1,
+        le=20,
+        description="Concurrencia máxima de envíos WhatsApp contra Meta.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_WHATSAPP_MAX_CONCURRENCY",
+            "TALIA_PROSPECCION_WHATSAPP_MAX_CONCURRENCY",
+        ),
+    )
+    mailbox_poll_interval_seconds: int = Field(
+        default=30,
+        ge=10,
+        le=3600,
+        description="Intervalo entre revisiones IMAP.",
+        validation_alias=AliasChoices(
+            "MAILBOX_POLL_INTERVAL_SECONDS",
+            "TALIA_MAILBOX_POLL_INTERVAL_SECONDS",
+        ),
+    )
+    mailbox_batch_size: int = Field(
+        default=50,
+        ge=1,
+        le=250,
+        description="Cantidad máxima de mensajes IMAP leídos por carpeta y ciclo.",
+        validation_alias=AliasChoices(
+            "MAILBOX_BATCH_SIZE",
+            "TALIA_MAILBOX_BATCH_SIZE",
         ),
     )
     prospeccion_sender_rate_limit_defer_seconds: int = Field(

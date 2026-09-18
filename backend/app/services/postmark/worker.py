@@ -78,7 +78,7 @@ class PostmarkWorker:
                         organizacion_id=organizacion_id,
                         claimed_rows=claimed,
                         client=client,
-                        inter_batch_seconds=5.0,
+                        inter_batch_seconds=settings.postmark_worker_inter_batch_seconds,
                     )
                     crm_repo = CRMRepository()
                     for delivery in deliveries:
@@ -180,7 +180,7 @@ class PostmarkWorker:
                             from_date=from_date,
                             to_date=to_date,
                             message_stream=message_stream,
-                            count=500,
+                            count=settings.postmark_sync_page_size,
                             offset=offset,
                         ),
                         timeout=settings.postmark_sync_page_timeout_seconds,
@@ -230,7 +230,7 @@ class PostmarkWorker:
                             from_date=from_date,
                             to_date=to_date,
                             message_stream=message_stream,
-                            count=500,
+                            count=settings.postmark_sync_page_size,
                             offset=offset,
                             single_page=True,
                             bounce_type=bounce_type,
@@ -330,6 +330,8 @@ class PostmarkWorker:
                 continue
 
 
-postmark_worker = PostmarkWorker()
+postmark_worker = PostmarkWorker(
+    batch_size=settings.postmark_worker_batch_size,
+)
 
 __all__ = ["PostmarkWorker", "postmark_worker"]

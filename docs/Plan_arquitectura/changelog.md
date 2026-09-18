@@ -13,11 +13,11 @@ Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIO
 - [ ] Implementación completa de la separación.
 - [x] Worker independiente de WhatsApp/Meta preparado (campañas, follow-ups, webhooks y reconciliación).
 - [x] Entry points independientes preparados para Postmark e IMAP.
-- [ ] Extracción completa de envíos Brevo.
+- [x] Extracción del sender de Brevo al worker de correo.
 - [x] Switches de migración para retirar Postmark e IMAP del API.
 - [ ] Pruebas de carga.
 - [ ] Migración gradual en producción.
-- [ ] Retiro de workers del proceso API.
+- [x] Retiro controlado de workers de comunicaciones del proceso API.
 - [ ] Reactivación controlada de la sincronización histórica Postmark.
 
 ## 2026-09-18 — Auditoría inicial
@@ -85,8 +85,8 @@ Estado: Postmark separado y activo de forma controlada; Brevo y sincronización 
 - [ ] Reutilizar checkpoints existentes.
 - [ ] Mover envíos Brevo a una cola durable.
 - [ ] Mantener tenant, lote, plantilla, versión, estado e idempotencia.
-- [ ] Definir límites de concurrencia por proveedor.
-- [ ] Definir backoff, leases y máximo de reintentos.
+- [x] Definir límites de concurrencia por proveedor y tenant.
+- [x] Definir backoff, rate limits y máximo global de 3 intentos.
 - [ ] Ejecutar pruebas de reinicio durante un lote.
 - [ ] Reactivar `POSTMARK_SYNC_ENABLED` únicamente en el worker nuevo.
 
@@ -113,10 +113,10 @@ Estado: implementación preparada; migración y activación controlada pendiente
 - [x] Hacer que el webhook Meta responda después de persistir el job, sin ejecutar el procesamiento en `BackgroundTasks`.
 - [x] Procesar mensajes y callbacks Meta en el worker con reintentos, leases e idempotencia.
 - [x] Mantener resolución por `phone_number_id` durante la validación del webhook.
-- [ ] Aplicar la migración en Supabase y activar el servicio en producción.
+- [x] Aplicar la migración en Supabase y activar el servicio en producción.
 - [ ] Probar duplicados y callbacks fuera de orden en producción controlada.
 - [ ] Probar aislamiento entre tenants.
-- [ ] Validar límites por tenant y proveedor.
+- [x] Implementar límites por tenant y proveedor; falta observarlos bajo carga.
 
 ### 2026-09-18 — Implementación del worker WhatsApp/Meta
 
@@ -142,6 +142,17 @@ Estado: pendiente.
 - [ ] Confirmar que el API no inicia conexiones a Brevo, Postmark o IMAP por jobs.
 - [ ] Confirmar que no quedan procesos de sincronización histórica en el API.
 
+### 2026-09-18 — Límites operativos iniciales
+
+- Se agregaron límites configurables por tenant y proveedor para el sender de prospección.
+- Se fijó concurrencia inicial de 2 para correo y 2 para WhatsApp/Meta.
+- Se fijaron lotes de 10 para correo/WhatsApp, 25 para entrega Postmark y 50 para lectura IMAP.
+- Se agregó un máximo global de 3 intentos por envío; se conservan los backoff existentes de 30, 120, 300 y 600 segundos.
+- Postmark histórico conserva `POSTMARK_SYNC_ENABLED=false`; cuando se reactive, usará páginas de 100 registros.
+- Se actualizaron límites systemd: API 85% CPU/512M; email 40%/256M; IMAP 25%/192M; WhatsApp 40%/256M.
+- Verificación local: compilación correcta y 34 pruebas enfocadas aprobadas.
+- Pendiente: instalar las unidades systemd actualizadas, reiniciar los workers y ejecutar prueba de carga.
+
 ## 2026-09-18 — Primera implementación reversible
 
 ### Cambios aplicados
@@ -153,7 +164,7 @@ Estado: pendiente.
 - El lifespan de FastAPI respeta ambos switches.
 - Los defaults mantienen el comportamiento actual hasta habilitar los workers externos.
 - Los servicios preparados incluyen límites iniciales de CPU/memoria.
-- El entrypoint de correo de esta fase procesa Postmark; los envíos Brevo permanecen en el flujo actual hasta implementar su cola durable.
+- El entrypoint de correo procesa Brevo mediante la cola durable de prospección y Postmark mediante su cola/worker aislado.
 - Se agregó backoff exponencial por buzón IMAP ante fallos de conexión/autenticación: inicia en 60 segundos, duplica hasta 15 minutos y se limpia tras un ciclo exitoso.
 - El backoff se mantiene en memoria del worker, no guarda credenciales ni cambia estados de mensajes o cursores.
 - `ProspeccionContactSender` acepta un filtro de canales y el worker de correo queda preparado para procesar únicamente `canal=correo`.
@@ -164,7 +175,7 @@ Estado: pendiente.
 
 - Compilación de módulos Python: exitosa.
 - Pruebas enfocadas IMAP/Postmark: 12 passed.
-- Servicios systemd: instalados y arrancados; todavía no habilitados para arranque automático.
+- Servicios systemd: instalados, arrancados y habilitados para arranque automático; los nuevos límites de esta fase aún requieren instalar las unidades actualizadas.
 - `POSTMARK_SYNC_ENABLED` permanece en `false`.
 - Las unidades fueron instaladas en `/etc/systemd/system/` y `systemctl daemon-reload` fue ejecutado.
 - Se dejaron persistidos `TALIA_POSTMARK_WORKER_IN_API=false` y `TALIA_MAILBOX_WORKER_IN_API=false` en `backend/.env`.
@@ -206,7 +217,7 @@ Estado: pendiente.
 - Confirmar que las colas mantienen tenant, lote, plantilla, estado e idempotencia.
 - Ejecutar smoke tests y medir la API antes de reactivar sincronización histórica.
 - Corregir autenticación IMAP y verificar el backoff en producción antes de habilitar el servicio en el arranque del sistema.
-- Habilitar `talia-email-worker.service` y `talia-mailbox-worker.service` con `systemctl enable` después de superar la prueba de estabilidad.
+- [x] Habilitar `talia-api.service`, `talia-email-worker.service`, `talia-mailbox-worker.service` y `talia-whatsapp-worker.service` con `systemctl enable`.
 - [x] Instalar la versión actualizada de `talia-email-worker.service`, arrancarla y confirmar que solo reclama envíos `correo`.
 - [x] Activar `TALIA_CONTACT_SENDER_IN_API=false` después de confirmar que el worker de correo está activo.
 

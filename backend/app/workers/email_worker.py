@@ -30,7 +30,12 @@ async def _run() -> None:
     for signum in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(signum, stop_event.set)
 
-    contact_sender = ProspeccionContactSender(channels=("correo",))
+    contact_sender = ProspeccionContactSender(
+        batch_size=settings.prospeccion_email_batch_size,
+        max_concurrency=settings.prospeccion_email_max_concurrency,
+        per_minute_limit=settings.prospeccion_sender_per_minute_limit,
+        channels=("correo",),
+    )
     await contact_sender.start()
     await postmark_worker.start()
     logger.info(

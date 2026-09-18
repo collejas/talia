@@ -834,7 +834,10 @@ class ProspeccionEmailInboundReader:
         return mailboxes
 
 
-email_inbound_reader = ProspeccionEmailInboundReader()
+email_inbound_reader = ProspeccionEmailInboundReader(
+    poll_interval=settings.mailbox_poll_interval_seconds,
+    batch_size=settings.mailbox_batch_size,
+)
 
 
 __all__: Sequence[str] = ("ProspeccionEmailInboundReader", "email_inbound_reader")

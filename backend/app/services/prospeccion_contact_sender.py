@@ -1604,6 +1604,7 @@ class ProspeccionContactSender:
         self._error_window_seconds = max(30, int(error_window_seconds))
         self._error_threshold = max(1, int(error_threshold))
         self._backpressure_cooldown_seconds = max(10, int(backpressure_cooldown_seconds))
+        self._max_retries = max(1, int(getattr(settings, "prospeccion_sender_max_retries", 3)))
         normalized_channels = {
             str(channel).strip().lower()
             for channel in (channels or ())
@@ -1648,6 +1649,7 @@ class ProspeccionContactSender:
             error_window_seconds=self._error_window_seconds,
             error_threshold=self._error_threshold,
             backpressure_cooldown_seconds=self._backpressure_cooldown_seconds,
+            max_retries=self._max_retries,
             channels=sorted(self._channels) if self._channels else None,
         )
 
@@ -1844,7 +1846,10 @@ class ProspeccionContactSender:
             return
 
         intento_actual = int(envio.get("intento_actual") or 0) + 1
-        max_reintentos = max(int(envio.get("max_reintentos") or 1), 1)
+        max_reintentos = min(
+            max(int(envio.get("max_reintentos") or 1), 1),
+            self._max_retries,
+        )
         claimed = await repo.worker_mark_envio_processing(
             envio_id=envio_id,
             attempt=intento_actual,
@@ -1902,6 +1907,23 @@ class ProspeccionContactSender:
 
         throttle_key: tuple[str, str, str] | None = None
         postmark_queue_dispatch = False
+        if canal == "correo" and org_uuid:
+            try:
+                postmark_queue_dispatch = await _postmark_enabled_for_tenant(organizacion_id=org_uuid)
+            except Exception as exc:  # pragma: no cover - configuración externa del tenant
+                log_event(
+                    logger,
+                    "prospeccion.postmark_dispatch_detection_failed",
+                    organizacion_id=str(org_uuid),
+                    envio_id=str(envio_id),
+                    error=str(exc),
+                )
+
+        provider_key = {
+            "whatsapp": "meta",
+            "correo": "postmark" if postmark_queue_dispatch else "brevo",
+            "llamada": "voice",
+        }.get(canal, canal or "unknown")
         if canal in {"correo", "whatsapp", "llamada"}:
             throttle_key = self._throttle_key_for_envio(
                 organizacion_id=org_uuid,
@@ -1909,7 +1931,22 @@ class ProspeccionContactSender:
                 detalle=detalle,
             )
             if throttle_key is not None:
-                allowed, reason = await self._acquire_send_slot(throttle_key)
+                org_key = str(org_uuid) if org_uuid else "global"
+                rate_slots = [
+                    (
+                        (org_key, provider_key, "__tenant__"),
+                        int(getattr(settings, "prospeccion_sender_tenant_per_minute_limit", 30)),
+                    ),
+                    (
+                        ("global", provider_key, "__provider__"),
+                        int(getattr(settings, "prospeccion_sender_provider_per_minute_limit", 60)),
+                    ),
+                    (
+                        throttle_key,
+                        self._per_minute_limit,
+                    ),
+                ]
+                allowed, reason = await self._acquire_send_slots(rate_slots)
                 if not allowed:
                     defer_until = (
                         datetime.now(timezone.utc) + timedelta(seconds=self._rate_limit_defer_seconds)
@@ -1919,7 +1956,7 @@ class ProspeccionContactSender:
                         current_detalle,
                         {
                             "reason": reason,
-                            "throttle_scope": f"{throttle_key[0]}:{throttle_key[1]}:{throttle_key[2]}",
+                            "throttle_scope": f"{org_key}:{provider_key}:{reason}",
                         },
                     )
                     await repo.worker_complete_envio(
@@ -1943,18 +1980,6 @@ class ProspeccionContactSender:
                         defer_seconds=self._rate_limit_defer_seconds,
                     )
                     return
-
-        if canal == "correo" and org_uuid:
-            try:
-                postmark_queue_dispatch = await _postmark_enabled_for_tenant(organizacion_id=org_uuid)
-            except Exception as exc:  # pragma: no cover - configuración externa del tenant
-                log_event(
-                    logger,
-                    "prospeccion.postmark_dispatch_detection_failed",
-                    organizacion_id=str(org_uuid),
-                    envio_id=str(envio_id),
-                    error=str(exc),
-                )
 
         dispatch_started = perf_counter()
         if org_uuid and canal in {"correo", "whatsapp", "llamada"}:
@@ -2232,21 +2257,33 @@ class ProspeccionContactSender:
         channel_key = (canal or "desconocido").strip().lower() or "desconocido"
         return org_key, channel_key, recipient_key
 
-    async def _acquire_send_slot(self, key: tuple[str, str, str]) -> tuple[bool, str]:
+    async def _acquire_send_slots(
+        self,
+        slots: Sequence[tuple[tuple[str, str, str], int]],
+    ) -> tuple[bool, str]:
         now = asyncio.get_running_loop().time()
         async with self._throttle_lock:
-            cooldown_until = self._cooldown_until.get(key, 0.0)
-            if cooldown_until > now:
-                return False, "cooldown"
-
-            bucket = self._send_events.setdefault(key, deque())
-            window_start = now - 60.0
-            while bucket and bucket[0] < window_start:
-                bucket.popleft()
-            if len(bucket) >= self._per_minute_limit:
-                return False, "per_minute_limit"
-            bucket.append(now)
+            normalized_slots = [
+                (key, max(1, int(limit)))
+                for key, limit in slots
+            ]
+            for key, limit in normalized_slots:
+                cooldown_until = self._cooldown_until.get(key, 0.0)
+                if cooldown_until > now:
+                    return False, "cooldown"
+                bucket = self._send_events.setdefault(key, deque())
+                window_start = now - 60.0
+                while bucket and bucket[0] < window_start:
+                    bucket.popleft()
+                if len(bucket) >= limit:
+                    return False, "per_minute_limit"
+            for key, _limit in normalized_slots:
+                self._send_events[key].append(now)
             return True, "ok"
+
+    async def _acquire_send_slot(self, key: tuple[str, str, str]) -> tuple[bool, str]:
+        """Compatibilidad para callers/tests antiguos: limita un solo scope."""
+        return await self._acquire_send_slots(((key, self._per_minute_limit),))
 
     async def _register_backpressure_signal(
         self,
