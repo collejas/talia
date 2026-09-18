@@ -177,6 +177,8 @@ Estado: pendiente.
 - Se reencolaron condicionalmente los 6 registros como `pendiente`, conservando sus columnas de tenant, lote, plantilla, intento e idempotencia; la actualización sólo aplicó cuando todos los indicadores de despacho estaban nulos.
 - Se agregó medición estructurada de duración y reintentos de llamadas Supabase, profundidad de cola pendiente/procesando, duración de ciclos y duración/resultado de cada despacho.
 - Los workers fuerzan como mínimo nivel `INFO` para que la evidencia operativa no desaparezca cuando el `.env` global usa `WARNING`.
+- Se silenció el logger HTTP detallado (`httpx`/`httpcore`) en los workers para no escribir URLs con correos de buzón u otros parámetros sensibles.
+- Los 6 envíos recuperados terminaron en `enviado` con identificadores de proveedor persistidos; la cola quedó con `pendiente=0` y `procesando=0`.
 
 ### Pendiente antes de habilitar
 
