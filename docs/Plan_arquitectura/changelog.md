@@ -152,7 +152,7 @@ Estado: pendiente.
 - `POSTMARK_SYNC_ENABLED` permanece en `false`.
 - Las unidades fueron instaladas en `/etc/systemd/system/` y `systemctl daemon-reload` fue ejecutado.
 - Se dejaron persistidos `TALIA_POSTMARK_WORKER_IN_API=false` y `TALIA_MAILBOX_WORKER_IN_API=false` en `backend/.env`.
-- El sender de correo todavía no se ha retirado del API: falta la activación coordinada del worker nuevo y el switch `TALIA_CONTACT_SENDER_IN_API=false`.
+- El sender de correo ya fue retirado del API mediante `TALIA_CONTACT_SENDER_IN_API=false`; queda pendiente observar estabilidad y entrega.
 
 ### Evidencia posterior al arranque controlado
 
@@ -165,6 +165,14 @@ Estado: pendiente.
 - Tras reiniciar el worker con el cambio, los fallos registraron `retry_in_seconds=60` y la siguiente ronda ocurrió aproximadamente un minuto después, en lugar de repetirse cada 20 segundos. El backoff quedó comprobado en ejecución.
 - No se reactivó la sincronización histórica Postmark; `POSTMARK_SYNC_ENABLED=false` continúa vigente.
 - No se modificaron filas de envíos, estados, lotes, plantillas, tenants ni claves de idempotencia durante esta fase.
+- Se instaló la unidad actualizada `talia-email-worker.service` con descripción Brevo/Postmark y se reinició correctamente.
+- Se activó `TALIA_CONTACT_SENDER_IN_API=false` y se reinició `talia-api.service`.
+- Después del reinicio, el API respondió 200 en `/api/health` y no registró un nuevo `sender_started`.
+- El worker de correo quedó activo con 4 tareas y aproximadamente 91 MiB de cgroup en la primera medición estable.
+- Los conteos de correo pasaron de 5,149 a 5,151 enviados durante la observación; el worker estaba procesando la cola.
+- La consulta de cola mostró 55 correos pendientes y 6 en `procesando`; WhatsApp y llamadas no tenían trabajos `procesando`.
+- La separación de Brevo/Postmark del API queda funcionalmente activa, pendiente de una ventana de observación más larga y de prueba de entrega controlada.
+- Observación pendiente: `logs/email-worker.log` permanece vacío durante esta ejecución; debe confirmarse la salida en journald o corregirse la configuración de logging antes de habilitar el arranque automático.
 
 ### Pendiente antes de habilitar
 
@@ -177,8 +185,8 @@ Estado: pendiente.
 - Ejecutar smoke tests y medir la API antes de reactivar sincronización histórica.
 - Corregir autenticación IMAP y verificar el backoff en producción antes de habilitar el servicio en el arranque del sistema.
 - Habilitar `talia-email-worker.service` y `talia-mailbox-worker.service` con `systemctl enable` después de superar la prueba de estabilidad.
-- Instalar la versión actualizada de `talia-email-worker.service`, arrancarla y confirmar que solo reclama envíos `correo`.
-- Activar `TALIA_CONTACT_SENDER_IN_API=false` únicamente después de confirmar que el worker de correo está activo.
+- [x] Instalar la versión actualizada de `talia-email-worker.service`, arrancarla y confirmar que solo reclama envíos `correo`.
+- [x] Activar `TALIA_CONTACT_SENDER_IN_API=false` después de confirmar que el worker de correo está activo.
 
 ## Criterios para marcar la separación como completada
 
