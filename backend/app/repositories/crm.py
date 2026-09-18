@@ -27805,6 +27805,20 @@ class CRMRepository:
             prefer="resolution=merge-duplicates,return=representation",
         )
 
+    async def invalidate_shared_response_cache_namespace(
+        self,
+        *,
+        cache_namespace: str,
+    ) -> None:
+        namespace = (cache_namespace or "").strip()
+        if not namespace:
+            return
+        await self._request_service_role(
+            "DELETE",
+            "/rest/v1/crm_response_cache",
+            params={"cache_namespace": f"eq.{namespace}"},
+        )
+
     async def _upload_storage_object(
         self,
         *,

@@ -2198,18 +2198,9 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
                 recent_conversation_id=recent_conversation_id,
                 window_minutes=_WHATSAPP_ATTRIB_CONTACT_DEDUP_MINUTES,
             )
-            return {
-                **recent_event,
-                "conversacion_id": conversation_id,
-                "persona_id": persona_id,
-                "regla_id": _trim_text(matched_rule.get("id")) or recent_event.get("regla_id"),
-                "canal_publicitario": inherited_detail["canal_publicitario"],
-                "campana_publicitaria": inherited_detail["campana_publicitaria"],
-                "adset": inherited_detail["adset"],
-                "anuncio": inherited_detail["anuncio"],
-                "tipo_match": applied_match_type,
-                "frase_normalizada": normalized_phrase,
-            }
+            # No devolver aquí: el contexto heredado sirve para la UI, pero
+            # cada conversación debe tener su propio evento CTA persistido
+            # para que las métricas por periodo puedan contabilizarla.
 
     event_payload = {
         "organizacion_id": str(organizacion_id),
@@ -2248,6 +2239,22 @@ async def _maybe_apply_publicidad_whatsapp_attribution(
         return None
     if not created_event:
         return None
+
+    # El CTA ya está persistido; eliminar la respuesta compartida evita que
+    # el mapa sirva un snapshot anterior al mensaje entrante. La falla de la
+    # invalidación no debe ocultar ni deshacer el evento CTA.
+    try:
+        await repo.invalidate_shared_response_cache_namespace(
+            cache_namespace="demografia_v2",
+        )
+    except CRMRepositoryError as exc:
+        log_event(
+            logger,
+            "whatsapp.publicidad_atribucion_cache_invalidation_failed",
+            conversation_id=conversation_id,
+            organizacion_id=str(organizacion_id),
+            error=str(exc),
+        )
 
     if message_id:
         try:
@@ -2929,14 +2936,10 @@ async def handle_incoming_message(
     is_prospeccion_context = False
     publicidad_atribucion_event: Mapping[str, Any] | None = None
     if repo:
-        prospeccion_sync_started = time.perf_counter()
-        is_prospeccion_context = await _sync_inbound_to_prospeccion_log(
-            repo=repo,
-            conversation_id=conversation_id,
-            organizacion_id=org_uuid,
-            persona_id=persona_id,
-            message=message,
-        )
+        # La atribución CTA pertenece al evento entrante y debe quedar
+        # disponible antes de cualquier enriquecimiento de prospección.
+        # Una consulta lenta de lotes/envíos no puede retrasarla ni hacer que
+        # la gráfica de CTAs dependa del sincronizador de campañas.
         publicidad_atribucion_event = await _maybe_apply_publicidad_whatsapp_attribution(
             repo=repo,
             organizacion_id=org_uuid,
@@ -2945,7 +2948,28 @@ async def handle_incoming_message(
             message_id=current_message_id,
             message=message,
         )
-        _record_stage_timing(stage_timings, "prospeccion_sync_ms", prospeccion_sync_started)
+        # Conservamos el modo de respuesta del asistente con una búsqueda
+        # ligera; la actualización completa del lote/envío queda fuera del
+        # camino crítico y no puede bloquear al CTA.
+        is_prospeccion_context = bool(
+            await _resolve_prospeccion_prospecto_id(
+                repo=repo,
+                persona_id=persona_id,
+                organizacion_id=org_uuid,
+                message=message,
+            )
+        )
+        prospeccion_sync_started = time.perf_counter()
+        _schedule_background_coroutine(
+            _sync_inbound_to_prospeccion_log(
+                repo=repo,
+                conversation_id=conversation_id,
+                organizacion_id=org_uuid,
+                persona_id=persona_id,
+                message=message,
+            ),
+        )
+        _record_stage_timing(stage_timings, "prospeccion_sync_scheduled_ms", prospeccion_sync_started)
     origin_type = (
         "publicidad_whatsapp"
         if publicidad_atribucion_event
