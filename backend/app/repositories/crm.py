@@ -24969,6 +24969,42 @@ class CRMRepository:
 
         return int(pending_count) + int(processing_count)
 
+    async def worker_queue_depth(self, *, canal: str | None = None) -> dict[str, int]:
+        """Obtiene profundidad exacta de la cola lista y en proceso, opcionalmente por canal."""
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        base_params: dict[str, str] = {"select": "id", "limit": "1"}
+        if canal:
+            base_params["canal"] = f"eq.{canal.strip().lower()}"
+
+        pending_params = {
+            **base_params,
+            "estado": "eq.pendiente",
+            "programado_en": f"lte.{now_iso}",
+        }
+        processing_params = {
+            **base_params,
+            "estado": "eq.procesando",
+        }
+        pending_resp, processing_resp = await asyncio.gather(
+            self._request(
+                "GET",
+                "/rest/v1/prospeccion_contacto_envio",
+                params=pending_params,
+                prefer="count=exact",
+            ),
+            self._request(
+                "GET",
+                "/rest/v1/prospeccion_contacto_envio",
+                params=processing_params,
+                prefer="count=exact",
+            ),
+        )
+        return {
+            "pendiente": int(self._extract_total_count(pending_resp.headers.get("content-range")) or 0),
+            "procesando": int(self._extract_total_count(processing_resp.headers.get("content-range")) or 0),
+        }
+
     async def worker_mark_envio_processing(
         self,
         *,
@@ -27662,12 +27698,13 @@ class CRMRepository:
         if prefer:
             headers["Prefer"] = prefer
         json_payload = _make_json_serializable(json) if json is not None else None
+        request_started = monotonic()
         logger.info(
             "crm_request_start",
             extra={
                 "method": method,
                 "path": path,
-                "params": params,
+                "param_keys": sorted(str(key) for key in (params or {})),
                 "json_keys": list(json_payload.keys()) if isinstance(json_payload, dict) else None,
                 "organizacion_id": str(organizacion_id) if organizacion_id else None,
             },
@@ -27723,7 +27760,13 @@ class CRMRepository:
             raise CRMRepositoryError(f"Error de red al llamar Supabase: {last_exc}") from last_exc
         logger.info(
             "crm_request_response",
-            extra={"method": method, "path": path, "status": resp.status_code},
+            extra={
+                "method": method,
+                "path": path,
+                "status": resp.status_code,
+                "duration_ms": round((monotonic() - request_started) * 1000, 2),
+                "attempts": attempt + 1,
+            },
         )
         if resp.status_code >= 400:
             raise CRMRepositoryError(

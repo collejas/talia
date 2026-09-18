@@ -31,7 +31,7 @@ async def _run() -> None:
 
 def main() -> None:
     configure_logging(
-        level=resolve_log_level(settings.log_level, default=logging.INFO),
+        level=min(resolve_log_level(settings.log_level, default=logging.INFO), logging.INFO),
         log_file="/var/www/talia/logs/mailbox-worker.log",
     )
     asyncio.run(_run())

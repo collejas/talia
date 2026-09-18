@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import html as html_lib
 import re
+from time import monotonic, perf_counter
 from typing import Any, Literal, Sequence
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import UUID
@@ -1620,6 +1621,7 @@ class ProspeccionContactSender:
         self._send_events: dict[tuple[str, str, str], deque[float]] = {}
         self._error_events: dict[tuple[str, str, str], deque[float]] = {}
         self._cooldown_until: dict[tuple[str, str, str], float] = {}
+        self._last_queue_observation_at = 0.0
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -1687,6 +1689,7 @@ class ProspeccionContactSender:
                 self._wake_event.clear()
 
     async def _process_pending_envios(self) -> bool:
+        cycle_started = perf_counter()
         repo = CRMRepository()
         (
             effective_batch_size,
@@ -1704,6 +1707,14 @@ class ProspeccionContactSender:
         if self._channels and len(self._channels) > 1:
             envios = [envio for envio in envios if _clean_text(envio.get("canal")) in self._channels]
         if not envios:
+            await self._maybe_log_queue_depth(repo)
+            log_event(
+                logger,
+                "prospeccion.sender_cycle",
+                fetched=0,
+                duration_ms=round((perf_counter() - cycle_started) * 1000, 2),
+                channels=sorted(self._channels) if self._channels else None,
+            )
             return False
 
         semaphore = asyncio.Semaphore(effective_concurrency)
@@ -1753,7 +1764,36 @@ class ProspeccionContactSender:
             if isinstance(maybe_error, CRMRepositoryError):
                 raise maybe_error
 
+        await self._maybe_log_queue_depth(repo)
+        log_event(
+            logger,
+            "prospeccion.sender_cycle",
+            fetched=len(envios),
+            duration_ms=round((perf_counter() - cycle_started) * 1000, 2),
+            effective_concurrency=effective_concurrency,
+            channels=sorted(self._channels) if self._channels else None,
+        )
+
         return len(envios) >= effective_batch_size
+
+    async def _maybe_log_queue_depth(self, repo: CRMRepository) -> None:
+        now = monotonic()
+        if now - self._last_queue_observation_at < 60:
+            return
+        self._last_queue_observation_at = now
+        canal = next(iter(self._channels)) if self._channels and len(self._channels) == 1 else None
+        try:
+            depth = await repo.worker_queue_depth(canal=canal)
+        except CRMRepositoryError as exc:
+            log_event(logger, "prospeccion.sender_queue_depth_failed", error=str(exc))
+            return
+        log_event(
+            logger,
+            "prospeccion.sender_queue_depth",
+            canal=canal,
+            pending=depth["pendiente"],
+            processing=depth["procesando"],
+        )
 
     async def _repair_pending_local_messages(self, repo: CRMRepository) -> None:
         """Reintenta registrar mensajes aceptados por Meta sin reenviarlos."""
@@ -1916,6 +1956,7 @@ class ProspeccionContactSender:
                     error=str(exc),
                 )
 
+        dispatch_started = perf_counter()
         if org_uuid and canal in {"correo", "whatsapp", "llamada"}:
             suppression = await repo.worker_find_active_contact_suppression(
                 organizacion_id=org_uuid,
@@ -1994,6 +2035,19 @@ class ProspeccionContactSender:
                 detalle={"reason": "canal_no_soportado"},
                 error="canal_no_soportado",
             )
+
+        log_event(
+            logger,
+            "prospeccion.sender_dispatch_result",
+            envio_id=str(envio_id),
+            organizacion_id=str(org_uuid) if org_uuid else None,
+            canal=canal,
+            provider=("postmark" if postmark_queue_dispatch else "brevo") if canal == "correo" else canal,
+            estado=result.estado,
+            retryable=result.retryable,
+            duration_ms=round((perf_counter() - dispatch_started) * 1000, 2),
+            has_provider_message_id=bool(result.mensaje_id),
+        )
 
         update_payload = self._build_envio_update_payload(
             envio=envio,

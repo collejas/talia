@@ -173,6 +173,10 @@ Estado: pendiente.
 - La consulta de cola mostró 55 correos pendientes y 6 en `procesando`; WhatsApp y llamadas no tenían trabajos `procesando`.
 - La separación de Brevo/Postmark del API queda funcionalmente activa, pendiente de una ventana de observación más larga y de prueba de entrega controlada.
 - Observación pendiente: `logs/email-worker.log` permanece vacío durante esta ejecución; debe confirmarse la salida en journald o corregirse la configuración de logging antes de habilitar el arranque automático.
+- Se identificaron 6 envíos de correo abandonados desde el 17 de septiembre: estaban en `procesando`, sin identificadores de proveedor ni marcas de despacho.
+- Se reencolaron condicionalmente los 6 registros como `pendiente`, conservando sus columnas de tenant, lote, plantilla, intento e idempotencia; la actualización sólo aplicó cuando todos los indicadores de despacho estaban nulos.
+- Se agregó medición estructurada de duración y reintentos de llamadas Supabase, profundidad de cola pendiente/procesando, duración de ciclos y duración/resultado de cada despacho.
+- Los workers fuerzan como mínimo nivel `INFO` para que la evidencia operativa no desaparezca cuando el `.env` global usa `WARNING`.
 
 ### Pendiente antes de habilitar
 
