@@ -145,12 +145,14 @@ Estado: pendiente.
 - Pruebas enfocadas IMAP/Postmark: 12 passed.
 - Servicios systemd: preparados en el repositorio, todavía no instalados ni habilitados.
 - `POSTMARK_SYNC_ENABLED` permanece en `false`.
+- Las unidades fueron instaladas en `/etc/systemd/system/` y `systemctl daemon-reload` fue ejecutado.
+- Se dejaron persistidos `TALIA_POSTMARK_WORKER_IN_API=false` y `TALIA_MAILBOX_WORKER_IN_API=false` en `backend/.env`.
 
 ### Pendiente antes de habilitar
 
 - Revisar el diff y aprobar los límites systemd.
-- Instalar/cargar las unidades mediante el procedimiento autorizado de deploy.
-- Configurar `POSTMARK_WORKER_IN_API=false` y `MAILBOX_WORKER_IN_API=false` para `talia-api.service`.
+- Reiniciar `talia-api.service` para que lea los switches nuevos.
+- Iniciar los dos workers después de que el API haya dejado sus runners.
 - Iniciar primero los workers nuevos en modo controlado.
 - Confirmar que las colas mantienen tenant, lote, plantilla, estado e idempotencia.
 - Ejecutar smoke tests y medir la API antes de reactivar sincronización histórica.
