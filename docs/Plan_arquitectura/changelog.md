@@ -59,27 +59,27 @@ Estado: preparación completada; habilitación pendiente.
 
 ### Fase 1 — Separación de IMAP
 
-Estado: pendiente.
+Estado: separación de proceso activa; endurecimiento y habilitación permanente pendientes.
 
 - [x] Crear entrypoint independiente `app.workers.mailbox_worker`.
 - [x] Preparar `talia-mailbox-worker.service`.
 - [x] Agregar switch `MAILBOX_WORKER_IN_API` para retirar el lector del API.
-- [ ] Habilitar el servicio en systemd.
-- [ ] Mover efectivamente `email_inbound_reader` fuera de `backend/app/main.py` en producción.
+- [x] Instalar y arrancar el servicio en systemd de forma controlada.
+- [x] Retirar `email_inbound_reader` del proceso activo del API mediante el switch.
 - [ ] Conservar estado, deduplicación y tenant.
 - [ ] Agregar límite de reintentos y circuit breaker para credenciales inválidas.
-- [ ] Verificar que un error IMAP no afecte la API.
+- [x] Verificar inicialmente que un error IMAP no afecte la salud de la API.
 - [ ] Validar consumo de CPU, memoria y conexiones.
 
 ### Fase 2 — Worker de Brevo y Postmark
 
-Estado: preparación inicial completada; habilitación pendiente.
+Estado: Postmark separado y activo de forma controlada; Brevo y sincronización histórica pendientes.
 
 - [x] Crear entrypoint independiente `app.workers.email_worker`.
 - [x] Preparar `talia-email-worker.service`.
 - [x] Agregar switch `POSTMARK_WORKER_IN_API` para retirar Postmark del API.
-- [ ] Habilitar el servicio en systemd.
-- [ ] Mover efectivamente entrega Postmark fuera de `talia-api.service` en producción.
+- [x] Instalar y arrancar el servicio en systemd de forma controlada.
+- [x] Retirar el worker Postmark del proceso activo del API mediante el switch.
 - [ ] Mover sincronización histórica Postmark.
 - [ ] Reutilizar checkpoints existentes.
 - [ ] Mover envíos Brevo a una cola durable.
@@ -143,19 +143,33 @@ Estado: pendiente.
 
 - Compilación de módulos Python: exitosa.
 - Pruebas enfocadas IMAP/Postmark: 12 passed.
-- Servicios systemd: preparados en el repositorio, todavía no instalados ni habilitados.
+- Servicios systemd: instalados y arrancados; todavía no habilitados para arranque automático.
 - `POSTMARK_SYNC_ENABLED` permanece en `false`.
 - Las unidades fueron instaladas en `/etc/systemd/system/` y `systemctl daemon-reload` fue ejecutado.
 - Se dejaron persistidos `TALIA_POSTMARK_WORKER_IN_API=false` y `TALIA_MAILBOX_WORKER_IN_API=false` en `backend/.env`.
 
+### Evidencia posterior al arranque controlado
+
+- `talia-api.service`, `talia-email-worker.service` y `talia-mailbox-worker.service` permanecen `active`.
+- `/api/health` respondió `{"status":"ok"}`.
+- El API quedó con 9 tareas y aproximadamente 302 MiB en cgroup; los workers quedaron alrededor de 54 MiB y 55 MiB respectivamente.
+- Antes de la separación el API había alcanzado aproximadamente 913 MiB de cgroup; la comparación es puntual y debe confirmarse con una línea base repetible.
+- El log del API ya no muestra el lector IMAP ni el worker Postmark desde el reinicio; los errores IMAP aparecen ahora en `talia-mailbox-worker.service`.
+- El buzón continúa fallando con `[AUTHENTICATIONFAILED] Authentication failed.` para dos configuraciones de tenant. Esto confirma el aislamiento, pero bloquea la aceptación funcional del lector y requiere corregir credenciales o aplicar circuit breaker/backoff.
+- No se reactivó la sincronización histórica Postmark; `POSTMARK_SYNC_ENABLED=false` continúa vigente.
+- No se modificaron filas de envíos, estados, lotes, plantillas, tenants ni claves de idempotencia durante esta fase.
+
 ### Pendiente antes de habilitar
 
-- Revisar el diff y aprobar los límites systemd.
-- Reiniciar `talia-api.service` para que lea los switches nuevos.
-- Iniciar los dos workers después de que el API haya dejado sus runners.
-- Iniciar primero los workers nuevos en modo controlado.
+- [x] Revisar el diff y aprobar los límites systemd.
+- [x] Reiniciar `talia-api.service` para que lea los switches nuevos.
+- [x] Iniciar los dos workers después de que el API haya dejado sus runners.
+- [x] Iniciar primero los workers nuevos en modo controlado.
+- [x] Confirmar que ambos procesos permanecen independientes del API durante el smoke test inicial.
 - Confirmar que las colas mantienen tenant, lote, plantilla, estado e idempotencia.
 - Ejecutar smoke tests y medir la API antes de reactivar sincronización histórica.
+- Corregir autenticación IMAP y añadir circuit breaker/backoff antes de habilitar el servicio en el arranque del sistema.
+- Habilitar `talia-email-worker.service` y `talia-mailbox-worker.service` con `systemctl enable` después de superar la prueba de estabilidad.
 
 ## Criterios para marcar la separación como completada
 
