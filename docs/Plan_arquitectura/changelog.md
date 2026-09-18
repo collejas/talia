@@ -158,6 +158,7 @@ Estado: pendiente.
 - Antes de la separación el API había alcanzado aproximadamente 913 MiB de cgroup; la comparación es puntual y debe confirmarse con una línea base repetible.
 - El log del API ya no muestra el lector IMAP ni el worker Postmark desde el reinicio; los errores IMAP aparecen ahora en `talia-mailbox-worker.service`.
 - El buzón continúa fallando con `[AUTHENTICATIONFAILED] Authentication failed.` para dos configuraciones de tenant. Esto confirma el aislamiento, pero bloquea la aceptación funcional del lector y requiere corregir credenciales o aplicar circuit breaker/backoff.
+- Tras reiniciar el worker con el cambio, los fallos registraron `retry_in_seconds=60` y la siguiente ronda ocurrió aproximadamente un minuto después, en lugar de repetirse cada 20 segundos. El backoff quedó comprobado en ejecución.
 - No se reactivó la sincronización histórica Postmark; `POSTMARK_SYNC_ENABLED=false` continúa vigente.
 - No se modificaron filas de envíos, estados, lotes, plantillas, tenants ni claves de idempotencia durante esta fase.
 
