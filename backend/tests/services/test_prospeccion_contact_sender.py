@@ -5,6 +5,7 @@ from app.services.prospeccion_contact_sender import (
     _build_booking_url,
     _build_twilio_numeric_variables_from_body,
     _compose_twilio_template_variables,
+    _ensure_broadcast_unsubscribe,
     _find_blank_twilio_variables,
     _render_twilio_variables,
 )
@@ -14,6 +15,32 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 import app.services.prospeccion_contact_sender as sender_module
+
+
+def test_broadcast_unsubscribe_uses_brevo_placeholder() -> None:
+    body, body_html = _ensure_broadcast_unsubscribe(
+        body="Hola",
+        body_html="<p>Hola</p>",
+        provider="brevo",
+    )
+
+    assert "{{ unsubscribe }}" in body
+    assert 'href="{{ unsubscribe }}"' in body_html
+    assert "pm:unsubscribe" not in body
+    assert "pm:unsubscribe" not in body_html
+
+
+def test_broadcast_unsubscribe_uses_postmark_placeholder() -> None:
+    body, body_html = _ensure_broadcast_unsubscribe(
+        body="Hola",
+        body_html="<p>Hola</p>",
+        provider="postmark",
+    )
+
+    assert "{{{ pm:unsubscribe }}}" in body
+    assert 'href="{{{ pm:unsubscribe }}}"' in body_html
+    assert "{{ unsubscribe }}" not in body
+    assert "{{ unsubscribe }}" not in body_html
 
 
 def test_render_twilio_variables_keeps_literal_text_for_variable_6() -> None:

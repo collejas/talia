@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import html as html_lib
 import re
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import UUID
 
@@ -41,6 +41,7 @@ DEFAULT_SENDER_BACKPRESSURE_COOLDOWN_SECONDS = 60
 BACKPRESSURE_TWILIO_ERROR_CODES = {"63024", "63049", "63032"}
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
 POSTMARK_UNSUBSCRIBE_PLACEHOLDER = "{{{ pm:unsubscribe }}}"
+BREVO_UNSUBSCRIBE_PLACEHOLDER = "{{ unsubscribe }}"
 NUMERIC_PLACEHOLDER_PATTERN = re.compile(r"{{\s*(\d+)\s*}}")
 LEGACY_IMAGE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*DATA:IMAGE:[^}]+}}", re.IGNORECASE)
 WHATSAPP_IMAGE_PLACEHOLDER_KEYS = {
@@ -477,15 +478,26 @@ def _append_tracking_params_to_anchor_hrefs(body_html: str, tracking_url: str) -
     return ANCHOR_HREF_PATTERN.sub(_replace, body_html)
 
 
-def _ensure_broadcast_unsubscribe(*, body: str, body_html: str | None) -> tuple[str, str | None]:
-    """Añade el enlace administrado por Postmark a todo Broadcast."""
-    unsubscribe_text = f"\n\nPara dejar de recibir estos correos: {POSTMARK_UNSUBSCRIBE_PLACEHOLDER}"
-    normalized_body = body if POSTMARK_UNSUBSCRIBE_PLACEHOLDER in body else f"{body}{unsubscribe_text}"
-    if not body_html or POSTMARK_UNSUBSCRIBE_PLACEHOLDER in body_html:
+def _ensure_broadcast_unsubscribe(
+    *,
+    body: str,
+    body_html: str | None,
+    provider: Literal["brevo", "postmark"],
+) -> tuple[str, str | None]:
+    """Añade el marcador de baja compatible con el proveedor del tenant."""
+
+    placeholder = (
+        POSTMARK_UNSUBSCRIBE_PLACEHOLDER
+        if provider == "postmark"
+        else BREVO_UNSUBSCRIBE_PLACEHOLDER
+    )
+    unsubscribe_text = f"\n\nPara dejar de recibir estos correos: {placeholder}"
+    normalized_body = body if placeholder in body else f"{body}{unsubscribe_text}"
+    if not body_html or placeholder in body_html:
         return normalized_body, body_html
     unsubscribe_html = (
         '<p style="margin-top:24px;font-size:12px;color:#667085;">'
-        f'<a href="{POSTMARK_UNSUBSCRIBE_PLACEHOLDER}">Darme de baja</a>'
+        f'<a href="{placeholder}">Darme de baja</a>'
         "</p>"
     )
     return normalized_body, f"{body_html}\n{unsubscribe_html}"
@@ -1088,15 +1100,23 @@ async def _run_envio_correo(
     message_kind = _clean_text(
         effective_payload.get("email_message_kind") or metadata.get("email_message_kind")
     )
+    postmark_enabled = bool(
+        organizacion_id
+        and await _postmark_enabled_for_tenant(organizacion_id=organizacion_id)
+    )
     if message_kind == "broadcast":
-        body, body_html = _ensure_broadcast_unsubscribe(body=body, body_html=body_html)
+        body, body_html = _ensure_broadcast_unsubscribe(
+            body=body,
+            body_html=body_html,
+            provider="postmark" if postmark_enabled else "brevo",
+        )
     if not subject or not body:
         return ContactEnvioResult(
             estado="error",
             detalle={"reason": "correo_payload_incompleto"},
             error="correo_payload_incompleto",
         )
-    if organizacion_id and await _postmark_enabled_for_tenant(organizacion_id=organizacion_id):
+    if postmark_enabled:
         return await _queue_postmark_prospeccion_email(
             envio=envio,
             payload=effective_payload,
