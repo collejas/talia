@@ -1593,6 +1593,7 @@ class ProspeccionContactSender:
         error_window_seconds: int = DEFAULT_SENDER_ERROR_WINDOW_SECONDS,
         error_threshold: int = DEFAULT_SENDER_ERROR_THRESHOLD,
         backpressure_cooldown_seconds: int = DEFAULT_SENDER_BACKPRESSURE_COOLDOWN_SECONDS,
+        channels: Sequence[str] | None = None,
     ) -> None:
         self._poll_interval = poll_interval
         self._batch_size = batch_size
@@ -1602,6 +1603,12 @@ class ProspeccionContactSender:
         self._error_window_seconds = max(30, int(error_window_seconds))
         self._error_threshold = max(1, int(error_threshold))
         self._backpressure_cooldown_seconds = max(10, int(backpressure_cooldown_seconds))
+        normalized_channels = {
+            str(channel).strip().lower()
+            for channel in (channels or ())
+            if str(channel).strip()
+        }
+        self._channels = frozenset(normalized_channels) or None
         self._retry_backoff = tuple(int(value) for value in retry_backoff if value > 0) or (
             DEFAULT_BACKOFF_SECONDS
         )
@@ -1639,6 +1646,7 @@ class ProspeccionContactSender:
             error_window_seconds=self._error_window_seconds,
             error_threshold=self._error_threshold,
             backpressure_cooldown_seconds=self._backpressure_cooldown_seconds,
+            channels=sorted(self._channels) if self._channels else None,
         )
 
     async def shutdown(self) -> None:
@@ -1689,7 +1697,12 @@ class ProspeccionContactSender:
             base_max_concurrency=self._max_concurrency,
         )
         await self._repair_pending_local_messages(repo)
-        envios = await repo.worker_list_pending_envios(limit=effective_batch_size)
+        envios = await repo.worker_list_pending_envios(
+            limit=effective_batch_size,
+            canal=next(iter(self._channels)) if self._channels and len(self._channels) == 1 else None,
+        )
+        if self._channels and len(self._channels) > 1:
+            envios = [envio for envio in envios if _clean_text(envio.get("canal")) in self._channels]
         if not envios:
             return False
 

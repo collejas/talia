@@ -252,6 +252,17 @@ class Settings(BaseSettings):
             "TALIA_POSTMARK_WORKER_IN_API",
         ),
     )
+    contact_sender_in_api: bool = Field(
+        default=True,
+        description=(
+            "Mantiene el sender de prospección dentro del API durante la migración. "
+            "Debe desactivarse cuando el worker de correo independiente esté operativo."
+        ),
+        validation_alias=AliasChoices(
+            "CONTACT_SENDER_IN_API",
+            "TALIA_CONTACT_SENDER_IN_API",
+        ),
+    )
     postmark_sync_enabled: bool = Field(
         default=False,
         description="Habilita la conciliación histórica no destructiva de Postmark.",

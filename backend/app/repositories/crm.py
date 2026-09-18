@@ -24885,6 +24885,7 @@ class CRMRepository:
         self,
         *,
         limit: int = 25,
+        canal: str | None = None,
     ) -> list[dict[str, Any]]:
         """Obtiene envíos pendientes listos para procesarse (service role)."""
 
@@ -24897,6 +24898,8 @@ class CRMRepository:
             "order": "programado_en.asc",
             "limit": str(effective_limit),
         }
+        if canal:
+            params["canal"] = f"eq.{canal.strip().lower()}"
         resp = await self._request(
             "GET",
             "/rest/v1/prospeccion_contacto_envio",

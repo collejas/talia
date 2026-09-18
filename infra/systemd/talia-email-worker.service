@@ -1,5 +1,5 @@
 [Unit]
-Description=TalIA Postmark worker (Brevo extraction pending)
+Description=TalIA email worker (Brevo and Postmark)
 After=network-online.target
 Wants=network-online.target
 

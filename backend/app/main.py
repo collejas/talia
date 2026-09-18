@@ -76,7 +76,8 @@ async def app_lifespan(_: FastAPI):
     """Administra recursos de inicio/cierre sin usar on_event."""
 
     await maybe_sync_role_permissions_on_start()
-    await contact_sender.start()
+    if settings.contact_sender_in_api:
+        await contact_sender.start()
     if settings.postmark_worker_enabled and settings.postmark_worker_in_api:
         await postmark_worker.start()
     if settings.mailbox_worker_in_api:
@@ -144,11 +145,14 @@ async def app_lifespan(_: FastAPI):
                 name="email_inbound_reader",
                 coro=email_inbound_reader.shutdown(),
             ),
-            _shutdown_with_timeout(
-                name="contact_sender",
-                coro=contact_sender.shutdown(),
-            ),
         ]
+        if settings.contact_sender_in_api:
+            shutdown_coroutines.append(
+                _shutdown_with_timeout(
+                    name="contact_sender",
+                    coro=contact_sender.shutdown(),
+                )
+            )
         if settings.postmark_worker_enabled and settings.postmark_worker_in_api:
             shutdown_coroutines.insert(
                 1,

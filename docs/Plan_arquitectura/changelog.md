@@ -140,6 +140,9 @@ Estado: pendiente.
 - El entrypoint de correo de esta fase procesa Postmark; los envíos Brevo permanecen en el flujo actual hasta implementar su cola durable.
 - Se agregó backoff exponencial por buzón IMAP ante fallos de conexión/autenticación: inicia en 60 segundos, duplica hasta 15 minutos y se limpia tras un ciclo exitoso.
 - El backoff se mantiene en memoria del worker, no guarda credenciales ni cambia estados de mensajes o cursores.
+- `ProspeccionContactSender` acepta un filtro de canales y el worker de correo queda preparado para procesar únicamente `canal=correo`.
+- La cola durable existente `prospeccion_contacto_envio` se reutiliza para Brevo; conserva tenant, lote, plantilla, estado e idempotencia.
+- El claim del worker admite filtro de canal y mantiene la transición atómica `pendiente` → `procesando`.
 
 ### Verificación
 
@@ -149,6 +152,7 @@ Estado: pendiente.
 - `POSTMARK_SYNC_ENABLED` permanece en `false`.
 - Las unidades fueron instaladas en `/etc/systemd/system/` y `systemctl daemon-reload` fue ejecutado.
 - Se dejaron persistidos `TALIA_POSTMARK_WORKER_IN_API=false` y `TALIA_MAILBOX_WORKER_IN_API=false` en `backend/.env`.
+- El sender de correo todavía no se ha retirado del API: falta la activación coordinada del worker nuevo y el switch `TALIA_CONTACT_SENDER_IN_API=false`.
 
 ### Evidencia posterior al arranque controlado
 
@@ -173,6 +177,8 @@ Estado: pendiente.
 - Ejecutar smoke tests y medir la API antes de reactivar sincronización histórica.
 - Corregir autenticación IMAP y verificar el backoff en producción antes de habilitar el servicio en el arranque del sistema.
 - Habilitar `talia-email-worker.service` y `talia-mailbox-worker.service` con `systemctl enable` después de superar la prueba de estabilidad.
+- Instalar la versión actualizada de `talia-email-worker.service`, arrancarla y confirmar que solo reclama envíos `correo`.
+- Activar `TALIA_CONTACT_SENDER_IN_API=false` únicamente después de confirmar que el worker de correo está activo.
 
 ## Criterios para marcar la separación como completada
 
