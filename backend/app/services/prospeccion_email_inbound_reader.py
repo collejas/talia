@@ -11,6 +11,7 @@ from email.message import Message
 from email.utils import parseaddr, parsedate_to_datetime
 import imaplib
 import re
+import time
 from datetime import datetime, timezone
 from typing import Any, Sequence
 from uuid import UUID
@@ -30,6 +31,8 @@ logger = get_logger("prospeccion.email_inbound_reader")
 DEFAULT_POLL_INTERVAL_SECONDS = 20.0
 DEFAULT_BATCH_SIZE = 250
 DEFAULT_IMAP_FOLDERS: tuple[str, ...] = ("INBOX", "Spam", "Junk", "Junk E-mail")
+DEFAULT_IMAP_FAILURE_BACKOFF_SECONDS = 60.0
+MAX_IMAP_FAILURE_BACKOFF_SECONDS = 15 * 60.0
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 WHITESPACE_RE = re.compile(r"\s+")
 
@@ -64,6 +67,12 @@ class ImapFolderFetchResult:
     selected_name: str
     events: list[dict[str, Any]]
     last_seen_uid: int
+
+
+@dataclass(slots=True)
+class _MailboxFailureState:
+    failures: int = 0
+    retry_after: float = 0.0
 
 
 def _quote_imap_folder(folder_name: str) -> str:
@@ -534,6 +543,33 @@ class ProspeccionEmailInboundReader:
         self._stop_event = asyncio.Event()
         self._enabled = True
         self._folder_names = DEFAULT_IMAP_FOLDERS
+        self._mailbox_failures: dict[tuple[str, str, int, bool], _MailboxFailureState] = {}
+
+    @staticmethod
+    def _mailbox_key(*, organizacion_id: UUID, host: str, username: str, port: int, use_ssl: bool) -> tuple[str, str, int, bool]:
+        return (str(organizacion_id), host.lower(), port, use_ssl)
+
+    def _mailbox_backoff_remaining(self, key: tuple[str, str, int, bool]) -> tuple[float, int] | None:
+        state = self._mailbox_failures.get(key)
+        if state is None:
+            return None
+        remaining = state.retry_after - time.monotonic()
+        if remaining <= 0:
+            return None
+        return remaining, state.failures
+
+    def _record_mailbox_failure(self, key: tuple[str, str, int, bool]) -> tuple[float, int]:
+        state = self._mailbox_failures.setdefault(key, _MailboxFailureState())
+        state.failures += 1
+        delay = min(
+            DEFAULT_IMAP_FAILURE_BACKOFF_SECONDS * (2 ** (state.failures - 1)),
+            MAX_IMAP_FAILURE_BACKOFF_SECONDS,
+        )
+        state.retry_after = time.monotonic() + delay
+        return delay, state.failures
+
+    def _clear_mailbox_failure(self, key: tuple[str, str, int, bool]) -> None:
+        self._mailbox_failures.pop(key, None)
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -595,6 +631,25 @@ class ProspeccionEmailInboundReader:
                 )
                 continue
 
+            mailbox_key = self._mailbox_key(
+                organizacion_id=organizacion_id,
+                host=host,
+                username=username,
+                port=port,
+                use_ssl=bool(mail_settings.use_ssl),
+            )
+            backoff = self._mailbox_backoff_remaining(mailbox_key)
+            if backoff is not None:
+                retry_in, failure_count = backoff
+                log_event(
+                    logger,
+                    "prospeccion.email_inbound_reader_mailbox_backoff",
+                    retry_in_seconds=round(retry_in, 1),
+                    failure_count=failure_count,
+                    **mailbox_scope,
+                )
+                continue
+
             try:
                 folder_cursor_map = await self._get_folder_cursor_map(
                     repo=repo,
@@ -613,11 +668,19 @@ class ProspeccionEmailInboundReader:
                     last_seen_uid_by_folder=folder_cursor_map,
                 )
             except Exception as exc:  # pragma: no cover - depende del servidor IMAP
+                retry_in, failure_count = self._record_mailbox_failure(mailbox_key)
                 logger.exception(
                     "prospeccion.email_inbound_reader_mailbox_failed",
-                    extra={**mailbox_scope, "error": str(exc)},
+                    extra={
+                        **mailbox_scope,
+                        "error": str(exc),
+                        "retry_in_seconds": retry_in,
+                        "failure_count": failure_count,
+                    },
                 )
                 continue
+
+            self._clear_mailbox_failure(mailbox_key)
 
             if not folder_results:
                 continue

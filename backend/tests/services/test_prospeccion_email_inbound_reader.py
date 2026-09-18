@@ -21,6 +21,38 @@ def _mail_settings(*, username: str, incoming_server: str) -> MailRuntimeSetting
     )
 
 
+def test_mailbox_failure_backoff_is_exponential_and_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = 1000.0
+    monkeypatch.setattr(inbound_reader.time, "monotonic", lambda: now)
+    reader = inbound_reader.ProspeccionEmailInboundReader()
+    key = reader._mailbox_key(
+        organizacion_id=UUID("a2f79c76-340a-4fe7-b05a-6ff4dd532325"),
+        host="MAIL.EXAMPLE.COM",
+        username="mail@example.com",
+        port=993,
+        use_ssl=True,
+    )
+
+    delay, failures = reader._record_mailbox_failure(key)
+    assert (delay, failures) == (60.0, 1)
+    remaining = reader._mailbox_backoff_remaining(key)
+    assert remaining is not None
+    assert remaining[0] == 60.0
+
+    now += 60.0
+    delay, failures = reader._record_mailbox_failure(key)
+    assert (delay, failures) == (120.0, 2)
+
+    state = reader._mailbox_failures[key]
+    state.failures = 20
+    delay, failures = reader._record_mailbox_failure(key)
+    assert delay == inbound_reader.MAX_IMAP_FAILURE_BACKOFF_SECONDS
+    assert failures == 21
+
+    reader._clear_mailbox_failure(key)
+    assert reader._mailbox_backoff_remaining(key) is None
+
+
 @pytest.mark.asyncio
 async def test_process_once_reads_tenant_assistant_mailboxes(monkeypatch: pytest.MonkeyPatch) -> None:
     tenant_org_id = UUID("a2f79c76-340a-4fe7-b05a-6ff4dd532325")

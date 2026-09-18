@@ -67,7 +67,7 @@ Estado: separación de proceso activa; endurecimiento y habilitación permanente
 - [x] Instalar y arrancar el servicio en systemd de forma controlada.
 - [x] Retirar `email_inbound_reader` del proceso activo del API mediante el switch.
 - [ ] Conservar estado, deduplicación y tenant.
-- [ ] Agregar límite de reintentos y circuit breaker para credenciales inválidas.
+- [x] Agregar backoff/circuit breaker en memoria para credenciales inválidas.
 - [x] Verificar inicialmente que un error IMAP no afecte la salud de la API.
 - [ ] Validar consumo de CPU, memoria y conexiones.
 
@@ -138,6 +138,8 @@ Estado: pendiente.
 - Los defaults mantienen el comportamiento actual hasta habilitar los workers externos.
 - Los servicios preparados incluyen límites iniciales de CPU/memoria.
 - El entrypoint de correo de esta fase procesa Postmark; los envíos Brevo permanecen en el flujo actual hasta implementar su cola durable.
+- Se agregó backoff exponencial por buzón IMAP ante fallos de conexión/autenticación: inicia en 60 segundos, duplica hasta 15 minutos y se limpia tras un ciclo exitoso.
+- El backoff se mantiene en memoria del worker, no guarda credenciales ni cambia estados de mensajes o cursores.
 
 ### Verificación
 
@@ -168,7 +170,7 @@ Estado: pendiente.
 - [x] Confirmar que ambos procesos permanecen independientes del API durante el smoke test inicial.
 - Confirmar que las colas mantienen tenant, lote, plantilla, estado e idempotencia.
 - Ejecutar smoke tests y medir la API antes de reactivar sincronización histórica.
-- Corregir autenticación IMAP y añadir circuit breaker/backoff antes de habilitar el servicio en el arranque del sistema.
+- Corregir autenticación IMAP y verificar el backoff en producción antes de habilitar el servicio en el arranque del sistema.
 - Habilitar `talia-email-worker.service` y `talia-mailbox-worker.service` con `systemctl enable` después de superar la prueba de estabilidad.
 
 ## Criterios para marcar la separación como completada
