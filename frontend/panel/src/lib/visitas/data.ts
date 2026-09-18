@@ -265,6 +265,7 @@ type VisitsFilters = {
   desde?: string | null;
   hasta?: string | null;
   soloConversion?: boolean;
+  soloEntrantes?: boolean;
 };
 
 function buildVisitsSearchParams(filters: VisitsFilters) {
@@ -306,6 +307,7 @@ async function loadWhatsappConversationRows(
           campana_tipo: filters.campanaTipo || undefined,
           template_id: filters.templateId || undefined,
           solo_conversion: filters.soloConversion ? true : undefined,
+          solo_entrantes: filters.soloEntrantes ? true : undefined,
           limit: pageSize,
           offset,
         },
@@ -731,7 +733,7 @@ export async function loadConversionMapTablesForConversionMap(
     const whatsappPromise =
       section === "visits"
         ? Promise.resolve(null)
-        : loadWhatsappConversationRows({ ...filters, soloConversion: true });
+        : loadWhatsappConversationRows({ ...filters, soloEntrantes: true });
 
     const [templatesResult, webchat, whatsappResult] = await Promise.all([
       templatesPromise,

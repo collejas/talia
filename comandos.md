@@ -212,7 +212,7 @@ Gran Penon
 
     select public.cleanup_test_phone_whatsapp(
     '+5214441302811',
-    '00000000-0000-0000-0000-000000000001'::uuid
+    '3f57cbb4-c2dc-4ac8-bd1b-1862cce0951b'::uuid
   );
 
   delete from public.oportunidades

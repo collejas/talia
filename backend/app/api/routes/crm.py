@@ -41226,6 +41226,7 @@ async def get_visits_whatsapp_conversations(
     campana_tipo: str | None = Query(default=None),
     template_id: str | None = Query(default=None),
     solo_conversion: bool = Query(default=False),
+    solo_entrantes: bool = Query(default=False),
 ) -> list[dict[str, Any]]:
     request_started = time.perf_counter()
     stage_timings: dict[str, float] = {}
@@ -41301,6 +41302,7 @@ async def get_visits_whatsapp_conversations(
             date_from=date_from,
             date_to=date_to,
             conversation_ids=conversion_conversation_ids,
+            inbound_date=solo_entrantes,
         )
         stage_timings["fetch_rows_ms"] = round((time.perf_counter() - fetch_rows_started) * 1000, 2)
         events_started = time.perf_counter()
@@ -41500,7 +41502,10 @@ async def get_visits_whatsapp_conversations(
             )
             resolved_campana_label = campana_label_map.get(campana_hint or "")
             resolved_campana_canal = _clean_text(campana_canal_map.get(campana_hint or ""))
-            if batch_hint or campana_hint or resolved_template_id or resolved_template_slug or resolved_template_label:
+            # Una atribución CTA es la fuente autoritativa de esta conversación.
+            # No permitir que el último envío al mismo teléfono la reclasifique
+            # como prospección WhatsApp.
+            if not event_row and (batch_hint or campana_hint or resolved_template_id or resolved_template_slug or resolved_template_label):
                 row["whatsapp_prospeccion"] = {
                     "batch_id": batch_hint,
                     "batch_label": batch_label_map.get(batch_hint or ""),
@@ -46407,9 +46412,9 @@ async def demografia_resumen_v2(
         {
             "schema_version": (
                 "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities"
-                "-conversion-geo-v3"
+                "-conversion-geo-v4-cache-reset"
                 if solo_conversiones
-                else "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities"
+                else "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities-v8-cache-reset"
             ),
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
@@ -47284,7 +47289,7 @@ async def demografia_mapa_v2(
     mapa_cache_key = _build_demografia_response_cache_key(
         "mapa-v2-whatsapp-personas",
         {
-            "schema_version": "mapa-v2-conversion-geo-v3" if solo_conversiones else "mapa-v2-whatsapp-personas",
+            "schema_version": "mapa-v2-conversion-geo-v4-cache-reset" if solo_conversiones else "mapa-v2-whatsapp-personas-v2-cache-reset",
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
             "estado": state_code,

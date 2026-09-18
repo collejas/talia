@@ -17475,11 +17475,12 @@ class CRMRepository:
         date_to: datetime | None = None,
         include_contact_details: bool = True,
         conversation_ids: set[str] | None = None,
+        inbound_date: bool = False,
     ) -> list[dict[str, Any]]:
         request_started = time.perf_counter()
         stage_timings: dict[str, float] = {}
         params = {
-            "select": "id,canal,iniciada_en,ultimo_mensaje_en,contacto_id",
+            "select": "id,canal,iniciada_en,ultimo_mensaje_en,ultimo_entrante_en,contacto_id",
             "canal": "eq.whatsapp",
             "order": "iniciada_en.desc",
             "limit": str(max(1, min(limit, 500))),
@@ -17492,15 +17493,16 @@ class CRMRepository:
             if not safe_ids:
                 return []
             params["id"] = f"in.({','.join(safe_ids)})"
+        date_column = "ultimo_entrante_en" if inbound_date else "iniciada_en"
         if date_from and date_to:
             params["and"] = (
-                f"(iniciada_en.gte.{date_from.isoformat()},"
-                f"iniciada_en.lte.{date_to.isoformat()})"
+                f"({date_column}.gte.{date_from.isoformat()},"
+                f"{date_column}.lte.{date_to.isoformat()})"
             )
         elif date_from:
-            params["iniciada_en"] = f"gte.{date_from.isoformat()}"
+            params[date_column] = f"gte.{date_from.isoformat()}"
         elif date_to:
-            params["iniciada_en"] = f"lte.{date_to.isoformat()}"
+            params[date_column] = f"lte.{date_to.isoformat()}"
         # Usamos service role y filtramos por organizacion para evitar diferencias de RLS
         # entre ambientes, manteniendo aislamiento por tenant.
         query_started = time.perf_counter()
@@ -17650,6 +17652,7 @@ class CRMRepository:
         date_to: datetime | None = None,
         include_persona_details: bool = True,
         conversation_ids: set[str] | None = None,
+        inbound_date: bool = False,
     ) -> list[dict[str, Any]]:
         return await self.visitas_whatsapp_conversaciones(
             usuario_token=usuario_token,
@@ -17660,6 +17663,7 @@ class CRMRepository:
             date_to=date_to,
             include_contact_details=include_persona_details,
             conversation_ids=conversation_ids,
+            inbound_date=inbound_date,
         )
 
     async def list_campana_conversion_conversations(
