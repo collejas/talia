@@ -364,6 +364,30 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - Migrar los tenants restantes uno por uno.
 - Retirar Brevo después de completar el checklist de eliminación y respaldo histórico.
 
+## [2026-09-19]
+
+### Preparación Postmark sin consultas repetidas por mensaje
+
+- El worker carga en bloque las supresiones de CRM y Postmark para el conjunto
+  de correos del ciclo.
+- La finalización posterior a la cola bulk ya no vuelve a renderizar ni a
+  consultar la configuración de cada correo.
+- La optimización se mantiene exclusiva de Postmark; Brevo y WhatsApp siguen
+  usando sus propios workers y límites.
+- Se reiniciaron `talia-postmark-preparer.service` y
+  `talia-email-worker.service` después de las validaciones locales.
+
+### Validaciones
+
+- Compilación de backend correcta.
+- 18 pruebas del sender Postmark aprobadas.
+- 3 pruebas del constructor de lotes aprobadas.
+
+### Pendiente
+
+- Ejecutar un lote real de 25 y otro de 500 para medir la latencia final del
+  preparador, CPU, memoria y tamaño efectivo de `/email/batch`.
+
 ## Formato para futuras entradas
 
 ```md

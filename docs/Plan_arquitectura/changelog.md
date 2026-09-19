@@ -303,6 +303,15 @@ Estado: pendiente.
 No marcar una fase como completada por compilación, reinicio, healthcheck o existencia del servicio. Cada fase requiere evidencia funcional y, cuando corresponda, persistencia validada, entrega del proveedor y medición posterior.
 ## 2026-09-19 — Persistencia agrupada Postmark sin afectar otros proveedores
 
+### Optimización de preparación por lote
+
+- Las supresiones de CRM y Postmark se consultan una vez por tenant y ciclo,
+  en lugar de una vez por correo.
+- La confirmación local después de la cola bulk no vuelve a ejecutar el render
+  completo del mensaje.
+- La API sigue desacoplada del preparador y la optimización no se aplica a
+  Brevo ni WhatsApp.
+
 - El preparador Postmark incorpora agrupación por tenant y reutilización de
   contexto para reducir llamadas repetidas durante la preparación.
 - La persistencia agrupada queda encapsulada en la RPC

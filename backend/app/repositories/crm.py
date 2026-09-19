@@ -25632,6 +25632,35 @@ class CRMRepository:
             return row
         return None
 
+    async def worker_list_active_contact_suppressions_for_prospectos(
+        self,
+        *,
+        organizacion_id: UUID,
+        prospecto_ids: Sequence[UUID],
+        canal: str,
+    ) -> list[dict[str, Any]]:
+        """Carga supresiones activas de un lote usando una sola consulta."""
+
+        if not prospecto_ids:
+            return []
+        ids = ",".join(str(value) for value in prospecto_ids)
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_suppressions",
+            params={
+                "select": "id,prospecto_id,canal,motivo,origen,metadata",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "activo": "eq.true",
+                "prospecto_id": f"in.({ids})",
+                "canal": f"in.({canal},all)",
+                "limit": str(len(prospecto_ids) * 2),
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError("worker_contact_suppressions_bulk_invalid")
+        return [row for row in data if isinstance(row, dict)]
+
     async def worker_create_contact_suppression(
         self,
         *,

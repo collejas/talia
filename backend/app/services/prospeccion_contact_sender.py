@@ -84,6 +84,7 @@ class _PostmarkPreparationCache:
     migrations: dict[UUID, dict[str, Any] | None]
     plans: dict[UUID, dict[str, Any] | None]
     servers: dict[UUID, dict[str, Any] | None]
+    suppressed_emails: dict[UUID, set[str]]
     lock: asyncio.Lock
 
     def __init__(self) -> None:
@@ -93,7 +94,28 @@ class _PostmarkPreparationCache:
         self.migrations = {}
         self.plans = {}
         self.servers = {}
+        self.suppressed_emails = {}
         self.lock = asyncio.Lock()
+
+    async def load_suppressed_emails(
+        self, organizacion_id: UUID, email_addresses: list[str]
+    ) -> None:
+        async with self.lock:
+            if organizacion_id not in self.suppressed_emails:
+                self.suppressed_emails[organizacion_id] = await PostmarkRepository().list_suppressed_emails(
+                    organizacion_id=organizacion_id,
+                    email_addresses=email_addresses,
+                )
+
+    async def is_suppressed(self, organizacion_id: UUID, email_address: str) -> bool:
+        async with self.lock:
+            suppressed = self.suppressed_emails.get(organizacion_id)
+        if suppressed is not None:
+            return email_address.strip().lower() in suppressed
+        return await PostmarkRepository().is_suppressed(
+            organizacion_id=organizacion_id,
+            email_address=email_address,
+        )
 
     async def public_base_url(self, organizacion_id: UUID) -> str | None:
         async with self.lock:
@@ -1569,10 +1591,15 @@ async def _queue_postmark_prospeccion_email(
             domain_name = str(domain.get("domain_name") or "").strip().lower()
             if not domain_name or from_email.rsplit("@", 1)[-1].lower() != domain_name:
                 raise PostmarkError("sender_domain_not_authorized")
-            if await repository.is_suppressed(
-                organizacion_id=organizacion_id,
-                email_address=message.to_email,
-            ):
+            suppressed = (
+                await preparation_cache.is_suppressed(organizacion_id, message.to_email)
+                if preparation_cache
+                else await repository.is_suppressed(
+                    organizacion_id=organizacion_id,
+                    email_address=message.to_email,
+                )
+            )
+            if suppressed:
                 raise PostmarkError("recipient_suppressed")
             stream_key = "transactional_stream" if message_kind == "transactional" else "broadcast_stream"
             stream_name = str(server.get(stream_key) or "").strip()
@@ -2030,6 +2057,40 @@ class ProspeccionContactSender:
             )
             return False
 
+        postmark_contact_suppressions: dict[UUID, dict[str, dict[str, Any]]] = {}
+        if self._provider_filter == "postmark":
+            by_org: dict[UUID, set[UUID]] = {}
+            emails_by_org: dict[UUID, list[str]] = {}
+            for envio in envios:
+                try:
+                    org_id = UUID(str(envio["organizacion_id"]))
+                    prospecto_id = UUID(str(envio["prospecto_id"]))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                by_org.setdefault(org_id, set()).add(prospecto_id)
+                email = _detail_email(envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {})
+                if email:
+                    emails_by_org.setdefault(org_id, []).append(email)
+
+            async def preload_postmark_org(org_id: UUID) -> None:
+                if self._postmark_preparation_cache:
+                    await self._postmark_preparation_cache.load_suppressed_emails(
+                        org_id, emails_by_org.get(org_id, [])
+                    )
+                rows = await repo.worker_list_active_contact_suppressions_for_prospectos(
+                    organizacion_id=org_id,
+                    prospecto_ids=sorted(by_org.get(org_id, set()), key=str),
+                    canal="correo",
+                )
+                suppression_map: dict[str, dict[str, Any]] = {}
+                for row in rows:
+                    prospecto_id = row.get("prospecto_id")
+                    if prospecto_id and str(prospecto_id) not in suppression_map:
+                        suppression_map[str(prospecto_id)] = row
+                postmark_contact_suppressions[org_id] = suppression_map
+
+            await asyncio.gather(*(preload_postmark_org(org_id) for org_id in by_org))
+
         semaphore = asyncio.Semaphore(effective_concurrency)
         bulk_queue = _PostmarkBulkQueue() if self._provider_filter == "postmark" else None
         if high_demand_details.get("high_demand_mode"):
@@ -2039,7 +2100,21 @@ class ProspeccionContactSender:
         async def _run_one(envio: dict[str, Any]) -> Exception | None:
             async with semaphore:
                 try:
-                    await self._process_envio(repo, envio, bulk_queue=bulk_queue)
+                    org_id = None
+                    try:
+                        org_id = UUID(str(envio.get("organizacion_id")))
+                    except (TypeError, ValueError):
+                        pass
+                    await self._process_envio(
+                        repo,
+                        envio,
+                        bulk_queue=bulk_queue,
+                        preloaded_contact_suppression=(
+                            postmark_contact_suppressions.get(org_id)
+                            if org_id is not None
+                            else None
+                        ),
+                    )
                     return None
                 except CRMRepositoryError as exc:
                     return exc
@@ -2181,6 +2256,7 @@ class ProspeccionContactSender:
         bulk_queue: _PostmarkBulkQueue | None = None,
         postmark_queued_result: dict[str, Any] | None = None,
         skip_claim: bool = False,
+        preloaded_contact_suppression: dict[str, Any] | None = None,
     ) -> None:
         envio_id_value = envio.get("id")
         try:
@@ -2349,13 +2425,16 @@ class ProspeccionContactSender:
 
         dispatch_started = perf_counter()
         if org_uuid and canal in {"correo", "whatsapp", "llamada"}:
-            suppression = await repo.worker_find_active_contact_suppression(
-                organizacion_id=org_uuid,
-                canal=canal,
-                prospecto_id=prospecto_uuid,
-                email=_clean_text(detalle.get("email")),
-                phone_e164=normalize_phone(_clean_text(detalle.get("phone"))),
-            )
+            if preloaded_contact_suppression is not None and canal == "correo":
+                suppression = preloaded_contact_suppression.get(str(prospecto_uuid)) if prospecto_uuid else None
+            else:
+                suppression = await repo.worker_find_active_contact_suppression(
+                    organizacion_id=org_uuid,
+                    canal=canal,
+                    prospecto_id=prospecto_uuid,
+                    email=_clean_text(detalle.get("email")),
+                    phone_e164=normalize_phone(_clean_text(detalle.get("phone"))),
+                )
             if suppression:
                 result = ContactEnvioResult(
                     estado="omitido",
@@ -2611,12 +2690,67 @@ class ProspeccionContactSender:
                 error=str(exc),
             )
             return
-        await self._process_envio(
-            repo,
-            envio,
-            postmark_queued_result=queued,
-            skip_claim=True,
+        envio_id = UUID(str(envio["id"]))
+        queued_message_id = queued.get("message_id")
+        if not queued_message_id:
+            await repo.worker_complete_envio(
+                envio_id=envio_id,
+                payload={
+                    "estado": "pendiente",
+                    "error": "postmark_bulk_message_id_missing",
+                    "procesado_en": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            return
+
+        payload = envio.get("payload") if isinstance(envio.get("payload"), dict) else {}
+        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        message_kind = _clean_text(payload.get("email_message_kind") or metadata.get("email_message_kind"))
+        result = ContactEnvioResult(
+            estado="enviado",
+            detalle={
+                "email": _detail_email(envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}),
+                "email_provider": "postmark",
+                "delivery_state": "queued",
+                "message_kind": message_kind,
+                "message_stream": queued.get("stream_name"),
+                "postmark_message_id": str(queued_message_id),
+            },
+            mensaje_id_interno=str(queued_message_id),
         )
+        intento_actual = int(envio.get("intento_actual") or 1)
+        max_reintentos = min(max(int(envio.get("max_reintentos") or 1), 1), self._max_retries)
+        update_payload = self._build_envio_update_payload(
+            envio=envio,
+            envio_id=envio_id,
+            result=result,
+            intento=intento_actual,
+            max_reintentos=max_reintentos,
+        )
+        await repo.worker_complete_envio(envio_id=envio_id, payload=update_payload)
+        await repo.worker_insert_contact_logs([
+            _build_contact_log_entry(
+                organizacion_id=envio.get("organizacion_id"),
+                prospecto_id=envio.get("prospecto_id"),
+                canal="correo",
+                estado="enviado",
+                detalle=result.detalle,
+                error=None,
+                batch_id=envio.get("batch_id"),
+                envio_id=envio_id,
+            )
+        ])
+        metrics.increment("correo", "enviado")
+        batch_id = envio.get("batch_id")
+        if batch_id:
+            try:
+                await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id)))
+            except (ValueError, CRMRepositoryError):
+                log_event(
+                    logger,
+                    "prospeccion.sender_batch_sync_failed",
+                    batch_id=batch_id,
+                )
 
     def _build_envio_update_payload(
         self,

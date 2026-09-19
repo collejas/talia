@@ -435,6 +435,30 @@ class PostmarkRepository:
         )
         return row is not None
 
+    async def list_suppressed_emails(
+        self, *, organizacion_id: UUID, email_addresses: list[str]
+    ) -> set[str]:
+        """Obtiene las supresiones activas de un conjunto de destinatarios."""
+
+        normalized = sorted({value.strip().lower() for value in email_addresses if value and value.strip()})
+        if not normalized:
+            return set()
+        rows = await self._get_many(
+            "/rest/v1/tenant_email_suppressions",
+            params={
+                "select": "email_address",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "email_address": "in.(" + ",".join(normalized) + ")",
+                "active": "eq.true",
+                "limit": str(len(normalized)),
+            },
+        )
+        return {
+            str(row.get("email_address")).strip().lower()
+            for row in rows
+            if row.get("email_address")
+        }
+
     async def ensure_migration(self, *, organizacion_id: UUID) -> dict[str, Any]:
         data = await self._rest_post(
             "/rest/v1/tenant_email_migrations",
