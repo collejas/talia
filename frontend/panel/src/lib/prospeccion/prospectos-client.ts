@@ -371,6 +371,8 @@ export type ProspectoContactarResponse = {
   ok: boolean
   batch_id: string
   contactos: ProspectoContactoResumen[]
+  total_contactos?: number
+  contactos_truncados?: boolean
   omitidos?: ProspeccionOmitido[]
 }
 

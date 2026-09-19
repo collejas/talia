@@ -3344,7 +3344,7 @@ function ProspectosView() {
       setBanner({
         type: "success",
         message: response.batch_id
-          ? `Lote principal creado con ${enrichedResults.length} envíos en ${Math.ceil(selectedCount / enviosPorLote)} sublotes.`
+          ? `Campaña en cola: ${selectedCount.toLocaleString("es-MX")} prospectos conservan su lote y se procesarán paso a paso. El panel mostrará el avance real.`
           : "Lote ejecutado.",
       })
       handlePlannerOpenChange(false)

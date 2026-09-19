@@ -317,11 +317,12 @@ Para el servidor actual de 1 vCPU y 1 GB:
 | Área | Límite inicial |
 |---|---:|
 | Brevo | 2 tareas concurrentes en el worker de correo |
-| Postmark entrega | 25 mensajes reclamados por tenant/ciclo; pausa de 5 s entre grupos |
+| Postmark entrega | Hasta 500 mensajes reclamados por tenant/ciclo; `/email/batch` en grupos de máximo 500 y corte conservador de 45 MiB |
 | Postmark histórico | 1 tenant y stream a la vez |
 | WhatsApp/Meta | 2 tareas concurrentes en el worker; máximo 30/minuto por tenant |
-| Lote normal | 10 por ciclo de correo/WhatsApp |
+| Lote de lectura del sender | 10 por ciclo de correo/WhatsApp; una campaña puede contener hasta 10,000 prospectos |
 | Lote histórico | 100 por página Postmark |
+| Brevo | 300 reservas diarias por tenant, aplicadas atómicamente por fecha UTC |
 | Envíos por tenant | 30/minuto por proveedor/canal |
 | Proveedor agregado | 60/minuto |
 | Destinatario | 2/minuto |
@@ -463,4 +464,4 @@ Migraciones bajo `supabase/migrations/` relacionadas con:
 
 ## 14. Estado de implementación
 
-Este documento contiene el diagnóstico y el plan original. Desde entonces se aplicaron de forma gradual la extracción de IMAP, la separación de correo/WhatsApp y estos límites operativos. La sincronización histórica Postmark continúa deliberadamente desactivada.
+Este documento contiene el diagnóstico y el plan actualizado. Se aplicaron de forma gradual la extracción de IMAP, la separación de correo/WhatsApp, los lotes Postmark de 500, la reserva Brevo de 300 diarios y las campañas virtuales de hasta 10,000 prospectos. La sincronización histórica Postmark continúa deliberadamente desactivada.

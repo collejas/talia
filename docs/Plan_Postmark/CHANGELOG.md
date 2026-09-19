@@ -8,6 +8,14 @@
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-09-18] — Batch real de 500 y límite de payload
+
+- El worker reclama hasta 500 mensajes por tenant y ciclo.
+- La entrega usa `/email/batch` con máximo de 500 destinatarios por llamada.
+- Los mensajes se separan por tipo y stream, y además se cortan antes de 45 MiB para conservar margen frente al límite de 50 MiB del proveedor.
+- La respuesta individual de Postmark continúa cerrando cada intento por separado; no se combinan estados ni idempotencias.
+- `POSTMARK_SYNC_ENABLED` permanece desactivado deliberadamente: esta entrega no reactiva todavía la sincronización histórica.
+
 ## [2026-09-14] — Sincronización integral por tenant
 
 - Se inició la implementación segura del sincronizador: las recepciones de webhook ahora quedan preparadas para persistir `X-PM-Webhook-Trace-Id` junto con tenant, servidor, tipo y mensaje.

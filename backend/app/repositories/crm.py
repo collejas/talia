@@ -27789,6 +27789,7 @@ class CRMRepository:
         self,
         *,
         usuario_token: str,
+        organizacion_id: UUID | None = None,
         start_utc: datetime,
         end_utc_exclusive: datetime,
     ) -> int:
@@ -27804,6 +27805,8 @@ class CRMRepository:
                 f"programado_en.lt.{end_utc_exclusive.isoformat()})"
             ),
         }
+        if organizacion_id is not None:
+            params["organizacion_id"] = f"eq.{organizacion_id}"
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/prospeccion_contacto_envio",
@@ -27812,6 +27815,46 @@ class CRMRepository:
             prefer="count=exact",
         )
         return self._extract_total_count(resp.headers.get("content-range")) or 0
+
+    async def reserve_brevo_daily_quota(
+        self,
+        *,
+        organizacion_id: UUID,
+        quota_date: date,
+        requested_count: int,
+        daily_limit: int = 300,
+    ) -> dict[str, Any]:
+        """Reserva cupo Brevo de forma atómica por tenant y fecha UTC."""
+        result = await self._rpc(
+            "reserve_brevo_daily_quota",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_quota_date": quota_date.isoformat(),
+                "p_requested_count": requested_count,
+                "p_daily_limit": daily_limit,
+            },
+        )
+        row = self._first_row(result)
+        return row if isinstance(row, dict) else {}
+
+    async def release_brevo_daily_quota(
+        self,
+        *,
+        organizacion_id: UUID,
+        quota_date: date,
+        released_count: int,
+    ) -> dict[str, Any]:
+        """Libera una reserva que no llegó a materializarse en la cola."""
+        result = await self._rpc(
+            "release_brevo_daily_quota",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_quota_date": quota_date.isoformat(),
+                "p_released_count": released_count,
+            },
+        )
+        row = self._first_row(result)
+        return row if isinstance(row, dict) else {}
 
     async def _list_scian_table(self, *, table: str) -> list[dict[str, Any]]:
         """Helper que obtiene todas las filas de una tabla SCIAN ordenadas por código."""

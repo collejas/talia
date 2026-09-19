@@ -233,6 +233,60 @@ async def test_deliver_claimed_batch_groups_messages_and_finishes_each_result():
 
 
 @pytest.mark.asyncio
+async def test_deliver_claimed_batch_splits_after_postmark_limit():
+    class BatchRepository(FakeRepository):
+        def __init__(self):
+            super().__init__()
+            self.finished = []
+
+        async def start_attempt(self, *, organizacion_id, message_id):
+            return {
+                "attempt_id": str(message_id),
+                "from_email": "noreply@geoactiv.mx",
+                "to_email": f"{message_id}@example.com",
+                "subject": "Aviso",
+                "text_body": "Contenido",
+                "message_kind": "broadcast",
+                "stream_name": "broadcast",
+                "tag": "campana",
+            }
+
+        async def finish_attempt(self, *, payload):
+            self.finished.append(payload)
+            return {"message_status": "submitted"}
+
+    class BatchClient:
+        def __init__(self):
+            self.batch_sizes = []
+
+        async def send_batch(self, messages, *, message_kind, message_stream):
+            self.batch_sizes.append(len(messages))
+            return PostmarkBatchResult(
+                items=[
+                    PostmarkSendResult(
+                        accepted=True,
+                        provider_message_id=UUID("11111111-1111-1111-1111-111111111111"),
+                    )
+                    for _ in messages
+                ]
+            )
+
+    message_ids = [uuid4() for _ in range(501)]
+    repository = BatchRepository()
+    client = BatchClient()
+    deliveries = await PostmarkService(repository=repository).deliver_claimed_batch(
+        organizacion_id=UUID("00000000-0000-0000-0000-000000000001"),
+        claimed_rows=[{"message_id": str(value)} for value in message_ids],
+        client=client,
+        inter_batch_seconds=0,
+    )
+
+    assert client.batch_sizes == [500, 1]
+    assert len(deliveries) == 501
+    assert len(repository.finished) == 501
+
+
+@pytest.mark.asyncio
 async def test_queue_message_reserves_with_stream_selected_by_kind():
     class QueueRepository(FakeRepository):
         def __init__(self):

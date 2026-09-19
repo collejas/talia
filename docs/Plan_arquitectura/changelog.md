@@ -9,6 +9,9 @@ Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIO
 - [x] Identificación de procesos dentro de `talia-api.service`.
 - [x] Diseño de arquitectura objetivo.
 - [x] Definición inicial de límites operativos.
+- [x] Implementación de lotes Postmark de hasta 500 con corte conservador por payload.
+- [x] Reserva atómica del límite Brevo de 300 envíos diarios por tenant.
+- [x] Campañas virtuales de hasta 10,000 prospectos con procesamiento paso a paso.
 - [x] Definición de pruebas, criterios de aceptación y rollback.
 - [ ] Implementación completa de la separación.
 - [x] Worker independiente de WhatsApp/Meta preparado (campañas, follow-ups, webhooks y reconciliación).
@@ -87,6 +90,8 @@ Estado: Postmark separado y activo de forma controlada; Brevo y sincronización 
 - [ ] Mantener tenant, lote, plantilla, versión, estado e idempotencia.
 - [x] Definir límites de concurrencia por proveedor y tenant.
 - [x] Definir backoff, rate limits y máximo global de 3 intentos.
+- [x] Reclamar hasta 500 mensajes Postmark por ciclo y dividir por stream/tamaño antes de llamar `/email/batch`.
+- [x] Reservar el cupo Brevo con RPC atómica por tenant y día UTC.
 - [ ] Ejecutar pruebas de reinicio durante un lote.
 - [ ] Reactivar `POSTMARK_SYNC_ENABLED` únicamente en el worker nuevo.
 
@@ -108,6 +113,8 @@ Estado: implementación preparada; migración y activación controlada pendiente
 
 - [x] Crear `talia-whatsapp-worker.service`.
 - [x] Mover follow-ups WhatsApp mediante switches del API y el worker nuevo.
+- [x] Permitir campañas virtuales de hasta 10,000 prospectos; cada envío conserva lote, plantilla, tenant e idempotencia.
+- [x] Evitar devolver miles de filas en la respuesta inicial; el avance se consulta por lote y SSE.
 - [x] Mover reconciliación Meta mediante switches del API y el worker nuevo.
 - [x] Crear cola durable `whatsapp_webhook_jobs` para webhooks Meta.
 - [x] Hacer que el webhook Meta responda después de persistir el job, sin ejecutar el procesamiento en `BackgroundTasks`.
@@ -146,7 +153,7 @@ Estado: pendiente.
 
 - Se agregaron límites configurables por tenant y proveedor para el sender de prospección.
 - Se fijó concurrencia inicial de 2 para correo y 2 para WhatsApp/Meta.
-- Se fijaron lotes de 10 para correo/WhatsApp, 25 para entrega Postmark y 50 para lectura IMAP.
+- Se fijaron lotes iniciales de 10 para el sender de correo/WhatsApp, 500 para entrega Postmark y 50 para lectura IMAP.
 - Se agregó un máximo global de 3 intentos por envío; se conservan los backoff existentes de 30, 120, 300 y 600 segundos.
 - Postmark histórico conserva `POSTMARK_SYNC_ENABLED=false`; cuando se reactive, usará páginas de 100 registros.
 - Se actualizaron límites systemd: API 85% CPU/512M; email 40%/256M; IMAP 25%/192M; WhatsApp 40%/256M.

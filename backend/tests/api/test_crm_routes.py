@@ -4529,12 +4529,12 @@ async def test_list_audit_logs(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_contactar_prospectos_allows_500_ids() -> None:
-    prospecto_ids = [str(uuid.uuid4()) for _ in range(500)]
+async def test_contactar_prospectos_allows_10000_ids() -> None:
+    prospecto_ids = [str(uuid.uuid4()) for _ in range(10000)]
 
     payload = crm_routes.ProspectoContactarPayload.model_validate({"prospecto_ids": prospecto_ids})
 
-    assert len(payload.prospecto_ids or []) == 500
+    assert len(payload.prospecto_ids or []) == 10000
 
     with pytest.raises(crm_routes.ValidationError):
         crm_routes.ProspectoContactarPayload.model_validate({"prospecto_ids": prospecto_ids + [str(uuid.uuid4())]})

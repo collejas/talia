@@ -302,9 +302,9 @@ class Settings(BaseSettings):
         ),
     )
     postmark_worker_batch_size: int = Field(
-        default=25,
+        default=500,
         ge=1,
-        le=100,
+        le=500,
         description="Cantidad máxima de mensajes Postmark reclamados por tenant y ciclo.",
         validation_alias=AliasChoices(
             "POSTMARK_WORKER_BATCH_SIZE",

@@ -1888,7 +1888,7 @@ DEFAULT_PORTAL_TOKEN_DAYS = 14
 QUOTE_WITH_ITEMS_SELECT = "*,items:lead_cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,impuestos,activo,descripcion,descripcion_corta,descripcion_larga))"
 QUOTE_DEFAULT_TAX_RATE = Decimal("0.16")
 CURRENCY_QUANTUM = Decimal("0.01")
-MAX_PROSPECCION_BATCH = 500
+MAX_PROSPECCION_BATCH = 10000
 MIN_PROSPECCION_SEPARACION_SEGUNDOS = 5
 PROSPECTOS_PREFS_MODULO = "prospeccion.prospectos"
 PROSPECTOS_PREFS_CLAVE_TABLA = "tabla"
@@ -4767,7 +4767,7 @@ class ProspectoContactarPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prospecto_ids: list[UUID] | None = Field(
-        default=None, min_length=1, max_length=500, description="Prospectos seleccionados manualmente."
+        default=None, min_length=1, max_length=10000, description="Prospectos seleccionados manualmente."
     )
     correo_asunto: str | None = Field(default=None, max_length=200)
     correo_cuerpo: str | None = Field(default=None, max_length=4000)
@@ -40082,6 +40082,7 @@ async def contactar_prospectos_legacy(
     if projected_email_by_utc_day:
         brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
         api_key = _clean_text(brevo_settings.api_key)
+        brevo_quota_reservations: list[tuple[date, int]] = []
         if api_key:
             for quota_day_utc, projected_email_sends in sorted(projected_email_by_utc_day.items()):
                 day_start_utc = datetime.combine(quota_day_utc, datetime.min.time(), tzinfo=timezone.utc)
@@ -40092,6 +40093,7 @@ async def contactar_prospectos_legacy(
                         operation="count_pending_email_envios_for_local_day",
                         func=lambda day_start_utc=day_start_utc, day_end_utc_exclusive=day_end_utc_exclusive: repo.count_pending_email_envios_for_local_day(
                             usuario_token=user_token,
+                            organizacion_id=organizacion_id,
                             start_utc=day_start_utc,
                             end_utc_exclusive=day_end_utc_exclusive,
                         ),
@@ -40126,6 +40128,46 @@ async def contactar_prospectos_legacy(
                         ),
                     )
 
+            # La consulta al proveedor es informativa y puede tener una carrera.
+            # La reserva local es la barrera autoritativa para no superar 300 por
+            # tenant cuando dos usuarios lanzan campañas simultáneamente.
+            try:
+                for quota_day_utc, projected_email_sends in sorted(projected_email_by_utc_day.items()):
+                    reservation = await repo.reserve_brevo_daily_quota(
+                        organizacion_id=organizacion_id,
+                        quota_date=quota_day_utc,
+                        requested_count=projected_email_sends,
+                        daily_limit=300,
+                    )
+                    if reservation.get("allowed") is not True:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=(
+                                "brevo_daily_quota_exceeded:"
+                                f"{reservation.get('available', 0)}:{projected_email_sends}:"
+                                f"{quota_day_utc.isoformat()}"
+                            ),
+                        )
+                    brevo_quota_reservations.append((quota_day_utc, projected_email_sends))
+            except Exception:
+                for reserved_date, reserved_count in brevo_quota_reservations:
+                    try:
+                        await repo.release_brevo_daily_quota(
+                            organizacion_id=organizacion_id,
+                            quota_date=reserved_date,
+                            released_count=reserved_count,
+                        )
+                    except CRMRepositoryError:
+                        logger.exception(
+                            "prospeccion.contactar.brevo_reservation_release_failed",
+                            extra={"quota_day_utc": reserved_date.isoformat()},
+                        )
+                raise
+        else:
+            brevo_quota_reservations = []
+    else:
+        brevo_quota_reservations = []
+
     try:
         batch = await _retry_transient_repo_error(
             operation="create_contact_batch",
@@ -40146,9 +40188,33 @@ async def contactar_prospectos_legacy(
             retries=1,
         )
     except CRMRepositoryError as exc:
+        for reserved_date, reserved_count in brevo_quota_reservations:
+            try:
+                await repo.release_brevo_daily_quota(
+                    organizacion_id=organizacion_id,
+                    quota_date=reserved_date,
+                    released_count=reserved_count,
+                )
+            except CRMRepositoryError:
+                logger.exception(
+                    "prospeccion.contactar.brevo_reservation_release_failed",
+                    extra={"quota_day_utc": reserved_date.isoformat()},
+                )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     batch_id = batch.get("id")
     if not batch_id:
+        for reserved_date, reserved_count in brevo_quota_reservations:
+            try:
+                await repo.release_brevo_daily_quota(
+                    organizacion_id=organizacion_id,
+                    quota_date=reserved_date,
+                    released_count=reserved_count,
+                )
+            except CRMRepositoryError:
+                logger.exception(
+                    "prospeccion.contactar.brevo_reservation_release_failed",
+                    extra={"quota_day_utc": reserved_date.isoformat()},
+                )
         raise HTTPException(status_code=502, detail="contact_batch_invalid")
 
     envios_entries, suppressed_by_channel = _build_contact_envios_entries(
@@ -40184,6 +40250,18 @@ async def contactar_prospectos_legacy(
                 retries=1,
             )
         except CRMRepositoryError as exc:
+            for reserved_date, reserved_count in brevo_quota_reservations:
+                try:
+                    await repo.release_brevo_daily_quota(
+                        organizacion_id=organizacion_id,
+                        quota_date=reserved_date,
+                        released_count=reserved_count,
+                    )
+                except CRMRepositoryError:
+                    logger.exception(
+                        "prospeccion.contactar.brevo_reservation_release_failed",
+                        extra={"quota_day_utc": reserved_date.isoformat()},
+                    )
             raise HTTPException(status_code=502, detail=str(exc)) from exc
     try:
         envios = await _retry_transient_repo_error(
@@ -40195,6 +40273,18 @@ async def contactar_prospectos_legacy(
             retries=1,
         )
     except CRMRepositoryError as exc:
+        for reserved_date, reserved_count in brevo_quota_reservations:
+            try:
+                await repo.release_brevo_daily_quota(
+                    organizacion_id=organizacion_id,
+                    quota_date=reserved_date,
+                    released_count=reserved_count,
+                )
+            except CRMRepositoryError:
+                logger.exception(
+                    "prospeccion.contactar.brevo_reservation_release_failed",
+                    extra={"quota_day_utc": reserved_date.isoformat()},
+                )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     resumen = _build_contact_resumen(envios)
@@ -40209,7 +40299,16 @@ async def contactar_prospectos_legacy(
         },
     )
 
-    response: dict[str, Any] = {"ok": True, "batch_id": str(batch_id), "contactos": resumen}
+    response: dict[str, Any] = {
+        "ok": True,
+        "batch_id": str(batch_id),
+        # En campañas grandes el progreso se consulta por batch; no devolvemos
+        # 10,000 filas en la respuesta inicial ni hacemos crecer la memoria de
+        # la API por un detalle que el panel no necesita para arrancar.
+        "contactos": resumen[:100],
+        "total_contactos": len(resumen),
+        "contactos_truncados": len(resumen) > 100,
+    }
     if omitidos:
         response["omitidos"] = omitidos
     return response

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -11,6 +12,10 @@ from app.integrations.postmark.errors import PostmarkError, PostmarkRequestError
 from app.integrations.postmark.schemas import MessageKind, PostmarkMessage
 
 from .repository import PostmarkRepository
+
+
+_POSTMARK_MAX_BATCH_ITEMS = 500
+_POSTMARK_MAX_BATCH_BYTES = 45 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -31,6 +36,53 @@ class PostmarkService:
 
     def __init__(self, *, repository: PostmarkRepository) -> None:
         self.repository = repository
+
+    @staticmethod
+    def _batch_chunks(
+        items: list[dict[str, object]],
+    ) -> list[list[dict[str, object]]]:
+        """Divide por 500 y por tamaño para respetar ambos límites Postmark."""
+        chunks: list[list[dict[str, object]]] = []
+        current: list[dict[str, object]] = []
+        current_bytes = 2  # []
+        for item in items:
+            message = item["message"]
+            stream_name = str(item["stream_name"])
+            if not isinstance(message, PostmarkMessage):
+                raise PostmarkError("email_message_invalid")
+            payload: dict[str, object] = {
+                "From": (
+                    f"{message.from_name} <{message.from_email}>"
+                    if message.from_name
+                    else message.from_email
+                ),
+                "To": message.to_email,
+                "Subject": message.subject,
+                "MessageStream": stream_name,
+            }
+            if message.html_body is not None:
+                payload["HtmlBody"] = message.html_body
+            if message.text_body is not None:
+                payload["TextBody"] = message.text_body
+            if message.reply_to:
+                payload["ReplyTo"] = message.reply_to
+            if message.tag:
+                payload["Tag"] = message.tag
+            item_bytes = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+            if item_bytes + 2 > _POSTMARK_MAX_BATCH_BYTES:
+                raise PostmarkError("email_message_payload_too_large")
+            if current and (
+                len(current) >= _POSTMARK_MAX_BATCH_ITEMS
+                or current_bytes + item_bytes + 1 > _POSTMARK_MAX_BATCH_BYTES
+            ):
+                chunks.append(current)
+                current = []
+                current_bytes = 2
+            current.append(item)
+            current_bytes += item_bytes + (1 if len(current) > 1 else 0)
+        if current:
+            chunks.append(current)
+        return chunks
 
     async def queue_message(
         self,
@@ -207,65 +259,68 @@ class PostmarkService:
             key = (str(item["message_kind"]), str(item["stream_name"]))
             groups.setdefault(key, []).append(item)
 
-        for group_index, ((kind, stream_name), items) in enumerate(groups.items()):
-            if group_index:
-                await asyncio.sleep(max(inter_batch_seconds, 0.0))
-            messages = [item["message"] for item in items]
-            try:
-                batch_result = await client.send_batch(
-                    messages,  # type: ignore[arg-type]
-                    message_kind=kind,  # type: ignore[arg-type]
-                    message_stream=stream_name,
-                )
-            except PostmarkRequestError as exc:
-                for item in items:
+        group_index = 0
+        for (kind, stream_name), group_items in groups.items():
+            for items in self._batch_chunks(group_items):
+                if group_index:
+                    await asyncio.sleep(max(inter_batch_seconds, 0.0))
+                group_index += 1
+                messages = [item["message"] for item in items]
+                try:
+                    batch_result = await client.send_batch(
+                        messages,  # type: ignore[arg-type]
+                        message_kind=kind,  # type: ignore[arg-type]
+                        message_stream=stream_name,
+                    )
+                except PostmarkRequestError as exc:
+                    for item in items:
+                        finish = await self.repository.finish_attempt(
+                            payload={
+                                "p_organizacion_id": str(organizacion_id),
+                                "p_message_id": str(item["message_id"]),
+                                "p_attempt_id": str(item["attempt_id"]),
+                                "p_accepted": False,
+                                "p_external_message_id": None,
+                                "p_error_code": str(exc.provider_code or exc.status_code or exc.code),
+                                "p_error_message": exc.provider_message or exc.code,
+                            }
+                        )
+                        deliveries.append(
+                            {
+                                "message_id": str(item["message_id"]),
+                                "provider_accepted": False,
+                                "provider_message_id": None,
+                                "state": finish.get("message_status"),
+                            }
+                        )
+                    continue
+
+                if len(batch_result.items) != len(items):
+                    raise PostmarkError("invalid_batch_response")
+                for item, result in zip(items, batch_result.items):
                     finish = await self.repository.finish_attempt(
                         payload={
                             "p_organizacion_id": str(organizacion_id),
                             "p_message_id": str(item["message_id"]),
                             "p_attempt_id": str(item["attempt_id"]),
-                            "p_accepted": False,
-                            "p_external_message_id": None,
-                            "p_error_code": str(exc.provider_code or exc.status_code or exc.code),
-                            "p_error_message": exc.provider_message or exc.code,
+                            "p_accepted": result.accepted,
+                            "p_external_message_id": (
+                                str(result.provider_message_id) if result.provider_message_id else None
+                            ),
+                            "p_error_code": str(result.error_code) if result.error_code is not None else None,
+                            "p_error_message": result.error_message,
                         }
                     )
                     deliveries.append(
                         {
                             "message_id": str(item["message_id"]),
-                            "provider_accepted": False,
-                            "provider_message_id": None,
+                            "provider_accepted": result.accepted,
+                            "provider_message_id": (
+                                str(result.provider_message_id) if result.provider_message_id else None
+                            ),
                             "state": finish.get("message_status"),
                         }
                     )
-                continue
-
-            if len(batch_result.items) != len(items):
-                raise PostmarkError("invalid_batch_response")
-            for item, result in zip(items, batch_result.items):
-                finish = await self.repository.finish_attempt(
-                    payload={
-                        "p_organizacion_id": str(organizacion_id),
-                        "p_message_id": str(item["message_id"]),
-                        "p_attempt_id": str(item["attempt_id"]),
-                        "p_accepted": result.accepted,
-                        "p_external_message_id": (
-                            str(result.provider_message_id) if result.provider_message_id else None
-                        ),
-                        "p_error_code": str(result.error_code) if result.error_code is not None else None,
-                        "p_error_message": result.error_message,
-                    }
-                )
-                deliveries.append(
-                    {
-                        "message_id": str(item["message_id"]),
-                        "provider_accepted": result.accepted,
-                        "provider_message_id": (
-                            str(result.provider_message_id) if result.provider_message_id else None
-                        ),
-                        "state": finish.get("message_status"),
-                    }
-                )
         return deliveries
 
     async def validate_send(

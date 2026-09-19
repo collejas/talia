@@ -104,6 +104,7 @@ async def resolve_prospeccion_email_capacity(
     try:
         scheduled = await repo.count_pending_email_envios_for_local_day(
             usuario_token=user_token,
+            organizacion_id=organizacion_id,
             start_utc=day_start_utc,
             end_utc_exclusive=day_end_utc_exclusive,
         )

@@ -28,6 +28,10 @@ backend/tests/services/postmark/
 frontend/panel/src/lib/email-service/
 ```
 
+### Lotes de campañas
+
+El tenant puede seleccionar hasta 10,000 prospectos en una campaña. Talia conserva un registro individual por destinatario con su tenant, lote, plantilla, estado e idempotencia; Postmark recibe esos registros en llamadas de hasta 500 mensajes mediante `/email/batch`. El worker separa `transactional` y `broadcast`, respeta cada stream y aplica un corte adicional por tamaño aproximado de 45 MiB para no acercarse al límite de 50 MiB. Los resultados individuales de Postmark son la fuente para aceptar o rechazar cada destinatario.
+
 Las migraciones nuevas se agregarán al directorio estándar de migraciones, pero crearán tablas Postmark propias. No se colocará lógica Postmark dentro de archivos Brevo ni dentro del servicio de correo legado.
 
 ## Principio de datos explícitos
