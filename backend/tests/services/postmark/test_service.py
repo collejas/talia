@@ -187,6 +187,7 @@ async def test_deliver_claimed_batch_groups_messages_and_finishes_each_result():
         def __init__(self):
             super().__init__()
             self.finished = []
+            self.bulk_finished = []
 
         async def start_attempt(self, *, organizacion_id, message_id):
             return {
@@ -203,6 +204,17 @@ async def test_deliver_claimed_batch_groups_messages_and_finishes_each_result():
         async def finish_attempt(self, *, payload):
             self.finished.append(payload)
             return {"message_status": "submitted" if payload["p_accepted"] else "failed"}
+
+        async def finish_attempts_bulk(self, *, organizacion_id, items):
+            self.bulk_finished.append(items)
+            return [
+                {
+                    "message_id": item["message_id"],
+                    "message_status": "submitted" if item["accepted"] else "failed",
+                    "updated": True,
+                }
+                for item in items
+            ]
 
     class BatchClient:
         async def send_batch(self, messages, *, message_kind, message_stream):
@@ -228,8 +240,10 @@ async def test_deliver_claimed_batch_groups_messages_and_finishes_each_result():
     )
 
     assert [item["provider_accepted"] for item in deliveries] == [True, False]
-    assert len(repository.finished) == 2
-    assert repository.finished[1]["p_error_code"] == "406"
+    assert repository.finished == []
+    assert len(repository.bulk_finished) == 1
+    assert len(repository.bulk_finished[0]) == 2
+    assert repository.bulk_finished[0][1]["error_code"] == "406"
 
 
 @pytest.mark.asyncio
@@ -238,6 +252,7 @@ async def test_deliver_claimed_batch_splits_after_postmark_limit():
         def __init__(self):
             super().__init__()
             self.finished = []
+            self.bulk_finished = []
 
         async def start_attempt(self, *, organizacion_id, message_id):
             return {
@@ -254,6 +269,13 @@ async def test_deliver_claimed_batch_splits_after_postmark_limit():
         async def finish_attempt(self, *, payload):
             self.finished.append(payload)
             return {"message_status": "submitted"}
+
+        async def finish_attempts_bulk(self, *, organizacion_id, items):
+            self.bulk_finished.append(items)
+            return [
+                {"message_id": item["message_id"], "message_status": "submitted", "updated": True}
+                for item in items
+            ]
 
     class BatchClient:
         def __init__(self):
@@ -283,7 +305,8 @@ async def test_deliver_claimed_batch_splits_after_postmark_limit():
 
     assert client.batch_sizes == [500, 1]
     assert len(deliveries) == 501
-    assert len(repository.finished) == 501
+    assert repository.finished == []
+    assert [len(items) for items in repository.bulk_finished] == [500, 1]
 
 
 @pytest.mark.asyncio

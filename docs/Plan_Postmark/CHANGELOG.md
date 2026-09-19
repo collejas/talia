@@ -417,6 +417,20 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - Conservar la ruta actual como rollback hasta demostrar consistencia del lote
   después de reinicios y reintentos.
 
+### Implementación de la finalización agrupada
+
+- Se agregó `tenant_email_finish_attempts_bulk`, limitada a 500 resultados y
+  protegida para `service_role`, para cerrar los intentos Postmark en una sola
+  transacción idempotente.
+- Se agregó `worker_finalize_postmark_envios_bulk`, que actualiza en bloque los
+  envíos de prospección, escribe la bitácora y sincroniza cada lote afectado.
+- El preparador ya no registra un finalizador por destinatario: acumula los
+  resultados del bloque y ejecuta una sola finalización por tenant y bloque.
+- La migración fue aplicada en Supabase y se verificaron ambas funciones; sólo
+  `service_role` puede ejecutarlas.
+- El código todavía requiere deploy y reinicio de los workers antes de medir la
+  reducción real en un lote de producción.
+
 ## Formato para futuras entradas
 
 ```md

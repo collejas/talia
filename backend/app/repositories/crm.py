@@ -25096,6 +25096,28 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_complete_envio_invalid:{row!r}")
         return row
 
+    async def worker_finalize_postmark_envios_bulk(
+        self,
+        *,
+        organizacion_id: UUID,
+        items: Sequence[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Finaliza envíos Postmark, logs y lotes en una sola RPC."""
+        if not items or len(items) > 500:
+            raise CRMRepositoryError("worker_postmark_finalize_bulk_invalid_size")
+        result = await self._rpc(
+            "worker_finalize_postmark_envios_bulk",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_items": list(items),
+            },
+        )
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError("worker_postmark_finalize_bulk_invalid_response")
+
     async def worker_get_envio_by_mensaje(
         self,
         *,

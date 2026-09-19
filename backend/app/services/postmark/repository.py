@@ -825,6 +825,26 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("attempt_finish_invalid_response")
         return data[0]
 
+    async def finish_attempts_bulk(
+        self,
+        *,
+        organizacion_id: UUID,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Cierra hasta 500 intentos en una sola transacción/RPC."""
+        if not items or len(items) > 500:
+            raise PostmarkRepositoryError("attempt_finish_bulk_invalid_size")
+        data = await self._rpc(
+            "tenant_email_finish_attempts_bulk",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_items": items,
+            },
+        )
+        if not isinstance(data, list):
+            raise PostmarkRepositoryError("attempt_finish_bulk_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
     async def set_quota(
         self,
         *,

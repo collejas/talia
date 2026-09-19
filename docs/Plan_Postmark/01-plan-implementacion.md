@@ -393,8 +393,10 @@ detenida.
 - Confirmado: la preparación ocurre fuera de la API, en el worker dedicado.
 - Confirmado: la optimización es exclusiva de Postmark; Brevo y WhatsApp
   conservan sus workers, límites y backpressure.
-- Pendiente: eliminar la mayor parte del trabajo individual posterior a la
-  persistencia y demostrar la latencia con lotes de 25, 500 y más de 500.
+- Implementado: el cierre de intentos Postmark y la finalización operativa de
+  prospección usan RPCs bulk de máximo 500, protegidas para `service_role`.
+- Pendiente: desplegar el código, reiniciar los workers y demostrar la latencia
+  con lotes de 25, 500 y más de 500.
 
 #### Siguiente paso aprobado: finalización agrupada sin latencia adicional
 
@@ -421,6 +423,10 @@ tamaño del batch, no la concurrencia del servidor: varios tenants podrán tener
 bloques preparados, pero el worker debe limitar cuántos bloques completos
 procesa simultáneamente. Si aumenta la presión del host o de Supabase, se
 pausan nuevos bloques y se conservan los bloques `ready` para reanudación.
+
+La migración de las RPCs bulk ya fue aplicada en Supabase y se verificó que
+únicamente `service_role` tiene permiso de ejecución. El código queda pendiente
+de deploy y reinicio controlado de los workers antes de comparar métricas.
 
 #### Criterios de aceptación de la siguiente fase
 

@@ -288,10 +288,10 @@ class PostmarkService:
                         message_stream=stream_name,
                     )
                 except PostmarkRequestError as exc:
-                    for item in items:
-                        finish = await self.repository.finish_attempt(
-                            payload={
-                                "p_organizacion_id": str(organizacion_id),
+                    finish_rows = await self._finish_attempts_bulk(
+                        organizacion_id=organizacion_id,
+                        items=[
+                            {
                                 "p_message_id": str(item["message_id"]),
                                 "p_attempt_id": str(item["attempt_id"]),
                                 "p_accepted": False,
@@ -299,23 +299,31 @@ class PostmarkService:
                                 "p_error_code": str(exc.provider_code or exc.status_code or exc.code),
                                 "p_error_message": exc.provider_message or exc.code,
                             }
-                        )
+                            for item in items
+                        ],
+                    )
+                    finish_by_message_id = {
+                        str(row.get("message_id")): row
+                        for row in finish_rows
+                    }
+                    for item in items:
+                        finish = finish_by_message_id.get(str(item["message_id"]), {})
                         deliveries.append(
                             {
                                 "message_id": str(item["message_id"]),
                                 "provider_accepted": False,
                                 "provider_message_id": None,
-                                "state": finish.get("message_status"),
+                                "state": finish.get("message_status") or "failed",
                             }
                         )
                     continue
 
                 if len(batch_result.items) != len(items):
                     raise PostmarkError("invalid_batch_response")
-                for item, result in zip(items, batch_result.items):
-                    finish = await self.repository.finish_attempt(
-                        payload={
-                            "p_organizacion_id": str(organizacion_id),
+                finish_rows = await self._finish_attempts_bulk(
+                    organizacion_id=organizacion_id,
+                    items=[
+                        {
                             "p_message_id": str(item["message_id"]),
                             "p_attempt_id": str(item["attempt_id"]),
                             "p_accepted": result.accepted,
@@ -325,7 +333,15 @@ class PostmarkService:
                             "p_error_code": str(result.error_code) if result.error_code is not None else None,
                             "p_error_message": result.error_message,
                         }
-                    )
+                        for item, result in zip(items, batch_result.items)
+                    ],
+                )
+                finish_by_message_id = {
+                    str(row.get("message_id")): row
+                    for row in finish_rows
+                }
+                for item, result in zip(items, batch_result.items):
+                    finish = finish_by_message_id.get(str(item["message_id"]), {})
                     deliveries.append(
                         {
                             "message_id": str(item["message_id"]),
@@ -333,10 +349,49 @@ class PostmarkService:
                             "provider_message_id": (
                                 str(result.provider_message_id) if result.provider_message_id else None
                             ),
-                            "state": finish.get("message_status"),
+                            "state": finish.get("message_status") or (
+                                "submitted" if result.accepted else "failed"
+                            ),
                         }
                     )
         return deliveries
+
+    async def _finish_attempts_bulk(
+        self,
+        *,
+        organizacion_id: UUID,
+        items: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        """Finaliza el resultado del batch en una RPC; conserva fallback de tests."""
+        payload_items = [
+            {
+                "message_id": item["p_message_id"],
+                "attempt_id": item["p_attempt_id"],
+                "accepted": item["p_accepted"],
+                "external_message_id": item.get("p_external_message_id"),
+                "error_code": item.get("p_error_code"),
+                "error_message": item.get("p_error_message"),
+            }
+            for item in items
+        ]
+        bulk_method = getattr(self.repository, "finish_attempts_bulk", None)
+        if bulk_method is not None:
+            return await bulk_method(
+                organizacion_id=organizacion_id,
+                items=payload_items,
+            )
+        # Compatibilidad temporal con repositorios de pruebas y despliegues que
+        # aún no tienen la migración; producción usa siempre la ruta bulk.
+        rows: list[dict[str, object]] = []
+        for item in items:
+            row = await self.repository.finish_attempt(
+                payload={
+                    "p_organizacion_id": str(organizacion_id),
+                    **item,
+                }
+            )
+            rows.append({"message_id": item["p_message_id"], **row})
+        return rows
 
     async def validate_send(
         self,

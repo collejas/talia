@@ -4,6 +4,7 @@ from app.services.prospeccion_contact_sender import (
     ContactEnvioResult,
     ProspeccionContactSender,
     _apply_tenant_public_base_url_defaults,
+    _build_contact_log_entry,
     _build_booking_url,
     _build_twilio_numeric_variables_from_body,
     _compose_twilio_template_variables,
@@ -17,6 +18,18 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 import app.services.prospeccion_contact_sender as sender_module
+
+
+def test_build_contact_log_entry_accepts_action() -> None:
+    entry = _build_contact_log_entry(
+        prospecto_id="11111111-1111-1111-1111-111111111111",
+        canal="correo",
+        accion="postmark_queued",
+        estado="enviado",
+        detalle={},
+    )
+
+    assert entry["accion"] == "postmark_queued"
 
 
 def test_broadcast_unsubscribe_uses_brevo_placeholder() -> None:

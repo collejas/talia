@@ -349,3 +349,15 @@ La concurrencia se limitará por bloques completos; no se aumentará a 500 por
 defecto. La validación requerirá lotes de 25, 500 y más de 500, con medición de
 p50/p95, CPU, memoria, conexiones Supabase, tamaño efectivo del batch y efecto
 en la latencia de la API. Brevo, WhatsApp e IMAP permanecen sin cambios.
+
+### Implementación aplicada
+
+- El cierre Postmark de intentos y el cierre operativo de prospección ahora
+  usan RPCs bulk de máximo 500 elementos, con límites por tenant y acceso
+  exclusivo de `service_role`.
+- La finalización agrupada mantiene la idempotencia de los intentos y evita
+  repetir bitácoras `postmark_queued` durante reintentos.
+- La migración fue aplicada y verificada en Supabase. Falta desplegar el código
+  y reiniciar `talia-postmark-preparer.service` y `talia-email-worker.service`.
+- La verificación funcional pendiente comparará preparación, persistencia,
+  aceptación Postmark, CPU, memoria, conexiones y p95 con lotes de 25 y 500.
