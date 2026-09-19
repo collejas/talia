@@ -270,6 +270,42 @@ pero no deben ejecutarse repetidamente por cada reintento del mismo destinatario
 Una reanudación debe continuar desde el bloque o mensaje pendiente y no volver a
 crear mensajes ya registrados.
 
+### Fase 6A.1: optimización de preparación masiva
+
+La separación de `talia-postmark-preparer.service` ya evita que la preparación
+ocurra dentro de la solicitud HTTP y que la entrega Postmark compita directamente
+con la API. Sin embargo, la preparación actual todavía ejecuta trabajo por
+destinatario. En la prueba controlada del lote
+`aa7beb0f-3e04-49b3-8722-91dd3432ea53`, 10 mensajes terminaron en una sola
+llamada `/email/batch`, pero tardaron aproximadamente un minuto en quedar listos.
+
+La siguiente implementación debe reducir esa latencia sin cambiar la entrega ni
+los flujos de Brevo o WhatsApp:
+
+1. La API crea el trabajo y responde con estado `preparando`; no espera el
+   renderizado, la persistencia ni la aceptación de Postmark.
+2. El preparador carga mediante consultas acotadas el conjunto de contactos y,
+   una sola vez por lote, el tenant, dominio, remitente, stream, plantilla,
+   imágenes, enlaces y configuración necesaria.
+3. Los mensajes se renderizan en memoria y se insertan mediante operaciones
+   agrupadas o RPCs en transacciones cortas de 100–250 filas.
+4. Las actualizaciones de `prospeccion_contacto_envio`, bitácoras y contadores
+   se agrupan y se ejecutan fuera de la solicitud HTTP, sin retrasar la creación
+   del payload.
+5. Sólo después de persistir todos los mensajes se crean bloques `ready` de
+   máximo 500 objetos, separados por tenant, tipo y stream.
+6. El worker de entrega reclama el bloque y realiza una sola llamada
+   `/email/batch`; la pausa de protección, si se necesita, se aplica entre
+   batches completos, nunca entre correos.
+
+En el servidor actual de 1 GB se conservarán inicialmente 2–4 tareas de
+preparación y un batch Postmark activo por tenant. No se elevará la concurrencia
+hasta medir CPU, memoria, conexiones, Supabase, duración y errores bajo carga.
+
+La preparación masiva debe conservar la idempotencia, los estados explícitos,
+el tenant, el lote, la plantilla y el destinatario. Un reinicio debe conservar
+los bloques `ready` y nunca volver a crear mensajes aceptados.
+
 ### Fase 6B: entrega del lote
 
 El worker de entrega Postmark debe reclamar exclusivamente bloques `ready` y
