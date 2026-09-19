@@ -141,6 +141,55 @@ class _PostmarkPreparationCache:
             self.domains[organizacion_id] = domain
             self.postmark_context_loaded.add(organizacion_id)
 
+    async def load_postmark_batch_context(
+        self,
+        organizacion_id: UUID,
+        *,
+        email_addresses: list[str],
+        prospecto_ids: set[UUID],
+        template_ids: set[UUID],
+    ) -> list[dict[str, Any]]:
+        """Carga configuración y supresiones del lote en una sola RPC."""
+
+        context = await PostmarkRepository().get_batch_context(
+            organizacion_id=organizacion_id,
+            email_addresses=email_addresses,
+            prospecto_ids=list(prospecto_ids),
+            template_ids=list(template_ids),
+        )
+        public_base_url = tenant_runtime.normalize_public_base_url(
+            context.get("public_base_url")
+        )
+        async with self.lock:
+            self.public_base_urls[organizacion_id] = public_base_url
+            for key, target in (
+                ("migration", self.migrations),
+                ("plan", self.plans),
+                ("server", self.servers),
+                ("domain", self.domains),
+            ):
+                value = context.get(key)
+                target[organizacion_id] = value if isinstance(value, dict) else None
+            suppressed = context.get("postmark_suppressed_emails")
+            self.suppressed_emails[organizacion_id] = {
+                str(value).strip().lower()
+                for value in suppressed
+                if value
+            } if isinstance(suppressed, list) else set()
+            template_images = context.get("template_images")
+            if isinstance(template_images, dict):
+                for template_id, image_context in template_images.items():
+                    try:
+                        key = (organizacion_id, UUID(str(template_id)))
+                    except (TypeError, ValueError):
+                        continue
+                    self.template_images[key] = (
+                        dict(image_context) if isinstance(image_context, dict) else {}
+                    )
+            self.postmark_context_loaded.add(organizacion_id)
+        crm_suppressions = context.get("crm_suppressions")
+        return [row for row in crm_suppressions if isinstance(row, dict)] if isinstance(crm_suppressions, list) else []
+
     async def load_suppressed_emails(
         self, organizacion_id: UUID, email_addresses: list[str]
     ) -> None:
@@ -2281,53 +2330,59 @@ class ProspeccionContactSender:
 
             async def preload_postmark_org(org_id: UUID) -> None:
                 if self._postmark_preparation_cache:
-                    preload_component_timings: dict[str, float] = {}
-
-                    async def timed_component(
-                        component: str,
-                        operation: Awaitable[Any],
-                    ) -> Any:
-                        started = perf_counter()
-                        result = await operation
-                        preload_component_timings[component] = round(
-                            (perf_counter() - started) * 1000, 2
+                    preload_started = perf_counter()
+                    try:
+                        rows = await self._postmark_preparation_cache.load_postmark_batch_context(
+                            org_id,
+                            email_addresses=emails_by_org.get(org_id, []),
+                            prospecto_ids=by_org.get(org_id, set()),
+                            template_ids=template_ids_by_org.get(org_id, set()),
                         )
-                        return result
-
-                    async def preload_render_context() -> None:
-                        try:
-                            await self._postmark_preparation_cache.load_render_context(
-                                org_id, template_ids_by_org.get(org_id, set())
+                        preload_component_timings = {
+                            "batch_context_rpc": round(
+                                (perf_counter() - preload_started) * 1000, 2
                             )
-                        except Exception as exc:  # pragma: no cover - fallback por tenant
-                            log_event(
-                                logger,
-                                "prospeccion.sender_render_context_preload_failed",
-                                organizacion_id=str(org_id),
-                                error=str(exc),
-                            )
+                        }
+                    except Exception as exc:  # pragma: no cover - fallback transitorio
+                        log_event(
+                            logger,
+                            "prospeccion.sender_batch_context_failed",
+                            organizacion_id=str(org_id),
+                            error=str(exc),
+                        )
 
-                    _, _, _, rows = await asyncio.gather(
-                        timed_component("render_context", preload_render_context()),
-                        timed_component(
-                            "postmark_configuration",
-                            self._postmark_preparation_cache.load_postmark_context(org_id),
-                        ),
-                        timed_component(
-                            "postmark_suppressions",
-                            self._postmark_preparation_cache.load_suppressed_emails(
-                                org_id, emails_by_org.get(org_id, [])
+                        async def preload_render_context() -> None:
+                            try:
+                                await self._postmark_preparation_cache.load_render_context(
+                                    org_id, template_ids_by_org.get(org_id, set())
+                                )
+                            except Exception as fallback_exc:  # pragma: no cover
+                                log_event(
+                                    logger,
+                                    "prospeccion.sender_render_context_preload_failed",
+                                    organizacion_id=str(org_id),
+                                    error=str(fallback_exc),
+                                )
+
+                        _, _, rows = await asyncio.gather(
+                            preload_render_context(),
+                            asyncio.gather(
+                                self._postmark_preparation_cache.load_postmark_context(org_id),
+                                self._postmark_preparation_cache.load_suppressed_emails(
+                                    org_id, emails_by_org.get(org_id, [])
+                                ),
                             ),
-                        ),
-                        timed_component(
-                            "crm_suppressions",
                             repo.worker_list_active_contact_suppressions_for_prospectos(
                                 organizacion_id=org_id,
                                 prospecto_ids=sorted(by_org.get(org_id, set()), key=str),
                                 canal="correo",
                             ),
-                        ),
-                    )
+                        )
+                        preload_component_timings = {
+                            "fallback_components": round(
+                                (perf_counter() - preload_started) * 1000, 2
+                            )
+                        }
                     log_event(
                         logger,
                         "prospeccion.postmark_preload_components",

@@ -606,6 +606,17 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - La medición del siguiente lote debe confirmar que configuración y render no
   esperan innecesariamente a la consulta de supresiones.
 
+### Contexto bulk por tenant
+
+- Se agregó `worker_get_postmark_batch_context`, limitada a 500 elementos por
+  lista de entrada y protegida para `service_role`.
+- La RPC devuelve en una sola operación la configuración Postmark, supresiones
+  del proveedor, supresiones CRM y contextos de imágenes de las plantillas.
+- El worker usa esa RPC por tenant y por lote, con fallback a la precarga
+  anterior si la operación falla.
+- Las supresiones se consultan nuevamente por lote; sólo la configuración
+  estable y los assets pueden reutilizarse mediante caché.
+
 ### Claim bulk Postmark
 
 - Se agregó `worker_claim_prospeccion_envios_bulk`, limitada a 500 elementos,

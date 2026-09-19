@@ -459,6 +459,31 @@ class PostmarkRepository:
             if row.get("email_address")
         }
 
+    async def get_batch_context(
+        self,
+        *,
+        organizacion_id: UUID,
+        email_addresses: list[str],
+        prospecto_ids: list[UUID],
+        template_ids: list[UUID],
+    ) -> dict[str, Any]:
+        """Obtiene en una RPC el contexto Postmark de un lote del tenant."""
+
+        result = await self._rpc(
+            "worker_get_postmark_batch_context",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_email_addresses": sorted(
+                    {value.strip().lower() for value in email_addresses if value and value.strip()}
+                ),
+                "p_prospecto_ids": [str(value) for value in sorted(set(prospecto_ids), key=str)],
+                "p_template_ids": [str(value) for value in sorted(set(template_ids), key=str)],
+            },
+        )
+        if not isinstance(result, dict):
+            raise PostmarkRepositoryError("batch_context_invalid_response")
+        return result
+
     async def ensure_migration(self, *, organizacion_id: UUID) -> dict[str, Any]:
         data = await self._rest_post(
             "/rest/v1/tenant_email_migrations",

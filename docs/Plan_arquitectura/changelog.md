@@ -466,3 +466,12 @@ repetido sin mover el payload al API ni aumentar la concurrencia global.
   sólo se sincroniza el resultado al terminar.
 - Se evita que una espera de Supabase bloquee la precarga de configuración,
   imágenes y URL pública del tenant.
+
+## 2026-09-19 — Contexto bulk de preparación Postmark
+
+- La preparación de un lote Postmark ahora puede resolver configuración,
+  supresiones CRM/Postmark y assets de plantilla con una sola RPC por tenant.
+- La operación está limitada a 500 elementos por lista, aislada por
+  `organizacion_id` y sólo ejecutable por `service_role`.
+- La caché no sustituye la consulta de supresiones del lote; evita únicamente
+  repetir datos estables y mantiene fallback operativo ante errores.
