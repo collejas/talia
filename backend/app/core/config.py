@@ -674,10 +674,10 @@ class Settings(BaseSettings):
         ),
     )
     postmark_prospeccion_max_concurrency: int = Field(
-        default=4,
+        default=12,
         ge=1,
         le=20,
-        description="Concurrencia del productor de cola Postmark, separada de Brevo.",
+        description="Concurrencia controlada del productor de cola Postmark, separada de Brevo.",
         validation_alias=AliasChoices(
             "POSTMARK_PROSPECCION_MAX_CONCURRENCY",
             "TALIA_POSTMARK_PROSPECCION_MAX_CONCURRENCY",
