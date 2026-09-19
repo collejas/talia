@@ -50,6 +50,16 @@ eliminaron los `PATCH` secuenciales por destinatario en esta ruta.
 La optimización mantiene los webhooks como mecanismo de eventos posteriores y
 no modifica los workers, límites ni proveedores de Brevo, WhatsApp o IMAP.
 
+### Ajuste de detección
+
+Se hizo configurable el intervalo de detección del worker Postmark mediante
+`POSTMARK_WORKER_POLL_INTERVAL_SECONDS`, con valor operativo inicial de `5`
+segundos. El valor no modifica la pausa entre batches (`POSTMARK_WORKER_INTER_BATCH_SECONDS`)
+ni la concurrencia; sólo reduce el tiempo máximo de espera para detectar un
+bloque `ready`.
+El preparador queda en `3` segundos mediante
+`POSTMARK_PREPARER_POLL_INTERVAL_SECONDS`.
+
 # Changelog — Plan Postmark
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.

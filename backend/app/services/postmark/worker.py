@@ -488,6 +488,7 @@ class PostmarkWorker:
 
 
 postmark_worker = PostmarkWorker(
+    interval_seconds=settings.postmark_worker_poll_interval_seconds,
     batch_size=settings.postmark_worker_batch_size,
 )
 

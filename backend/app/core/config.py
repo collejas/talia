@@ -311,6 +311,16 @@ class Settings(BaseSettings):
             "TALIA_POSTMARK_WORKER_BATCH_SIZE",
         ),
     )
+    postmark_worker_poll_interval_seconds: float = Field(
+        default=5.0,
+        ge=1.0,
+        le=60.0,
+        description="Intervalo del worker Postmark para detectar bloques listos.",
+        validation_alias=AliasChoices(
+            "POSTMARK_WORKER_POLL_INTERVAL_SECONDS",
+            "TALIA_POSTMARK_WORKER_POLL_INTERVAL_SECONDS",
+        ),
+    )
     postmark_worker_inter_batch_seconds: float = Field(
         default=5.0,
         ge=0.0,

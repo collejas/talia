@@ -382,3 +382,14 @@ en la latencia de la API. Brevo, WhatsApp e IMAP permanecen sin cambios.
   elementos y protegida para `service_role`.
 - No se modificaron webhooks, Brevo, WhatsApp, IMAP ni la sincronización
   histórica de Postmark.
+
+## 2026-09-19 — Intervalo configurable de detección Postmark
+
+- El worker Postmark ahora recibe su intervalo de polling desde
+  `POSTMARK_WORKER_POLL_INTERVAL_SECONDS`.
+- Se estableció inicialmente en 5 segundos para reducir espera sin aumentar
+  concurrencia ni modificar la pausa entre batches.
+- El preparador queda en 3 segundos mediante
+  `POSTMARK_PREPARER_POLL_INTERVAL_SECONDS`.
+- El preparador conserva su intervalo independiente; Brevo, WhatsApp e IMAP no
+  comparten este ajuste.
