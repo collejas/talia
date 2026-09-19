@@ -72,6 +72,41 @@ la prioridad siguiente es una RPC de persistencia masiva con cuota e
 idempotencia atómicas, seguida de actualizaciones agrupadas de prospección y
 bitácoras.
 
+### Contrato de aceptación y webhooks
+
+La aceptación de Postmark y la entrega final son eventos diferentes y no deben
+mezclarse en un único contador o llamada de consulta.
+
+```text
+Talia prepara payload
+        |
+        v
+Postmark /email/batch
+        |
+        +--> respuesta inmediata: aceptado/rechazado por destinatario
+        |       Talia persiste MessageID e intento local
+        |
+        +--> webhook posterior: Delivery/Bounce/Open/Click/Complaint/Unsubscribe
+                Talia actualiza estado, métricas y supresiones
+```
+
+La respuesta de `/email/batch` debe persistirse inmediatamente porque contiene
+la aceptación inicial y el `MessageID` que permite correlacionar los eventos
+posteriores. Esa persistencia no espera al webhook.
+
+Los webhooks son la fuente operativa principal de los eventos posteriores. No
+se debe llamar a la API de Postmark después de cada batch para consultar
+entregas o rebotes. La API histórica sólo se ejecuta como respaldo controlado,
+con checkpoints, límites y sin borrar datos locales; por eso
+`POSTMARK_SYNC_ENABLED=false` permanece desactivado durante la operación normal.
+
+Las escrituras locales posteriores a la aceptación —estado del envío,
+`mensaje_id`, `mensaje_id_interno`, bitácoras y estado del lote— deben hacerse
+en una operación agrupada. El worker puede llamar a Postmark una vez por batch,
+guardar la respuesta y terminar la persistencia local con una RPC, sin crear un
+`PATCH` por destinatario. Esto reduce latencia y conexiones sin cambiar el
+flujo de Brevo, WhatsApp o IMAP.
+
 ## 3. Procesos actuales dentro de `talia-api.service`
 
 En la auditoría inicial, el lifespan de [`backend/app/main.py`](../../backend/app/main.py) iniciaba:

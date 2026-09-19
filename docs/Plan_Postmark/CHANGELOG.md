@@ -5,6 +5,46 @@
 - La separación operativa de 5 segundos se aplica entre lotes y no entre correos individuales; se mantiene una única ejecución concurrente por worker para no sobrecargar Talia ni mezclar tenants.
 - Los lotes `broadcast` y `transactional` se envían por separado (`broadcast` y `outbound`) y continúan usando la cuota, la idempotencia y los webhooks existentes.
 
+## 2026-09-19 — Aceptación inmediata y eventos posteriores por webhook
+
+Se documenta la separación obligatoria entre la respuesta de aceptación de
+Postmark y los eventos posteriores del ciclo de vida del correo.
+
+### Flujo operativo
+
+1. Talia prepara y persiste el payload local.
+2. `talia-email-worker.service` envía un bloque de hasta 500 mensajes mediante
+   una sola llamada `/email/batch`.
+3. La respuesta de Postmark se guarda inmediatamente: resultado individual,
+   `MessageID` externo, estado de aceptación e intento local.
+4. Postmark envía después los eventos de entrega, rebote, apertura, clic, queja
+   y baja mediante el webhook del servidor/tenant.
+5. El worker de webhooks actualiza `tenant_email_messages`, eventos y
+   supresiones de forma idempotente.
+
+### Reglas
+
+- El webhook no sustituye la persistencia de la respuesta de `/email/batch`;
+  son momentos distintos del proceso.
+- La aceptación del proveedor no significa entrega en bandeja. Un mensaje
+  aceptado queda pendiente de confirmación hasta recibir `Delivery`, `Bounce`
+  u otro evento de Postmark.
+- No se debe consultar Postmark después de cada envío para obtener eventos en
+  tiempo real. Los webhooks son el mecanismo principal para esos eventos.
+- La sincronización histórica de la API de Postmark sólo sirve como respaldo,
+  carga inicial o recuperación de ventanas faltantes y permanece separada de
+  la entrega normal (`POSTMARK_SYNC_ENABLED=false`).
+- Las actualizaciones locales posteriores al batch deben ejecutarse mediante
+  RPC/operación agrupada; no se deben hacer cientos de `PATCH` individuales.
+- La pausa configurada se aplica entre llamadas batch cuando sea necesaria,
+  nunca entre destinatarios del mismo batch.
+
+### Optimización pendiente
+
+La entrega del lote ya funciona con `/email/batch`. La siguiente optimización
+es agrupar también la actualización posterior de `prospeccion_contacto_envio`
+y sus bitácoras, manteniendo webhooks, Brevo y WhatsApp sin cambios.
+
 # Changelog — Plan Postmark
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.

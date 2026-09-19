@@ -361,3 +361,14 @@ en la latencia de la API. Brevo, WhatsApp e IMAP permanecen sin cambios.
   y reiniciar `talia-postmark-preparer.service` y `talia-email-worker.service`.
 - La verificación funcional pendiente comparará preparación, persistencia,
   aceptación Postmark, CPU, memoria, conexiones y p95 con lotes de 25 y 500.
+## 2026-09-19 — Contrato de aceptación Postmark y eventos por webhook
+
+- Se documentó que la respuesta de `/email/batch` registra inmediatamente la
+  aceptación o rechazo individual y el `MessageID` externo.
+- Se documentó que entregas, rebotes, aperturas, clics, quejas y bajas llegan
+  posteriormente por webhook y no deben obtenerse consultando Postmark después
+  de cada envío.
+- La sincronización histórica permanece como respaldo con checkpoints y
+  `POSTMARK_SYNC_ENABLED=false` durante la operación normal.
+- La persistencia local posterior al batch debe agruparse mediante RPC/operación
+  masiva; Brevo, WhatsApp e IMAP conservan sus propios workers y límites.
