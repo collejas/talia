@@ -30,13 +30,22 @@ async def _run() -> None:
     for signum in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(signum, stop_event.set)
 
-    contact_sender = ProspeccionContactSender(
+    brevo_sender = ProspeccionContactSender(
         batch_size=settings.prospeccion_email_batch_size,
         max_concurrency=settings.prospeccion_email_max_concurrency,
         per_minute_limit=settings.prospeccion_sender_per_minute_limit,
         channels=("correo",),
+        provider="brevo",
     )
-    await contact_sender.start()
+    postmark_sender = ProspeccionContactSender(
+        batch_size=settings.postmark_prospeccion_batch_size,
+        max_concurrency=settings.postmark_prospeccion_max_concurrency,
+        per_minute_limit=settings.postmark_prospeccion_per_minute_limit,
+        channels=("correo",),
+        provider="postmark",
+    )
+    await brevo_sender.start()
+    await postmark_sender.start()
     await postmark_worker.start()
     logger.info(
         "email_worker.started",
@@ -48,7 +57,8 @@ async def _run() -> None:
     try:
         await stop_event.wait()
     finally:
-        await contact_sender.shutdown()
+        await brevo_sender.shutdown()
+        await postmark_sender.shutdown()
         await postmark_worker.shutdown()
         logger.info("email_worker.stopped")
 

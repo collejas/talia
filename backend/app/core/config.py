@@ -657,10 +657,60 @@ class Settings(BaseSettings):
         default=2,
         ge=1,
         le=20,
-        description="Concurrencia máxima del sender Brevo/Postmark de prospección.",
+        description="Concurrencia máxima del sender Brevo de prospección.",
         validation_alias=AliasChoices(
             "PROSPECCION_EMAIL_MAX_CONCURRENCY",
             "TALIA_PROSPECCION_EMAIL_MAX_CONCURRENCY",
+        ),
+    )
+    postmark_prospeccion_batch_size: int = Field(
+        default=500,
+        ge=1,
+        le=500,
+        description="Cantidad máxima de envíos Postmark encolados por ciclo de prospección.",
+        validation_alias=AliasChoices(
+            "POSTMARK_PROSPECCION_BATCH_SIZE",
+            "TALIA_POSTMARK_PROSPECCION_BATCH_SIZE",
+        ),
+    )
+    postmark_prospeccion_max_concurrency: int = Field(
+        default=4,
+        ge=1,
+        le=20,
+        description="Concurrencia del productor de cola Postmark, separada de Brevo.",
+        validation_alias=AliasChoices(
+            "POSTMARK_PROSPECCION_MAX_CONCURRENCY",
+            "TALIA_POSTMARK_PROSPECCION_MAX_CONCURRENCY",
+        ),
+    )
+    postmark_prospeccion_per_minute_limit: int = Field(
+        default=500,
+        ge=1,
+        le=5000,
+        description="Límite de encolado Postmark por productor en una ventana de un minuto.",
+        validation_alias=AliasChoices(
+            "POSTMARK_PROSPECCION_PER_MINUTE_LIMIT",
+            "TALIA_POSTMARK_PROSPECCION_PER_MINUTE_LIMIT",
+        ),
+    )
+    postmark_prospeccion_tenant_per_minute_limit: int = Field(
+        default=500,
+        ge=1,
+        le=5000,
+        description="Límite de encolado Postmark por tenant en una ventana de un minuto.",
+        validation_alias=AliasChoices(
+            "POSTMARK_PROSPECCION_TENANT_PER_MINUTE_LIMIT",
+            "TALIA_POSTMARK_PROSPECCION_TENANT_PER_MINUTE_LIMIT",
+        ),
+    )
+    postmark_prospeccion_provider_per_minute_limit: int = Field(
+        default=1000,
+        ge=1,
+        le=10000,
+        description="Límite agregado de encolado Postmark en una ventana de un minuto.",
+        validation_alias=AliasChoices(
+            "POSTMARK_PROSPECCION_PROVIDER_PER_MINUTE_LIMIT",
+            "TALIA_POSTMARK_PROSPECCION_PROVIDER_PER_MINUTE_LIMIT",
         ),
     )
     prospeccion_whatsapp_batch_size: int = Field(

@@ -39,6 +39,7 @@ DEFAULT_SENDER_RATE_LIMIT_DEFER_SECONDS = 20
 DEFAULT_SENDER_ERROR_WINDOW_SECONDS = 120
 DEFAULT_SENDER_ERROR_THRESHOLD = 5
 DEFAULT_SENDER_BACKPRESSURE_COOLDOWN_SECONDS = 60
+PROVIDER_SCOPE_CACHE_SECONDS = 30.0
 BACKPRESSURE_TWILIO_ERROR_CODES = {"63024", "63049", "63032"}
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w\.-]+)\s*}}")
 POSTMARK_UNSUBSCRIBE_PLACEHOLDER = "{{{ pm:unsubscribe }}}"
@@ -1595,6 +1596,7 @@ class ProspeccionContactSender:
         error_threshold: int = DEFAULT_SENDER_ERROR_THRESHOLD,
         backpressure_cooldown_seconds: int = DEFAULT_SENDER_BACKPRESSURE_COOLDOWN_SECONDS,
         channels: Sequence[str] | None = None,
+        provider: Literal["postmark", "brevo"] | None = None,
     ) -> None:
         self._poll_interval = poll_interval
         self._batch_size = batch_size
@@ -1611,6 +1613,7 @@ class ProspeccionContactSender:
             if str(channel).strip()
         }
         self._channels = frozenset(normalized_channels) or None
+        self._provider_filter = provider
         self._retry_backoff = tuple(int(value) for value in retry_backoff if value > 0) or (
             DEFAULT_BACKOFF_SECONDS
         )
@@ -1623,6 +1626,8 @@ class ProspeccionContactSender:
         self._error_events: dict[tuple[str, str, str], deque[float]] = {}
         self._cooldown_until: dict[tuple[str, str, str], float] = {}
         self._last_queue_observation_at = 0.0
+        self._provider_scope_cached_at = 0.0
+        self._provider_scope_cache: list[UUID] | None = None
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -1651,6 +1656,7 @@ class ProspeccionContactSender:
             backpressure_cooldown_seconds=self._backpressure_cooldown_seconds,
             max_retries=self._max_retries,
             channels=sorted(self._channels) if self._channels else None,
+            provider=self._provider_filter,
         )
 
     async def shutdown(self) -> None:
@@ -1701,10 +1707,23 @@ class ProspeccionContactSender:
             base_batch_size=self._batch_size,
             base_max_concurrency=self._max_concurrency,
         )
-        await self._repair_pending_local_messages(repo)
+        if not self._channels or "whatsapp" in self._channels:
+            await self._repair_pending_local_messages(repo)
+        provider_organization_ids: list[UUID] | None = None
+        excluded_provider_organization_ids: list[UUID] | None = None
+        if self._provider_filter:
+            enabled_postmark_ids = await self._enabled_postmark_organizations()
+            if enabled_postmark_ids is None:
+                return False
+            if self._provider_filter == "postmark":
+                provider_organization_ids = enabled_postmark_ids
+            else:
+                excluded_provider_organization_ids = enabled_postmark_ids
         envios = await repo.worker_list_pending_envios(
             limit=effective_batch_size,
             canal=next(iter(self._channels)) if self._channels and len(self._channels) == 1 else None,
+            organizacion_ids=provider_organization_ids,
+            excluir_organizacion_ids=excluded_provider_organization_ids,
         )
         if self._channels and len(self._channels) > 1:
             envios = [envio for envio in envios if _clean_text(envio.get("canal")) in self._channels]
@@ -1777,6 +1796,28 @@ class ProspeccionContactSender:
         )
 
         return len(envios) >= effective_batch_size
+
+    async def _enabled_postmark_organizations(self) -> list[UUID] | None:
+        """Obtiene el scope Postmark con cache corto y fail-closed."""
+
+        now = monotonic()
+        if now - self._provider_scope_cached_at < PROVIDER_SCOPE_CACHE_SECONDS:
+            return list(self._provider_scope_cache or [])
+        try:
+            enabled = await PostmarkRepository().list_enabled_organizations()
+        except Exception as exc:  # pragma: no cover - configuración externa
+            log_event(
+                logger,
+                "prospeccion.sender_provider_scope_failed",
+                provider=self._provider_filter,
+                error=str(exc),
+            )
+            # Fail closed: nunca enviar por Brevo un tenant cuyo proveedor
+            # no pudo resolverse, ni enviar Postmark fuera de su scope.
+            return None
+        self._provider_scope_cache = list(enabled)
+        self._provider_scope_cached_at = now
+        return list(enabled)
 
     async def _maybe_log_queue_depth(self, repo: CRMRepository) -> None:
         now = monotonic()
@@ -1935,11 +1976,31 @@ class ProspeccionContactSender:
                 rate_slots = [
                     (
                         (org_key, provider_key, "__tenant__"),
-                        int(getattr(settings, "prospeccion_sender_tenant_per_minute_limit", 30)),
+                        int(
+                            getattr(
+                                settings,
+                                (
+                                    "postmark_prospeccion_tenant_per_minute_limit"
+                                    if provider_key == "postmark"
+                                    else "prospeccion_sender_tenant_per_minute_limit"
+                                ),
+                                500 if provider_key == "postmark" else 30,
+                            )
+                        ),
                     ),
                     (
                         ("global", provider_key, "__provider__"),
-                        int(getattr(settings, "prospeccion_sender_provider_per_minute_limit", 60)),
+                        int(
+                            getattr(
+                                settings,
+                                (
+                                    "postmark_prospeccion_provider_per_minute_limit"
+                                    if provider_key == "postmark"
+                                    else "prospeccion_sender_provider_per_minute_limit"
+                                ),
+                                1000 if provider_key == "postmark" else 60,
+                            )
+                        ),
                     ),
                     (
                         throttle_key,

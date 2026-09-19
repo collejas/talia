@@ -464,6 +464,15 @@ def _postgrest_in_clause(values: Iterable[str]) -> str:
     return f"in.({','.join(quoted)})"
 
 
+def _postgrest_not_in_clause(values: Iterable[str]) -> str:
+    quoted: list[str] = []
+    for value in values:
+        text = str(value or "")
+        escaped = text.replace('"', '""')
+        quoted.append(f'"{escaped}"')
+    return f"not.in.({','.join(quoted)})"
+
+
 def _postgrest_eq_literal(value: str) -> str:
     return urlquote(value, safe="")
 
@@ -24886,6 +24895,8 @@ class CRMRepository:
         *,
         limit: int = 25,
         canal: str | None = None,
+        organizacion_ids: Sequence[UUID] | None = None,
+        excluir_organizacion_ids: Sequence[UUID] | None = None,
     ) -> list[dict[str, Any]]:
         """Obtiene envíos pendientes listos para procesarse (service role)."""
 
@@ -24900,6 +24911,15 @@ class CRMRepository:
         }
         if canal:
             params["canal"] = f"eq.{canal.strip().lower()}"
+        if organizacion_ids is not None:
+            normalized_ids = [str(value) for value in organizacion_ids]
+            if not normalized_ids:
+                return []
+            params["organizacion_id"] = _postgrest_in_clause(normalized_ids)
+        elif excluir_organizacion_ids:
+            params["organizacion_id"] = _postgrest_not_in_clause(
+                str(value) for value in excluir_organizacion_ids
+            )
         resp = await self._request(
             "GET",
             "/rest/v1/prospeccion_contacto_envio",

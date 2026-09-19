@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from .repository import PostmarkRepository
 
 _POSTMARK_MAX_BATCH_ITEMS = 500
 _POSTMARK_MAX_BATCH_BYTES = 45 * 1024 * 1024
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -268,6 +270,15 @@ class PostmarkService:
                     await asyncio.sleep(max(inter_batch_seconds, 0.0))
                 group_index += 1
                 messages = [item["message"] for item in items]
+                logger.info(
+                    "postmark.batch_dispatch",
+                    extra={
+                        "organizacion_id": str(organizacion_id),
+                        "message_kind": kind,
+                        "message_stream": stream_name,
+                        "batch_size": len(messages),
+                    },
+                )
                 try:
                     batch_result = await client.send_batch(
                         messages,  # type: ignore[arg-type]
