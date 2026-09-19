@@ -420,3 +420,14 @@ La medición posterior al despliegue debe comparar las etapas instrumentadas del
 lote anterior con un lote equivalente, sin confundir el tiempo de precarga
 única con el tiempo de cada correo. El objetivo es reducir el procesamiento
 repetido sin mover el payload al API ni aumentar la concurrencia global.
+
+## 2026-09-19 — Precarga de contexto de render Postmark
+
+- El preparador identifica las plantillas únicas de cada tenant antes de crear
+  las tareas individuales.
+- La URL pública y los contextos de imágenes se consultan en paralelo y se
+  reutilizan en memoria por ciclo.
+- El cambio no altera el payload, el batch de Postmark, Brevo, WhatsApp ni la
+  separación de workers.
+- La prueba de aceptación medirá `preload_postmark_context` frente a
+  `correo_context_and_assets`, memoria y p95 con una y varias plantillas.

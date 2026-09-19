@@ -182,6 +182,42 @@ class _PostmarkPreparationCache:
                 self.template_images[key] = dict(context or {})
         return dict(self.template_images[key])
 
+    async def load_render_context(
+        self, organizacion_id: UUID, template_ids: set[UUID]
+    ) -> None:
+        """Precarga URL pública e imágenes de las plantillas del lote."""
+
+        async with self.lock:
+            pending_template_ids = {
+                template_id
+                for template_id in template_ids
+                if (organizacion_id, template_id) not in self.template_images
+            }
+            public_url_loaded = organizacion_id in self.public_base_urls
+        runtime_task = (
+            asyncio.sleep(0, result=self.public_base_urls[organizacion_id])
+            if public_url_loaded
+            else tenant_runtime.get_org_public_base_url(organizacion_id=organizacion_id)
+        )
+        crm_repository = CRMRepository()
+        public_url, *image_contexts = await asyncio.gather(
+            runtime_task,
+            *(
+                crm_repository.list_contact_template_image_context(
+                    organizacion_id=organizacion_id,
+                    template_id=template_id,
+                )
+                for template_id in sorted(pending_template_ids, key=str)
+            ),
+        )
+        async with self.lock:
+            if organizacion_id not in self.public_base_urls:
+                self.public_base_urls[organizacion_id] = public_url
+            for template_id, context in zip(
+                sorted(pending_template_ids, key=str), image_contexts
+            ):
+                self.template_images[(organizacion_id, template_id)] = dict(context or {})
+
     async def verified_domain(
         self, organizacion_id: UUID
     ) -> dict[str, Any] | None:
@@ -2162,6 +2198,7 @@ class ProspeccionContactSender:
         if self._provider_filter == "postmark":
             by_org: dict[UUID, set[UUID]] = {}
             emails_by_org: dict[UUID, list[str]] = {}
+            template_ids_by_org: dict[UUID, set[UUID]] = {}
             for envio in envios:
                 try:
                     org_id = UUID(str(envio["organizacion_id"]))
@@ -2172,9 +2209,40 @@ class ProspeccionContactSender:
                 email = _detail_email(envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {})
                 if email:
                     emails_by_org.setdefault(org_id, []).append(email)
+                envio_payload = envio.get("payload") if isinstance(envio.get("payload"), dict) else {}
+                payload_metadata = (
+                    envio_payload.get("metadata")
+                    if isinstance(envio_payload.get("metadata"), dict)
+                    else {}
+                )
+                raw_template_id = (
+                    envio.get("plantilla_id")
+                    or envio.get("whatsapp_template_id")
+                    or envio.get("template_id")
+                    or envio_payload.get("template_id")
+                    or payload_metadata.get("template_id")
+                )
+                try:
+                    if raw_template_id:
+                        template_ids_by_org.setdefault(org_id, set()).add(
+                            UUID(str(raw_template_id))
+                        )
+                except (TypeError, ValueError):
+                    pass
 
             async def preload_postmark_org(org_id: UUID) -> None:
                 if self._postmark_preparation_cache:
+                    try:
+                        await self._postmark_preparation_cache.load_render_context(
+                            org_id, template_ids_by_org.get(org_id, set())
+                        )
+                    except Exception as exc:  # pragma: no cover - fallback por tenant
+                        log_event(
+                            logger,
+                            "prospeccion.sender_render_context_preload_failed",
+                            organizacion_id=str(org_id),
+                            error=str(exc),
+                        )
                     await self._postmark_preparation_cache.load_postmark_context(org_id)
                     migration = await self._postmark_preparation_cache.migration(org_id)
                     postmark_enabled_by_org[org_id] = bool(

@@ -569,3 +569,14 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - Se compararán especialmente `envio_claim_and_routing`,
   `correo_context_and_assets`, `postmark_queue_enqueue` y
   `preload_postmark_context`, además de p50/p95 y carga del servidor.
+
+### Precarga de renderizado e imágenes
+
+- Antes de procesar el lote se identifican las plantillas únicas por tenant.
+- La URL pública y los contextos de imágenes de esas plantillas se cargan en
+  paralelo y se reutilizan durante el renderizado de cada mensaje.
+- La optimización sólo se activa en la ruta Postmark; la ruta Brevo conserva
+  sus consultas y comportamiento actuales.
+- La validación posterior debe comprobar que `correo_context_and_assets` baja
+  sin aumentar memoria de forma significativa en lotes con varias plantillas
+  e imágenes.
