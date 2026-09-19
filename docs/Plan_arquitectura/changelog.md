@@ -23,6 +23,31 @@ Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIO
 - [x] Retiro controlado de workers de comunicaciones del proceso API.
 - [ ] Reactivación controlada de la sincronización histórica Postmark.
 
+## 2026-09-19 — Alineación con el plan Postmark
+
+### Estado actual
+
+- La separación inicial de API, correo, buzón y WhatsApp queda documentada como implementada mediante servicios systemd independientes y switches del API.
+- `POSTMARK_SYNC_ENABLED=false` permanece vigente; la sincronización histórica no se reactiva dentro de la API ni junto con la entrega normal.
+- La prueba controlada de 25 mensajes confirmó una sola llamada Postmark `/email/batch` con `batch_size=25`.
+- El problema de rendimiento pendiente está antes de Postmark: la preparación todavía procesa destinatarios individualmente y puede generar presión sobre Supabase, CPU y webhooks.
+
+### Decisión alineada
+
+- La API sólo crea y encola el lote; no debe esperar la preparación ni la aceptación del proveedor.
+- Un preparador Postmark debe cargar una vez el contexto del tenant y construir bloques `ready` de máximo 500 mensajes.
+- `talia-email-worker.service` debe entregar cada bloque `ready` con una sola llamada `/email/batch`.
+- Brevo conserva su cola, concurrencia y límites propios; WhatsApp conserva su worker y sus límites propios.
+- Los webhooks deben persistir una recepción mínima idempotente y delegar el procesamiento pesado al worker de correo.
+- La concurrencia y el backpressure se aplican por batch completo, tenant y proveedor; nunca se debe convertir un batch en envíos individuales.
+
+### Pendientes
+
+- [ ] Implementar o separar `talia-postmark-preparer.service`.
+- [ ] Persistir explícitamente los bloques preparados y sus estados.
+- [ ] Desacoplar completamente el procesamiento de webhooks Postmark.
+- [ ] Ejecutar pruebas de 25, 500 y más de 500 mensajes con métricas de API, CPU, memoria, Supabase y llamadas reales a Postmark.
+
 ## 2026-09-18 — Auditoría inicial
 
 ### Completado

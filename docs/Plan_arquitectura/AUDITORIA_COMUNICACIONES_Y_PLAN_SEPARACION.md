@@ -1,7 +1,8 @@
 # Auditoría técnica de comunicaciones y plan de separación
 
-Fecha de auditoría: 2026-09-18 UTC  
-Estado: diagnóstico completado; implementación pendiente de autorización.
+Fecha de auditoría inicial: 2026-09-18 UTC
+Actualización de estado: 2026-09-19 UTC
+Estado: separación inicial implementada; optimización de preparación de lotes y desacoplamiento durable de webhooks pendientes.
 
 ## 1. Alcance
 
@@ -20,9 +21,9 @@ La auditoría fue de solo lectura. No se modificaron código, datos, migraciones
 
 ## 2. Resumen ejecutivo
 
-La API y los workers actualmente comparten el mismo proceso Python. `talia-api.service` atiende tráfico HTTP y también ejecuta procesos de comunicaciones y mantenimiento.
+La auditoría inicial detectó que la API y los workers compartían el mismo proceso Python. Esa condición fue corregida parcialmente: actualmente los servicios de correo, WhatsApp y buzón tienen procesos systemd separados y los switches del API retiran los runners correspondientes.
 
-El problema principal es que la sincronización histórica de Postmark está implementada dentro de `PostmarkWorker`, pero ese worker se inicia desde el lifespan de FastAPI.
+El problema actual ya no es que la entrega Postmark ocurra en la solicitud HTTP. El problema restante es que la preparación de prospección todavía realiza trabajo por destinatario antes de que el worker pueda entregar un bloque completo a Postmark. Eso consume CPU, conexiones y operaciones de Supabase y puede afectar la latencia de la aplicación y la persistencia de webhooks.
 
 Estado observado:
 
@@ -31,11 +32,28 @@ POSTMARK_WORKER_ENABLED=true
 POSTMARK_SYNC_ENABLED=false
 ```
 
-La sincronización histórica está desactivada, pero el worker de Postmark continúa residiendo dentro de la API. Reactivar directamente `POSTMARK_SYNC_ENABLED` volvería a mezclar sincronización histórica, llamadas a Postmark, llamadas a Supabase y tráfico del panel en el mismo proceso.
+En el corte inicial, la sincronización histórica estaba desactivada pero el
+worker de Postmark residía dentro de la API. Reactivar directamente
+`POSTMARK_SYNC_ENABLED` en aquel diseño habría mezclado sincronización
+histórica, llamadas a Postmark, llamadas a Supabase y tráfico del panel en el
+mismo proceso.
+
+La afirmación anterior corresponde al corte inicial del 18 de septiembre. En el
+estado actualizado, `POSTMARK_WORKER_IN_API=false`, `TALIA_CONTACT_SENDER_IN_API=false`
+y `TALIA_MAILBOX_WORKER_IN_API=false`; la entrega Postmark se ejecuta desde
+`talia-email-worker.service`, el buzón desde `talia-mailbox-worker.service` y
+WhatsApp desde `talia-whatsapp-worker.service`. `POSTMARK_SYNC_ENABLED` continúa
+en `false` y no debe reactivarse hasta que exista una ejecución histórica
+dedicada con límites y medición propios.
+
+La prueba del 19 de septiembre confirmó que el worker entregó el lote Postmark
+de 25 mensajes mediante una sola operación `/email/batch`. Por tanto, el batch
+del proveedor funciona; la siguiente mejora es separar el worker que prepara el
+contenido del worker que entrega los bloques completos.
 
 ## 3. Procesos actuales dentro de `talia-api.service`
 
-El lifespan de [`backend/app/main.py`](../../backend/app/main.py) inicia:
+En la auditoría inicial, el lifespan de [`backend/app/main.py`](../../backend/app/main.py) iniciaba:
 
 - `contact_sender`.
 - `postmark_worker`, de forma condicional.
@@ -52,18 +70,36 @@ El lifespan de [`backend/app/main.py`](../../backend/app/main.py) inicia:
 - `meta_delivery_reconciliation_runner`.
 - `message_billing_alert_runner`.
 
-No se encontraron servicios systemd independientes para estos workers. La situación actual es:
+Ese listado describe el estado previo a la separación. La situación actual
+esperada después de los switches es:
 
 ```text
 talia-api.service
-  └── un proceso Python/Uvicorn
-      ├── API y panel
-      ├── webhooks
-      ├── workers de correo
-      ├── workers de WhatsApp
-      ├── lector IMAP
-      └── jobs de mantenimiento
+  └── API y panel
+      ├── autenticación y autorización
+      ├── recepción/validación rápida de webhooks
+      └── jobs ligeros estrictamente necesarios para la API
+
+talia-email-worker.service
+  ├── preparación/encolamiento actual de correo
+  ├── entrega Brevo
+  ├── entrega Postmark por /email/batch
+  └── sincronización histórica Postmark sólo si se habilita de forma controlada
+
+talia-whatsapp-worker.service
+  ├── campañas y follow-ups WhatsApp
+  ├── callbacks Meta encolados
+  └── reconciliación de entregas
+
+talia-mailbox-worker.service
+  └── polling IMAP y correo entrante
 ```
+
+La separación anterior no significa que la preparación Postmark ya esté
+optimizada. El worker de correo todavía puede procesar destinatarios
+individualmente para preparar la cola. Esa etapa debe convertirse en un worker
+de preparación de lotes, separado lógicamente o mediante una unidad propia,
+para que el worker de entrega sólo reclame bloques `ready` de hasta 500.
 
 ## 4. Mediciones observadas
 
@@ -80,7 +116,9 @@ Corte realizado el 18 de septiembre de 2026, aproximadamente 18:52 UTC:
 | `POSTMARK_WORKER_ENABLED` | `true` |
 | `POSTMARK_SYNC_ENABLED` | `false` |
 
-El proceso no tiene workers hijos. Las tareas de fondo comparten event loop, memoria, límites de archivos y conexiones HTTP con la API.
+En ese corte inicial el proceso no tenía workers hijos; las tareas de fondo
+compartían event loop, memoria, límites de archivos y conexiones HTTP con la
+API. Esta medición no representa la topología separada actual.
 
 ### 4.1 Latencia observada
 
@@ -117,7 +155,7 @@ Los conteos son globales. Todo worker debe aplicar `organizacion_id` cuando el m
 
 El envío está implementado en [`backend/app/services/email.py`](../../backend/app/services/email.py), mediante un cliente HTTP síncrono hacia `/smtp/email`.
 
-Hallazgos:
+Hallazgos de la auditoría inicial:
 
 - No existe un worker dedicado para Brevo.
 - El envío puede ejecutarse dentro del proceso API.
@@ -126,7 +164,7 @@ Hallazgos:
 - La política de reintentos no está centralizada.
 - Los eventos externos necesitan una clave idempotente antes de producir cambios locales.
 
-Riesgo: una llamada síncrona a Brevo puede bloquear el event loop si se ejecuta desde una ruta async o desde una tarea del API.
+Riesgo identificado: una llamada síncrona a Brevo podía bloquear el event loop si se ejecutaba desde una ruta async o desde una tarea del API. Actualmente el sender de correo se ejecuta desde `talia-email-worker.service`; falta completar pruebas de carga y confirmar que todos los caminos de Brevo permanezcan fuera del API.
 
 ### 5.2 Postmark
 
@@ -138,23 +176,24 @@ Componentes principales:
 - [`backend/app/services/postmark/webhooks.py`](../../backend/app/services/postmark/webhooks.py)
 - [`backend/app/integrations/postmark/client.py`](../../backend/app/integrations/postmark/client.py)
 
-El worker realiza, por tenant:
+El worker de correo realiza, por tenant:
 
 1. Provisión pendiente.
 2. Verificación o creación de webhooks.
 3. Claim de mensajes.
-4. Entrega de lotes.
-5. Actualización de envíos de prospección.
-6. Sincronización histórica de mensajes.
-7. Sincronización de hard bounces, complaints y unsubscribes.
+4. Preparación/encolamiento actual de envíos de prospección.
+5. Entrega de lotes.
+6. Actualización de envíos de prospección.
+7. Sincronización histórica de mensajes cuando está habilitada.
+8. Sincronización de hard bounces, complaints y unsubscribes cuando corresponde.
 
 La sincronización histórica usa ventanas de fechas, streams y checkpoints. Hay checkpoints existentes y avance parcial; no se debe reiniciar ni borrar ese estado.
 
-El claim usa una RPC atómica y lease de 600 segundos. La estructura existente es reutilizable, pero la ejecución debe salir del proceso API.
+El claim usa una RPC atómica y lease de 600 segundos. La estructura existente es reutilizable y la ejecución ya salió del proceso API. La mejora pendiente consiste en evitar que la preparación por destinatario compita con la entrega y con las operaciones de otros proveedores. La entrega debe recibir un bloque `ready` de hasta 500 objetos y llamar una sola vez a `/email/batch`; una separación temporal, si se necesita, debe aplicarse entre llamadas batch y no entre correos individuales.
 
 ### 5.3 Webhooks Postmark
 
-[`postmark_webhook`](../../backend/app/api/routes/webhooks.py) valida Basic Auth, consulta el servidor y llama a `process_postmark_event` antes de responder.
+[`postmark_webhook`](../../backend/app/api/routes/webhooks.py) valida Basic Auth, consulta el servidor y actualmente todavía ejecuta parte de `process_postmark_event` antes de responder.
 
 El procesamiento síncrono incluye:
 
@@ -165,30 +204,35 @@ El procesamiento síncrono incluye:
 - Actualización de suppressions.
 - Cierre del receipt.
 
-Existe idempotencia parcial mediante `tenant_email_webhook_receipts`, pero el webhook no es rápido ni desacoplado. Si falla el procesamiento interno, responde 500. Se observaron errores `postmark.webhook_processing_failed`.
+Existe idempotencia parcial mediante `tenant_email_webhook_receipts`, pero el webhook todavía no está completamente desacoplado. Si falla una escritura o una consulta interna, responde 500; se observaron errores `postmark.webhook_processing_failed`. La corrección pendiente es persistir una recepción mínima idempotente, encolar su procesamiento y responder rápidamente.
 
 ### 5.4 WhatsApp/Meta
 
 El endpoint Meta está en [`backend/app/channels/whatsapp/router.py`](../../backend/app/channels/whatsapp/router.py).
 
-Actualmente:
+En la auditoría inicial:
 
 - Valida la firma.
 - Convierte el payload en mensajes y callbacks.
 - Programa `handle_incoming_message` y `handle_status_callback` con `BackgroundTasks`.
 - Responde `accepted`.
 
-Esto reduce el tiempo de respuesta HTTP, pero no aísla recursos: `BackgroundTasks` sigue ejecutándose en el mismo proceso y no es una cola durable.
+En aquel corte esto reducía el tiempo de respuesta HTTP, pero no aislaba
+recursos: `BackgroundTasks` seguía ejecutándose en el mismo proceso y no era
+una cola durable. Actualmente el procesamiento durable usa la cola de WhatsApp
+y `talia-whatsapp-worker.service`.
 
 El procesamiento puede incluir consultas de persona, conversación, oportunidad, catálogo, OpenAI, envío Meta, persistencia y follow-up. Los logs muestran turnos de varios segundos y errores de timeout de Supabase.
 
 La resolución por `phone_number_id` debe conservarse como regla obligatoria de aislamiento por tenant. No debe confiarse únicamente en un UUID recibido en la URL.
 
+Actualmente los callbacks y trabajos WhatsApp tienen una cola durable y un worker separado mediante `talia-whatsapp-worker.service`. La validación de firma y tenant permanece en el API; el procesamiento pesado no debe volver a `BackgroundTasks`.
+
 ### 5.5 Follow-ups WhatsApp
 
 `whatsapp_followup_jobs` ya tiene estados, `attempt_count`, `lease_until`, `due_at` y `processed_at`, por lo que puede reutilizarse como cola durable.
 
-El problema actual es que el runner que reclama y procesa esos jobs vive dentro de `talia-api.service`. También se observaron fallos repetidos en requeue y lectura de jobs listos.
+El runner ya fue separado del API. Permanecen pendientes las pruebas de carga, requeue, callbacks fuera de orden y aislamiento entre tenants.
 
 ### 5.6 IMAP
 
@@ -216,7 +260,7 @@ El proceso continúa intentando leer buzones con credenciales inválidas. Debe a
 
 ### Riesgos pendientes
 
-- `BackgroundTasks` no es durable ante reinicios.
+- Cualquier ruta que aún use `BackgroundTasks` para trabajo durable debe migrarse a una cola; los callbacks Meta ya cuentan con la cola durable de WhatsApp.
 - Un webhook puede registrar el receipt y fallar después durante la persistencia.
 - Polling, reconciliación y callbacks pueden consultar los mismos registros sin una frontera de eventos común.
 - Las políticas de retry no están centralizadas.
@@ -234,11 +278,17 @@ talia-api.service
   - inserción de eventos/jobs
   - respuesta rápida
 
+talia-postmark-preparer.service
+  - prepara contenido de campañas Postmark
+  - carga una vez contexto de tenant, plantilla, dominio y stream
+  - crea bloques `ready` de máximo 500
+  - no llama a Postmark
+
 talia-email-worker.service
-  - cola Brevo
-  - entrega Postmark
-  - sincronización histórica Postmark
-  - webhooks Postmark ya encolados
+  - entrega Brevo desde su cola y límites propios
+  - entrega Postmark de bloques `ready` mediante `/email/batch`
+  - sincronización histórica Postmark sólo en una fase controlada
+  - procesamiento de webhooks Postmark ya encolados
 
 talia-whatsapp-worker.service
   - jobs WhatsApp programados
@@ -252,7 +302,12 @@ talia-mailbox-worker.service
   - procesamiento de correo entrante
 ```
 
-Los webhooks deben validar, resolver tenant, registrar un evento idempotente, crear/despertar un job y responder inmediatamente.
+Los webhooks deben validar, resolver tenant, registrar una recepción idempotente, crear/despertar un job y responder inmediatamente. El procesamiento pesado no debe vivir en el API.
+
+La preparación y entrega Postmark deben mantenerse separadas de Brevo y
+WhatsApp. El límite de 500 se aplica a cada llamada completa al proveedor; no se
+debe simular con 500 llamadas unitarias ni con una espera de cinco segundos por
+destinatario.
 
 ## 8. Cambios de base de datos propuestos
 
@@ -361,9 +416,10 @@ Los errores 4xx permanentes no se reintentan. Los 429 respetan `Retry-After`. Lo
 
 - Crear `talia-email-worker.service`.
 - Mover entrega Postmark.
+- Separar la preparación Postmark en `talia-postmark-preparer.service` o en un worker equivalente aislado.
 - Mover sincronización histórica.
 - Reutilizar checkpoints actuales.
-- Mover envíos Brevo a la cola.
+- Mantener los envíos Brevo en su cola y worker, sin adoptar el batch ni los límites de Postmark.
 - Reactivar sincronización solo en el worker nuevo.
 
 ### Fase 3: webhooks de correo
@@ -371,7 +427,7 @@ Los errores 4xx permanentes no se reintentan. Los 429 respetan `Retry-After`. Lo
 - Mantener validación en el API.
 - Registrar receipt/evento idempotente.
 - Responder rápido.
-- Procesar el evento en `talia-email-worker.service`.
+- Procesar el evento en `talia-email-worker.service` después de persistir la recepción.
 
 ### Fase 4: WhatsApp/Meta
 
@@ -379,7 +435,7 @@ Los errores 4xx permanentes no se reintentan. Los 429 respetan `Retry-After`. Lo
 - Mover follow-ups.
 - Mover reconciliación Meta.
 - Registrar callbacks en una cola durable.
-- Sustituir `BackgroundTasks` para trabajos durables.
+- Mantener los trabajos durables fuera de `BackgroundTasks` y verificar que no se reintroduzca ese patrón.
 
 ### Fase 5: limpieza del API
 
