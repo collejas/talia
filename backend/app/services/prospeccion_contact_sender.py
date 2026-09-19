@@ -1948,6 +1948,7 @@ class ProspeccionContactSender:
             {
                 "id": envio.get("id"),
                 "prospecto_id": envio.get("prospecto_id"),
+                "batch_id": envio.get("batch_id"),
             },
         )
 
