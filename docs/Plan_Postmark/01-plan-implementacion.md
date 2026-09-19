@@ -306,6 +306,36 @@ La preparación masiva debe conservar la idempotencia, los estados explícitos,
 el tenant, el lote, la plantilla y el destinatario. Un reinicio debe conservar
 los bloques `ready` y nunca volver a crear mensajes aceptados.
 
+### Fase 6A.2: persistencia masiva de mensajes
+
+La prueba del lote `3ccecddd-bd27-41cc-9f06-541891c8d921` confirmó que el
+transporte funciona: 10 mensajes terminaron en una sola llamada
+`/email/batch` y quedaron en `submitted`. Sin embargo, la preparación tardó
+aproximadamente 64 segundos. La reutilización de contexto no eliminó la
+latencia principal porque todavía existen operaciones individuales por
+destinatario.
+
+La siguiente implementación debe:
+
+1. Reclamar atómicamente un lote de negocio completo o un bloque de máximo 500.
+2. Cargar contactos, plantilla y configuración mediante consultas acotadas.
+3. Renderizar los mensajes en memoria y validar cada objeto antes de persistir.
+4. Persistir el conjunto mediante una RPC o inserción masiva en columnas
+   explícitas de `tenant_email_messages`.
+5. Reservar la cuota por el total del bloque dentro de una operación protegida
+   contra concurrencia.
+6. Mantener idempotencia por mensaje y devolver el resultado individual de cada
+   fila, incluyendo duplicados y errores de validación.
+7. Actualizar prospección, bitácoras y contadores mediante operaciones
+   agrupadas posteriores.
+8. Crear el bloque `ready` sólo después de completar la persistencia.
+
+El payload de entrada de la RPC puede ser transitorio, pero los datos del
+negocio deben terminar en columnas explícitas, con constraints, foreign keys e
+índices. La transacción no debe incluir la llamada HTTP a Postmark.
+
+Esta fase no modificará Brevo, WhatsApp, sus workers, cuotas ni backpressure.
+
 ### Fase 6B: entrega del lote
 
 El worker de entrega Postmark debe reclamar exclusivamente bloques `ready` y

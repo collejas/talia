@@ -64,6 +64,14 @@ cargar el contexto una vez, renderizar en memoria, persistir mensajes en
 bloques y dejar un payload `ready` de hasta 500 elementos para el worker de
 entrega.
 
+La prueba posterior del lote `3ccecddd-bd27-41cc-9f06-541891c8d921` confirmó
+que el transporte ya entrega 10 mensajes en un solo batch, pero la preparación
+continúa tardando aproximadamente 64 segundos. La cache de contexto reduce
+consultas repetidas, aunque no resuelve las escrituras individuales. Por ello,
+la prioridad siguiente es una RPC de persistencia masiva con cuota e
+idempotencia atómicas, seguida de actualizaciones agrupadas de prospección y
+bitácoras.
+
 ## 3. Procesos actuales dentro de `talia-api.service`
 
 En la auditoría inicial, el lifespan de [`backend/app/main.py`](../../backend/app/main.py) iniciaba:
@@ -451,6 +459,18 @@ Los errores 4xx permanentes no se reintentan. Los 429 respetan `Retry-After`. Lo
   por tenant; no se modifica la concurrencia de Brevo o WhatsApp.
 - Se registran duración de consulta, renderizado, persistencia, payload,
   llamada a Postmark, CPU, memoria, conexiones y jobs pendientes.
+
+#### Fase 2B: persistencia masiva e idempotente
+
+- Reclamar el lote o bloque completo con `SKIP LOCKED` y lease.
+- Cargar contactos y configuración en consultas acotadas.
+- Renderizar en memoria y validar antes de persistir.
+- Insertar mensajes y reservar cuota por bloque mediante RPC/transacción corta.
+- Mantener columnas explícitas, constraints, índices y foreign keys; el JSON
+  sólo podrá transportar temporalmente el conjunto de entrada variable.
+- Actualizar estados operativos y bitácoras en operaciones agrupadas.
+- Crear `ready` únicamente después de completar la persistencia.
+- Medir contra la implementación individual antes de cambiar concurrencia.
 
 ### Fase 3: webhooks de correo
 

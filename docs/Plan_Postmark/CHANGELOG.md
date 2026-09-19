@@ -92,6 +92,16 @@ entrega mantendrá un batch activo por tenant, con backpressure medible.
   por inserciones/RPCs agrupadas; no se marca esta fase como terminada hasta
   medir esa mejora con lotes de 500.
 
+### Validación del lote 3ccecddd
+
+- El lote de 10 mensajes terminó en una sola llamada `/email/batch`.
+- Los 10 mensajes quedaron en `submitted` y el batch terminó correctamente.
+- La preparación tardó aproximadamente 64 segundos.
+- La reutilización de contexto no eliminó la latencia principal; persisten
+  operaciones individuales por destinatario.
+- Siguiente paso: RPC/inserción masiva para mensajes, cuota, actualizaciones de
+  prospección y bitácoras, manteniendo transacciones cortas e idempotencia.
+
 ### Diagnóstico
 
 - La prueba de 25 mensajes confirmó que el worker ya puede enviar un único `postmark.batch_dispatch` con `batch_size=25`; la integración `/email/batch` funciona.
