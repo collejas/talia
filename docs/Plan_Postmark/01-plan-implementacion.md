@@ -356,6 +356,86 @@ La medición de producción sigue pendiente para confirmar el tamaño efectivo
 de los grupos, duración, CPU, memoria y conexiones bajo lotes de 25, 500 y
 más de 500.
 
+### Fase 6A.3: auditoría de latencia y siguiente reducción
+
+#### Avance comprobado el 2026-09-19
+
+La auditoría del lote `91cc6e22-d28d-4514-a849-06b618de53df` confirmó el flujo
+actual:
+
+1. La API creó las filas operativas sin ejecutar el envío HTTP a Postmark.
+2. `talia-postmark-preparer.service` cargó el contexto del tenant y preparó
+   los 10 mensajes.
+3. La cola bulk persistió los 10 objetos en un bloque, con
+   `item_count=10`, `result_count=10` y `duration_ms=451.44`.
+4. `talia-email-worker.service` despachó los 10 mensajes en una sola llamada
+   `/email/batch`, no como 10 llamadas individuales.
+5. Los 10 mensajes recibieron `external_message_id` y quedaron en
+   `submitted`.
+
+La duración del ciclo de preparación fue `12,982.65 ms`. Como comparación, el
+lote `2f1374dd-9642-418e-9dd4-cc0d456d0fe7` tardó `32,383.72 ms` para 10
+mensajes. La mejora observada es de aproximadamente 59.9% (`19.4 s` menos),
+sin subir la concurrencia global a 500.
+
+Durante la auditoría se encontró una inconsistencia de transición: la
+finalización directa de Postmark no sincronizaba el estado del lote de negocio.
+Por eso el lote podía conservar `pendiente` aunque sus mensajes ya estuvieran
+`enviado`, y el worker podía no reclamarlo. Se agregó la sincronización
+`worker_sync_batch_status` a esa ruta y se reconcilió el lote de prueba. Esta
+corrección evita que la preparación rápida introduzca una cola aparentemente
+detenida.
+
+#### Estado de la fase
+
+- Confirmado: el payload se agrupa antes del envío y la entrega usa un único
+  `/email/batch` por bloque preparado.
+- Confirmado: la preparación ocurre fuera de la API, en el worker dedicado.
+- Confirmado: la optimización es exclusiva de Postmark; Brevo y WhatsApp
+  conservan sus workers, límites y backpressure.
+- Pendiente: eliminar la mayor parte del trabajo individual posterior a la
+  persistencia y demostrar la latencia con lotes de 25, 500 y más de 500.
+
+#### Siguiente paso aprobado: finalización agrupada sin latencia adicional
+
+La siguiente implementación debe mantener el payload completo en memoria,
+persistirlo una sola vez y finalizarlo con operaciones agrupadas:
+
+1. Crear una RPC transaccional, limitada a 500 filas, que actualice en bloque
+   el estado operativo, `external_message_id`, timestamps y errores de los
+   mensajes Postmark.
+2. Actualizar el lote de prospección una sola vez después de aplicar todos los
+   resultados, evitando una consulta o RPC por destinatario.
+3. Agrupar la escritura de bitácoras y eventos de aceptación, conservando las
+   columnas explícitas de tenant, lote, plantilla, destinatario y proveedor.
+4. Mantener el worker de entrega con una llamada `/email/batch` por bloque y
+   una transición idempotente `ready` → `sending` → `submitted`.
+5. Reducir los eventos de progreso a uno por bloque; los eventos individuales
+   deben quedar para auditoría, no para bloquear la preparación.
+6. Instrumentar p50/p95 de API, preparación, persistencia y despacho, además
+   de CPU, memoria, conexiones Supabase, tamaño real del batch y errores por
+   tenant.
+
+La RPC no debe incluir llamadas HTTP a Postmark. El límite de 500 controla el
+tamaño del batch, no la concurrencia del servidor: varios tenants podrán tener
+bloques preparados, pero el worker debe limitar cuántos bloques completos
+procesa simultáneamente. Si aumenta la presión del host o de Supabase, se
+pausan nuevos bloques y se conservan los bloques `ready` para reanudación.
+
+#### Criterios de aceptación de la siguiente fase
+
+- Un lote de 500 genera un payload con hasta 500 objetos y una sola llamada
+  `/email/batch`.
+- La creación del lote no espera la respuesta de Postmark.
+- La finalización local usa operaciones agrupadas y no realiza una RPC por
+  destinatario.
+- El lote de negocio y sus mensajes terminan en estados consistentes después
+  de reiniciar cualquiera de los workers.
+- La API mantiene su p95 y consumo de CPU dentro de la línea base acordada.
+- Brevo, WhatsApp, IMAP y sus límites no cambian.
+- La ruta anterior queda disponible como rollback hasta completar las pruebas
+  reales y la comparación de métricas.
+
 ### Fase 6B: entrega del lote
 
 El worker de entrega Postmark debe reclamar exclusivamente bloques `ready` y

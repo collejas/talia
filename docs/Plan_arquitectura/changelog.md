@@ -326,3 +326,26 @@ No marcar una fase como completada por compilación, reinicio, healthcheck o exi
 - El coordinador ahora libera la concurrencia después de preparar cada objeto,
   persiste el bloque completo y finaliza los registros individuales con los
   IDs retornados; no se elevó la concurrencia del servidor a 500.
+
+### Auditoría de ejecución y siguiente optimización
+
+- En el lote Postmark `91cc6e22-d28d-4514-a849-06b618de53df`, el preparador
+  persistió 10 objetos en bloque en `451.44 ms` y el ciclo completo de
+  preparación tardó `12,982.65 ms`.
+- El lote de comparación `2f1374dd-9642-418e-9dd4-cc0d456d0fe7` tardó
+  `32,383.72 ms` para el mismo tamaño; la reducción observada fue de
+  aproximadamente 59.9%.
+- La entrega confirmó una sola llamada Postmark `/email/batch` para los 10
+  objetos y 10 IDs externos persistidos en `submitted`.
+- La auditoría detectó que la ruta de finalización directa no sincronizaba el
+  lote de negocio. Se agregó `worker_sync_batch_status` y se reconciliaron los
+  estados para impedir que un lote terminado quedara visible como `pendiente`.
+
+El siguiente paso arquitectónico es una finalización bulk transaccional de
+hasta 500 mensajes: actualizar estados e IDs, escribir bitácoras y sincronizar
+el lote una sola vez. Esta operación debe seguir fuera del API, no incluir la
+llamada HTTP a Postmark y conservar idempotencia para reintentos y reinicios.
+La concurrencia se limitará por bloques completos; no se aumentará a 500 por
+defecto. La validación requerirá lotes de 25, 500 y más de 500, con medición de
+p50/p95, CPU, memoria, conexiones Supabase, tamaño efectivo del batch y efecto
+en la latencia de la API. Brevo, WhatsApp e IMAP permanecen sin cambios.

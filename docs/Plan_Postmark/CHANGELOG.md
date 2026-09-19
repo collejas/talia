@@ -388,6 +388,35 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - Ejecutar un lote real de 25 y otro de 500 para medir la latencia final del
   preparador, CPU, memoria y tamaño efectivo de `/email/batch`.
 
+### Auditoría real del lote `91cc6e22-d28d-4514-a849-06b618de53df`
+
+- Se prepararon 10 mensajes fuera de la API y se persistieron mediante la cola
+  bulk: `item_count=10`, `result_count=10`, `duration_ms=451.44`.
+- El worker de entrega realizó una sola llamada `/email/batch` para los 10
+  mensajes; no se observaron 10 llamadas individuales.
+- Los 10 mensajes recibieron `external_message_id` y quedaron en `submitted`.
+- La preparación tardó `12,982.65 ms`, frente a `32,383.72 ms` del lote de
+  comparación `2f1374dd-9642-418e-9dd4-cc0d456d0fe7`: reducción aproximada de
+  59.9%.
+- Se encontró y corrigió la falta de sincronización del estado del lote de
+  negocio después de la finalización directa Postmark. Sin esa llamada, el
+  lote podía permanecer `pendiente` aunque sus mensajes ya estuvieran
+  `enviado`.
+
+### Siguiente paso para reducir la latencia
+
+- Implementar finalización agrupada de hasta 500 mensajes: estados, IDs
+  externos, timestamps, errores, bitácoras y estado del lote en operaciones
+  acotadas e idempotentes.
+- Mantener la construcción del payload y la persistencia fuera de
+  `talia-api.service`; el API no debe esperar a Postmark.
+- Medir p50/p95, CPU, memoria, conexiones, tamaño efectivo de `/email/batch` y
+  presión por tenant con pruebas de 25, 500 y más de 500.
+- Controlar la concurrencia por bloques completos, sin convertir el batch en
+  envíos unitarios y sin modificar los límites de Brevo o WhatsApp.
+- Conservar la ruta actual como rollback hasta demostrar consistencia del lote
+  después de reinicios y reintentos.
+
 ## Formato para futuras entradas
 
 ```md
