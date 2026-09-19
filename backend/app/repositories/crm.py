@@ -25051,6 +25051,35 @@ class CRMRepository:
         data = resp.json() or []
         return isinstance(data, list) and bool(data)
 
+    async def worker_claim_envios_bulk(
+        self,
+        *,
+        organizacion_id: UUID,
+        items: Sequence[dict[str, Any]],
+    ) -> set[UUID]:
+        """Reclama hasta 500 envíos Postmark pendientes en una RPC."""
+
+        if not items or len(items) > 500:
+            raise CRMRepositoryError("worker_bulk_claim_invalid_size")
+        result = await self._rpc(
+            "worker_claim_prospeccion_envios_bulk",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_items": list(items),
+            },
+        )
+        if not isinstance(result, list):
+            raise CRMRepositoryError("worker_bulk_claim_invalid_response")
+        claimed: set[UUID] = set()
+        for row in result:
+            if not isinstance(row, dict) or row.get("claimed") is not True:
+                continue
+            try:
+                claimed.add(UUID(str(row["envio_id"])))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return claimed
+
     async def worker_reserve_envio_dispatch(
         self,
         *,

@@ -431,3 +431,22 @@ repetido sin mover el payload al API ni aumentar la concurrencia global.
   separación de workers.
 - La prueba de aceptación medirá `preload_postmark_context` frente a
   `correo_context_and_assets`, memoria y p95 con una y varias plantillas.
+
+## 2026-09-19 — Precarga Postmark paralela por tenant
+
+- La configuración Postmark, las supresiones del proveedor, las supresiones CRM
+  y el contexto de render se cargan concurrentemente antes de crear las tareas
+  por correo.
+- El fallback de imágenes/URL permanece disponible para no convertir una falla
+  auxiliar en una falla total del lote.
+- El claim bulk queda como una etapa posterior aislada, con RPC, límites e
+  idempotencia revisados antes de modificar el claim existente.
+
+## 2026-09-19 — Claim bulk Postmark
+
+- Se incorporó una RPC de máximo 500 registros para pasar de PATCH individuales
+  a una reclamación transaccional por tenant.
+- La condición `estado = pendiente` mantiene la exclusión entre workers y la
+  respuesta permite procesar únicamente los envíos reclamados.
+- La ruta anterior queda como fallback ante una falla de la RPC; Brevo,
+  WhatsApp e IMAP permanecen sin cambios.

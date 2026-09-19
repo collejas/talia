@@ -580,3 +580,21 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - La validación posterior debe comprobar que `correo_context_and_assets` baja
   sin aumentar memoria de forma significativa en lotes con varias plantillas
   e imágenes.
+- La precarga de renderizado, configuración Postmark, supresiones del proveedor
+  y supresiones CRM ahora se ejecuta en paralelo por tenant.
+- Se conserva el fallback del contexto de renderizado si una consulta auxiliar
+  falla; no se bloquea todo el lote por una imagen o URL no disponible.
+- El siguiente paso separado es evaluar un claim bulk de envíos; requiere una
+  RPC idempotente y una migración propia antes de sustituir el claim actual.
+
+### Claim bulk Postmark
+
+- Se agregó `worker_claim_prospeccion_envios_bulk`, limitada a 500 elementos,
+  con alcance por tenant y actualización atómica sólo cuando el estado actual
+  es `pendiente`.
+- El preparador Postmark reclama los envíos del ciclo mediante esa RPC y sólo
+  crea tareas para los registros efectivamente reclamados.
+- Si la RPC falla, la ruta Postmark conserva temporalmente el claim individual
+  como fallback; Brevo y WhatsApp no cambian.
+- La función fue aplicada y verificada en Supabase con ejecución exclusiva de
+  `service_role`.

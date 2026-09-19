@@ -2193,6 +2193,52 @@ class ProspeccionContactSender:
             )
             return False
 
+        postmark_bulk_claimed_ids: set[UUID] | None = None
+        if self._provider_filter == "postmark":
+            claim_started = perf_counter()
+            by_org_envios: dict[UUID, list[dict[str, Any]]] = {}
+            for envio in envios:
+                try:
+                    org_id = UUID(str(envio["organizacion_id"]))
+                    envio_id = UUID(str(envio["id"]))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                attempt = min(
+                    max(int(envio.get("intento_actual") or 0) + 1, 1),
+                    self._max_retries,
+                )
+                by_org_envios.setdefault(org_id, []).append(
+                    {"envio_id": str(envio_id), "intento_actual": attempt}
+                )
+            try:
+                claimed_by_org = await asyncio.gather(
+                    *(
+                        repo.worker_claim_envios_bulk(
+                            organizacion_id=org_id,
+                            items=items,
+                        )
+                        for org_id, items in by_org_envios.items()
+                    )
+                )
+                postmark_bulk_claimed_ids = set().union(*claimed_by_org) if claimed_by_org else set()
+                claimed_envios: list[dict[str, Any]] = []
+                for envio in envios:
+                    try:
+                        envio_uuid = UUID(str(envio["id"]))
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    if envio_uuid in postmark_bulk_claimed_ids:
+                        claimed_envios.append(envio)
+                envios = claimed_envios
+            except Exception as exc:  # pragma: no cover - fallback transitorio
+                postmark_bulk_claimed_ids = None
+                log_event(
+                    logger,
+                    "prospeccion.sender_bulk_claim_failed",
+                    error=str(exc),
+                )
+            mark_stage("bulk_claim_postmark")
+
         postmark_contact_suppressions: dict[UUID, dict[str, dict[str, Any]]] = {}
         postmark_enabled_by_org: dict[UUID, bool] = {}
         if self._provider_filter == "postmark":
@@ -2232,32 +2278,44 @@ class ProspeccionContactSender:
 
             async def preload_postmark_org(org_id: UUID) -> None:
                 if self._postmark_preparation_cache:
-                    try:
-                        await self._postmark_preparation_cache.load_render_context(
-                            org_id, template_ids_by_org.get(org_id, set())
-                        )
-                    except Exception as exc:  # pragma: no cover - fallback por tenant
-                        log_event(
-                            logger,
-                            "prospeccion.sender_render_context_preload_failed",
-                            organizacion_id=str(org_id),
-                            error=str(exc),
-                        )
-                    await self._postmark_preparation_cache.load_postmark_context(org_id)
+                    async def preload_render_context() -> None:
+                        try:
+                            await self._postmark_preparation_cache.load_render_context(
+                                org_id, template_ids_by_org.get(org_id, set())
+                            )
+                        except Exception as exc:  # pragma: no cover - fallback por tenant
+                            log_event(
+                                logger,
+                                "prospeccion.sender_render_context_preload_failed",
+                                organizacion_id=str(org_id),
+                                error=str(exc),
+                            )
+
+                    _, _, _, rows = await asyncio.gather(
+                        preload_render_context(),
+                        self._postmark_preparation_cache.load_postmark_context(org_id),
+                        self._postmark_preparation_cache.load_suppressed_emails(
+                            org_id, emails_by_org.get(org_id, [])
+                        ),
+                        repo.worker_list_active_contact_suppressions_for_prospectos(
+                            organizacion_id=org_id,
+                            prospecto_ids=sorted(by_org.get(org_id, set()), key=str),
+                            canal="correo",
+                        ),
+                    )
+                else:
+                    rows = await repo.worker_list_active_contact_suppressions_for_prospectos(
+                        organizacion_id=org_id,
+                        prospecto_ids=sorted(by_org.get(org_id, set()), key=str),
+                        canal="correo",
+                    )
+                if self._postmark_preparation_cache:
                     migration = await self._postmark_preparation_cache.migration(org_id)
                     postmark_enabled_by_org[org_id] = bool(
                         migration
                         and migration.get("feature_enabled") is True
                         and migration.get("status") in {"active", "validated", "migrated"}
                     )
-                    await self._postmark_preparation_cache.load_suppressed_emails(
-                        org_id, emails_by_org.get(org_id, [])
-                    )
-                rows = await repo.worker_list_active_contact_suppressions_for_prospectos(
-                    organizacion_id=org_id,
-                    prospecto_ids=sorted(by_org.get(org_id, set()), key=str),
-                    canal="correo",
-                )
                 suppression_map: dict[str, dict[str, Any]] = {}
                 for row in rows:
                     prospecto_id = row.get("prospecto_id")
@@ -2296,6 +2354,7 @@ class ProspeccionContactSender:
                         repo,
                         envio,
                         bulk_queue=bulk_queue,
+                        skip_claim=postmark_bulk_claimed_ids is not None,
                         preloaded_postmark_enabled=(
                             postmark_enabled_by_org.get(org_id)
                             if org_id is not None
