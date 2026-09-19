@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 from uuid import UUID
@@ -44,13 +46,17 @@ async def test_send_message_uses_server_token_and_transactional_stream():
     assert captured["token"] == "server-secret"
     assert captured["json"] == (
         b'{"From": "Talia <sender@example.com>", "To": "recipient@example.com", '
-        b'"Subject": "Hola", "MessageStream": "outbound", "TextBody": "Texto"}'
+        b'"Subject": "Hola", "MessageStream": "outbound", "TrackOpens": true, '
+        b'"TrackLinks": "HtmlAndText", "TextBody": "Texto"}'
     )
 
 
 @pytest.mark.asyncio
 async def test_send_batch_keeps_individual_provider_failures():
+    captured = []
+
     async def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(request.read()))
         return httpx.Response(
             200,
             json=[
@@ -69,6 +75,8 @@ async def test_send_batch_keeps_individual_provider_failures():
 
     assert [item.accepted for item in result.items] == [True, False]
     assert result.items[1].error_code == 406
+    assert all(item["TrackOpens"] is True for item in captured[0])
+    assert all(item["TrackLinks"] == "HtmlAndText" for item in captured[0])
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 MessageKind = Literal["transactional", "broadcast"]
+PostmarkTrackLinks = Literal["None", "HtmlAndText", "HtmlOnly", "TextOnly"]
 
 
 class PostmarkDomainResult(BaseModel):
@@ -49,6 +50,8 @@ class PostmarkMessage(BaseModel):
     text_body: str | None = None
     reply_to: str | None = Field(default=None, max_length=320)
     tag: str | None = Field(default=None, max_length=100)
+    track_opens: bool = True
+    track_links: PostmarkTrackLinks = "HtmlAndText"
 
     @model_validator(mode="after")
     def require_body(self) -> "PostmarkMessage":

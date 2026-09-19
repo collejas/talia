@@ -445,6 +445,8 @@ class PostmarkClient:
             "To": message.to_email,
             "Subject": message.subject,
             "MessageStream": message_stream,
+            "TrackOpens": message.track_opens,
+            "TrackLinks": message.track_links,
         }
         if message.from_name:
             payload["From"] = f"{message.from_name} <{message.from_email}>"

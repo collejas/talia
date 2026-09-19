@@ -59,6 +59,8 @@ class PostmarkService:
                 "To": message.to_email,
                 "Subject": message.subject,
                 "MessageStream": stream_name,
+                "TrackOpens": message.track_opens,
+                "TrackLinks": message.track_links,
             }
             if message.html_body is not None:
                 payload["HtmlBody"] = message.html_body
