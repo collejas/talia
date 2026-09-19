@@ -32,6 +32,21 @@ from app.services.storage import StorageError
 
 logger = get_logger("prospeccion.contact_sender")
 
+
+def _record_stage_timing(
+    metrics_by_stage: dict[str, dict[str, float]] | None,
+    stage: str,
+    started_at: float,
+) -> None:
+    """Acumula tiempos sin registrar contenido ni identificadores sensibles."""
+    if metrics_by_stage is None:
+        return
+    duration_ms = (perf_counter() - started_at) * 1000
+    row = metrics_by_stage.setdefault(stage, {"count": 0.0, "total_ms": 0.0, "max_ms": 0.0})
+    row["count"] += 1
+    row["total_ms"] += duration_ms
+    row["max_ms"] = max(row["max_ms"], duration_ms)
+
 DEFAULT_BACKOFF_SECONDS: tuple[int, ...] = (30, 120, 300, 600)
 DEFAULT_SENDER_MAX_CONCURRENCY = 2
 DEFAULT_SENDER_PER_MINUTE_LIMIT = 40
@@ -85,6 +100,7 @@ class _PostmarkPreparationCache:
     plans: dict[UUID, dict[str, Any] | None]
     servers: dict[UUID, dict[str, Any] | None]
     suppressed_emails: dict[UUID, set[str]]
+    postmark_context_loaded: set[UUID]
     lock: asyncio.Lock
 
     def __init__(self) -> None:
@@ -95,7 +111,35 @@ class _PostmarkPreparationCache:
         self.plans = {}
         self.servers = {}
         self.suppressed_emails = {}
+        self.postmark_context_loaded = set()
         self.lock = asyncio.Lock()
+
+    async def load_postmark_context(self, organizacion_id: UUID) -> None:
+        """Carga una vez el contexto estable de Postmark para este tenant.
+
+        Se ejecuta antes de procesar los mensajes del ciclo. Así, las tareas
+        concurrentes sólo consultan memoria para migración, plan, servidor y
+        dominio, en vez de repetir lecturas de configuración por correo.
+        """
+
+        async with self.lock:
+            if organizacion_id in self.postmark_context_loaded:
+                return
+        repository = PostmarkRepository()
+        migration, plan, server, domain = await asyncio.gather(
+            repository.get_migration(organizacion_id=organizacion_id),
+            repository.get_active_plan(organizacion_id=organizacion_id),
+            repository.get_server(organizacion_id=organizacion_id),
+            repository.get_verified_domain(organizacion_id=organizacion_id),
+        )
+        async with self.lock:
+            if organizacion_id in self.postmark_context_loaded:
+                return
+            self.migrations[organizacion_id] = migration
+            self.plans[organizacion_id] = plan
+            self.servers[organizacion_id] = server
+            self.domains[organizacion_id] = domain
+            self.postmark_context_loaded.add(organizacion_id)
 
     async def load_suppressed_emails(
         self, organizacion_id: UUID, email_addresses: list[str]
@@ -1255,7 +1299,9 @@ async def _run_envio_correo(
     preparation_cache: _PostmarkPreparationCache | None = None,
     bulk_queue: _PostmarkBulkQueue | None = None,
     postmark_queued_result: dict[str, Any] | None = None,
+    stage_metrics: dict[str, dict[str, float]] | None = None,
 ) -> ContactEnvioResult:
+    validation_started = perf_counter()
     email_value = _clean_text(envio.get("email"))
     if not email_value:
         return ContactEnvioResult(
@@ -1271,6 +1317,9 @@ async def _run_envio_correo(
             detalle={"reason": "correo_payload_incompleto"},
             error="correo_payload_incompleto",
         )
+    _record_stage_timing(stage_metrics, "correo_validation", validation_started)
+
+    context_started = perf_counter()
     effective_payload = payload
     if organizacion_id:
         try:
@@ -1317,6 +1366,9 @@ async def _run_envio_correo(
                     )
                     merged_metadata.update(image_context)
                     effective_payload = {**effective_payload, "metadata": merged_metadata}
+    _record_stage_timing(stage_metrics, "correo_context_and_assets", context_started)
+
+    render_started = perf_counter()
     context = _build_placeholder_context(envio, effective_payload, effective_payload.get("metadata"))
     tracking_url = _build_email_tracking_url(
         context=context,
@@ -1353,6 +1405,9 @@ async def _run_envio_correo(
     if body_html:
         body_html = _wrap_images_with_tracking_link(body_html, tracking_url)
         body_html = _append_tracking_params_to_anchor_hrefs(body_html, tracking_url)
+    _record_stage_timing(stage_metrics, "correo_render_and_tracking", render_started)
+
+    provider_started = perf_counter()
     metadata = effective_payload.get("metadata") if isinstance(effective_payload.get("metadata"), dict) else {}
     message_kind = _clean_text(
         effective_payload.get("email_message_kind") or metadata.get("email_message_kind")
@@ -1374,8 +1429,10 @@ async def _run_envio_correo(
             detalle={"reason": "correo_payload_incompleto"},
             error="correo_payload_incompleto",
         )
+    _record_stage_timing(stage_metrics, "correo_provider_checks", provider_started)
     if postmark_enabled:
-        return await _queue_postmark_prospeccion_email(
+        queue_started = perf_counter()
+        result = await _queue_postmark_prospeccion_email(
             envio=envio,
             payload=effective_payload,
             subject=subject,
@@ -1386,6 +1443,8 @@ async def _run_envio_correo(
             bulk_queue=bulk_queue,
             postmark_queued_result=postmark_queued_result,
         )
+        _record_stage_timing(stage_metrics, "postmark_queue_enqueue", queue_started)
+        return result
 
     mail_settings = None
     brevo_settings = None
@@ -2040,6 +2099,14 @@ class ProspeccionContactSender:
 
     async def _process_pending_envios(self) -> bool:
         cycle_started = perf_counter()
+        stage_started = cycle_started
+        stage_timings_ms: dict[str, float] = {}
+
+        def mark_stage(stage: str) -> None:
+            nonlocal stage_started
+            stage_timings_ms[stage] = round((perf_counter() - stage_started) * 1000, 2)
+            stage_started = perf_counter()
+
         repo = CRMRepository()
         # El contexto se reutiliza dentro del ciclo, pero se vuelve a cargar
         # en el siguiente para no conservar cambios de dominio/plantilla.
@@ -2052,8 +2119,10 @@ class ProspeccionContactSender:
             base_batch_size=self._batch_size,
             base_max_concurrency=self._max_concurrency,
         )
+        mark_stage("load_limits")
         if not self._channels or "whatsapp" in self._channels:
             await self._repair_pending_local_messages(repo)
+        mark_stage("repair_local_messages")
         provider_organization_ids: list[UUID] | None = None
         excluded_provider_organization_ids: list[UUID] | None = None
         if self._provider_filter:
@@ -2064,26 +2133,32 @@ class ProspeccionContactSender:
                 provider_organization_ids = enabled_postmark_ids
             else:
                 excluded_provider_organization_ids = enabled_postmark_ids
+        mark_stage("load_provider_scope")
         envios = await repo.worker_list_pending_envios(
             limit=effective_batch_size,
             canal=next(iter(self._channels)) if self._channels and len(self._channels) == 1 else None,
             organizacion_ids=provider_organization_ids,
             excluir_organizacion_ids=excluded_provider_organization_ids,
         )
+        mark_stage("fetch_pending_envios")
         if self._channels and len(self._channels) > 1:
             envios = [envio for envio in envios if _clean_text(envio.get("canal")) in self._channels]
         if not envios:
             await self._maybe_log_queue_depth(repo)
+            mark_stage("queue_depth")
+            stage_timings_ms["cycle_total"] = round((perf_counter() - cycle_started) * 1000, 2)
             log_event(
                 logger,
                 "prospeccion.sender_cycle",
                 fetched=0,
-                duration_ms=round((perf_counter() - cycle_started) * 1000, 2),
+                duration_ms=stage_timings_ms["cycle_total"],
+                stage_timings_ms=stage_timings_ms,
                 channels=sorted(self._channels) if self._channels else None,
             )
             return False
 
         postmark_contact_suppressions: dict[UUID, dict[str, dict[str, Any]]] = {}
+        postmark_enabled_by_org: dict[UUID, bool] = {}
         if self._provider_filter == "postmark":
             by_org: dict[UUID, set[UUID]] = {}
             emails_by_org: dict[UUID, list[str]] = {}
@@ -2100,6 +2175,13 @@ class ProspeccionContactSender:
 
             async def preload_postmark_org(org_id: UUID) -> None:
                 if self._postmark_preparation_cache:
+                    await self._postmark_preparation_cache.load_postmark_context(org_id)
+                    migration = await self._postmark_preparation_cache.migration(org_id)
+                    postmark_enabled_by_org[org_id] = bool(
+                        migration
+                        and migration.get("feature_enabled") is True
+                        and migration.get("status") in {"active", "validated", "migrated"}
+                    )
                     await self._postmark_preparation_cache.load_suppressed_emails(
                         org_id, emails_by_org.get(org_id, [])
                     )
@@ -2116,8 +2198,10 @@ class ProspeccionContactSender:
                 postmark_contact_suppressions[org_id] = suppression_map
 
             await asyncio.gather(*(preload_postmark_org(org_id) for org_id in by_org))
+        mark_stage("preload_postmark_context")
 
         semaphore = asyncio.Semaphore(effective_concurrency)
+        process_stage_timings: dict[str, dict[str, float]] = {}
         bulk_queue = (
             _PostmarkBulkQueue(
                 postmark_finalizer=lambda items: self._finalize_deferred_postmark_envios(
@@ -2144,6 +2228,12 @@ class ProspeccionContactSender:
                         repo,
                         envio,
                         bulk_queue=bulk_queue,
+                        preloaded_postmark_enabled=(
+                            postmark_enabled_by_org.get(org_id)
+                            if org_id is not None
+                            else None
+                        ),
+                        stage_metrics=process_stage_timings,
                         preloaded_contact_suppression=(
                             postmark_contact_suppressions.get(org_id)
                             if org_id is not None
@@ -2184,18 +2274,24 @@ class ProspeccionContactSender:
         for envio in envios:
             tasks.append(asyncio.create_task(_run_one(envio)))
         results = await asyncio.gather(*tasks)
+        mark_stage("process_envios")
         if bulk_queue:
             await bulk_queue.close()
+        mark_stage("postmark_bulk_persist")
         for maybe_error in results:
             if isinstance(maybe_error, CRMRepositoryError):
                 raise maybe_error
 
         await self._maybe_log_queue_depth(repo)
+        mark_stage("queue_depth")
+        stage_timings_ms["cycle_total"] = round((perf_counter() - cycle_started) * 1000, 2)
         log_event(
             logger,
             "prospeccion.sender_cycle",
             fetched=len(envios),
-            duration_ms=round((perf_counter() - cycle_started) * 1000, 2),
+            duration_ms=stage_timings_ms["cycle_total"],
+            stage_timings_ms=stage_timings_ms,
+            process_envio_stage_timings=process_stage_timings,
             effective_concurrency=effective_concurrency,
             channels=sorted(self._channels) if self._channels else None,
         )
@@ -2291,8 +2387,11 @@ class ProspeccionContactSender:
         bulk_queue: _PostmarkBulkQueue | None = None,
         postmark_queued_result: dict[str, Any] | None = None,
         skip_claim: bool = False,
+        preloaded_postmark_enabled: bool | None = None,
         preloaded_contact_suppression: dict[str, Any] | None = None,
+        stage_metrics: dict[str, dict[str, float]] | None = None,
     ) -> None:
+        envio_started = perf_counter()
         envio_id_value = envio.get("id")
         try:
             envio_id = UUID(str(envio_id_value))
@@ -2366,7 +2465,11 @@ class ProspeccionContactSender:
         postmark_queue_dispatch = False
         if canal == "correo" and org_uuid:
             try:
-                postmark_queue_dispatch = await _postmark_enabled_for_tenant(organizacion_id=org_uuid)
+                postmark_queue_dispatch = (
+                    preloaded_postmark_enabled
+                    if preloaded_postmark_enabled is not None
+                    else await _postmark_enabled_for_tenant(organizacion_id=org_uuid)
+                )
             except Exception as exc:  # pragma: no cover - configuración externa del tenant
                 log_event(
                     logger,
@@ -2459,7 +2562,9 @@ class ProspeccionContactSender:
                     return
 
         dispatch_started = perf_counter()
+        _record_stage_timing(stage_metrics, "envio_claim_and_routing", envio_started)
         if org_uuid and canal in {"correo", "whatsapp", "llamada"}:
+            suppression_started = perf_counter()
             if preloaded_contact_suppression is not None and canal == "correo":
                 suppression = preloaded_contact_suppression.get(str(prospecto_uuid)) if prospecto_uuid else None
             else:
@@ -2497,6 +2602,11 @@ class ProspeccionContactSender:
                             motivo=reservation.get("motivo"),
                         )
                         return
+                _record_stage_timing(
+                    stage_metrics,
+                    "envio_suppression_and_reservation",
+                    suppression_started,
+                )
                 if canal == "correo":
                     result = await _run_envio_correo(
                         correo_context,
@@ -2512,6 +2622,7 @@ class ProspeccionContactSender:
                         postmark_queued_result=(
                             postmark_queued_result if postmark_queue_dispatch else None
                         ),
+                        stage_metrics=stage_metrics,
                     )
                 elif canal == "whatsapp":
                     result = await _run_envio_whatsapp(
@@ -2521,6 +2632,12 @@ class ProspeccionContactSender:
                     )
                 else:
                     result = await _run_envio_llamada(detalle, payload)
+            if suppression:
+                _record_stage_timing(
+                    stage_metrics,
+                    "envio_suppression_and_reservation",
+                    suppression_started,
+                )
         elif canal == "correo":
             reservation = await repo.worker_reserve_envio_dispatch(envio_id=envio_id)
             if not reservation.get("permitido"):
@@ -2529,6 +2646,7 @@ class ProspeccionContactSender:
                 correo_context,
                 payload,
                 organizacion_id=org_uuid,
+                stage_metrics=stage_metrics,
             )
         elif canal == "whatsapp":
             reservation = await repo.worker_reserve_envio_dispatch(envio_id=envio_id)
@@ -2565,10 +2683,12 @@ class ProspeccionContactSender:
                 )
                 return
             queued_future = result.postmark_bulk_future
+            bulk_registration_started = perf_counter()
             bulk_queue.register_postmark_item(
                 envio=envio,
                 queued_future=queued_future,
             )
+            _record_stage_timing(stage_metrics, "postmark_bulk_registration", bulk_registration_started)
             return
 
         log_event(

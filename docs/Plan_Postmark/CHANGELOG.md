@@ -60,6 +60,19 @@ bloque `ready`.
 El preparador queda en `3` segundos mediante
 `POSTMARK_PREPARER_POLL_INTERVAL_SECONDS`.
 
+### Instrumentación de preparación
+
+El evento `prospeccion.sender_cycle` ahora registra `stage_timings_ms` para
+separar carga de límites, reparación local, scope de proveedor, lectura de
+envíos pendientes, precarga de contexto/supresiones, procesamiento de envíos,
+persistencia agrupada Postmark y profundidad de cola. Esta medición precede a
+cualquier aumento de concurrencia o cambio de tamaño de batch.
+
+Para el procesamiento de correo también registra métricas agregadas de
+validación, carga de contexto e imágenes, renderizado/tracking, validaciones
+del proveedor, encolado Postmark y registro en el batch. No se guardan cuerpos,
+destinatarios ni URLs en estas métricas.
+
 # Changelog — Plan Postmark
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
@@ -533,3 +546,26 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 
 - `backend/.venv/bin/python -m compileall` pasó para los módulos Postmark.
 - `10` pruebas de integración del cliente Postmark pasaron.
+
+## [2026-09-19]
+
+### Precarga del contexto por tenant
+
+- El preparador Postmark ahora carga una sola vez por tenant y por ciclo la
+  migración, el plan activo, el servidor y el dominio remitente verificado.
+- La detección de Postmark reutiliza el resultado precargado en cada correo;
+  se eliminó la consulta repetida de la migración durante el procesamiento
+  individual del lote.
+- La precarga ocurre fuera del flujo de Brevo y no cambia los límites,
+  reservas ni el transporte de WhatsApp.
+- Se mantienen la validación de dominio/servidor, la supresión por destinatario
+  y el envío final en `/email/batch` de Postmark.
+
+### Validación y siguiente medición
+
+- Pasaron las 27 pruebas enfocadas de Postmark y prospección.
+- Falta desplegar y reiniciar los workers para medir el lote real
+  `1a75a514-1170-433c-9da9-5263da09a7d3` contra un lote equivalente.
+- Se compararán especialmente `envio_claim_and_routing`,
+  `correo_context_and_assets`, `postmark_queue_enqueue` y
+  `preload_postmark_context`, además de p50/p95 y carga del servidor.

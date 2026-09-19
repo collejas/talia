@@ -393,3 +393,30 @@ en la latencia de la API. Brevo, WhatsApp e IMAP permanecen sin cambios.
   `POSTMARK_PREPARER_POLL_INTERVAL_SECONDS`.
 - El preparador conserva su intervalo independiente; Brevo, WhatsApp e IMAP no
   comparten este ajuste.
+
+## 2026-09-19 — Instrumentación por etapas del sender
+
+- `prospeccion.sender_cycle` ahora registra tiempos separados para scope,
+  lectura de pendientes, precarga de contexto, procesamiento de envíos,
+  persistencia Postmark y profundidad de cola.
+- El procesamiento de correo agrega tiempos acumulados de validación, contexto
+  e imágenes, renderizado/tracking, validaciones del proveedor, encolado y
+  registro en batch, sin incluir contenido sensible.
+- La instrumentación es sólo observabilidad: no cambia concurrencia, cuotas,
+  payloads ni comportamiento de Brevo, WhatsApp o IMAP.
+
+## 2026-09-19 — Precarga aislada del contexto Postmark
+
+- Por cada ciclo del preparador se precarga por tenant la configuración estable
+  de Postmark: migración, plan activo, servidor y dominio verificado.
+- Cada correo reutiliza ese contexto en memoria y deja de consultar la
+  migración de Postmark individualmente para decidir el proveedor.
+- La optimización se limita a tenants cuyo proveedor seleccionado es Postmark;
+  Brevo, WhatsApp e IMAP conservan sus rutas y límites actuales.
+- Se conservan las validaciones de seguridad de tenant, servidor, dominio,
+  stream y supresión antes de encolar el mensaje.
+
+La medición posterior al despliegue debe comparar las etapas instrumentadas del
+lote anterior con un lote equivalente, sin confundir el tiempo de precarga
+única con el tiempo de cada correo. El objetivo es reducir el procesamiento
+repetido sin mover el payload al API ni aumentar la concurrencia global.
