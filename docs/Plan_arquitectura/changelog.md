@@ -450,3 +450,19 @@ repetido sin mover el payload al API ni aumentar la concurrencia global.
   respuesta permite procesar únicamente los envíos reclamados.
 - La ruta anterior queda como fallback ante una falla de la RPC; Brevo,
   WhatsApp e IMAP permanecen sin cambios.
+
+## 2026-09-19 — Medición de componentes de precarga
+
+- El sender registra por tenant los tiempos de render context, configuración
+  Postmark, supresiones Postmark y supresiones CRM.
+- Sólo se registran cantidades y duración; no se exponen destinatarios,
+  payloads ni contenido de correo.
+- La siguiente optimización se decidirá con esa medición, evitando aumentar
+  concurrencia global sin evidencia.
+
+## 2026-09-19 — Caché Postmark sin bloqueo durante I/O
+
+- La consulta de supresiones Postmark se ejecuta fuera del lock de memoria y
+  sólo se sincroniza el resultado al terminar.
+- Se evita que una espera de Supabase bloquee la precarga de configuración,
+  imágenes y URL pública del tenant.

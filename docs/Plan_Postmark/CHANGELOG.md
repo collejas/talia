@@ -587,6 +587,25 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - El siguiente paso separado es evaluar un claim bulk de envíos; requiere una
   RPC idempotente y una migración propia antes de sustituir el claim actual.
 
+### Medición interna de la precarga
+
+- Se agregó la métrica `prospeccion.postmark_preload_components` para separar
+  `render_context`, `postmark_configuration`, `postmark_suppressions` y
+  `crm_suppressions`.
+- La métrica no registra correos, payloads ni contenido; sólo cantidades y
+  tiempos por tenant.
+- Después del siguiente lote se optimizará únicamente el componente que tenga
+  mayor duración.
+
+### Eliminación de bloqueo durante supresiones
+
+- La consulta de supresiones Postmark ya no mantiene el lock global de caché
+  mientras espera a Supabase.
+- El resultado se publica en la caché después de completar la consulta, sin
+  bloquear la precarga de configuración ni de renderizado.
+- La medición del siguiente lote debe confirmar que configuración y render no
+  esperan innecesariamente a la consulta de supresiones.
+
 ### Claim bulk Postmark
 
 - Se agregó `worker_claim_prospeccion_envios_bulk`, limitada a 500 elementos,

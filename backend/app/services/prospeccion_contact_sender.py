@@ -145,11 +145,14 @@ class _PostmarkPreparationCache:
         self, organizacion_id: UUID, email_addresses: list[str]
     ) -> None:
         async with self.lock:
-            if organizacion_id not in self.suppressed_emails:
-                self.suppressed_emails[organizacion_id] = await PostmarkRepository().list_suppressed_emails(
-                    organizacion_id=organizacion_id,
-                    email_addresses=email_addresses,
-                )
+            if organizacion_id in self.suppressed_emails:
+                return
+        suppressed = await PostmarkRepository().list_suppressed_emails(
+            organizacion_id=organizacion_id,
+            email_addresses=email_addresses,
+        )
+        async with self.lock:
+            self.suppressed_emails.setdefault(organizacion_id, suppressed)
 
     async def is_suppressed(self, organizacion_id: UUID, email_address: str) -> bool:
         async with self.lock:
@@ -2278,6 +2281,19 @@ class ProspeccionContactSender:
 
             async def preload_postmark_org(org_id: UUID) -> None:
                 if self._postmark_preparation_cache:
+                    preload_component_timings: dict[str, float] = {}
+
+                    async def timed_component(
+                        component: str,
+                        operation: Awaitable[Any],
+                    ) -> Any:
+                        started = perf_counter()
+                        result = await operation
+                        preload_component_timings[component] = round(
+                            (perf_counter() - started) * 1000, 2
+                        )
+                        return result
+
                     async def preload_render_context() -> None:
                         try:
                             await self._postmark_preparation_cache.load_render_context(
@@ -2292,16 +2308,34 @@ class ProspeccionContactSender:
                             )
 
                     _, _, _, rows = await asyncio.gather(
-                        preload_render_context(),
-                        self._postmark_preparation_cache.load_postmark_context(org_id),
-                        self._postmark_preparation_cache.load_suppressed_emails(
-                            org_id, emails_by_org.get(org_id, [])
+                        timed_component("render_context", preload_render_context()),
+                        timed_component(
+                            "postmark_configuration",
+                            self._postmark_preparation_cache.load_postmark_context(org_id),
                         ),
-                        repo.worker_list_active_contact_suppressions_for_prospectos(
-                            organizacion_id=org_id,
-                            prospecto_ids=sorted(by_org.get(org_id, set()), key=str),
-                            canal="correo",
+                        timed_component(
+                            "postmark_suppressions",
+                            self._postmark_preparation_cache.load_suppressed_emails(
+                                org_id, emails_by_org.get(org_id, [])
+                            ),
                         ),
+                        timed_component(
+                            "crm_suppressions",
+                            repo.worker_list_active_contact_suppressions_for_prospectos(
+                                organizacion_id=org_id,
+                                prospecto_ids=sorted(by_org.get(org_id, set()), key=str),
+                                canal="correo",
+                            ),
+                        ),
+                    )
+                    log_event(
+                        logger,
+                        "prospeccion.postmark_preload_components",
+                        organizacion_id=str(org_id),
+                        template_count=len(template_ids_by_org.get(org_id, set())),
+                        prospect_count=len(by_org.get(org_id, set())),
+                        email_count=len(emails_by_org.get(org_id, [])),
+                        component_timings_ms=preload_component_timings,
                     )
                 else:
                     rows = await repo.worker_list_active_contact_suppressions_for_prospectos(
