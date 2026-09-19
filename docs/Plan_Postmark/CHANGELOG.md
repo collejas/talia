@@ -80,6 +80,18 @@ entrega mantendrá un batch activo por tenant, con backpressure medible.
 - La latencia de la API y el consumo de CPU/memoria se comparan contra una
   línea base antes de habilitar mayor concurrencia.
 
+### Primera implementación de la fase
+
+- `talia-postmark-preparer.service` reutiliza durante cada ciclo el contexto
+  estable del tenant: URL pública, imágenes de plantilla, dominio verificado y
+  activación de Postmark.
+- El cache se reinicia por ciclo para no conservar cambios de configuración y
+  usa exclusión mutua para evitar consultas duplicadas entre tareas concurrentes.
+- Brevo y WhatsApp no utilizan este cache ni modifican sus límites.
+- La siguiente iteración todavía debe sustituir las escrituras por destinatario
+  por inserciones/RPCs agrupadas; no se marca esta fase como terminada hasta
+  medir esa mejora con lotes de 500.
+
 ### Diagnóstico
 
 - La prueba de 25 mensajes confirmó que el worker ya puede enviar un único `postmark.batch_dispatch` con `batch_size=25`; la integración `/email/batch` funciona.

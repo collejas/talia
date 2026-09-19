@@ -7,6 +7,15 @@ Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIO
 - Se agregó una migración correctiva para calificar las columnas de `tenant_email_messages` al cerrar `tenant_email_delivery_batches`.
 - La corrección evita que un bloque ya enviado permanezca en `sending` por una ambigüedad SQL; no reenvía ni modifica mensajes ya aceptados.
 
+## 2026-09-19 — Primera optimización de preparación Postmark
+
+- El preparador reutiliza por ciclo el contexto estable del tenant y evita
+  consultas duplicadas de URL pública, imágenes, dominio y activación Postmark.
+- La optimización está limitada a Postmark; Brevo y WhatsApp conservan sus
+  workers, límites y backpressure.
+- Queda pendiente la persistencia agrupada de mensajes y bitácoras; se requiere
+  medirla antes de aumentar la concurrencia.
+
 ## 2026-09-19 — Implementación de preparación Postmark y webhooks durables
 
 ### Cambios aplicados en código

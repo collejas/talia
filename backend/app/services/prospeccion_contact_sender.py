@@ -73,6 +73,54 @@ class ContactEnvioResult:
     retryable: bool = False
 
 
+@dataclass(slots=True)
+class _PostmarkPreparationCache:
+    """Contexto estable reutilizable durante un ciclo del preparador."""
+
+    public_base_urls: dict[UUID, str | None]
+    template_images: dict[tuple[UUID, UUID], dict[str, Any]]
+    domains: dict[UUID, dict[str, Any] | None]
+    lock: asyncio.Lock
+
+    def __init__(self) -> None:
+        self.public_base_urls = {}
+        self.template_images = {}
+        self.domains = {}
+        self.lock = asyncio.Lock()
+
+    async def public_base_url(self, organizacion_id: UUID) -> str | None:
+        async with self.lock:
+            if organizacion_id not in self.public_base_urls:
+                self.public_base_urls[organizacion_id] = await tenant_runtime.get_org_public_base_url(
+                    organizacion_id=organizacion_id
+                )
+        return self.public_base_urls[organizacion_id]
+
+    async def template_image_context(
+        self, organizacion_id: UUID, template_id: UUID
+    ) -> dict[str, Any]:
+        key = (organizacion_id, template_id)
+        async with self.lock:
+            if key not in self.template_images:
+                context = await CRMRepository().list_contact_template_image_context(
+                    organizacion_id=organizacion_id,
+                    template_id=template_id,
+                )
+                self.template_images[key] = dict(context or {})
+        return dict(self.template_images[key])
+
+    async def verified_domain(
+        self, organizacion_id: UUID
+    ) -> dict[str, Any] | None:
+        async with self.lock:
+            if organizacion_id not in self.domains:
+                self.domains[organizacion_id] = await PostmarkRepository().get_verified_domain(
+                    organizacion_id=organizacion_id
+                )
+        domain = self.domains[organizacion_id]
+        return dict(domain) if domain else None
+
+
 def _clean_text(value: Any) -> str | None:
     if isinstance(value, str):
         trimmed = value.strip()
@@ -1009,6 +1057,8 @@ async def _run_envio_correo(
     payload: dict[str, Any],
     *,
     organizacion_id: UUID | None = None,
+    postmark_enabled: bool | None = None,
+    preparation_cache: _PostmarkPreparationCache | None = None,
 ) -> ContactEnvioResult:
     email_value = _clean_text(envio.get("email"))
     if not email_value:
@@ -1028,7 +1078,11 @@ async def _run_envio_correo(
     effective_payload = payload
     if organizacion_id:
         try:
-            public_base_url = await tenant_runtime.get_org_public_base_url(organizacion_id=organizacion_id)
+            public_base_url = (
+                await preparation_cache.public_base_url(organizacion_id)
+                if preparation_cache
+                else await tenant_runtime.get_org_public_base_url(organizacion_id=organizacion_id)
+            )
         except Exception as exc:  # pragma: no cover - fallback a metadata/valores globales
             log_event(
                 logger,
@@ -1041,9 +1095,14 @@ async def _run_envio_correo(
         template_id_raw = _clean_text(effective_payload.get("template_id"))
         if template_id_raw:
             try:
-                image_context = await CRMRepository().list_contact_template_image_context(
-                    organizacion_id=organizacion_id,
-                    template_id=UUID(template_id_raw),
+                template_uuid = UUID(template_id_raw)
+                image_context = (
+                    await preparation_cache.template_image_context(organizacion_id, template_uuid)
+                    if preparation_cache
+                    else await CRMRepository().list_contact_template_image_context(
+                        organizacion_id=organizacion_id,
+                        template_id=template_uuid,
+                    )
                 )
             except (CRMRepositoryError, TypeError, ValueError) as exc:
                 log_event(
@@ -1102,10 +1161,11 @@ async def _run_envio_correo(
     message_kind = _clean_text(
         effective_payload.get("email_message_kind") or metadata.get("email_message_kind")
     )
-    postmark_enabled = bool(
-        organizacion_id
-        and await _postmark_enabled_for_tenant(organizacion_id=organizacion_id)
-    )
+    if postmark_enabled is None:
+        postmark_enabled = bool(
+            organizacion_id
+            and await _postmark_enabled_for_tenant(organizacion_id=organizacion_id)
+        )
     if message_kind == "broadcast":
         body, body_html = _ensure_broadcast_unsubscribe(
             body=body,
@@ -1126,6 +1186,7 @@ async def _run_envio_correo(
             body=body,
             body_html=body_html,
             organizacion_id=organizacion_id,
+            preparation_cache=preparation_cache,
         )
 
     mail_settings = None
@@ -1275,11 +1336,16 @@ async def _queue_postmark_prospeccion_email(
     body: str,
     body_html: str | None,
     organizacion_id: UUID,
+    preparation_cache: _PostmarkPreparationCache | None = None,
 ) -> ContactEnvioResult:
     """Encola prospección en Postmark sin pasar por el servicio de correo legado."""
 
     repository = PostmarkRepository()
-    domain = await repository.get_verified_domain(organizacion_id=organizacion_id)
+    domain = (
+        await preparation_cache.verified_domain(organizacion_id)
+        if preparation_cache
+        else await repository.get_verified_domain(organizacion_id=organizacion_id)
+    )
     if not domain:
         return ContactEnvioResult(
             estado="error",
@@ -1633,6 +1699,7 @@ class ProspeccionContactSender:
         self._last_queue_observation_at = 0.0
         self._provider_scope_cached_at = 0.0
         self._provider_scope_cache: list[UUID] | None = None
+        self._postmark_preparation_cache = _PostmarkPreparationCache()
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -1704,6 +1771,9 @@ class ProspeccionContactSender:
     async def _process_pending_envios(self) -> bool:
         cycle_started = perf_counter()
         repo = CRMRepository()
+        # El contexto se reutiliza dentro del ciclo, pero se vuelve a cargar
+        # en el siguiente para no conservar cambios de dominio/plantilla.
+        self._postmark_preparation_cache = _PostmarkPreparationCache()
         (
             effective_batch_size,
             effective_concurrency,
@@ -2089,6 +2159,12 @@ class ProspeccionContactSender:
                         correo_context,
                         payload,
                         organizacion_id=org_uuid,
+                        postmark_enabled=postmark_queue_dispatch,
+                        preparation_cache=(
+                            self._postmark_preparation_cache
+                            if postmark_queue_dispatch
+                            else None
+                        ),
                     )
                 elif canal == "whatsapp":
                     result = await _run_envio_whatsapp(
