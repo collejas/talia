@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import hashlib
 import secrets
 from uuid import UUID
 
@@ -14,7 +15,6 @@ from app.core.config import settings
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services.stripe_billing import StripeProcessingError, StripeWebhookError, process_stripe_webhook
 from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
-from app.services.postmark.webhooks import process_postmark_event
 
 from .admin import get_platform_repo
 
@@ -57,15 +57,42 @@ async def postmark_webhook(
         server = await repository.get_server_by_id(server_id=server_id)
         if not server or server.get("server_status") != "active":
             raise HTTPException(status_code=404, detail="postmark_server_not_found")
-        result = await process_postmark_event(
-            repository=repository,
-            organizacion_id=UUID(str(server["organizacion_id"])),
-            server_id=server_id,
-            message_stream=message_stream,
-            payload=payload,
-            trace_id=request.headers.get("X-PM-Webhook-Trace-Id"),
+        record_type = str(payload.get("RecordType") or "").strip()
+        if record_type not in {"Delivery", "Bounce", "Open", "Click", "SpamComplaint", "SubscriptionChange"}:
+            raise HTTPException(status_code=400, detail="postmark_webhook_event_type_invalid")
+        trace_id = request.headers.get("X-PM-Webhook-Trace-Id")
+        raw_message_id = str(payload.get("MessageID") or "").strip()
+        raw_event_id = str(payload.get("ID") or "").strip()
+        event_date = str(
+            payload.get("DeliveredAt")
+            or payload.get("BouncedAt")
+            or payload.get("ReceivedAt")
+            or payload.get("ChangedAt")
+            or ""
+        ).strip()
+        event_key = (trace_id or raw_event_id or f"{record_type}:{raw_message_id}:{event_date}").strip()
+        if not event_key:
+            event_key = hashlib.sha256(repr(sorted(payload.items())).encode("utf-8")).hexdigest()
+        queued = await repository.enqueue_webhook_job(
+            payload={
+                "p_organizacion_id": str(server["organizacion_id"]),
+                "p_server_id": str(server_id),
+                "p_message_stream": message_stream,
+                "p_event_type": record_type,
+                "p_event_key": event_key[:500],
+                "p_external_message_id": raw_message_id or None,
+                "p_webhook_trace_id": trace_id[:200] if trace_id else None,
+                "p_payload": payload,
+            }
         )
-        return result
+        return JSONResponse(
+            status_code=200,
+            content={
+                "accepted": True,
+                "queued": bool(queued.get("created")),
+                "duplicate": not bool(queued.get("created")),
+            },
+        )
     except HTTPException:
         raise
     except (PostmarkRepositoryError, ValueError) as exc:

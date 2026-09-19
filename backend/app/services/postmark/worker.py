@@ -17,6 +17,7 @@ from .repository import PostmarkRepository, PostmarkRepositoryError
 from .provisioning import PostmarkProvisioningError, PostmarkProvisioningService
 from .service import PostmarkService
 from .synchronization import synchronize_hard_bounces, synchronize_outbound_messages
+from .webhooks import process_postmark_event
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,10 @@ class PostmarkWorker:
                     extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
                 )
                 continue
+            await self._process_webhook_jobs(
+                repository=repository,
+                organizacion_id=organizacion_id,
+            )
             token = await get_secret_plaintext(
                 organizacion_id=organizacion_id,
                 clave=str(server.get("server_token_secret_key") or "postmark.server_token"),
@@ -68,6 +73,41 @@ class PostmarkWorker:
                 transactional_stream=str(server.get("transactional_stream") or "outbound"),
                 broadcast_stream=str(server.get("broadcast_stream") or "broadcast"),
             )
+
+            # Los bloques preparados ya representan el payload lógico completo
+            # de hasta 500 mensajes. La entrega no reconstruye lotes parciales
+            # por disponibilidad accidental de la cola.
+            for delivery_batch in await repository.list_ready_delivery_batches(
+                organizacion_id=organizacion_id,
+                limit=50,
+            ):
+                raw_delivery_batch_id = delivery_batch.get("id")
+                try:
+                    delivery_batch_id = UUID(str(raw_delivery_batch_id))
+                except (TypeError, ValueError):
+                    continue
+                claimed_batch = await repository.claim_delivery_batch(
+                    organizacion_id=organizacion_id,
+                    delivery_batch_id=delivery_batch_id,
+                    limit=self.batch_size,
+                )
+                if not claimed_batch:
+                    await repository.finish_delivery_batch(
+                        organizacion_id=organizacion_id,
+                        delivery_batch_id=delivery_batch_id,
+                    )
+                    continue
+                await self._deliver_claimed(
+                    repository=repository,
+                    service=service,
+                    organizacion_id=organizacion_id,
+                    client=client,
+                    claimed=claimed_batch,
+                )
+                await repository.finish_delivery_batch(
+                    organizacion_id=organizacion_id,
+                    delivery_batch_id=delivery_batch_id,
+                )
 
             # Los lotes de prospección esperan a que Talia termine de preparar
             # todos sus mensajes. Así /email/batch recibe el arreglo completo
@@ -106,6 +146,54 @@ class PostmarkWorker:
                 )
         if settings.postmark_sync_enabled and self._sync_is_due():
             processed += await self._synchronize_history(repository)
+        return processed
+
+    async def _process_webhook_jobs(
+        self,
+        *,
+        repository: PostmarkRepository,
+        organizacion_id: UUID,
+    ) -> int:
+        processed = 0
+        for job in await repository.claim_webhook_jobs(
+            organizacion_id=organizacion_id,
+            limit=25,
+        ):
+            try:
+                job_id = UUID(str(job["id"]))
+                server_id = UUID(str(job["server_id"]))
+                payload = job.get("payload")
+                if not isinstance(payload, dict):
+                    raise ValueError("postmark_webhook_job_payload_invalid")
+                await process_postmark_event(
+                    repository=repository,
+                    organizacion_id=organizacion_id,
+                    server_id=server_id,
+                    message_stream=str(job.get("message_stream") or ""),
+                    payload=payload,
+                    trace_id=str(job.get("webhook_trace_id") or "") or None,
+                    source="webhook",
+                )
+                await repository.finish_webhook_job(job_id=job_id, success=True)
+                processed += 1
+            except Exception as exc:  # pragma: no cover - depende de Supabase/proveedor
+                try:
+                    await repository.finish_webhook_job(
+                        job_id=UUID(str(job["id"])),
+                        success=False,
+                        error_code=type(exc).__name__,
+                        error_message=str(exc),
+                        retry_seconds=min(900, 30 * (2 ** max(int(job.get("attempt_count") or 1) - 1, 0))),
+                    )
+                except Exception:
+                    logger.exception(
+                        "postmark.webhook_job_retry_persist_failed",
+                        extra={"job_id": str(job.get("id"))},
+                    )
+                logger.exception(
+                    "postmark.webhook_job_failed",
+                    extra={"job_id": str(job.get("id")), "organizacion_id": str(organizacion_id)},
+                )
         return processed
 
     async def _deliver_claimed(

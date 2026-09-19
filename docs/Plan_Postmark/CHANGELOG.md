@@ -8,6 +8,37 @@
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-09-19] — Implementación del preparador y cola durable de webhooks
+
+### Cambios
+
+- Se agregó `tenant_email_delivery_batches` para persistir bloques homogéneos de hasta 500 mensajes por tenant, lote, tipo y stream.
+- Se agregó `delivery_batch_id` a `tenant_email_messages` para impedir que un mensaje preparado salga por el claim genérico.
+- Se agregaron RPCs para preparar bloques, reclamarlos con `SKIP LOCKED` y cerrar su estado sin mantener transacciones abiertas durante la llamada externa.
+- Se creó `backend/app/workers/postmark_preparer.py` y la unidad `talia-postmark-preparer.service`; este proceso prepara Postmark sin llamar al proveedor.
+- `talia-email-worker.service` quedó dedicado a entrega Brevo/Postmark y ya no inicia el sender de preparación Postmark.
+- La entrega Postmark reclama bloques preparados y realiza `/email/batch`; el fallback legado sólo atiende mensajes sin bloque durante la transición.
+- Se agregó `tenant_email_webhook_jobs` con claim, lease, reintentos e idempotencia.
+- El endpoint Postmark ahora persiste el trabajo y responde rápidamente; el worker procesa posteriormente el evento y sus supresiones/métricas.
+
+### Seguridad y aislamiento
+
+- La cola de lotes y la cola de webhooks son exclusivas de `service_role` y mantienen `organizacion_id`/servidor como parte de sus claves operativas.
+- Brevo y WhatsApp no comparten la preparación Postmark ni sus límites de concurrencia.
+- El payload JSON sólo conserva el contenido crudo del webhook; los estados, tenant, servidor, evento, intentos y leases son columnas explícitas.
+
+### Validaciones
+
+- Compilación de backend: aprobada.
+- Pruebas enfocadas Postmark, integración Postmark y sender de prospección: `37 passed`.
+- `git diff --check`: aprobado.
+
+### Pendientes operativos
+
+- Aplicar la migración `20260922_120000_postmark_preparation_and_webhook_queue.sql`.
+- Instalar y arrancar `talia-postmark-preparer.service`; no se reiniciaron servicios desde este cambio.
+- Ejecutar pruebas reales de 25, 500 y más de 500 mensajes y confirmar CPU, memoria, Supabase, tamaño de payload y llamadas `/email/batch`.
+
 ## [2026-09-19] — Plan de aislamiento de preparación y entrega
 
 ### Diagnóstico

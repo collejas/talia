@@ -321,6 +321,26 @@ class Settings(BaseSettings):
             "TALIA_POSTMARK_WORKER_INTER_BATCH_SECONDS",
         ),
     )
+    postmark_preparer_max_concurrency: int = Field(
+        default=4,
+        ge=1,
+        le=12,
+        description="Concurrencia del preparador Postmark, separada de la entrega y de Brevo.",
+        validation_alias=AliasChoices(
+            "POSTMARK_PREPARER_MAX_CONCURRENCY",
+            "TALIA_POSTMARK_PREPARER_MAX_CONCURRENCY",
+        ),
+    )
+    postmark_preparer_poll_interval_seconds: float = Field(
+        default=5.0,
+        ge=1.0,
+        le=60.0,
+        description="Intervalo del preparador Postmark para detectar lotes completados.",
+        validation_alias=AliasChoices(
+            "POSTMARK_PREPARER_POLL_INTERVAL_SECONDS",
+            "TALIA_POSTMARK_PREPARER_POLL_INTERVAL_SECONDS",
+        ),
+    )
     postmark_transactional_stream: str = Field(
         default="outbound",
         validation_alias=AliasChoices(

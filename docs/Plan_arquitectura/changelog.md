@@ -2,6 +2,22 @@
 
 Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIONES_Y_PLAN_SEPARACION.md](./AUDITORIA_COMUNICACIONES_Y_PLAN_SEPARACION.md).
 
+## 2026-09-19 — Implementación de preparación Postmark y webhooks durables
+
+### Cambios aplicados en código
+
+- Se agregó un preparador Postmark independiente y su unidad systemd.
+- Se agregaron bloques persistentes de entrega de máximo 500 mensajes y RPCs de reclamación idempotente.
+- El worker de entrega conserva la separación de Brevo y Postmark y sólo envía bloques preparados mediante `/email/batch`.
+- El endpoint Postmark ahora encola la recepción autenticada y responde sin ejecutar todas las escrituras de eventos.
+- El worker procesa los webhooks con lease, reintentos y deduplicación.
+
+### Estado de despliegue
+
+- El código y la migración están preparados, pero la migración aún debe aplicarse en Supabase.
+- La unidad `talia-postmark-preparer.service` aún debe instalarse y arrancarse en producción.
+- No se modificaron datos ni se reiniciaron servicios durante esta implementación.
+
 ## Estado general
 
 - [x] Auditoría técnica inicial.

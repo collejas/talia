@@ -1,23 +1,23 @@
 [Unit]
-Description=TalIA email delivery worker (Brevo and Postmark)
-After=network-online.target
+Description=TalIA Postmark preparation worker
+After=network-online.target talia-email-worker.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/var/www/talia/backend
-ExecStart=/var/www/talia/backend/scripts/run_email_worker.sh
+ExecStart=/var/www/talia/backend/scripts/run_postmark_preparer.sh
 EnvironmentFile=/var/www/talia/backend/.env
 Environment=TALIA_POSTMARK_WORKER_IN_API=false
+Environment=PYTHONUNBUFFERED=1
 Restart=always
 RestartSec=5
-Environment=PYTHONUNBUFFERED=1
 User=jorge
 Group=jorge
 NoNewPrivileges=true
 PrivateTmp=true
 MemoryMax=256M
-CPUQuota=40%
+CPUQuota=20%
 
 [Install]
 WantedBy=multi-user.target

@@ -589,6 +589,7 @@ class PostmarkRepository:
                 "select": "source_batch_id",
                 "organizacion_id": f"eq.{organizacion_id}",
                 "source_batch_id": "not.is.null",
+                "delivery_batch_id": "is.null",
                 "status": "in.(queued,processing)",
                 "order": "queued_at.asc",
                 "limit": "5000",
@@ -605,6 +606,121 @@ class PostmarkRepository:
                 seen.add(batch_id)
                 result.append(batch_id)
         return result
+
+    async def prepare_delivery_batches(
+        self,
+        *,
+        organizacion_id: UUID,
+        source_batch_id: UUID,
+        max_messages: int = 500,
+    ) -> list[dict[str, Any]]:
+        data = await self._rpc(
+            "tenant_email_prepare_delivery_batches",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_source_batch_id": str(source_batch_id),
+                "p_max_messages": max(1, min(max_messages, 500)),
+            },
+        )
+        if not isinstance(data, list):
+            raise PostmarkRepositoryError("delivery_batch_prepare_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_ready_delivery_batches(
+        self, *, organizacion_id: UUID, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        return await self._get_many(
+            "/rest/v1/tenant_email_delivery_batches",
+            params={
+                "select": "id,organizacion_id,source_batch_id,message_kind,message_stream,sequence_number,message_count,status,attempt_count",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "status": "in.(ready,retry_wait)",
+                "order": "prepared_at.asc,id.asc",
+                "limit": str(max(1, min(limit, 100))),
+            },
+        )
+
+    async def claim_delivery_batch(
+        self,
+        *,
+        organizacion_id: UUID,
+        delivery_batch_id: UUID,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        data = await self._rpc(
+            "tenant_email_claim_delivery_batch",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_delivery_batch_id": str(delivery_batch_id),
+                "p_limit": max(1, min(limit, 500)),
+                "p_stale_after_seconds": 600,
+            },
+        )
+        if not isinstance(data, list):
+            raise PostmarkRepositoryError("delivery_batch_claim_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def finish_delivery_batch(
+        self,
+        *,
+        organizacion_id: UUID,
+        delivery_batch_id: UUID,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> dict[str, Any] | None:
+        data = await self._rpc(
+            "tenant_email_finish_delivery_batch",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_delivery_batch_id": str(delivery_batch_id),
+                "p_error_code": error_code,
+                "p_error_message": error_message,
+            },
+        )
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        return data[0]
+
+    async def enqueue_webhook_job(self, *, payload: dict[str, Any]) -> dict[str, Any]:
+        data = await self._rpc("tenant_email_enqueue_webhook_job", payload)
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise PostmarkRepositoryError("webhook_job_enqueue_invalid_response")
+        return data[0]
+
+    async def claim_webhook_jobs(
+        self, *, organizacion_id: UUID, limit: int = 25
+    ) -> list[dict[str, Any]]:
+        data = await self._rpc(
+            "tenant_email_claim_webhook_jobs",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_limit": max(1, min(limit, 100)),
+                "p_stale_after_seconds": 300,
+            },
+        )
+        if not isinstance(data, list):
+            raise PostmarkRepositoryError("webhook_job_claim_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def finish_webhook_job(
+        self,
+        *,
+        job_id: UUID,
+        success: bool,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        retry_seconds: int = 60,
+    ) -> None:
+        await self._rpc(
+            "tenant_email_finish_webhook_job",
+            {
+                "p_job_id": str(job_id),
+                "p_success": success,
+                "p_error_code": error_code,
+                "p_error_message": error_message,
+                "p_retry_seconds": max(1, min(retry_seconds, 3600)),
+            },
+        )
 
     async def get_contact_batch(self, *, batch_id: UUID) -> dict[str, Any] | None:
         """Obtiene el estado operativo de un lote de prospección."""
@@ -796,6 +912,8 @@ class PostmarkRepository:
             raise PostmarkRepositoryError(
                 f"queue_failed:{response.status_code}:{safe_detail}" if safe_detail else f"queue_failed:{response.status_code}"
             )
+        if response.status_code == 204 or not response.content:
+            return None
         return response.json()
 
 

@@ -37,15 +37,7 @@ async def _run() -> None:
         channels=("correo",),
         provider="brevo",
     )
-    postmark_sender = ProspeccionContactSender(
-        batch_size=settings.postmark_prospeccion_batch_size,
-        max_concurrency=settings.postmark_prospeccion_max_concurrency,
-        per_minute_limit=settings.postmark_prospeccion_per_minute_limit,
-        channels=("correo",),
-        provider="postmark",
-    )
     await brevo_sender.start()
-    await postmark_sender.start()
     await postmark_worker.start()
     logger.info(
         "email_worker.started",
@@ -58,7 +50,6 @@ async def _run() -> None:
         await stop_event.wait()
     finally:
         await brevo_sender.shutdown()
-        await postmark_sender.shutdown()
         await postmark_worker.shutdown()
         logger.info("email_worker.stopped")
 
