@@ -68,55 +68,101 @@ class PostmarkWorker:
                 transactional_stream=str(server.get("transactional_stream") or "outbound"),
                 broadcast_stream=str(server.get("broadcast_stream") or "broadcast"),
             )
+
+            # Los lotes de prospección esperan a que Talia termine de preparar
+            # todos sus mensajes. Así /email/batch recibe el arreglo completo
+            # del lote, en lugar de lo que casualmente alcanzó la cola.
+            for source_batch_id in await repository.list_queued_source_batches(
+                organizacion_id=organizacion_id
+            ):
+                source_batch = await repository.get_contact_batch(batch_id=source_batch_id)
+                if not source_batch or source_batch.get("estado") != "completado":
+                    continue
+                claimed_batch = await repository.claim_messages_for_batch(
+                    organizacion_id=organizacion_id,
+                    source_batch_id=source_batch_id,
+                    limit=self.batch_size,
+                )
+                if claimed_batch:
+                    processed += await self._deliver_claimed(
+                        repository=repository,
+                        service=service,
+                        organizacion_id=organizacion_id,
+                        client=client,
+                        claimed=claimed_batch,
+                    )
+
             claimed = await repository.claim_messages(
                 organizacion_id=organizacion_id,
                 limit=self.batch_size,
             )
             if claimed:
-                try:
-                    deliveries = await service.deliver_claimed_batch(
-                        organizacion_id=organizacion_id,
-                        claimed_rows=claimed,
-                        client=client,
-                        inter_batch_seconds=settings.postmark_worker_inter_batch_seconds,
-                    )
-                    crm_repo = CRMRepository()
-                    for delivery in deliveries:
-                        message_id = delivery.get("message_id")
-                        if not message_id:
-                            continue
-                        idempotency_key = await repository.get_message_idempotency_key(
-                            message_id=UUID(str(message_id))
-                        )
-                        envio_id = self._prospeccion_envio_id(idempotency_key)
-                        if not envio_id:
-                            continue
-                        if delivery.get("provider_accepted") and delivery.get("provider_message_id"):
-                            await crm_repo.worker_complete_envio(
-                                envio_id=envio_id,
-                                payload={
-                                    "mensaje_id": delivery["provider_message_id"],
-                                    "proveedor_aceptado_en": datetime.now(timezone.utc).isoformat(),
-                                },
-                            )
-                        elif not delivery.get("provider_accepted"):
-                            await crm_repo.worker_complete_envio(
-                                envio_id=envio_id,
-                                payload={
-                                    "estado": "error",
-                                    "error": "postmark_provider_rejected",
-                                    "procesado_en": datetime.now(timezone.utc).isoformat(),
-                                },
-                            )
-                    processed += len(deliveries)
-                except (PostmarkError, PostmarkRepositoryError, CRMRepositoryError, ValueError) as exc:
-                    logger.exception(
-                        "postmark.worker_batch_failed",
-                        extra={"organizacion_id": str(organizacion_id), "batch_size": len(claimed), "error": str(exc)},
-                    )
+                processed += await self._deliver_claimed(
+                    repository=repository,
+                    service=service,
+                    organizacion_id=organizacion_id,
+                    client=client,
+                    claimed=claimed,
+                )
         if settings.postmark_sync_enabled and self._sync_is_due():
             processed += await self._synchronize_history(repository)
         return processed
+
+    async def _deliver_claimed(
+        self,
+        *,
+        repository: PostmarkRepository,
+        service: PostmarkService,
+        organizacion_id: UUID,
+        client: PostmarkClient,
+        claimed: list[dict[str, object]],
+    ) -> int:
+        try:
+            deliveries = await service.deliver_claimed_batch(
+                organizacion_id=organizacion_id,
+                claimed_rows=claimed,
+                client=client,
+                inter_batch_seconds=settings.postmark_worker_inter_batch_seconds,
+            )
+            crm_repo = CRMRepository()
+            for delivery in deliveries:
+                message_id = delivery.get("message_id")
+                if not message_id:
+                    continue
+                idempotency_key = await repository.get_message_idempotency_key(
+                    message_id=UUID(str(message_id))
+                )
+                envio_id = self._prospeccion_envio_id(idempotency_key)
+                if not envio_id:
+                    continue
+                if delivery.get("provider_accepted") and delivery.get("provider_message_id"):
+                    await crm_repo.worker_complete_envio(
+                        envio_id=envio_id,
+                        payload={
+                            "mensaje_id": delivery["provider_message_id"],
+                            "proveedor_aceptado_en": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                elif not delivery.get("provider_accepted"):
+                    await crm_repo.worker_complete_envio(
+                        envio_id=envio_id,
+                        payload={
+                            "estado": "error",
+                            "error": "postmark_provider_rejected",
+                            "procesado_en": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+            return len(deliveries)
+        except (PostmarkError, PostmarkRepositoryError, CRMRepositoryError, ValueError) as exc:
+            logger.exception(
+                "postmark.worker_batch_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "batch_size": len(claimed),
+                    "error": str(exc),
+                },
+            )
+            return 0
 
     def _sync_is_due(self) -> bool:
         if self._last_sync_at is None:

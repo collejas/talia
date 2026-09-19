@@ -97,6 +97,7 @@ class PostmarkService:
         idempotency_key: str,
         template_id: UUID | None = None,
         template_version: int | None = None,
+        source_batch_id: UUID | None = None,
         max_attempts: int = 3,
     ) -> dict[str, object]:
         """Valida y reserva cuota para un mensaje Postmark sin enviarlo."""
@@ -105,8 +106,7 @@ class PostmarkService:
             message=message,
             message_kind=message_kind,
         )
-        queued = await self.repository.queue_message(
-            payload={
+        queue_payload = {
                 "p_organizacion_id": str(organizacion_id),
                 "p_migration_id": str(context.migration_id),
                 "p_domain_id": str(context.domain_id),
@@ -125,8 +125,10 @@ class PostmarkService:
                 "p_text_body": message.text_body,
                 "p_tag": message.tag,
                 "p_max_attempts": max_attempts,
-            }
-        )
+        }
+        if source_batch_id:
+            queue_payload["p_source_batch_id"] = str(source_batch_id)
+        queued = await self.repository.queue_message(payload=queue_payload)
         return {
             "message_id": queued.get("message_id"),
             "usage_period_id": queued.get("usage_period_id"),

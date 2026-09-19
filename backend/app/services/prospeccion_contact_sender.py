@@ -1327,6 +1327,11 @@ async def _queue_postmark_prospeccion_email(
             message=message,
             message_kind=message_kind,
             idempotency_key=f"prospeccion-envio:{envio['id']}",
+            source_batch_id=(
+                UUID(str(envio["batch_id"]))
+                if envio.get("batch_id")
+                else None
+            ),
             # El constructor de prospección y las plantillas Postmark son
             # catálogos distintos. En esta etapa Talia ya renderiza y guarda
             # el contenido completo; no se debe enviar el UUID del catálogo

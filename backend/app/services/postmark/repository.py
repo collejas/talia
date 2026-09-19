@@ -534,7 +534,12 @@ class PostmarkRepository:
 
     async def queue_message(self, *, payload: dict[str, Any]) -> dict[str, Any]:
         """Encola y reserva cuota mediante la RPC atómica propia de Postmark."""
-        data = await self._rpc("tenant_email_queue_message", payload)
+        function_name = (
+            "tenant_email_queue_message_with_batch"
+            if payload.get("p_source_batch_id")
+            else "tenant_email_queue_message"
+        )
+        data = await self._rpc(function_name, payload)
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise PostmarkRepositoryError("queue_invalid_response")
         return data[0]
@@ -556,6 +561,61 @@ class PostmarkRepository:
         if not isinstance(data, list):
             raise PostmarkRepositoryError("claim_invalid_response")
         return [row for row in data if isinstance(row, dict)]
+
+    async def claim_messages_for_batch(
+        self,
+        *,
+        organizacion_id: UUID,
+        source_batch_id: UUID,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        data = await self._rpc(
+            "tenant_email_claim_messages_for_batch",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_source_batch_id": str(source_batch_id),
+                "p_limit": max(1, min(limit, 500)),
+                "p_stale_after_seconds": 600,
+            },
+        )
+        if not isinstance(data, list):
+            raise PostmarkRepositoryError("batch_claim_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def list_queued_source_batches(self, *, organizacion_id: UUID) -> list[UUID]:
+        rows = await self._get_many(
+            "/rest/v1/tenant_email_messages",
+            params={
+                "select": "source_batch_id",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "source_batch_id": "not.is.null",
+                "status": "in.(queued,processing)",
+                "order": "queued_at.asc",
+                "limit": "5000",
+            },
+        )
+        result: list[UUID] = []
+        seen: set[UUID] = set()
+        for row in rows:
+            try:
+                batch_id = UUID(str(row.get("source_batch_id")))
+            except (TypeError, ValueError):
+                continue
+            if batch_id not in seen:
+                seen.add(batch_id)
+                result.append(batch_id)
+        return result
+
+    async def get_contact_batch(self, *, batch_id: UUID) -> dict[str, Any] | None:
+        """Obtiene el estado operativo de un lote de prospección."""
+        return await self._get_one(
+            "/rest/v1/prospeccion_contacto_batch",
+            params={
+                "select": "id,organizacion_id,estado,total_prospectos",
+                "id": f"eq.{batch_id}",
+                "limit": "1",
+            },
+        )
 
     async def get_message_idempotency_key(self, *, message_id: UUID) -> str | None:
         row = await self._get_one(
