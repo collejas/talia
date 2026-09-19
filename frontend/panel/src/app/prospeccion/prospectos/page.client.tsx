@@ -1834,16 +1834,6 @@ function ProspectosView() {
           typeof response.total === "number" ? response.total : nextOffset + rows.length
         setTotal(nextTotal)
         setOffset(nextOffset)
-        setSelected((prev) => {
-          if (!rows.length) return new Set<string>()
-          const allowed = new Set<string>()
-          rows.forEach((row) => {
-            if (row.id && prev.has(row.id)) {
-              allowed.add(row.id)
-            }
-          })
-          return allowed
-        })
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return
@@ -1935,6 +1925,10 @@ function ProspectosView() {
   )
 
   useEffect(() => {
+    // La selección sobrevive al cambio de página. Se limpia únicamente cuando
+    // cambia el universo de consulta porque fetchProspectos cambia por filtros
+    // o por tamaño de página, no al navegar mediante fetchProspectos(offset).
+    setSelected(new Set<string>())
     void fetchProspectos(0)
   }, [fetchProspectos])
 
@@ -2563,7 +2557,9 @@ function ProspectosView() {
       clearTimeout(timerId)
     }
   }, [currentIds, prospectosViewMode, selectedIds])
-  const allSelected = currentIds.length > 0 && currentIds.every((id) => selected.has(id))
+  const selectedCurrentCount = currentIds.reduce((count, id) => count + (selected.has(id) ? 1 : 0), 0)
+  const allSelected = currentIds.length > 0 && selectedCurrentCount === currentIds.length
+  const someCurrentSelected = selectedCurrentCount > 0 && !allSelected
   const activeQueryGroup = openedQueryScope ?? (filters.queryFilters.length === 1 ? filters.queryFilters[0] : null)
   const allGroupsSelected =
     groupedQueryOptions.length > 0 && groupedQueryOptions.every((group) => selectedGroups.has(group.value))
@@ -5372,7 +5368,7 @@ function ProspectosView() {
                   <TableHead className="w-10">
                     <Checkbox
                       aria-label="Seleccionar todos los prospectos"
-                      checked={allSelected ? true : selected.size ? "indeterminate" : false}
+                      checked={allSelected ? true : someCurrentSelected ? "indeterminate" : false}
                       onCheckedChange={(value) => handleToggleAll(value === true)}
                       disabled={!items.length}
                     />
@@ -5782,7 +5778,12 @@ function ProspectosView() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:px-6">
             <div>
               {selectedCount ? (
-                <span className="font-medium text-foreground">{selectedCount} seleccionados.</span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="font-medium text-foreground">{selectedCount} seleccionados.</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(new Set<string>())}>
+                    Limpiar selección
+                  </Button>
+                </div>
               ) : (
                 <span>Sin prospectos seleccionados.</span>
               )}
