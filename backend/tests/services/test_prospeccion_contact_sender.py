@@ -301,14 +301,50 @@ async def test_postmark_bulk_queue_groups_same_tenant_items(monkeypatch) -> None
         {"idempotency_key": "two", "stream_name": "broadcast", "server_id": "server-1"},
     ]
 
-    results = await asyncio.gather(
-        *(queue.enqueue(organizacion_id=organizacion_id, item=item) for item in items)
-    )
+    futures = [
+        queue.enqueue_pending(organizacion_id=organizacion_id, item=item)
+        for item in items
+    ]
     await queue.close()
+    results = await asyncio.gather(*futures)
 
     assert len(calls) == 1
     assert [item["idempotency_key"] for item in calls[0]] == ["one", "two"]
     assert [result["message_id"] for result in results] == ["message-1", "message-2"]
+
+
+@pytest.mark.asyncio
+async def test_postmark_bulk_queue_splits_over_500_items(monkeypatch) -> None:
+    calls: list[int] = []
+
+    class FakePostmarkRepository:
+        async def queue_messages_bulk(self, *, organizacion_id, items):
+            calls.append(len(items))
+            return [
+                {"idempotency_key": item["idempotency_key"], "message_id": item["idempotency_key"]}
+                for item in items
+            ]
+
+    monkeypatch.setattr(sender_module, "PostmarkRepository", FakePostmarkRepository)
+    queue = sender_module._PostmarkBulkQueue()
+    organizacion_id = UUID("22222222-2222-2222-2222-222222222222")
+    futures = [
+        queue.enqueue_pending(
+            organizacion_id=organizacion_id,
+            item={
+                "idempotency_key": f"key-{index}",
+                "stream_name": "broadcast",
+                "server_id": "server-1",
+            },
+        )
+        for index in range(501)
+    ]
+
+    await queue.close()
+    results = await asyncio.gather(*futures)
+
+    assert calls == [500, 1]
+    assert len(results) == 501
 
 
 def test_build_envio_update_payload_persists_local_and_provider_message_ids() -> None:

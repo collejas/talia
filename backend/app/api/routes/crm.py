@@ -11132,6 +11132,7 @@ def _build_contact_envios_entries(
     separacion_segundos: int | None = None,
     envios_por_lote: int | None = None,
     intervalo_entre_lotes_segundos: int | None = None,
+    postmark_email_batch: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
     entries: list[dict[str, Any]] = []
     suppressed_by_channel: dict[str, list[str]] = {}
@@ -11231,10 +11232,18 @@ def _build_contact_envios_entries(
             base_dt = base_programado or base_now
             lote_dt = base_dt + timedelta(seconds=(lote_numero - 1) * intervalo_lotes)
             posicion_en_lote = channel_index % lote_size
+            schedule_separation = (
+                0
+                if postmark_email_batch and canal == "correo"
+                else separacion_val
+            )
             entry = {
                 "batch_id": batch_value,
                 "prospecto_id": prospecto_id_text,
                 "canal": canal,
+                # La columna conserva el mínimo operativo de 5 s para no
+                # romper su constraint; Postmark usa el horario de lote,
+                # no esta columna, para llegar al preparador sin espaciado.
                 "separacion_segundos": separacion_val,
                 "numero_lote": lote_numero,
                 "lote_programado_en": lote_dt.isoformat(),
@@ -11280,7 +11289,7 @@ def _build_contact_envios_entries(
                 if display_name_snapshot:
                     entry["whatsapp_template_display_name_snapshot"] = display_name_snapshot
             entry["programado_en"] = (
-                lote_dt + timedelta(seconds=posicion_en_lote * separacion_val)
+                lote_dt + timedelta(seconds=posicion_en_lote * schedule_separation)
             ).isoformat()
             entries.append(entry)
             envio_index_by_channel[canal] = channel_index + 1
@@ -38427,6 +38436,21 @@ async def prospeccion_campana_update(
     if not canales_config:
         raise HTTPException(status_code=400, detail="contact_channels_required")
 
+    postmark_email_batch = False
+    if "correo" in canales_config:
+        try:
+            migration = await PostmarkRepository().get_migration(organizacion_id=organizacion_id)
+            postmark_email_batch = bool(
+                migration
+                and migration.get("feature_enabled") is True
+                and migration.get("status") in {"active", "validated", "migrated"}
+            )
+        except PostmarkRepositoryError as exc:
+            logger.warning(
+                "prospeccion.campana_update.postmark_provider_check_failed",
+                extra={"error": str(exc)},
+            )
+
     selector_filtros: dict[str, Any] = {}
     prospectos: list[dict[str, Any]] = []
     if payload.lista_id:
@@ -38574,6 +38598,7 @@ async def prospeccion_campana_update(
         separacion_segundos=separacion_segundos,
         envios_por_lote=envios_por_lote,
         intervalo_entre_lotes_segundos=intervalo_entre_lotes_segundos,
+        postmark_email_batch=postmark_email_batch,
     )
     created_envios = await repo.insert_contact_envios(usuario_token=user_token, entries=new_entries)
 
@@ -40041,6 +40066,22 @@ async def contactar_prospectos_legacy(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     suppression_map = _build_suppression_channel_map(suppressions)
     prospectos = _attach_suppressions_to_prospectos(prospectos, suppression_map)
+
+    postmark_email_batch = False
+    if "correo" in canales_config:
+        try:
+            migration = await PostmarkRepository().get_migration(organizacion_id=organizacion_id)
+            postmark_email_batch = bool(
+                migration
+                and migration.get("feature_enabled") is True
+                and migration.get("status") in {"active", "validated", "migrated"}
+            )
+        except PostmarkRepositoryError as exc:
+            logger.warning(
+                "prospeccion.contactar.postmark_provider_check_failed",
+                extra={"error": str(exc)},
+            )
+
     preview_entries, _preview_suppressed = _build_contact_envios_entries(
         batch_id="preview",
         prospectos=prospectos,
@@ -40049,6 +40090,7 @@ async def contactar_prospectos_legacy(
         separacion_segundos=payload.separacion_segundos,
         envios_por_lote=payload.envios_por_lote,
         intervalo_entre_lotes_segundos=payload.intervalo_entre_lotes_segundos,
+        postmark_email_batch=postmark_email_batch,
     )
     projected_email_by_utc_day: dict[date, int] = {}
     for entry in preview_entries:
@@ -40062,22 +40104,8 @@ async def contactar_prospectos_legacy(
         quota_day_utc = programmed.astimezone(timezone.utc).date()
         projected_email_by_utc_day[quota_day_utc] = projected_email_by_utc_day.get(quota_day_utc, 0) + 1
 
-    if projected_email_by_utc_day:
-        postmark_enabled = False
-        try:
-            migration = await PostmarkRepository().get_migration(organizacion_id=organizacion_id)
-            postmark_enabled = bool(
-                migration
-                and migration.get("feature_enabled") is True
-                and migration.get("status") in {"active", "validated", "migrated"}
-            )
-        except PostmarkRepositoryError as exc:
-            logger.warning(
-                "prospeccion.contactar.postmark_provider_check_failed",
-                extra={"error": str(exc)},
-            )
-        if postmark_enabled:
-            projected_email_by_utc_day = {}
+    if postmark_email_batch:
+        projected_email_by_utc_day = {}
 
     if projected_email_by_utc_day:
         brevo_settings = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
@@ -40225,6 +40253,7 @@ async def contactar_prospectos_legacy(
         separacion_segundos=payload.separacion_segundos,
         envios_por_lote=payload.envios_por_lote,
         intervalo_entre_lotes_segundos=payload.intervalo_entre_lotes_segundos,
+        postmark_email_batch=postmark_email_batch,
     )
     if suppressed_by_channel:
         for canal, ids in suppressed_by_channel.items():

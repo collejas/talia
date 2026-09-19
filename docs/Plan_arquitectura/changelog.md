@@ -314,3 +314,6 @@ No marcar una fase como completada por compilación, reinicio, healthcheck o exi
 - La mejora aún requiere medir en producción el tamaño efectivo de los grupos,
   CPU, memoria, conexiones, latencia y resultados con lotes de 25, 500 y más
   de 500 antes de declararla completada.
+- El coordinador ahora libera la concurrencia después de preparar cada objeto,
+  persiste el bloque completo y finaliza los registros individuales con los
+  IDs retornados; no se elevó la concurrencia del servidor a 500.

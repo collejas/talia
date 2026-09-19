@@ -2043,6 +2043,39 @@ def test_build_contact_envios_entries_creates_sublots_and_balances_templates() -
     assert entries[2]["programado_en"] == "2026-09-05T12:01:00+00:00"
 
 
+def test_build_contact_envios_entries_postmark_email_batch_removes_only_email_spacing() -> None:
+    prospectos = [{"id": str(uuid.uuid4()), "email": f"persona{index}@ejemplo.com"} for index in range(3)]
+    entries, suppressed = crm_routes._build_contact_envios_entries(
+        batch_id=uuid.uuid4(),
+        prospectos=prospectos,
+        canales={
+            "correo": {"template_id": "correo-template"},
+            "whatsapp": {"template_id": "whatsapp-template"},
+        },
+        programacion={
+            "correo": "2026-09-05T12:00:00+00:00",
+            "whatsapp": "2026-09-05T12:00:00+00:00",
+        },
+        separacion_segundos=5,
+        postmark_email_batch=True,
+    )
+
+    assert suppressed == {}
+    email_entries = [entry for entry in entries if entry["canal"] == "correo"]
+    whatsapp_entries = [entry for entry in entries if entry["canal"] == "whatsapp"]
+    assert [entry["programado_en"] for entry in email_entries] == [
+        "2026-09-05T12:00:00+00:00",
+        "2026-09-05T12:00:00+00:00",
+        "2026-09-05T12:00:00+00:00",
+    ]
+    assert [entry["separacion_segundos"] for entry in email_entries] == [5, 5, 5]
+    assert [entry["programado_en"] for entry in whatsapp_entries] == [
+        "2026-09-05T12:00:00+00:00",
+        "2026-09-05T12:00:05+00:00",
+        "2026-09-05T12:00:10+00:00",
+    ]
+
+
 def test_resolve_contact_channels_uses_each_whatsapp_template_body() -> None:
     first_id = uuid.uuid4()
     second_id = uuid.uuid4()

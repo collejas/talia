@@ -148,6 +148,11 @@ entrega mantendrá un batch activo por tenant, con backpressure medible.
   mantiene separadas las rutas de Brevo y WhatsApp.
 - La fase queda pendiente de medición real con lotes de 500 para confirmar que
   el grupo concurrente alcanza el tamaño objetivo sin saturar Supabase o CPU.
+- El preparador registra `postmark.bulk_queue_flush` con `item_count`,
+  `result_count` y duración para medir el tamaño efectivo de cada agrupación.
+- Se corrigió la espera por mensaje: el renderizado libera la concurrencia,
+  la RPC se ejecuta al cerrar el bloque y los estados se finalizan después con
+  los IDs individuales retornados.
 
 ## [2026-09-18] — Batch real de 500 y límite de payload
 

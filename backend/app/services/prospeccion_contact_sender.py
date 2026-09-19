@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 import html as html_lib
 import re
 from time import monotonic, perf_counter
-from typing import Any, Literal, Sequence
+from typing import Any, Awaitable, Callable, Literal, Sequence
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import UUID
 
@@ -71,6 +71,7 @@ class ContactEnvioResult:
     mensaje_id: str | None = None
     mensaje_id_interno: str | None = None
     retryable: bool = False
+    postmark_bulk_future: asyncio.Future[dict[str, Any]] | None = None
 
 
 @dataclass(slots=True)
@@ -158,42 +159,48 @@ class _PostmarkBulkQueue:
     """Agrupa mensajes listos durante un ciclo antes de persistirlos."""
 
     def __init__(self, *, debounce_seconds: float = 0.15) -> None:
+        # Se conserva el parámetro por compatibilidad, pero el cierre se hace
+        # por bloque/ciclo para que 500 mensajes no se dividan por tiempo.
         self._debounce_seconds = max(float(debounce_seconds), 0.05)
         self._pending: dict[UUID, list[tuple[dict[str, Any], asyncio.Future[dict[str, Any]]]]] = {}
         self._flush_tasks: dict[UUID, asyncio.Task[None]] = {}
+        self._finalizers: list[Callable[[], Awaitable[None]]] = []
+        self._finalizer_semaphore = asyncio.Semaphore(4)
         self._repository = PostmarkRepository()
 
-    async def enqueue(self, *, organizacion_id: UUID, item: dict[str, Any]) -> dict[str, Any]:
+    def enqueue_pending(
+        self, *, organizacion_id: UUID, item: dict[str, Any]
+    ) -> asyncio.Future[dict[str, Any]]:
         loop = asyncio.get_running_loop()
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
         bucket = self._pending.setdefault(organizacion_id, [])
         bucket.append((item, future))
         if len(bucket) >= 500:
-            task = self._flush_tasks.pop(organizacion_id, None)
-            if task:
-                task.cancel()
-            await self._flush(organizacion_id)
-        elif organizacion_id not in self._flush_tasks:
-            self._flush_tasks[organizacion_id] = asyncio.create_task(
-                self._flush_after_debounce(organizacion_id),
-                name="postmark-bulk-queue-flush",
-            )
-        return await future
+            if organizacion_id not in self._flush_tasks:
+                self._flush_tasks[organizacion_id] = asyncio.create_task(
+                    self._run_flush(organizacion_id),
+                    name="postmark-bulk-queue-flush",
+                )
+        return future
 
-    async def _flush_after_debounce(self, organizacion_id: UUID) -> None:
-        try:
-            await asyncio.sleep(self._debounce_seconds)
-            await self._flush(organizacion_id)
-        except asyncio.CancelledError:
-            return
-        finally:
-            self._flush_tasks.pop(organizacion_id, None)
+    async def enqueue(self, *, organizacion_id: UUID, item: dict[str, Any]) -> dict[str, Any]:
+        """Compatibilidad para consumidores que necesitan esperar el resultado."""
+        return await self.enqueue_pending(organizacion_id=organizacion_id, item=item)
+
+    def register_finalizer(self, finalizer: Callable[[], Awaitable[None]]) -> None:
+        self._finalizers.append(finalizer)
 
     async def _flush(self, organizacion_id: UUID) -> None:
-        entries = self._pending.pop(organizacion_id, [])
+        bucket = self._pending.get(organizacion_id, [])
+        entries = bucket[:500]
+        if entries:
+            del bucket[: len(entries)]
+        if not bucket:
+            self._pending.pop(organizacion_id, None)
         if not entries:
             return
         futures = [future for _, future in entries]
+        flush_started = perf_counter()
         try:
             rows = await self._repository.queue_messages_bulk(
                 organizacion_id=organizacion_id,
@@ -212,10 +219,36 @@ class _PostmarkBulkQueue:
                     future.set_exception(PostmarkError("bulk_message_queue_missing_result"))
                     continue
                 future.set_result({**row, "stream_name": item["stream_name"], "server_id": item["server_id"]})
+            log_event(
+                logger,
+                "postmark.bulk_queue_flush",
+                organizacion_id=str(organizacion_id),
+                item_count=len(entries),
+                result_count=len(rows),
+                duration_ms=round((perf_counter() - flush_started) * 1000, 2),
+            )
         except Exception as exc:
             for future in futures:
                 if not future.done():
                     future.set_exception(exc)
+            log_event(
+                logger,
+                "postmark.bulk_queue_flush_failed",
+                organizacion_id=str(organizacion_id),
+                item_count=len(entries),
+                duration_ms=round((perf_counter() - flush_started) * 1000, 2),
+                error=str(exc),
+            )
+        if organizacion_id in self._pending:
+            await self._flush(organizacion_id)
+
+    async def _run_flush(self, organizacion_id: UUID) -> None:
+        current = asyncio.current_task()
+        try:
+            await self._flush(organizacion_id)
+        finally:
+            if self._flush_tasks.get(organizacion_id) is current:
+                self._flush_tasks.pop(organizacion_id, None)
 
     async def close(self) -> None:
         for task in list(self._flush_tasks.values()):
@@ -225,6 +258,13 @@ class _PostmarkBulkQueue:
                 pass
         for organizacion_id in list(self._pending):
             await self._flush(organizacion_id)
+        if self._finalizers:
+            await asyncio.gather(*(self._run_finalizer(finalizer) for finalizer in self._finalizers))
+            self._finalizers.clear()
+
+    async def _run_finalizer(self, finalizer: Callable[[], Awaitable[None]]) -> None:
+        async with self._finalizer_semaphore:
+            await finalizer()
 
 
 def _clean_text(value: Any) -> str | None:
@@ -1166,6 +1206,7 @@ async def _run_envio_correo(
     postmark_enabled: bool | None = None,
     preparation_cache: _PostmarkPreparationCache | None = None,
     bulk_queue: _PostmarkBulkQueue | None = None,
+    postmark_queued_result: dict[str, Any] | None = None,
 ) -> ContactEnvioResult:
     email_value = _clean_text(envio.get("email"))
     if not email_value:
@@ -1295,6 +1336,7 @@ async def _run_envio_correo(
             organizacion_id=organizacion_id,
             preparation_cache=preparation_cache,
             bulk_queue=bulk_queue,
+            postmark_queued_result=postmark_queued_result,
         )
 
     mail_settings = None
@@ -1446,6 +1488,7 @@ async def _queue_postmark_prospeccion_email(
     organizacion_id: UUID,
     preparation_cache: _PostmarkPreparationCache | None = None,
     bulk_queue: _PostmarkBulkQueue | None = None,
+    postmark_queued_result: dict[str, Any] | None = None,
 ) -> ContactEnvioResult:
     """Encola prospección en Postmark sin pasar por el servicio de correo legado."""
 
@@ -1499,7 +1542,10 @@ async def _queue_postmark_prospeccion_email(
         )
         idempotency_key = f"prospeccion-envio:{envio['id']}"
         source_batch_id = UUID(str(envio["batch_id"])) if envio.get("batch_id") else None
-        if bulk_queue and preparation_cache:
+        bulk_future: asyncio.Future[dict[str, Any]] | None = None
+        if postmark_queued_result is not None:
+            queued = dict(postmark_queued_result)
+        elif bulk_queue and preparation_cache:
             migration = await preparation_cache.migration(organizacion_id)
             plan = await preparation_cache.active_plan(organizacion_id)
             server = await preparation_cache.server(organizacion_id)
@@ -1532,7 +1578,7 @@ async def _queue_postmark_prospeccion_email(
             stream_name = str(server.get(stream_key) or "").strip()
             if not stream_name:
                 raise PostmarkError("message_stream_missing")
-            queued = await bulk_queue.enqueue(
+            bulk_future = bulk_queue.enqueue_pending(
                 organizacion_id=organizacion_id,
                 item={
                     "idempotency_key": idempotency_key,
@@ -1556,6 +1602,11 @@ async def _queue_postmark_prospeccion_email(
                     "source_batch_id": str(source_batch_id) if source_batch_id else None,
                 },
             )
+            queued = {
+                "message_id": None,
+                "stream_name": stream_name,
+                "server_id": str(server_id),
+            }
         else:
             queued = await PostmarkService(repository=repository).queue_message(
                 organizacion_id=organizacion_id,
@@ -1600,7 +1651,8 @@ async def _queue_postmark_prospeccion_email(
                 prospecto_id=envio.get("prospecto_id"),
             ),
         },
-        mensaje_id_interno=str(queued["message_id"]),
+        mensaje_id_interno=(str(queued["message_id"]) if queued.get("message_id") else None),
+        postmark_bulk_future=bulk_future,
     )
 
 
@@ -2127,6 +2179,8 @@ class ProspeccionContactSender:
         envio: dict[str, Any],
         *,
         bulk_queue: _PostmarkBulkQueue | None = None,
+        postmark_queued_result: dict[str, Any] | None = None,
+        skip_claim: bool = False,
     ) -> None:
         envio_id_value = envio.get("id")
         try:
@@ -2140,12 +2194,13 @@ class ProspeccionContactSender:
             max(int(envio.get("max_reintentos") or 1), 1),
             self._max_retries,
         )
-        claimed = await repo.worker_mark_envio_processing(
-            envio_id=envio_id,
-            attempt=intento_actual,
-        )
-        if not claimed:
-            return
+        if not skip_claim:
+            claimed = await repo.worker_mark_envio_processing(
+                envio_id=envio_id,
+                attempt=intento_actual,
+            )
+            if not claimed:
+                return
 
         canal = _clean_text(envio.get("canal")) or ""
         detalle = envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {}
@@ -2340,6 +2395,9 @@ class ProspeccionContactSender:
                             else None
                         ),
                         bulk_queue=bulk_queue if postmark_queue_dispatch else None,
+                        postmark_queued_result=(
+                            postmark_queued_result if postmark_queue_dispatch else None
+                        ),
                     )
                 elif canal == "whatsapp":
                     result = await _run_envio_whatsapp(
@@ -2378,6 +2436,29 @@ class ProspeccionContactSender:
                 detalle={"reason": "canal_no_soportado"},
                 error="canal_no_soportado",
             )
+
+        if result.postmark_bulk_future is not None:
+            if not bulk_queue:
+                await repo.worker_complete_envio(
+                    envio_id=envio_id,
+                    payload={
+                        "estado": "pendiente",
+                        "error": "postmark_bulk_queue_unavailable",
+                        "programado_en": (
+                            datetime.now(timezone.utc) + timedelta(seconds=30)
+                        ).isoformat(),
+                    },
+                )
+                return
+            queued_future = result.postmark_bulk_future
+            bulk_queue.register_finalizer(
+                lambda: self._finalize_deferred_postmark_envio(
+                    repo=repo,
+                    envio=envio,
+                    queued_future=queued_future,
+                )
+            )
+            return
 
         log_event(
             logger,
@@ -2497,6 +2578,45 @@ class ProspeccionContactSender:
                     "estado": batch_state,
                 },
             )
+
+    async def _finalize_deferred_postmark_envio(
+        self,
+        *,
+        repo: CRMRepository,
+        envio: dict[str, Any],
+        queued_future: asyncio.Future[dict[str, Any]],
+    ) -> None:
+        """Cierra un envío después de que la RPC bulk devolvió su ID local."""
+
+        try:
+            queued = await queued_future
+        except Exception as exc:
+            envio_id = UUID(str(envio["id"]))
+            await repo.worker_complete_envio(
+                envio_id=envio_id,
+                payload={
+                    "estado": "pendiente",
+                    "error": "postmark_bulk_persist_failed",
+                    "detalle": {"reason": str(exc)},
+                    "programado_en": (
+                        datetime.now(timezone.utc) + timedelta(seconds=30)
+                    ).isoformat(),
+                    "procesado_en": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            log_event(
+                logger,
+                "prospeccion.postmark_bulk_finalize_failed",
+                envio_id=str(envio.get("id")),
+                error=str(exc),
+            )
+            return
+        await self._process_envio(
+            repo,
+            envio,
+            postmark_queued_result=queued,
+            skip_claim=True,
+        )
 
     def _build_envio_update_payload(
         self,

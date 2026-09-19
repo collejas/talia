@@ -344,16 +344,17 @@ en `tenant_email_messages` mediante la función atómica existente. La RPC sólo
 puede ser ejecutada por `service_role`, conserva idempotencia, cuota, vínculo
 con el lote de prospección y devuelve el resultado individual de cada mensaje.
 
-El preparador Postmark usa una cola de agrupación por tenant con una ventana
-de debounce corta. La configuración, dominio, servidor y plan se reutilizan
-por ciclo; las validaciones de dominio, servidor, stream y supresión por
-destinatario permanecen activas. Brevo y WhatsApp no pasan por esta cola.
+El preparador Postmark usa una cola de agrupación por tenant que permite que
+las tareas de renderizado liberen la concurrencia antes de esperar la RPC. La
+cola persiste bloques de máximo 500, y después cierra cada envío con el ID
+individual devuelto por la RPC. La configuración, dominio, servidor y plan se
+reutilizan por ciclo; las validaciones de dominio, servidor, stream y
+supresión por destinatario permanecen activas. Brevo y WhatsApp no pasan por
+esta cola.
 
-Esta entrega reduce las llamadas de persistencia, pero no se marca todavía
-como cierre de la fase 6A.2: para afirmar que un lote de 500 se materializa
-en una sola RPC todavía falta medir en producción el tamaño real de los grupos
-concurrentes y, si resulta menor al objetivo, separar completamente el
-renderizado limitado de la persistencia por bloque.
+La medición de producción sigue pendiente para confirmar el tamaño efectivo
+de los grupos, duración, CPU, memoria y conexiones bajo lotes de 25, 500 y
+más de 500.
 
 ### Fase 6B: entrega del lote
 
