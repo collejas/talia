@@ -71,6 +71,43 @@ Eventos mínimos: Delivery, Bounce, SpamComplaint, Open, Click, SubscriptionChan
 - Requerir permiso de campañas para envíos Broadcast.
 - Registrar actor, tenant, campaña, cantidad, fecha y resultado.
 
+## Rendimiento, aislamiento y backpressure
+
+La preparación de una campaña no debe ejecutarse dentro de la solicitud del
+panel ni en el proceso de la API. El lote se crea y se encola; un worker prepara
+los mensajes y otro worker entrega bloques completos de máximo 500 mediante
+`/email/batch`.
+
+Los límites se aplican en este orden:
+
+- máximo 500 mensajes por llamada de Postmark;
+- máximo de tamaño de payload inferior a 50 MiB, usando margen operativo;
+- límite de batches simultáneos por tenant;
+- límite global de batches Postmark;
+- límite independiente para Brevo y WhatsApp;
+- pausa automática ante presión de CPU, memoria, conexiones, errores de Supabase o profundidad excesiva de cola.
+
+La pausa sólo detiene nuevos reclamos. No elimina mensajes, no libera una
+reserva ya aceptada sin auditoría y no cambia estados de mensajes enviados. Al
+recuperarse los indicadores, el worker reanuda bloques `ready` mediante
+reclamación idempotente.
+
+Métricas mínimas:
+
+- tiempo de creación del lote en la API;
+- tiempo de preparación por bloque;
+- cantidad de mensajes por bloque;
+- duración y resultado de cada llamada `/email/batch`;
+- batches en `ready`, `sending` y `retry_wait`;
+- CPU, memoria, conexiones y errores de Supabase;
+- latencia y tasa de error de webhooks;
+- mensajes aceptados, rechazados y confirmados por evento.
+
+Una prueba de aceptación debe demostrar que crear una campaña no aumenta de
+forma sostenida la latencia de endpoints normales y que una campaña de 500
+mensajes produce una sola llamada batch cuando el payload permanece debajo del
+límite de tamaño.
+
 ## Entregabilidad y cumplimiento
 
 - Separar streams transaccional y broadcast.

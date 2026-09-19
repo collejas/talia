@@ -32,6 +32,81 @@ frontend/panel/src/lib/email-service/
 
 El tenant puede seleccionar hasta 10,000 prospectos en una campaña. Talia conserva un registro individual por destinatario con su tenant, lote, plantilla, estado e idempotencia; Postmark recibe esos registros en llamadas de hasta 500 mensajes mediante `/email/batch`. El worker separa `transactional` y `broadcast`, respeta cada stream y aplica un corte adicional por tamaño aproximado de 45 MiB para no acercarse al límite de 50 MiB. Los resultados individuales de Postmark son la fuente para aceptar o rechazar cada destinatario.
 
+### Preparación asíncrona y envío sin latencia visible
+
+La preparación de una campaña no debe ejecutarse dentro de la solicitud HTTP que
+inicia el envío. La API debe crear el lote, registrar sus destinatarios, reservar
+la cuota y encolar un trabajo; después debe responder al panel sin esperar a que
+se rendericen los mensajes ni a que Postmark acepte el envío.
+
+El proceso se divide en dos workers y dos estados distintos:
+
+```text
+Panel/API
+  -> crea lote y destinatarios
+  -> encola trabajo de preparación
+  -> responde inmediatamente
+
+Worker de preparación Postmark
+  -> carga una vez tenant, dominio, remitente, stream y plantilla
+  -> prepara el contenido fuera de la API
+  -> agrupa en bloques de máximo 500
+  -> marca cada bloque como ready
+
+Worker de entrega Postmark
+  -> reclama un bloque ready completo
+  -> llama una vez a /email/batch
+  -> persiste el resultado individual de cada elemento
+
+Webhook/worker de eventos
+  -> recibe Delivery, Bounce, Open, Click, SpamComplaint y SubscriptionChange
+  -> actualiza eventos, supresiones y métricas de forma asíncrona
+```
+
+El límite de 500 es el tamaño máximo de una llamada a Postmark, no una razón
+para ejecutar 500 tareas individuales. Si una campaña tiene 1,200 destinatarios,
+debe producir tres bloques: 500, 500 y 200. Cada bloque debe pertenecer a un
+solo tenant, tipo de mensaje y Message Stream. Nunca se debe mezclar
+`broadcast` con `transactional`.
+
+La preparación debe evitar consultas repetidas por destinatario. El worker debe
+obtener una sola vez el contexto invariable del lote y utilizar consultas o
+escrituras agrupadas cuando existan en el repositorio. El contenido variable de
+cada destinatario sí debe conservarse individualmente, pero no debe provocar
+una nueva resolución de tenant, cuota, dominio, stream, plantilla o secreto en
+cada iteración.
+
+El bloque preparado debe persistir como entidad operativa con columnas
+explícitas, al menos: `tenant_id`, `campaign_batch_id`, `provider`,
+`message_kind`, `message_stream`, `sequence_number`, `message_count`, `status`,
+`prepared_at`, `claimed_at`, `submitted_at`, `attempt_count` y `last_error`.
+El contenido o snapshot de cada mensaje debe relacionarse con su registro local
+de envío; no se debe depender de reconstruir el payload durante la llamada
+externa.
+
+Estados mínimos del bloque:
+
+```text
+created -> preparing -> ready -> sending -> submitted
+                                      \-> failed / retry_wait
+```
+
+`submitted` significa que Postmark aceptó individualmente el mensaje. La
+entrega real continúa confirmándose mediante webhooks y puede terminar en
+`delivered`, `bounced`, `complained`, `unsubscribed` o un estado equivalente.
+
+La preparación y la entrega deben ejecutarse fuera de `talia-api.service` en
+workers separados o procesos aislados. El worker de Postmark debe tener un
+límite de batches simultáneos, no una concurrencia ilimitada de mensajes. La
+configuración inicial recomendada es una o dos llamadas `/email/batch`
+simultáneas por servidor, con backoff ante `429`, timeouts o errores de red.
+Brevo y WhatsApp conservan sus propios workers, tamaños de lote y límites; no
+se debe reutilizar esta concurrencia para esos proveedores.
+
+Este diseño elimina la latencia visible en el panel, limita el impacto sobre
+CPU, memoria y conexiones de Supabase, y permite pausar la entrega sin perder
+los destinatarios ya preparados.
+
 Las migraciones nuevas se agregarán al directorio estándar de migraciones, pero crearán tablas Postmark propias. No se colocará lógica Postmark dentro de archivos Brevo ni dentro del servicio de correo legado.
 
 ## Principio de datos explícitos

@@ -245,11 +245,39 @@ No se debe depender de la plantilla remota para reconstruir históricamente un e
 
 ## Fase 6: envío de prospección y cuotas
 
-Modificar `prospeccion_contact_sender.py` para:
+La implementación se divide en preparación y entrega. `prospeccion_contact_sender.py`
+no debe realizar la llamada externa ni bloquear la respuesta del panel. Su
+responsabilidad es crear el lote de negocio, registrar los destinatarios y
+encolar el trabajo de preparación. El resultado visible para el usuario debe
+ser `preparando`, no una espera hasta terminar 500 operaciones.
+
+### Fase 6A: preparación del lote
+
+El worker de preparación Postmark debe:
+
+- tomar un lote de campaña ya creado;
+- cargar una sola vez el tenant, dominio, remitente, stream, plantilla, cuota y secreto necesario;
+- renderizar los mensajes en segundo plano;
+- evitar una consulta de configuración por destinatario;
+- persistir el snapshot explícito de cada mensaje y su relación con `batch_id`;
+- crear bloques homogéneos de máximo 500 mensajes;
+- separar siempre `broadcast` y `transactional`;
+- marcar cada bloque como `ready` sólo cuando todos sus mensajes estén preparados;
+- dejar el lote en `failed` o `retry_wait` si no puede terminarlo.
+
+La reserva de cuota y la idempotencia deben ocurrir antes de preparar el bloque,
+pero no deben ejecutarse repetidamente por cada reintento del mismo destinatario.
+Una reanudación debe continuar desde el bloque o mensaje pendiente y no volver a
+crear mensajes ya registrados.
+
+### Fase 6B: entrega del lote
+
+El worker de entrega Postmark debe reclamar exclusivamente bloques `ready` y
+realizar una llamada `/email/batch` por cada bloque. Debe:
 
 - consultar cuota antes de reservar;
 - reservar de forma atómica por tenant;
-- crear un registro de envío local antes de llamar a Postmark;
+- crear los registros locales antes de llamar a Postmark;
 - usar `MessageStream` Broadcast;
 - usar `Metadata` con claves pequeñas: `tenant_id`, `envio_id`, `campana_id`, `batch_id`;
 - guardar el `MessageID` devuelto;
@@ -257,12 +285,26 @@ Modificar `prospeccion_contact_sender.py` para:
 - no repetir un envío aceptado por Postmark;
 - marcar por separado `queued`, `submitted`, `delivered`, `bounced`, `failed` y `suppressed`.
 
-Para la separación temporal, no basta con espaciar la creación de filas en
-`tenant_email_messages`: el envío externo ocurre en `postmark-worker`. Ese
-worker debe reservar el turno justo antes de `PostmarkClient.send_message` y
-reencolar el mensaje si el reloj de `organizacion_id + canal` todavía no lo
-permite. El identificador local de la cola y el `MessageID` externo deben
-permanecer diferenciados.
+La separación temporal se aplica entre llamadas `/email/batch`, no entre
+mensajes individuales. El identificador local del bloque, el identificador
+local del mensaje y el `MessageID` externo deben permanecer diferenciados.
+Una campaña de 500 mensajes debe producir una llamada con 500 objetos, salvo
+que el límite de 50 MiB obligue a cortar antes. Una campaña menor no debe
+esperar artificialmente a que existan 500 destinatarios.
+
+El número de llamadas simultáneas debe limitarse por tenant y globalmente. La
+protección del servidor no debe convertir el batch en envíos unitarios: debe
+controlar cuántos batches completos se procesan al mismo tiempo. Si aumenta la
+presión de CPU, memoria, conexiones o errores de base de datos, el worker debe
+pausar nuevos bloques y reanudar los que estén en `ready`.
+
+### Fase 6C: webhook y eventos
+
+El endpoint de webhook sólo debe autenticar, validar, insertar una recepción
+idempotente y responder rápidamente. La actualización de mensajes, eventos,
+supresiones, métricas y contadores debe ejecutarse en un worker de eventos. Un
+timeout de Supabase no debe convertir el endpoint en una operación larga ni
+mezclar la carga de webhooks con la preparación de campañas.
 
 La Bulk API está orientada a broadcast y requiere confirmación/aprobación de Postmark para la cuenta. La API batch admite hasta 500 mensajes por llamada, pero el límite de la llamada no sustituye la cuota del tenant.
 

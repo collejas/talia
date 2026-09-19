@@ -13,7 +13,7 @@ Que GEOACTIV opere el servicio de correo desde Talia para todos los tenants:
 
 ## Estado de este documento
 
-Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tablas ya existe en Supabase, el tenant maestro ya fue probado y la creación de tenants ahora aprovisiona automáticamente la estructura operativa de correo en estado pendiente. La verificación de dominio, activación por tenant y webhooks de métricas siguen siendo pasos explícitos antes de retirar el proveedor anterior.
+Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tablas ya existe en Supabase, el tenant maestro ya fue probado y la creación de tenants ahora aprovisiona automáticamente la estructura operativa de correo en estado pendiente. La entrega Postmark ya usa `/email/batch` y puede agrupar hasta 500 mensajes, pero la preparación todavía debe terminar de aislarse en un worker de lotes para que no genere latencia ni presión sobre la API y Supabase. La verificación de dominio, activación por tenant y webhooks de métricas siguen siendo pasos explícitos antes de retirar el proveedor anterior.
 
 ## Orden de lectura
 
@@ -48,6 +48,30 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 - Sincronizar por tenant la información histórica que Postmark exponga mediante API y recibir en tiempo real los eventos mediante webhooks; el backend debe conservar checkpoints, idempotencia y auditoría.
 - Usar Postmark como fuente de verdad para eventos y estado del proveedor, y Talia como fuente de verdad para atribución de negocio, cuota contratada y reglas operativas.
 - Conservar en Talia el historial local completo: la sincronización histórica nunca eliminará datos porque hayan expirado de la retención de Postmark.
+
+## Decisión de rendimiento y lotes Postmark
+
+El objetivo operativo es que la acción del usuario sólo cree y encole el lote;
+la preparación y la entrega deben continuar en segundo plano. Postmark debe
+recibir un payload completo de hasta 500 objetos por llamada `/email/batch`, no
+una secuencia de llamadas individuales separadas cinco segundos.
+
+La arquitectura aprobada es:
+
+- `talia-api.service`: crea el lote, valida permisos y encola el trabajo;
+- worker de preparación Postmark: construye y persiste bloques completos de hasta 500;
+- `talia-email-worker`: reclama bloques `ready` y llama `/email/batch`;
+- worker de webhooks/eventos: persiste y procesa entregas, rebotes, quejas, aperturas, clics y bajas;
+- `talia-whatsapp-worker`: permanece independiente y no comparte la concurrencia de correo.
+
+La concurrencia se controla por batch completo. No se usará la concurrencia para
+disparar mensajes individuales. Brevo conservará sus límites y worker propios.
+El sistema debe aplicar backpressure cuando aumenten CPU, memoria, conexiones
+de base de datos, errores o profundidad de cola, sin borrar ni duplicar lotes.
+
+La experiencia esperada es que el panel responda rápidamente con el lote en
+estado `preparando`; la latencia de renderizado, persistencia y entrega queda
+fuera de la solicitud HTTP y puede observarse mediante el progreso del lote.
 
 ## Alta automática de tenants
 

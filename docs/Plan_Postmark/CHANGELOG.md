@@ -8,6 +8,42 @@
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-09-19] — Plan de aislamiento de preparación y entrega
+
+### Diagnóstico
+
+- La prueba de 25 mensajes confirmó que el worker ya puede enviar un único `postmark.batch_dispatch` con `batch_size=25`; la integración `/email/batch` funciona.
+- La latencia observada se concentra antes de Postmark: la preparación actual ejecuta trabajo por destinatario, realiza operaciones repetidas contra repositorios/Supabase y usa concurrencia de mensajes.
+- Bajo carga se observaron ciclos de preparación de aproximadamente 31–34 segundos, consumo relevante de CPU en API y worker de correo, y timeouts de Supabase durante la persistencia de webhooks.
+- Esperar a que el lote esté completo no es el problema principal; el problema es preparar y persistir destinatarios individualmente mientras la aplicación comparte recursos con los workers.
+
+### Decisión aprobada
+
+- La API sólo crea el lote, registra la intención, reserva la cuota y encola el trabajo; no renderiza ni envía los mensajes dentro de la solicitud HTTP.
+- Un worker de preparación carga una vez el contexto invariable del tenant y construye bloques homogéneos de máximo 500 mensajes.
+- Un worker de entrega reclama únicamente bloques `ready` y realiza una llamada `/email/batch` por bloque.
+- La concurrencia se limita por batch completo; no se usa una pausa de cinco segundos entre mensajes individuales.
+- El payload completo y el resultado individual de cada elemento deben conservarse localmente con estados e idempotencia explícitos.
+- Los webhooks deben persistirse rápidamente y procesarse de forma asíncrona para no competir con la preparación ni bloquear el endpoint.
+- Brevo, Postmark y WhatsApp mantienen workers, límites, backpressure y métricas independientes.
+
+### Criterios de aceptación
+
+- Crear un lote responde al panel sin esperar la preparación o la aceptación del proveedor.
+- Una campaña Postmark de 500 mensajes debajo del límite de tamaño produce una sola llamada `/email/batch` con 500 objetos.
+- Una campaña de más de 500 se divide en bloques de 500 sin mezclar tenant, tipo ni stream.
+- CPU, memoria, conexiones y latencia de la API permanecen dentro de los umbrales definidos durante una prueba concurrente.
+- Un timeout o reinicio no duplica mensajes aceptados ni elimina bloques preparados.
+- Un error de webhook se reintenta sin duplicar eventos ni detener la API.
+
+### Pendientes
+
+- Crear o adaptar la entidad persistente de bloque preparado con columnas explícitas y estados `created`, `preparing`, `ready`, `sending`, `submitted`, `retry_wait` y `failed`.
+- Separar definitivamente el worker de preparación del worker de entrega.
+- Sustituir consultas repetidas por destinatario por carga de contexto y operaciones agrupadas.
+- Implementar backpressure medible para Postmark sin modificar límites de Brevo ni WhatsApp.
+- Ejecutar pruebas de 25, 500 y más de 500 mensajes y documentar CPU, memoria, Supabase, duración, payload y llamadas reales a Postmark.
+
 ## [2026-09-18] — Batch real de 500 y límite de payload
 
 - El worker reclama hasta 500 mensajes por tenant y ciclo.
