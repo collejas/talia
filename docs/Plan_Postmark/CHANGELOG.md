@@ -137,6 +137,18 @@ entrega mantendrá un batch activo por tenant, con backpressure medible.
 - Ejecutar pruebas de 25, 500 y más de 500 mensajes y documentar CPU, memoria, Supabase, duración, payload y llamadas reales a Postmark.
 - Implementar la fase de preparación masiva y medirla antes de elevar la concurrencia.
 
+## [2026-09-19] — Persistencia agrupada del preparador Postmark
+
+- Se agregó la migración `20260922_160000_postmark_bulk_queue.sql` con una RPC
+  limitada a 500 elementos y ejecución exclusiva de `service_role`.
+- La RPC materializa los campos de cada mensaje en columnas explícitas y
+  reutiliza la validación de cuota/idempotencia existente; el JSON sólo es
+  transporte transitorio.
+- El preparador agrupa mensajes por tenant, reutiliza contexto invariable y
+  mantiene separadas las rutas de Brevo y WhatsApp.
+- La fase queda pendiente de medición real con lotes de 500 para confirmar que
+  el grupo concurrente alcanza el tamaño objetivo sin saturar Supabase o CPU.
+
 ## [2026-09-18] — Batch real de 500 y límite de payload
 
 - El worker reclama hasta 500 mensajes por tenant y ciclo.

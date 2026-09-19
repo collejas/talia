@@ -336,6 +336,25 @@ negocio deben terminar en columnas explícitas, con constraints, foreign keys e
 
 Esta fase no modificará Brevo, WhatsApp, sus workers, cuotas ni backpressure.
 
+#### Implementación inicial 2026-09-19
+
+Se agregó `tenant_email_queue_messages_bulk`, una RPC acotada a 500 elementos
+que recibe temporalmente los objetos ya renderizados y materializa cada campo
+en `tenant_email_messages` mediante la función atómica existente. La RPC sólo
+puede ser ejecutada por `service_role`, conserva idempotencia, cuota, vínculo
+con el lote de prospección y devuelve el resultado individual de cada mensaje.
+
+El preparador Postmark usa una cola de agrupación por tenant con una ventana
+de debounce corta. La configuración, dominio, servidor y plan se reutilizan
+por ciclo; las validaciones de dominio, servidor, stream y supresión por
+destinatario permanecen activas. Brevo y WhatsApp no pasan por esta cola.
+
+Esta entrega reduce las llamadas de persistencia, pero no se marca todavía
+como cierre de la fase 6A.2: para afirmar que un lote de 500 se materializa
+en una sola RPC todavía falta medir en producción el tamaño real de los grupos
+concurrentes y, si resulta menor al objetivo, separar completamente el
+renderizado limitado de la persistencia por bloque.
+
 ### Fase 6B: entrega del lote
 
 El worker de entrega Postmark debe reclamar exclusivamente bloques `ready` y

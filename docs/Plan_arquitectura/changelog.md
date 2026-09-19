@@ -301,3 +301,16 @@ Estado: pendiente.
 ## Regla de control
 
 No marcar una fase como completada por compilación, reinicio, healthcheck o existencia del servicio. Cada fase requiere evidencia funcional y, cuando corresponda, persistencia validada, entrega del proveedor y medición posterior.
+## 2026-09-19 — Persistencia agrupada Postmark sin afectar otros proveedores
+
+- El preparador Postmark incorpora agrupación por tenant y reutilización de
+  contexto para reducir llamadas repetidas durante la preparación.
+- La persistencia agrupada queda encapsulada en la RPC
+  `tenant_email_queue_messages_bulk`, limitada a 500 mensajes y ejecutable
+  únicamente por `service_role`.
+- La entrega continúa aislada en `talia-email-worker.service` y conserva la
+  llamada Postmark `/email/batch`; Brevo, WhatsApp y el lector de buzones no
+  utilizan esta ruta.
+- La mejora aún requiere medir en producción el tamaño efectivo de los grupos,
+  CPU, memoria, conexiones, latencia y resultados con lotes de 25, 500 y más
+  de 500 antes de declararla completada.

@@ -1,3 +1,5 @@
+import asyncio
+
 from app.services.prospeccion_contact_sender import (
     ContactEnvioResult,
     ProspeccionContactSender,
@@ -273,6 +275,40 @@ async def test_postmark_prospeccion_queues_without_loading_legacy_provider(monke
     assert calls["message"].from_email == "talia@talia.mx"
     assert calls["template_id"] is None
     assert calls["idempotency_key"] == "prospeccion-envio:22222222-2222-2222-2222-222222222222"
+
+
+@pytest.mark.asyncio
+async def test_postmark_bulk_queue_groups_same_tenant_items(monkeypatch) -> None:
+    calls: list[list[dict[str, object]]] = []
+
+    class FakePostmarkRepository:
+        async def queue_messages_bulk(self, *, organizacion_id, items):
+            calls.append(items)
+            return [
+                {
+                    "idempotency_key": item["idempotency_key"],
+                    "message_id": f"message-{index}",
+                    "message_status": "queued",
+                }
+                for index, item in enumerate(items, start=1)
+            ]
+
+    monkeypatch.setattr(sender_module, "PostmarkRepository", FakePostmarkRepository)
+    queue = sender_module._PostmarkBulkQueue(debounce_seconds=0.05)
+    organizacion_id = UUID("11111111-1111-1111-1111-111111111111")
+    items = [
+        {"idempotency_key": "one", "stream_name": "broadcast", "server_id": "server-1"},
+        {"idempotency_key": "two", "stream_name": "broadcast", "server_id": "server-1"},
+    ]
+
+    results = await asyncio.gather(
+        *(queue.enqueue(organizacion_id=organizacion_id, item=item) for item in items)
+    )
+    await queue.close()
+
+    assert len(calls) == 1
+    assert [item["idempotency_key"] for item in calls[0]] == ["one", "two"]
+    assert [result["message_id"] for result in results] == ["message-1", "message-2"]
 
 
 def test_build_envio_update_payload_persists_local_and_provider_message_ids() -> None:

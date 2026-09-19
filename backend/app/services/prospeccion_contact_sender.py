@@ -80,12 +80,18 @@ class _PostmarkPreparationCache:
     public_base_urls: dict[UUID, str | None]
     template_images: dict[tuple[UUID, UUID], dict[str, Any]]
     domains: dict[UUID, dict[str, Any] | None]
+    migrations: dict[UUID, dict[str, Any] | None]
+    plans: dict[UUID, dict[str, Any] | None]
+    servers: dict[UUID, dict[str, Any] | None]
     lock: asyncio.Lock
 
     def __init__(self) -> None:
         self.public_base_urls = {}
         self.template_images = {}
         self.domains = {}
+        self.migrations = {}
+        self.plans = {}
+        self.servers = {}
         self.lock = asyncio.Lock()
 
     async def public_base_url(self, organizacion_id: UUID) -> str | None:
@@ -119,6 +125,106 @@ class _PostmarkPreparationCache:
                 )
         domain = self.domains[organizacion_id]
         return dict(domain) if domain else None
+
+    async def migration(self, organizacion_id: UUID) -> dict[str, Any] | None:
+        async with self.lock:
+            if organizacion_id not in self.migrations:
+                self.migrations[organizacion_id] = await PostmarkRepository().get_migration(
+                    organizacion_id=organizacion_id
+                )
+        migration = self.migrations[organizacion_id]
+        return dict(migration) if migration else None
+
+    async def active_plan(self, organizacion_id: UUID) -> dict[str, Any] | None:
+        async with self.lock:
+            if organizacion_id not in self.plans:
+                self.plans[organizacion_id] = await PostmarkRepository().get_active_plan(
+                    organizacion_id=organizacion_id
+                )
+        plan = self.plans[organizacion_id]
+        return dict(plan) if plan else None
+
+    async def server(self, organizacion_id: UUID) -> dict[str, Any] | None:
+        async with self.lock:
+            if organizacion_id not in self.servers:
+                self.servers[organizacion_id] = await PostmarkRepository().get_server(
+                    organizacion_id=organizacion_id
+                )
+        server = self.servers[organizacion_id]
+        return dict(server) if server else None
+
+
+class _PostmarkBulkQueue:
+    """Agrupa mensajes listos durante un ciclo antes de persistirlos."""
+
+    def __init__(self, *, debounce_seconds: float = 0.15) -> None:
+        self._debounce_seconds = max(float(debounce_seconds), 0.05)
+        self._pending: dict[UUID, list[tuple[dict[str, Any], asyncio.Future[dict[str, Any]]]]] = {}
+        self._flush_tasks: dict[UUID, asyncio.Task[None]] = {}
+        self._repository = PostmarkRepository()
+
+    async def enqueue(self, *, organizacion_id: UUID, item: dict[str, Any]) -> dict[str, Any]:
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[dict[str, Any]] = loop.create_future()
+        bucket = self._pending.setdefault(organizacion_id, [])
+        bucket.append((item, future))
+        if len(bucket) >= 500:
+            task = self._flush_tasks.pop(organizacion_id, None)
+            if task:
+                task.cancel()
+            await self._flush(organizacion_id)
+        elif organizacion_id not in self._flush_tasks:
+            self._flush_tasks[organizacion_id] = asyncio.create_task(
+                self._flush_after_debounce(organizacion_id),
+                name="postmark-bulk-queue-flush",
+            )
+        return await future
+
+    async def _flush_after_debounce(self, organizacion_id: UUID) -> None:
+        try:
+            await asyncio.sleep(self._debounce_seconds)
+            await self._flush(organizacion_id)
+        except asyncio.CancelledError:
+            return
+        finally:
+            self._flush_tasks.pop(organizacion_id, None)
+
+    async def _flush(self, organizacion_id: UUID) -> None:
+        entries = self._pending.pop(organizacion_id, [])
+        if not entries:
+            return
+        futures = [future for _, future in entries]
+        try:
+            rows = await self._repository.queue_messages_bulk(
+                organizacion_id=organizacion_id,
+                items=[item for item, _ in entries],
+            )
+            by_key = {
+                str(row.get("idempotency_key")): row
+                for row in rows
+                if row.get("idempotency_key")
+            }
+            for item, future in entries:
+                if future.done():
+                    continue
+                row = by_key.get(str(item["idempotency_key"]))
+                if not row:
+                    future.set_exception(PostmarkError("bulk_message_queue_missing_result"))
+                    continue
+                future.set_result({**row, "stream_name": item["stream_name"], "server_id": item["server_id"]})
+        except Exception as exc:
+            for future in futures:
+                if not future.done():
+                    future.set_exception(exc)
+
+    async def close(self) -> None:
+        for task in list(self._flush_tasks.values()):
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        for organizacion_id in list(self._pending):
+            await self._flush(organizacion_id)
 
 
 def _clean_text(value: Any) -> str | None:
@@ -1059,6 +1165,7 @@ async def _run_envio_correo(
     organizacion_id: UUID | None = None,
     postmark_enabled: bool | None = None,
     preparation_cache: _PostmarkPreparationCache | None = None,
+    bulk_queue: _PostmarkBulkQueue | None = None,
 ) -> ContactEnvioResult:
     email_value = _clean_text(envio.get("email"))
     if not email_value:
@@ -1187,6 +1294,7 @@ async def _run_envio_correo(
             body_html=body_html,
             organizacion_id=organizacion_id,
             preparation_cache=preparation_cache,
+            bulk_queue=bulk_queue,
         )
 
     mail_settings = None
@@ -1337,6 +1445,7 @@ async def _queue_postmark_prospeccion_email(
     body_html: str | None,
     organizacion_id: UUID,
     preparation_cache: _PostmarkPreparationCache | None = None,
+    bulk_queue: _PostmarkBulkQueue | None = None,
 ) -> ContactEnvioResult:
     """Encola prospección en Postmark sin pasar por el servicio de correo legado."""
 
@@ -1388,22 +1497,78 @@ async def _queue_postmark_prospeccion_email(
             text_body=body,
             tag=tag,
         )
-        queued = await PostmarkService(repository=repository).queue_message(
-            organizacion_id=organizacion_id,
-            message=message,
-            message_kind=message_kind,
-            idempotency_key=f"prospeccion-envio:{envio['id']}",
-            source_batch_id=(
-                UUID(str(envio["batch_id"]))
-                if envio.get("batch_id")
-                else None
-            ),
-            # El constructor de prospección y las plantillas Postmark son
-            # catálogos distintos. En esta etapa Talia ya renderiza y guarda
-            # el contenido completo; no se debe enviar el UUID del catálogo
-            # local como FK de tenant_email_templates.
-            template_id=None,
-        )
+        idempotency_key = f"prospeccion-envio:{envio['id']}"
+        source_batch_id = UUID(str(envio["batch_id"])) if envio.get("batch_id") else None
+        if bulk_queue and preparation_cache:
+            migration = await preparation_cache.migration(organizacion_id)
+            plan = await preparation_cache.active_plan(organizacion_id)
+            server = await preparation_cache.server(organizacion_id)
+            if not migration or migration.get("feature_enabled") is not True or migration.get("status") not in {
+                "active", "validated", "migrated"
+            }:
+                raise PostmarkError("email_service_not_enabled")
+            if not plan:
+                raise PostmarkError("active_email_plan_required")
+            if not server or server.get("server_status") != "active":
+                raise PostmarkError("postmark_server_not_ready")
+            try:
+                server_id = UUID(str(server["id"]))
+                migration_id = UUID(str(migration["id"]))
+                plan_id = UUID(str(plan["id"]))
+                domain_id = UUID(str(domain["id"]))
+            except (KeyError, TypeError, ValueError) as exc:
+                raise PostmarkError("email_configuration_invalid") from exc
+            if str(domain.get("server_id")) != str(server_id):
+                raise PostmarkError("domain_server_mismatch")
+            domain_name = str(domain.get("domain_name") or "").strip().lower()
+            if not domain_name or from_email.rsplit("@", 1)[-1].lower() != domain_name:
+                raise PostmarkError("sender_domain_not_authorized")
+            if await repository.is_suppressed(
+                organizacion_id=organizacion_id,
+                email_address=message.to_email,
+            ):
+                raise PostmarkError("recipient_suppressed")
+            stream_key = "transactional_stream" if message_kind == "transactional" else "broadcast_stream"
+            stream_name = str(server.get(stream_key) or "").strip()
+            if not stream_name:
+                raise PostmarkError("message_stream_missing")
+            queued = await bulk_queue.enqueue(
+                organizacion_id=organizacion_id,
+                item={
+                    "idempotency_key": idempotency_key,
+                    "migration_id": str(migration_id),
+                    "domain_id": str(domain_id),
+                    "plan_id": str(plan_id),
+                    "template_id": None,
+                    "template_version": None,
+                    "message_kind": message_kind,
+                    "stream_name": stream_name,
+                    "server_id": str(server_id),
+                    "from_email": message.from_email,
+                    "from_name": message.from_name,
+                    "reply_to_email": message.reply_to,
+                    "to_email": message.to_email,
+                    "subject": message.subject,
+                    "html_body": message.html_body,
+                    "text_body": message.text_body,
+                    "tag": message.tag,
+                    "max_attempts": 3,
+                    "source_batch_id": str(source_batch_id) if source_batch_id else None,
+                },
+            )
+        else:
+            queued = await PostmarkService(repository=repository).queue_message(
+                organizacion_id=organizacion_id,
+                message=message,
+                message_kind=message_kind,
+                idempotency_key=idempotency_key,
+                source_batch_id=source_batch_id,
+                # El constructor de prospección y las plantillas Postmark son
+                # catálogos distintos. En esta etapa Talia ya renderiza y guarda
+                # el contenido completo; no se debe enviar el UUID del catálogo
+                # local como FK de tenant_email_templates.
+                template_id=None,
+            )
     except (PostmarkError, KeyError, TypeError, ValueError) as exc:
         log_event(
             logger,
@@ -1814,6 +1979,7 @@ class ProspeccionContactSender:
             return False
 
         semaphore = asyncio.Semaphore(effective_concurrency)
+        bulk_queue = _PostmarkBulkQueue() if self._provider_filter == "postmark" else None
         if high_demand_details.get("high_demand_mode"):
             log_event(logger, "prospeccion.sender_high_demand_profile", **high_demand_details)
         tasks: list[asyncio.Task[Exception | None]] = []
@@ -1821,7 +1987,7 @@ class ProspeccionContactSender:
         async def _run_one(envio: dict[str, Any]) -> Exception | None:
             async with semaphore:
                 try:
-                    await self._process_envio(repo, envio)
+                    await self._process_envio(repo, envio, bulk_queue=bulk_queue)
                     return None
                 except CRMRepositoryError as exc:
                     return exc
@@ -1856,6 +2022,8 @@ class ProspeccionContactSender:
         for envio in envios:
             tasks.append(asyncio.create_task(_run_one(envio)))
         results = await asyncio.gather(*tasks)
+        if bulk_queue:
+            await bulk_queue.close()
         for maybe_error in results:
             if isinstance(maybe_error, CRMRepositoryError):
                 raise maybe_error
@@ -1953,7 +2121,13 @@ class ProspeccionContactSender:
                     error=str(exc),
                 )
 
-    async def _process_envio(self, repo: CRMRepository, envio: dict[str, Any]) -> None:
+    async def _process_envio(
+        self,
+        repo: CRMRepository,
+        envio: dict[str, Any],
+        *,
+        bulk_queue: _PostmarkBulkQueue | None = None,
+    ) -> None:
         envio_id_value = envio.get("id")
         try:
             envio_id = UUID(str(envio_id_value))
@@ -2165,6 +2339,7 @@ class ProspeccionContactSender:
                             if postmark_queue_dispatch
                             else None
                         ),
+                        bulk_queue=bulk_queue if postmark_queue_dispatch else None,
                     )
                 elif canal == "whatsapp":
                     result = await _run_envio_whatsapp(

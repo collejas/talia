@@ -544,6 +544,23 @@ class PostmarkRepository:
             raise PostmarkRepositoryError("queue_invalid_response")
         return data[0]
 
+    async def queue_messages_bulk(
+        self, *, organizacion_id: UUID, items: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Encola hasta 500 mensajes en una sola llamada RPC por tenant."""
+        if not items or len(items) > 500:
+            raise PostmarkRepositoryError("bulk_message_queue_invalid_size")
+        data = await self._rpc(
+            "tenant_email_queue_messages_bulk",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_items": items,
+            },
+        )
+        if not isinstance(data, list):
+            raise PostmarkRepositoryError("bulk_message_queue_invalid_response")
+        return [row for row in data if isinstance(row, dict)]
+
     async def claim_messages(
         self,
         *,
