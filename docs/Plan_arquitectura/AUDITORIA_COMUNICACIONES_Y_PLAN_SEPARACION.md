@@ -51,6 +51,19 @@ de 25 mensajes mediante una sola operación `/email/batch`. Por tanto, el batch
 del proveedor funciona; la siguiente mejora es separar el worker que prepara el
 contenido del worker que entrega los bloques completos.
 
+### Estado actualizado: optimización pendiente de preparación
+
+La separación de procesos ya está operativa, pero no elimina por sí sola el
+tiempo necesario para construir los mensajes. La prueba controlada de 10
+mensajes confirmó un único `/email/batch` de 10, aunque la preparación tardó
+aproximadamente un minuto porque todavía ejecuta trabajo por destinatario.
+
+La siguiente fase no cambiará la entrega de Postmark ni los flujos de Brevo y
+WhatsApp. Optimizará exclusivamente `talia-postmark-preparer.service` para
+cargar el contexto una vez, renderizar en memoria, persistir mensajes en
+bloques y dejar un payload `ready` de hasta 500 elementos para el worker de
+entrega.
+
 ## 3. Procesos actuales dentro de `talia-api.service`
 
 En la auditoría inicial, el lifespan de [`backend/app/main.py`](../../backend/app/main.py) iniciaba:
@@ -421,6 +434,23 @@ Los errores 4xx permanentes no se reintentan. Los 429 respetan `Retry-After`. Lo
 - Reutilizar checkpoints actuales.
 - Mantener los envíos Brevo en su cola y worker, sin adoptar el batch ni los límites de Postmark.
 - Reactivar sincronización solo en el worker nuevo.
+
+#### Fase 2A: preparación masiva Postmark
+
+- La API sólo crea el trabajo y responde; no espera renderizado, inserciones ni
+  aceptación del proveedor.
+- El preparador carga contactos, plantilla, imágenes, dominio y configuración
+  del tenant mediante consultas acotadas y reutiliza ese contexto para todo el
+  lote.
+- La persistencia usa inserciones/RPCs agrupadas en transacciones cortas de
+  100–250 mensajes.
+- Los bloques se limitan a 500 objetos y se separan por tenant, tipo y stream.
+- Las actualizaciones de prospección y bitácoras se agrupan y se ejecutan fuera
+  de la ruta HTTP.
+- Se mantienen límites iniciales de 2–4 tareas de preparación y un batch activo
+  por tenant; no se modifica la concurrencia de Brevo o WhatsApp.
+- Se registran duración de consulta, renderizado, persistencia, payload,
+  llamada a Postmark, CPU, memoria, conexiones y jobs pendientes.
 
 ### Fase 3: webhooks de correo
 

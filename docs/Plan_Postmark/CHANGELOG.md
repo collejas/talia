@@ -42,6 +42,44 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 
 ## [2026-09-19] — Plan de aislamiento de preparación y entrega
 
+### Fase siguiente aprobada: preparación masiva sin latencia de API
+
+La separación de workers ya evita que la entrega Postmark bloquee la API, pero
+la preparación todavía procesa cada destinatario con operaciones repetidas.
+En la prueba del lote `aa7beb0f-3e04-49b3-8722-91dd3432ea53`, 10 mensajes
+terminaron en un único `/email/batch`, pero la preparación tardó cerca de un
+minuto antes de crear el bloque.
+
+La siguiente implementación deberá:
+
+- Mantener la solicitud HTTP limitada a crear el trabajo y devolver su estado.
+- Cargar en una sola operación acotada los contactos y el contexto invariable
+  del tenant, plantilla, dominio, remitente, imágenes y enlaces.
+- Renderizar los mensajes en memoria y persistirlos mediante inserciones o RPCs
+  agrupadas, en transacciones cortas de 100–250 filas.
+- Crear bloques homogéneos de hasta 500 mensajes sin mezclar tenant, tipo ni
+  stream.
+- Entregar cada bloque con una sola llamada `/email/batch`.
+- Ejecutar las actualizaciones de prospección y bitácoras en operaciones
+  agrupadas posteriores, sin retrasar la creación del payload.
+- Mantener Brevo y WhatsApp sin cambios de cola, proveedor, cuota o límites.
+
+No se aumentará la concurrencia de forma agresiva en el servidor de 1 GB. La
+preparación conservará inicialmente 2–4 tareas concurrentes y el worker de
+entrega mantendrá un batch activo por tenant, con backpressure medible.
+
+### Criterios adicionales de aceptación
+
+- El panel no espera la preparación ni la aceptación de Postmark.
+- Un lote de 500 produce un bloque persistido con 500 objetos y una llamada
+  `/email/batch`, salvo el corte documentado por tamaño de payload.
+- La preparación masiva no ejecuta una consulta o escritura completa por
+  destinatario.
+- El tiempo de preparación, inserción y entrega queda medido por lote.
+- Un reinicio conserva bloques `ready` y no duplica mensajes aceptados.
+- La latencia de la API y el consumo de CPU/memoria se comparan contra una
+  línea base antes de habilitar mayor concurrencia.
+
 ### Diagnóstico
 
 - La prueba de 25 mensajes confirmó que el worker ya puede enviar un único `postmark.batch_dispatch` con `batch_size=25`; la integración `/email/batch` funciona.
@@ -75,6 +113,7 @@ Registro de avances, decisiones, validaciones y pendientes de la migración del 
 - Sustituir consultas repetidas por destinatario por carga de contexto y operaciones agrupadas.
 - Implementar backpressure medible para Postmark sin modificar límites de Brevo ni WhatsApp.
 - Ejecutar pruebas de 25, 500 y más de 500 mensajes y documentar CPU, memoria, Supabase, duración, payload y llamadas reales a Postmark.
+- Implementar la fase de preparación masiva y medirla antes de elevar la concurrencia.
 
 ## [2026-09-18] — Batch real de 500 y límite de payload
 
