@@ -2,6 +2,11 @@
 
 Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIONES_Y_PLAN_SEPARACION.md](./AUDITORIA_COMUNICACIONES_Y_PLAN_SEPARACION.md).
 
+## 2026-09-19 — Corrección del cierre de batches Postmark
+
+- Se agregó una migración correctiva para calificar las columnas de `tenant_email_messages` al cerrar `tenant_email_delivery_batches`.
+- La corrección evita que un bloque ya enviado permanezca en `sending` por una ambigüedad SQL; no reenvía ni modifica mensajes ya aceptados.
+
 ## 2026-09-19 — Implementación de preparación Postmark y webhooks durables
 
 ### Cambios aplicados en código

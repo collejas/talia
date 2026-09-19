@@ -1,5 +1,6 @@
 # Próxima entrega
 
+- La función de cierre de bloques califica explícitamente `delivery_batch_id` para evitar que el nombre de la columna de salida PL/pgSQL entre en conflicto con la columna de mensajes.
 - El worker de entrega usa `/email/batch` para agrupar hasta 500 mensajes por tenant, tipo y stream, conservando el resultado individual de cada destinatario.
 - La separación operativa de 5 segundos se aplica entre lotes y no entre correos individuales; se mantiene una única ejecución concurrente por worker para no sobrecargar Talia ni mezclar tenants.
 - Los lotes `broadcast` y `transactional` se envían por separado (`broadcast` y `outbound`) y continúan usando la cuota, la idempotencia y los webhooks existentes.
