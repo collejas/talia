@@ -213,33 +213,56 @@ class PostmarkWorker:
                 inter_batch_seconds=settings.postmark_worker_inter_batch_seconds,
             )
             crm_repo = CRMRepository()
+            message_ids: list[UUID] = []
+            for delivery in deliveries:
+                raw_message_id = delivery.get("message_id")
+                try:
+                    message_ids.append(UUID(str(raw_message_id)))
+                except (TypeError, ValueError):
+                    continue
+            idempotency_by_message = await repository.get_message_idempotency_keys(
+                message_ids=message_ids
+            )
+            finalization_items: list[dict[str, object]] = []
             for delivery in deliveries:
                 message_id = delivery.get("message_id")
                 if not message_id:
                     continue
-                idempotency_key = await repository.get_message_idempotency_key(
-                    message_id=UUID(str(message_id))
-                )
+                local_message_id = str(message_id)
+                idempotency_key = idempotency_by_message.get(local_message_id)
                 envio_id = self._prospeccion_envio_id(idempotency_key)
                 if not envio_id:
                     continue
                 if delivery.get("provider_accepted") and delivery.get("provider_message_id"):
-                    await crm_repo.worker_complete_envio(
-                        envio_id=envio_id,
-                        payload={
-                            "mensaje_id": delivery["provider_message_id"],
-                            "proveedor_aceptado_en": datetime.now(timezone.utc).isoformat(),
-                        },
+                    finalization_items.append(
+                        {
+                            "envio_id": str(envio_id),
+                            "update_payload": {
+                                "estado": "enviado",
+                                "mensaje_id": str(delivery["provider_message_id"]),
+                                "mensaje_id_interno": local_message_id,
+                                "proveedor_aceptado_en": datetime.now(timezone.utc).isoformat(),
+                            },
+                            "log_entry": {},
+                        }
                     )
                 elif not delivery.get("provider_accepted"):
-                    await crm_repo.worker_complete_envio(
-                        envio_id=envio_id,
-                        payload={
-                            "estado": "error",
-                            "error": "postmark_provider_rejected",
-                            "procesado_en": datetime.now(timezone.utc).isoformat(),
-                        },
+                    finalization_items.append(
+                        {
+                            "envio_id": str(envio_id),
+                            "update_payload": {
+                                "estado": "error",
+                                "error": "postmark_provider_rejected",
+                                "procesado_en": datetime.now(timezone.utc).isoformat(),
+                            },
+                            "log_entry": {},
+                        }
                     )
+            if finalization_items:
+                await crm_repo.worker_finalize_postmark_envios_bulk(
+                    organizacion_id=organizacion_id,
+                    items=finalization_items,
+                )
             return len(deliveries)
         except (PostmarkError, PostmarkRepositoryError, CRMRepositoryError, ValueError) as exc:
             logger.exception(

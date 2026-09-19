@@ -39,11 +39,16 @@ Postmark y los eventos posteriores del ciclo de vida del correo.
 - La pausa configurada se aplica entre llamadas batch cuando sea necesaria,
   nunca entre destinatarios del mismo batch.
 
-### Optimización pendiente
+### Optimización implementada
 
-La entrega del lote ya funciona con `/email/batch`. La siguiente optimización
-es agrupar también la actualización posterior de `prospeccion_contacto_envio`
-y sus bitácoras, manteniendo webhooks, Brevo y WhatsApp sin cambios.
+La entrega del lote continúa usando `/email/batch`. La actualización posterior
+de `prospeccion_contacto_envio` ya se agrupa: el worker obtiene la relación
+entre mensajes locales y envíos con una sola lectura y finaliza estados,
+identificadores y lotes mediante una sola RPC de hasta 500 elementos. Se
+eliminaron los `PATCH` secuenciales por destinatario en esta ruta.
+
+La optimización mantiene los webhooks como mecanismo de eventos posteriores y
+no modifica los workers, límites ni proveedores de Brevo, WhatsApp o IMAP.
 
 # Changelog — Plan Postmark
 

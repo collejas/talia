@@ -372,3 +372,13 @@ en la latencia de la API. Brevo, WhatsApp e IMAP permanecen sin cambios.
   `POSTMARK_SYNC_ENABLED=false` durante la operación normal.
 - La persistencia local posterior al batch debe agruparse mediante RPC/operación
   masiva; Brevo, WhatsApp e IMAP conservan sus propios workers y límites.
+
+## 2026-09-19 — Persistencia agrupada posterior al batch
+
+- El worker Postmark dejó de resolver cada `idempotency_key` con una consulta
+  individual; ahora realiza una sola lectura acotada por batch.
+- La actualización de `prospeccion_contacto_envio`, identificadores locales,
+  aceptación y cierre de lotes usa la RPC masiva existente, limitada a 500
+  elementos y protegida para `service_role`.
+- No se modificaron webhooks, Brevo, WhatsApp, IMAP ni la sincronización
+  histórica de Postmark.

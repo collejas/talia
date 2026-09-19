@@ -102,10 +102,11 @@ con checkpoints, límites y sin borrar datos locales; por eso
 
 Las escrituras locales posteriores a la aceptación —estado del envío,
 `mensaje_id`, `mensaje_id_interno`, bitácoras y estado del lote— deben hacerse
-en una operación agrupada. El worker puede llamar a Postmark una vez por batch,
-guardar la respuesta y terminar la persistencia local con una RPC, sin crear un
-`PATCH` por destinatario. Esto reduce latencia y conexiones sin cambiar el
-flujo de Brevo, WhatsApp o IMAP.
+en una operación agrupada. Esta optimización ya fue implementada: el worker
+obtiene la relación entre mensajes y envíos con una lectura acotada y termina
+la persistencia local con una RPC de hasta 500 elementos, sin crear un `PATCH`
+por destinatario. Esto reduce latencia y conexiones sin cambiar el flujo de
+Brevo, WhatsApp o IMAP.
 
 ## 3. Procesos actuales dentro de `talia-api.service`
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Sequence
 from uuid import UUID
 
 import httpx
@@ -785,6 +785,31 @@ class PostmarkRepository:
         )
         value = row.get("idempotency_key") if row else None
         return str(value).strip() if value else None
+
+    async def get_message_idempotency_keys(
+        self, *, message_ids: Sequence[UUID]
+    ) -> dict[str, str]:
+        """Obtiene la relación mensaje local -> envío en una sola lectura."""
+        normalized = list(dict.fromkeys(str(message_id) for message_id in message_ids))
+        if not normalized:
+            return {}
+        if len(normalized) > 500:
+            raise PostmarkRepositoryError("message_idempotency_bulk_invalid_size")
+        rows = await self._get_many(
+            "/rest/v1/tenant_email_messages",
+            params={
+                "select": "id,idempotency_key",
+                "id": f"in.({','.join(normalized)})",
+                "limit": "500",
+            },
+        )
+        result: dict[str, str] = {}
+        for row in rows:
+            message_id = str(row.get("id") or "").strip()
+            idempotency_key = str(row.get("idempotency_key") or "").strip()
+            if message_id and idempotency_key:
+                result[message_id] = idempotency_key
+        return result
 
     async def defer_message(self, *, message_id: UUID) -> None:
         await self._rest_patch(
