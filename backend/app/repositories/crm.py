@@ -20177,33 +20177,53 @@ class CRMRepository:
         organizacion_id: UUID | None = None,
         prospecto_ids: list[UUID],
     ) -> list[dict[str, Any]]:
-        """Obtiene prospectos filtrando por su identificador."""
+        """Obtiene prospectos por bloques para evitar URLs excesivamente grandes."""
 
         if not prospecto_ids:
             return []
-        ids_param = ",".join(str(value) for value in prospecto_ids)
-        params = {"id": f"in.({ids_param})"}
-        if organizacion_id is not None:
-            params["organizacion_id"] = f"eq.{organizacion_id}"
-            resp = await self._request(
-                "GET",
-                "/rest/v1/prospeccion_prospectos",
-                params=params,
-                organizacion_id=organizacion_id,
-            )
-        else:
-            if not usuario_token:
-                raise CRMRepositoryError("prospectos_by_ids_missing_token")
-            resp = await self._request_with_user(
-                "GET",
-                "/rest/v1/prospeccion_prospectos",
-                token=usuario_token,
-                params=params,
-            )
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
-        return data
+        if organizacion_id is None and not usuario_token:
+            raise CRMRepositoryError("prospectos_by_ids_missing_token")
+
+        # PostgREST recibe los IDs en la URL. Mantener bloques pequeños evita
+        # 502/414 cuando el panel selecciona cientos o miles de prospectos.
+        chunk_size = 200
+        requested_ids: list[str] = []
+        seen_ids: set[str] = set()
+        for value in prospecto_ids:
+            value_text = str(value)
+            if value_text in seen_ids:
+                continue
+            seen_ids.add(value_text)
+            requested_ids.append(value_text)
+
+        rows_by_id: dict[str, dict[str, Any]] = {}
+        for start in range(0, len(requested_ids), chunk_size):
+            chunk = requested_ids[start : start + chunk_size]
+            params = {"id": f"in.({','.join(chunk)})"}
+            if organizacion_id is not None:
+                params["organizacion_id"] = f"eq.{organizacion_id}"
+                resp = await self._request(
+                    "GET",
+                    "/rest/v1/prospeccion_prospectos",
+                    params=params,
+                    organizacion_id=organizacion_id,
+                )
+            else:
+                resp = await self._request_with_user(
+                    "GET",
+                    "/rest/v1/prospeccion_prospectos",
+                    token=usuario_token,
+                    params=params,
+                )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
+            for row in data:
+                if not isinstance(row, dict) or not row.get("id"):
+                    continue
+                rows_by_id.setdefault(str(row["id"]), row)
+
+        return [rows_by_id[prospecto_id] for prospecto_id in requested_ids if prospecto_id in rows_by_id]
 
     async def list_prospectos(
         self,
@@ -22646,15 +22666,20 @@ class CRMRepository:
         if not entries:
             return []
         created: list[dict[str, Any]] = []
-        chunk_size = 500
+        # Los lotes grandes pueden tardar más que el timeout de PostgREST. Los
+        # dividimos en solicitudes pequeñas. `ignore-duplicates` hace segura la
+        # repetición si la solicitud anterior confirmó en Supabase pero el
+        # cliente perdió la respuesta y el endpoint vuelve a intentarlo.
+        chunk_size = 200
         for start in range(0, len(entries), chunk_size):
             chunk = entries[start : start + chunk_size]
             resp = await self._request_with_user(
                 "POST",
                 "/rest/v1/prospeccion_contacto_envio",
                 token=usuario_token,
+                params={"on_conflict": "batch_id,prospecto_id,canal"},
                 json=chunk,
-                prefer="return=representation",
+                prefer="resolution=ignore-duplicates,return=representation",
             )
             data = resp.json() or []
             if not isinstance(data, list):
@@ -24357,11 +24382,10 @@ class CRMRepository:
         prospecto_ids: Sequence[UUID],
         canales: Sequence[str],
     ) -> list[dict[str, Any]]:
-        """Obtiene suppressions activas por prospecto/canal."""
+        """Obtiene supresiones activas por bloques de prospectos y canal."""
 
         if not prospecto_ids or not canales:
             return []
-        ids_param = ",".join(str(value) for value in prospecto_ids)
         canal_values = sorted(
             {
                 value.strip().lower()
@@ -24372,23 +24396,27 @@ class CRMRepository:
         if not canal_values:
             return []
         canal_values.append("all")
-        params = {
-            "select": "id,prospecto_id,canal,motivo,origen,metadata",
-            "activo": "eq.true",
-            "prospecto_id": f"in.({ids_param})",
-            "canal": _postgrest_in_clause(canal_values),
-            "limit": "5000",
-        }
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/prospeccion_contacto_suppressions",
-            token=usuario_token,
-            params=params,
-        )
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"contact_suppression_by_prospect_invalid:{data!r}")
-        return data
+        rows: list[dict[str, Any]] = []
+        ids = [str(value) for value in prospecto_ids]
+        for start in range(0, len(ids), 200):
+            chunk = ids[start : start + 200]
+            resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_contacto_suppressions",
+                token=usuario_token,
+                params={
+                    "select": "id,prospecto_id,canal,motivo,origen,metadata",
+                    "activo": "eq.true",
+                    "prospecto_id": f"in.({','.join(chunk)})",
+                    "canal": _postgrest_in_clause(canal_values),
+                    "limit": "5000",
+                },
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"contact_suppression_by_prospect_invalid:{data!r}")
+            rows.extend(row for row in data if isinstance(row, dict))
+        return rows
 
     async def _list_prospecto_ids_with_contact_suppressions(
         self,

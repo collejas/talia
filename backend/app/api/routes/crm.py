@@ -40316,14 +40316,18 @@ async def contactar_prospectos_legacy(
                 )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    resumen = _build_contact_resumen(envios)
+    # El POST es idempotente: si Supabase confirmó una parte y la respuesta se
+    # perdió, `ignore-duplicates` puede devolver menos filas en el reintento.
+    # El resumen inicial debe representar la selección solicitada completa,
+    # mientras el estado real se consulta por batch.
+    resumen = _build_contact_resumen(envios_entries)
     contact_sender.notify_new_envios()
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,
         event_type="prospectos_contact_batch_created",
         payload={
             "batch_id": str(batch_id),
-            "envios": len(envios),
+            "envios": len(envios_entries),
             "prospectos": total_prospectos,
         },
     )

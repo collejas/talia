@@ -15,6 +15,13 @@ class PostmarkRepositoryError(RuntimeError):
     """Error controlado al consultar la configuración de correo."""
 
 
+# La RPC mantiene las validaciones y la cuota por mensaje. Ejecutarla con 500
+# filas en una sola transacción excede el statement_timeout de Supabase. Estos
+# bloques solo afectan la persistencia local; la preparación posterior sigue
+# formando entregas Postmark de hasta 500 mensajes.
+POSTMARK_QUEUE_RPC_CHUNK_SIZE = 50
+
+
 class PostmarkRepository:
     """Repositorio server-side exclusivo de las tablas tenant_email_*."""
 
@@ -596,19 +603,23 @@ class PostmarkRepository:
     async def queue_messages_bulk(
         self, *, organizacion_id: UUID, items: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Encola hasta 500 mensajes en una sola llamada RPC por tenant."""
+        """Encola hasta 500 mensajes usando RPCs acotadas por tenant."""
         if not items or len(items) > 500:
             raise PostmarkRepositoryError("bulk_message_queue_invalid_size")
-        data = await self._rpc(
-            "tenant_email_queue_messages_bulk",
-            {
-                "p_organizacion_id": str(organizacion_id),
-                "p_items": items,
-            },
-        )
-        if not isinstance(data, list):
-            raise PostmarkRepositoryError("bulk_message_queue_invalid_response")
-        return [row for row in data if isinstance(row, dict)]
+        rows: list[dict[str, Any]] = []
+        for start in range(0, len(items), POSTMARK_QUEUE_RPC_CHUNK_SIZE):
+            chunk = items[start : start + POSTMARK_QUEUE_RPC_CHUNK_SIZE]
+            data = await self._rpc(
+                "tenant_email_queue_messages_bulk",
+                {
+                    "p_organizacion_id": str(organizacion_id),
+                    "p_items": chunk,
+                },
+            )
+            if not isinstance(data, list):
+                raise PostmarkRepositoryError("bulk_message_queue_invalid_response")
+            rows.extend(row for row in data if isinstance(row, dict))
+        return rows
 
     async def claim_messages(
         self,

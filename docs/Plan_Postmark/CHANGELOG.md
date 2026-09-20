@@ -617,6 +617,17 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - Las supresiones se consultan nuevamente por lote; sólo la configuración
   estable y los assets pueden reutilizarse mediante caché.
 
+### Selección masiva de prospectos
+
+- La carga de prospectos seleccionados manualmente ahora consulta los IDs en
+  bloques de 200 antes de crear el lote de Talia.
+- Esto evita URLs excesivas hacia PostgREST cuando se seleccionan cientos o
+  miles de prospectos; el lote lógico conserva todos los seleccionados.
+- El envío posterior continúa respetando el máximo de 500 mensajes por
+  delivery batch de Postmark.
+- La consulta de supresiones del mismo flujo también se particiona en bloques
+  de 200 para evitar un segundo `502` durante la creación del lote.
+
 ### Claim bulk Postmark
 
 - Se agregó `worker_claim_prospeccion_envios_bulk`, limitada a 500 elementos,
@@ -628,3 +639,26 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
   como fallback; Brevo y WhatsApp no cambian.
 - La función fue aplicada y verificada en Supabase con ejecución exclusiva de
   `service_role`.
+
+## 2026-09-19 — protección de lotes grandes y reintentos idempotentes
+
+- Se corrigió la inserción de `prospeccion_contacto_envio` para usar bloques de
+  200 registros y `resolution=ignore-duplicates` sobre la restricción
+  `(batch_id, prospecto_id, canal)`. Así, un timeout después de un commit no
+  convierte un lote ya persistido en un `502` ni duplica envíos al reintentarlo.
+- La RPC de cola Postmark ahora se invoca internamente en bloques de 50. Esto
+  evita ejecutar 500 validaciones/cuotas dentro de una sola transacción que
+  exceda `statement_timeout`. El límite operativo de la entrega Postmark sigue
+  siendo de hasta 500 mensajes; solo se acota la persistencia local.
+- La respuesta inicial del endpoint resume la selección completa solicitada y
+  el estado definitivo continúa consultándose por lote/webhook.
+
+## 2026-09-19 — cancelación segura de lotes duplicados
+
+- Los lotes `690db3b6-36ae-41fa-b488-5bf92491c58f` y
+  `711a6071-4472-4f04-90bc-4b495956e7ba` se cancelan conservando sus filas
+  como auditoría, porque no contienen mensajes aceptados por Postmark.
+- Los intentos con estado `cancelado` dejan de incrementar los contadores de
+  envíos de los prospectos y no bloquean una nueva selección.
+- Se cancelaron también los mensajes locales `queued` sin
+  `external_message_id`; ningún mensaje cancelado fue aceptado por Postmark.

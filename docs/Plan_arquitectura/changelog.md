@@ -475,3 +475,23 @@ repetido sin mover el payload al API ni aumentar la concurrencia global.
   `organizacion_id` y sólo ejecutable por `service_role`.
 - La caché no sustituye la consulta de supresiones del lote; evita únicamente
   repetir datos estables y mantiene fallback operativo ante errores.
+
+## 2026-09-19 — Selección masiva sin URL excesiva
+
+- `list_prospectos_by_ids` consulta selecciones grandes en bloques de 200 y
+  reconstruye el resultado en el orden solicitado.
+- La creación del lote sigue siendo una sola operación lógica y no se mezcla
+  con la fragmentación de delivery batches de Postmark.
+- Las consultas auxiliares de supresiones usan la misma partición para que una
+  selección grande no falle después de cargar los prospectos.
+
+## 2026-09-19 — lotes grandes sin reintentos duplicados
+
+- Los envíos de prospección de hasta 10,000 prospectos ahora se insertan en
+  bloques de 200 con upsert idempotente por `(batch_id, prospecto_id, canal)`.
+- La cola local de Postmark limita cada llamada RPC a 50 mensajes para no
+  saturar el `statement_timeout` de Supabase; esta protección no modifica el
+  comportamiento de Brevo ni WhatsApp ni el agrupamiento final de entregas.
+- Un `502` posterior a un commit ya no debe provocar que el navegador vuelva a
+  crear registros duplicados dentro del lote; el progreso real se observa en
+  los registros del lote y sus webhooks.

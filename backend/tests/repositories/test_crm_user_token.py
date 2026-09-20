@@ -103,6 +103,66 @@ async def test_list_contactables_by_ids_uses_source_specific_columns(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_list_prospectos_by_ids_chunks_large_selection_and_preserves_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository(user_token="user-token")
+    captured: list[dict[str, object]] = []
+    prospecto_ids = [uuid.uuid4() for _ in range(401)]
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        params = kwargs["params"]
+        assert isinstance(params, dict)
+        ids = str(params["id"])[4:-1].split(",")
+        captured.append(params)
+        return DummyResponse([{"id": value, "display_name": value} for value in reversed(ids)])
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    result = await repo.list_prospectos_by_ids(
+        usuario_token="user-token",
+        prospecto_ids=prospecto_ids,
+    )
+
+    assert len(captured) == 3
+    assert [len(str(params["id"])[4:-1].split(",")) for params in captured] == [200, 200, 1]
+    assert [row["id"] for row in result] == [str(value) for value in prospecto_ids]
+
+
+@pytest.mark.asyncio
+async def test_contact_suppressions_chunk_large_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository(user_token="user-token")
+    captured: list[dict[str, object]] = []
+    prospecto_ids = [uuid.uuid4() for _ in range(401)]
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        params = kwargs["params"]
+        assert isinstance(params, dict)
+        captured.append(params)
+        return DummyResponse([])
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    result = await repo.list_active_contact_suppressions_for_prospectos(
+        usuario_token="user-token",
+        prospecto_ids=prospecto_ids,
+        canales=["correo"],
+    )
+
+    assert result == []
+    assert len(captured) == 3
+    assert [len(str(params["prospecto_id"])[4:-1].split(",")) for params in captured] == [200, 200, 1]
+
+
+@pytest.mark.asyncio
 async def test_bulk_insert_prospectos_aligns_optional_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
     monkeypatch.setattr(settings, "supabase_service_role", "service")
@@ -137,3 +197,36 @@ async def test_bulk_insert_prospectos_aligns_optional_keys(monkeypatch: pytest.M
     assert first_keys == second_keys
     assert json_payload[0]["primer_apellido"] is None
     assert json_payload[1]["nombre_comercial"] is None
+
+
+@pytest.mark.asyncio
+async def test_insert_contact_envios_chunks_and_ignores_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository(user_token="user-token")
+    calls: list[dict[str, object]] = []
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        calls.append({"method": method, "path": path, **kwargs})
+        return DummyResponse(kwargs["json"])
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+    entries = [
+        {"batch_id": "batch", "prospecto_id": str(index), "canal": "correo"}
+        for index in range(401)
+    ]
+
+    result = await repo.insert_contact_envios(usuario_token="user-token", entries=entries)
+
+    assert len(calls) == 3
+    assert [len(call["json"]) for call in calls] == [200, 200, 1]
+    assert all(call["params"] == {"on_conflict": "batch_id,prospecto_id,canal"} for call in calls)
+    assert all(
+        call["prefer"] == "resolution=ignore-duplicates,return=representation"
+        for call in calls
+    )
+    assert len(result) == len(entries)
