@@ -2361,6 +2361,182 @@ async def _find_preferred_sale_stage(
     return None
 
 
+async def _find_negotiation_stage(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+) -> dict[str, Any] | None:
+    for code in ("general_negociacion", "negociacion"):
+        stage = await repo.get_pipeline_stage_by_code(
+            organizacion_id=organizacion_id,
+            code=code,
+        )
+        if stage:
+            return stage
+    stages = await repo.list_pipelines(organizacion_id=organizacion_id)
+    for stage in stages:
+        if isinstance(stage, dict) and "negociacion" in str(stage.get("codigo") or "").lower():
+            return stage
+    return None
+
+
+async def _advance_opportunity_to_negotiation(
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+    current_stage_id: UUID | None,
+    usuario_id: UUID | None = None,
+) -> None:
+    stage = await _find_negotiation_stage(repo, organizacion_id)
+    if not stage:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="negotiation_stage_not_configured",
+        )
+    next_stage_id = _safe_uuid(stage.get("id"))
+    if not next_stage_id or next_stage_id == current_stage_id:
+        return
+    await repo.update_opportunity(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        payload={"etapa_id": str(next_stage_id)},
+    )
+    history_payload: dict[str, Any] = {
+        "oportunidad_id": str(oportunidad_id),
+        "etapa_origen_id": str(current_stage_id) if current_stage_id else None,
+        "etapa_destino_id": str(next_stage_id),
+        "fuente": "propiedad_apartado_reservado",
+    }
+    if usuario_id:
+        history_payload["cambiado_por_usuario_id"] = str(usuario_id)
+    await repo.append_stage_history(
+        organizacion_id=organizacion_id,
+        payload={key: value for key, value in history_payload.items() if value is not None},
+    )
+
+
+async def _ensure_property_quote_for_status(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    unidad: dict[str, Any],
+    status_value: str,
+    oportunidad_id: UUID,
+    persona_id: UUID | None,
+    cuenta_id: UUID | None,
+    catalog_item_id: UUID | None,
+    propiedad_id: UUID | None,
+    precio_final: Decimal | None,
+    moneda: str,
+    usuario_id: UUID | None,
+) -> dict[str, Any]:
+    resolved_catalog_item_id = catalog_item_id or _safe_uuid(unidad.get("catalog_item_id"))
+    if not resolved_catalog_item_id:
+        raise HTTPException(status_code=409, detail="property_catalog_item_required")
+    resolved_propiedad_id = propiedad_id or _safe_uuid(unidad.get("propiedad_id"))
+    resolved_price = _decimal_to_number(precio_final)
+    if resolved_price is None:
+        resolved_price = _as_number(unidad.get("precio"))
+    if resolved_price is None or resolved_price <= 0:
+        raise HTTPException(status_code=409, detail="property_price_required")
+
+    catalog_item = await repo.get_catalog_item(
+        organizacion_id=organizacion_id,
+        item_id=resolved_catalog_item_id,
+    )
+    if not catalog_item:
+        raise HTTPException(status_code=404, detail="catalog_item_not_found")
+    product = await _ensure_product_for_catalog_item(
+        repo,
+        organizacion_id,
+        resolved_catalog_item_id,
+    )
+    sale_refs = {
+        "propiedad_id": str(resolved_propiedad_id) if resolved_propiedad_id else None,
+        "unidad_id": str(unidad.get("id")),
+        "catalog_item_id": str(resolved_catalog_item_id),
+        "oportunidad_id": str(oportunidad_id),
+        "precio_final": resolved_price,
+        "tipo_operacion": status_value,
+    }
+    quote_payload: dict[str, Any] = {
+        "estatus": "aceptada",
+        "total": resolved_price,
+        "moneda": moneda,
+        "oportunidad_id": str(oportunidad_id),
+        "metadata": {key: value for key, value in sale_refs.items() if value is not None},
+    }
+    if cuenta_id:
+        quote_payload["cuenta_id"] = str(cuenta_id)
+    if persona_id:
+        quote_payload["persona_id"] = str(persona_id)
+
+    accepted_quotes = await repo.list_accepted_quotes_by_opportunity_ids(
+        organizacion_id=organizacion_id,
+        oportunidad_ids=[oportunidad_id],
+    )
+    quote_has_item = False
+    if accepted_quotes:
+        quote_id = _safe_uuid(accepted_quotes[0].get("id"))
+        if not quote_id:
+            raise CRMRepositoryError("accepted_quote_missing_id")
+        quote = await repo.get_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=quote_id,
+        )
+        existing_metadata = _normalize_metadata_value(quote.get("metadata")) or {}
+        existing_unit_id = _safe_uuid(existing_metadata.get("unidad_id"))
+        if existing_unit_id and existing_unit_id != _safe_uuid(unidad.get("id")):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="opportunity_already_has_accepted_quote_for_another_unit",
+            )
+        quote_has_item = bool(quote.get("items"))
+    else:
+        quote = None
+        existing_quotes = await repo.list_quote_entries(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+        for candidate in existing_quotes:
+            candidate_metadata = _normalize_metadata_value(candidate.get("metadata")) or {}
+            candidate_unit_id = _safe_uuid(candidate_metadata.get("unidad_id"))
+            candidate_status = str(candidate.get("estatus") or "").strip().lower()
+            if (
+                candidate_unit_id == _safe_uuid(unidad.get("id"))
+                and candidate_metadata.get("tipo_operacion") == status_value
+                and candidate_status in {"borrador", "enviada"}
+            ):
+                quote = candidate
+                quote_has_item = bool(candidate.get("items"))
+                break
+        if quote is None:
+            quote_payload["estatus"] = "borrador"
+            quote = await repo.create_quote(
+                organizacion_id=organizacion_id,
+                payload=quote_payload,
+            )
+
+    if not quote_has_item:
+        await repo.add_quote_item(
+            organizacion_id=organizacion_id,
+            payload={
+                "cotizacion_id": str(quote["id"]),
+                "orden": 1,
+                "producto_id": str(product.get("id")),
+                "descripcion": catalog_item.get("nombre") or "Unidad inmobiliaria",
+                "cantidad": 1,
+                "precio_unitario": resolved_price,
+                "subtotal": resolved_price,
+                "metadata": {key: value for key, value in sale_refs.items() if value is not None},
+            },
+        )
+        quote = await repo.get_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=UUID(str(quote["id"])),
+        )
+    return quote
+
+
 async def _advance_opportunity_to_won(
     repo: CRMRepository,
     organizacion_id: UUID,
@@ -6101,6 +6277,15 @@ class PropiedadUnidadStatusUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: PropiedadStatus
     oportunidad_id: UUID | None = None
+    catalog_item_id: UUID | None = None
+    propiedad_id: UUID | None = None
+    precio_final: Decimal | None = Field(default=None, gt=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+
+    @field_validator("moneda")
+    @classmethod
+    def uppercase_currency(cls, value: str) -> str:
+        return value.upper()
 
 
 class CRMPropertySaleRequest(BaseModel):
@@ -49291,6 +49476,27 @@ async def actualizar_status_propiedad_unidad(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="opportunity_required_for_commercial_status",
         )
+    if payload.status.value in {
+        PropiedadStatus.apartado.value,
+        PropiedadStatus.reservado.value,
+    }:
+        try:
+            await _ensure_property_quote_for_status(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                unidad={**(current_unidad or {}), "id": str(unidad_id)},
+                status_value=payload.status.value,
+                oportunidad_id=resolved_oportunidad_id,
+                persona_id=resolved_persona_id,
+                cuenta_id=resolved_cuenta_id,
+                catalog_item_id=payload.catalog_item_id,
+                propiedad_id=payload.propiedad_id,
+                precio_final=payload.precio_final,
+                moneda=payload.moneda,
+                usuario_id=usuario_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     update_payload: dict[str, Any] = {
         "status": payload.status.value,
     }
@@ -49304,6 +49510,24 @@ async def actualizar_status_propiedad_unidad(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if payload.status.value in {
+        PropiedadStatus.apartado.value,
+        PropiedadStatus.reservado.value,
+    } and resolved_oportunidad_id:
+        try:
+            current_stage_id = _safe_uuid(
+                (opportunity or {}).get("etapa_id")
+                or ((opportunity or {}).get("etapa") or {}).get("id")
+            )
+            await _advance_opportunity_to_negotiation(
+                repo,
+                organizacion_id,
+                resolved_oportunidad_id,
+                current_stage_id,
+                usuario_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     event_payload = {
         "organizacion_id": str(organizacion_id),
         "unidad_id": str(unidad_id),

@@ -318,6 +318,22 @@ class DummyCRMRepository(CRMRepository):
             ]
         return stages
 
+    async def get_pipeline_stage_by_code(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(("get_pipeline_stage_by_code", kwargs))
+        code = str(kwargs.get("code") or "")
+        return next(
+            (stage for stage in self.pipeline_stages if str(stage.get("codigo") or "") == code),
+            None,
+        )
+
+    async def update_opportunity(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("update_opportunity", kwargs))
+        return {
+            "id": str(kwargs["oportunidad_id"]),
+            "organizacion_id": str(kwargs["organizacion_id"]),
+            **kwargs["payload"],
+        }
+
     async def list_pipeline_opportunities(self, **kwargs: Any) -> tuple[list[dict[str, Any]], int]:
         """Simula la lista de oportunidades del pipeline."""
 
@@ -2755,11 +2771,24 @@ async def test_actualizar_status_propiedad_unidad_crea_movimiento(
     oportunidad_id = uuid.uuid4()
     persona_id = uuid.uuid4()
     cuenta_id = uuid.uuid4()
+    catalog_item_id = uuid.uuid4()
+    propiedad_id = uuid.uuid4()
+    negotiation_stage_id = uuid.uuid4()
+    fake_repo.pipeline_stages = [
+        {
+            "id": str(negotiation_stage_id),
+            "codigo": "negociacion",
+            "nombre": "Negociación",
+            "categoria": "abierta",
+        }
+    ]
     fake_repo.propiedad_unidades_by_id[str(unidad_id)] = {
         "id": str(unidad_id),
         "organizacion_id": str(uuid.uuid4()),
         "status": "disponible",
         "precio": 1200000,
+        "catalog_item_id": str(catalog_item_id),
+        "propiedad_id": str(propiedad_id),
         "oportunidad_id": str(oportunidad_id),
         "persona_id": str(persona_id),
         "cuenta_id": str(cuenta_id),
@@ -2783,6 +2812,15 @@ async def test_actualizar_status_propiedad_unidad_crea_movimiento(
     assert movimiento_payload["persona_id"] == str(persona_id)
     assert movimiento_payload["cuenta_id"] == str(cuenta_id)
     assert movimiento_payload["precio"] == 1200000
+    assert any(call_name == "create_quote" for call_name, _ in fake_repo.calls)
+    assert any(call_name == "add_quote_item" for call_name, _ in fake_repo.calls)
+    create_quote_call = next(call for name, call in fake_repo.calls if name == "create_quote")
+    assert create_quote_call["payload"]["estatus"] == "borrador"
+    assert any(call_name == "update_opportunity" for call_name, _ in fake_repo.calls)
+    update_opportunity_call = next(
+        call for name, call in fake_repo.calls if name == "update_opportunity"
+    )
+    assert update_opportunity_call["payload"]["etapa_id"] == str(negotiation_stage_id)
 
 
 @pytest.mark.asyncio

@@ -2040,6 +2040,10 @@ export function PropertyMap() {
         body: JSON.stringify({
           status: statusModalTarget,
           oportunidad_id: statusModalOpportunityId,
+          catalog_item_id: catalogItemId,
+          propiedad_id: propiedadId,
+          precio_final: mapboxProps?.precio ?? null,
+          moneda: "MXN",
         }),
       });
       const payload = await response.json().catch(() => null);
