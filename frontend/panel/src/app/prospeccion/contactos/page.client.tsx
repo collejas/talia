@@ -91,7 +91,7 @@ export default function ContactosPageClient() {
     setBatchLoading(true)
     setBatchError(null)
     try {
-      const response = await listContactoBatches({ limit: 20, include_resumen: true })
+      const response = await listContactoBatches({ limit: 10, include_resumen: true, include_total: false })
       setBatches(response.items ?? [])
       if (!selectedBatchId && response.items?.length) {
         setSelectedBatchId(response.items[0].id)
@@ -107,6 +107,8 @@ export default function ContactosPageClient() {
   const [logs, setLogs] = useState<ContactoLog[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [logsError, setLogsError] = useState<string | null>(null)
+  const [logsRequested, setLogsRequested] = useState(false)
+  const logsRequestedRef = useRef(false)
 
   const fetchBatchSummary = useCallback(async (batchId: string | null) => {
     if (!batchId) {
@@ -208,7 +210,7 @@ export default function ContactosPageClient() {
         await reintentarContactoEnvio(envioId)
         await fetchEnvios(selectedBatchId)
         await fetchBatchSummary(selectedBatchId)
-        await fetchLogs(selectedBatchId)
+        if (logsRequestedRef.current) await fetchLogs(selectedBatchId)
       } catch (err) {
         const message = err instanceof Error ? err.message : "No se pudo reintentar el envío."
         setEnvioError(message)
@@ -227,7 +229,7 @@ export default function ContactosPageClient() {
       await cancelarContactoBatch(selectedBatchId)
       await fetchBatchSummary(selectedBatchId)
       await fetchEnvios(selectedBatchId)
-      await fetchLogs(selectedBatchId)
+      if (logsRequestedRef.current) await fetchLogs(selectedBatchId)
       await fetchBatches()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo cancelar el lote."
@@ -246,7 +248,7 @@ export default function ContactosPageClient() {
         await cancelarContactoEnvio(envioId)
         await fetchEnvios(selectedBatchId)
         await fetchBatchSummary(selectedBatchId)
-        await fetchLogs(selectedBatchId)
+        if (logsRequestedRef.current) await fetchLogs(selectedBatchId)
       } catch (err) {
         const message = err instanceof Error ? err.message : "No se pudo cancelar el envío."
         setEnvioError(message)
@@ -263,11 +265,16 @@ export default function ContactosPageClient() {
       setEnvios([])
       setLogs([])
       setLogsError(null)
+      logsRequestedRef.current = false
+      setLogsRequested(false)
       return
     }
     void fetchBatchSummary(selectedBatchId)
     void fetchEnvios(selectedBatchId)
-    void fetchLogs(selectedBatchId)
+    setLogs([])
+    setLogsError(null)
+    logsRequestedRef.current = false
+    setLogsRequested(false)
     const source = new EventSource(`/api/prospeccion/contacto/batches/${selectedBatchId}/stream`)
     source.onmessage = (event) => {
       if (!event?.data) return
@@ -294,7 +301,7 @@ export default function ContactosPageClient() {
       }
       void fetchBatchSummary(selectedBatchId)
       void fetchEnvios(selectedBatchId)
-      void fetchLogs(selectedBatchId)
+      if (logsRequestedRef.current) void fetchLogs(selectedBatchId)
     }
     source.onerror = () => {
       source.close()
@@ -554,11 +561,16 @@ export default function ContactosPageClient() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => selectedBatchId && void fetchLogs(selectedBatchId)}
+            onClick={() => {
+              if (!selectedBatchId) return
+              logsRequestedRef.current = true
+              setLogsRequested(true)
+              void fetchLogs(selectedBatchId)
+            }}
             disabled={!selectedBatchId || logsLoading}
           >
             <IconRefresh className={cn("mr-1.5 size-4", logsLoading && "animate-spin")} />
-            Actualizar
+            {logsRequested ? "Actualizar" : "Cargar eventos"}
           </Button>
         </CardHeader>
         <CardContent>
@@ -571,7 +583,12 @@ export default function ContactosPageClient() {
           {!selectedBatchId ? (
             <p className="text-sm text-muted-foreground">Selecciona un lote para consultar su timeline.</p>
           ) : null}
-          {selectedBatchId ? (
+          {selectedBatchId && !logsRequested ? (
+            <p className="text-sm text-muted-foreground">
+              Los eventos se cargarán únicamente cuando los solicites para mantener ágil la vista.
+            </p>
+          ) : null}
+          {selectedBatchId && logsRequested ? (
             logs.length ? (
               <ol className="space-y-3">
                 {collapseDuplicateContactLogs(logs).map((log) => (

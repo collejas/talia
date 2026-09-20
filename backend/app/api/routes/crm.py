@@ -5086,6 +5086,7 @@ class ContactBatchQuery(BaseModel):
     estado: str | None = Field(default=None, max_length=40)
     order: Literal["reciente", "antiguo"] = Field(default="reciente")
     include_resumen: bool = Field(default=False)
+    include_total: bool = Field(default=True)
 
 
 class ContactEnvioQuery(BaseModel):
@@ -5100,6 +5101,8 @@ class ContactEnvioQuery(BaseModel):
     canal: Literal["correo", "whatsapp", "llamada", ""] | None = Field(default=None)
     estado: str | None = Field(default=None, max_length=40)
     order: Literal["reciente", "antiguo"] = Field(default="reciente")
+    include_total: bool = Field(default=True)
+    include_sesiones_utm: bool = Field(default=True)
 
 
 class ContactLogQuery(BaseModel):
@@ -5115,6 +5118,7 @@ class ContactLogQuery(BaseModel):
     canal: Literal["correo", "whatsapp", "llamada", ""] | None = Field(default=None)
     estado: str | None = Field(default=None, max_length=40)
     order: Literal["reciente", "antiguo"] = Field(default="reciente")
+    include_total: bool = Field(default=True)
 
 
 class ContactSuppressionQuery(BaseModel):
@@ -35163,6 +35167,7 @@ async def listar_batches_prospeccion_contacto_legacy(
             offset=params.offset,
             estado=params.estado,
             order=order,
+            count_exact=params.include_total,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -35215,6 +35220,7 @@ async def listar_envios_prospeccion_contacto_legacy(
             canal=params.canal or None,
             estado=params.estado,
             order=order,
+            count_exact=params.include_total,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -35230,7 +35236,7 @@ async def listar_envios_prospeccion_contacto_legacy(
             continue
 
     sesiones_map: dict[str, int] = {}
-    if envio_ids:
+    if params.include_sesiones_utm and envio_ids:
         try:
             sesiones_map = await repo.get_prospeccion_envio_sesiones_utm(
                 organizacion_id=organizacion_id,
@@ -35278,6 +35284,7 @@ async def listar_logs_prospeccion_contacto_legacy(
             canal=params.canal if params.canal else None,
             estado=params.estado,
             order=order,
+            count_exact=params.include_total,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

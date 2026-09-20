@@ -1643,6 +1643,7 @@ export async function listContactoBatches(params: {
   estado?: string
   order?: "reciente" | "antiguo"
   include_resumen?: boolean
+  include_total?: boolean
 } = {}): Promise<{ ok: boolean; items: ContactoBatch[]; total: number; limit: number; offset: number }> {
   const url = buildClientUrl("/api/prospeccion/contacto/batches")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -1650,6 +1651,7 @@ export async function listContactoBatches(params: {
   if (params.estado?.trim()) url.searchParams.set("estado", params.estado.trim())
   if (params.order) url.searchParams.set("order", params.order)
   if (params.include_resumen) url.searchParams.set("include_resumen", "true")
+  if (params.include_total === false) url.searchParams.set("include_total", "false")
   return requestJson(url.toString())
 }
 
@@ -1665,6 +1667,8 @@ export async function listContactoEnvios(params: {
   canal?: "correo" | "whatsapp" | "llamada"
   estado?: string
   order?: "reciente" | "antiguo"
+  include_total?: boolean
+  include_sesiones_utm?: boolean
 } = {}): Promise<{ ok: boolean; items: ContactoEnvio[]; total: number; limit: number; offset: number }> {
   const url = buildClientUrl("/api/prospeccion/contacto/envios")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -1674,6 +1678,8 @@ export async function listContactoEnvios(params: {
   if (params.canal) url.searchParams.set("canal", params.canal)
   if (params.estado?.trim()) url.searchParams.set("estado", params.estado.trim())
   if (params.order) url.searchParams.set("order", params.order)
+  if (params.include_total === false) url.searchParams.set("include_total", "false")
+  if (params.include_sesiones_utm === false) url.searchParams.set("include_sesiones_utm", "false")
   return requestJson(url.toString())
 }
 
@@ -1732,6 +1738,7 @@ export async function listContactoLogs(params: {
   canal?: "correo" | "whatsapp" | "llamada"
   estado?: string
   order?: "reciente" | "antiguo"
+  include_total?: boolean
 } = {}): Promise<{ ok: boolean; items: ContactoLog[]; total: number; limit: number; offset: number }> {
   const url = buildClientUrl("/api/prospeccion/contacto/logs")
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
@@ -1742,6 +1749,7 @@ export async function listContactoLogs(params: {
   if (params.canal) url.searchParams.set("canal", params.canal)
   if (params.estado?.trim()) url.searchParams.set("estado", params.estado.trim())
   if (params.order) url.searchParams.set("order", params.order)
+  if (params.include_total === false) url.searchParams.set("include_total", "false")
   return requestJson(url.toString())
 }
 

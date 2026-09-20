@@ -22596,11 +22596,12 @@ class CRMRepository:
         estado: str | None = None,
         campana_id: UUID | None = None,
         order: str | None = None,
+        count_exact: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
         """Obtiene lotes de contacto con filtros básicos."""
 
         params: dict[str, str] = {
-            "select": "*",
+            "select": "id,iniciado_por,canales,total_prospectos,estado,programado_en,finalizado_en,creado_en,campana_id,lista_id,titulo,filtros,programacion,envios_por_lote,intervalo_entre_lotes_segundos,total_lotes,estrategia_plantillas",
             "limit": str(limit),
             "offset": str(offset),
             "order": order or "creado_en.desc",
@@ -22614,7 +22615,7 @@ class CRMRepository:
             "/rest/v1/prospeccion_contacto_batch",
             token=usuario_token,
             params=params,
-            prefer="count=exact",
+            prefer="count=exact" if count_exact else None,
         )
         data = resp.json() or []
         if not isinstance(data, list):
@@ -23470,11 +23471,12 @@ class CRMRepository:
         canal: str | None = None,
         estado: str | None = None,
         order: str | None = None,
+        count_exact: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista envíos filtrando por lote o prospecto."""
 
         params: dict[str, str] = {
-            "select": "*",
+            "select": "id,batch_id,prospecto_id,canal,estado,detalle,mensaje_id,programado_en,procesado_en,error,numero_lote,lote_programado_en,plantilla_id",
             "limit": str(limit),
             "offset": str(offset),
             "order": order or "creado_en.desc",
@@ -23493,7 +23495,7 @@ class CRMRepository:
             "/rest/v1/prospeccion_contacto_envio",
             token=usuario_token,
             params=params,
-            prefer="count=exact",
+            prefer="count=exact" if count_exact else None,
         )
         data = resp.json() or []
         if not isinstance(data, list):
@@ -23579,11 +23581,12 @@ class CRMRepository:
         canal: str | None = None,
         estado: str | None = None,
         order: str | None = None,
+        count_exact: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista eventos registrados en la bitácora de contactos."""
 
         params: dict[str, str] = {
-            "select": "*",
+            "select": "id,prospecto_id,canal,accion,estado,detalle,error,creado_en,envio_id,batch_id",
             "limit": str(limit),
             "offset": str(offset),
             "order": order or "creado_en.desc",
@@ -23604,7 +23607,7 @@ class CRMRepository:
             "/rest/v1/prospeccion_contactos_log",
             token=usuario_token,
             params=params,
-            prefer="count=exact",
+            prefer="count=exact" if count_exact else None,
         )
         data = resp.json() or []
         if not isinstance(data, list):
