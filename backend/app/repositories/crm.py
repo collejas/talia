@@ -4300,6 +4300,20 @@ class CRMRepository:
         payload: dict[str, Any],
     ) -> dict[str, Any]:
         body = {"organizacion_id": str(organizacion_id), **payload}
+        if not isinstance(body.get("orden"), int) or body["orden"] <= 0:
+            cotizacion_id = body.get("cotizacion_id")
+            if not cotizacion_id:
+                raise CRMRepositoryError("quote_item_missing_quote_id")
+            existing_items = await self.list_quote_items(
+                organizacion_id=organizacion_id,
+                cotizacion_id=UUID(str(cotizacion_id)),
+            )
+            orders = [
+                item.get("orden")
+                for item in existing_items
+                if isinstance(item.get("orden"), int) and item.get("orden") > 0
+            ]
+            body["orden"] = max(orders, default=0) + 1
         resp = await self._request(
             "POST",
             "/rest/v1/cotizacion_items",
@@ -4449,9 +4463,11 @@ class CRMRepository:
         items: list[dict[str, Any]],
     ) -> None:
         rows = []
-        for item in items:
+        for index, item in enumerate(items, start=1):
             payload = dict(item)
             payload["cotizacion_id"] = str(quote_id)
+            if not isinstance(payload.get("orden"), int) or payload["orden"] <= 0:
+                payload["orden"] = index
             rows.append(payload)
         if not rows:
             return

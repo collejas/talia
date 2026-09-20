@@ -981,12 +981,17 @@ class DummyCRMRepository(CRMRepository):
             "actualizado_en": "2024-01-01T00:00:00Z",
         }
 
+    async def list_accepted_quotes_by_opportunity_ids(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_accepted_quotes_by_opportunity_ids", kwargs))
+        return []
+
     async def list_quote_items(self, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_quote_items", kwargs))
         return [
             {
                 "id": str(uuid.uuid4()),
                 "cotizacion_id": str(kwargs["cotizacion_id"]),
+                "orden": 1,
                 "producto_id": None,
                 "descripcion": "Servicio",
                 "cantidad": 1,
@@ -1002,6 +1007,7 @@ class DummyCRMRepository(CRMRepository):
         return {
             "id": str(uuid.uuid4()),
             **kwargs["payload"],
+            "orden": kwargs["payload"].get("orden") or 1,
             "descripcion": kwargs["payload"]["descripcion"],
             "cantidad": kwargs["payload"].get("cantidad", 1),
         }
@@ -2599,6 +2605,8 @@ async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
     assert payload["id"]
     assert any(call_name == "create_quote" for call_name, _ in fake_repo.calls)
     assert any(call_name == "add_quote_item" for call_name, _ in fake_repo.calls)
+    add_item_call = next(call for name, call in fake_repo.calls if name == "add_quote_item")
+    assert add_item_call["payload"]["orden"] == 1
     assert fake_repo.updated_propiedad_unidades
     assert fake_repo.updated_propiedad_unidades[0]["payload"]["status"] == "vendido"
     assert fake_repo.updated_propiedad_unidades[0]["payload"]["oportunidad_id"] == str(oportunidad_id)

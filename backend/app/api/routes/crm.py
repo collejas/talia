@@ -3072,6 +3072,10 @@ async def _render_quote_pdf_after_sale(
     conceptos = _concepts_from_items(items_list if isinstance(items_list, list) else [])
     reference = str(oportunidad_id).split("-")[0]
     quote_context = quotes_service.QuoteRenderContext(
+        folio=_normalize_quote_folio_value(
+            quote_row.get("folio")
+            or (_normalize_metadata_value(quote_row.get("metadata")) or {}).get("folio")
+        ),
         lead_label=_clean_text(
             opportunity.get("titulo")
             or contact.get("company_name")
@@ -17807,6 +17811,7 @@ class CRMQuoteCreate(BaseModel):
 class CRMQuoteItem(BaseModel):
     id: UUID
     cotizacion_id: UUID
+    orden: int = Field(..., ge=1)
     producto_id: UUID | None = None
     descripcion: str
     cantidad: float
@@ -17818,6 +17823,7 @@ class CRMQuoteItem(BaseModel):
 
 class CRMQuoteItemCreate(BaseModel):
     cotizacion_id: UUID
+    orden: int | None = Field(default=None, ge=1)
     producto_id: UUID | None = None
     descripcion: str = Field(..., max_length=500)
     cantidad: float = Field(default=1, gt=0)
@@ -49469,6 +49475,8 @@ async def registrar_venta_propiedad(
     elif payload.contacto_id:
         quote_payload["contacto_id"] = str(payload.contacto_id)
 
+    existing_accepted_quote = False
+    quote_has_item = False
     try:
         sale_logger.info(
             "propiedad_sale_started",
@@ -49498,12 +49506,34 @@ async def registrar_venta_propiedad(
                 "moneda": payload.moneda,
             },
         )
-        quote = await repo.create_quote(
+        accepted_quotes = await repo.list_accepted_quotes_by_opportunity_ids(
             organizacion_id=organizacion_id,
-            payload=quote_payload,
+            oportunidad_ids=[resolved_oportunidad_id],
         )
+        if accepted_quotes:
+            existing_quote_id = _safe_uuid(accepted_quotes[0].get("id"))
+            if not existing_quote_id:
+                raise CRMRepositoryError("accepted_quote_missing_id")
+            quote = await repo.get_quote_entry(
+                organizacion_id=organizacion_id,
+                quote_id=existing_quote_id,
+            )
+            existing_metadata = _normalize_metadata_value(quote.get("metadata")) or {}
+            existing_unit_id = _safe_uuid(existing_metadata.get("unidad_id"))
+            if existing_unit_id and existing_unit_id != payload.unidad_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="opportunity_already_has_accepted_quote_for_another_unit",
+                )
+            existing_accepted_quote = True
+            quote_has_item = bool(quote.get("items"))
+        else:
+            quote = await repo.create_quote(
+                organizacion_id=organizacion_id,
+                payload=quote_payload,
+            )
         sale_logger.info(
-            "propiedad_quote_created",
+            "propiedad_quote_reused" if existing_accepted_quote else "propiedad_quote_created",
             extra={
                 "organizacion_id": str(organizacion_id),
                 "quote_id": str(quote["id"]),
@@ -49541,39 +49571,41 @@ async def registrar_venta_propiedad(
                 "catalog_item_id": str(payload.catalog_item_id),
             },
         )
-        item_payload: dict[str, Any] = {
-            "cotizacion_id": str(quote["id"]),
-            "producto_id": str(product.get("id")),
-            "descripcion": catalog_item.get("nombre") or "Unidad inmobiliaria",
-            "cantidad": 1,
-            "precio_unitario": price_value,
-            "subtotal": price_value,
-            "metadata": item_metadata,
-        }
-        await repo.add_quote_item(
-            organizacion_id=organizacion_id,
-            payload=item_payload,
-        )
-        sale_logger.info(
-            "propiedad_quote_item_added",
-            extra={
-                "organizacion_id": str(organizacion_id),
-                "quote_id": str(quote["id"]),
+        if not quote_has_item:
+            item_payload: dict[str, Any] = {
+                "cotizacion_id": str(quote["id"]),
+                "orden": 1,
                 "producto_id": str(product.get("id")),
+                "descripcion": catalog_item.get("nombre") or "Unidad inmobiliaria",
                 "cantidad": 1,
                 "precio_unitario": price_value,
-            },
-        )
-        _write_propiedad_sale_event(
-            "quote_item_added",
-            {
-                "organizacion_id": str(organizacion_id),
-                "quote_id": str(quote["id"]),
-                "producto_id": str(product.get("id")),
-                "cantidad": 1,
-                "precio_unitario": price_value,
-            },
-        )
+                "subtotal": price_value,
+                "metadata": item_metadata,
+            }
+            await repo.add_quote_item(
+                organizacion_id=organizacion_id,
+                payload=item_payload,
+            )
+            sale_logger.info(
+                "propiedad_quote_item_added",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "quote_id": str(quote["id"]),
+                    "producto_id": str(product.get("id")),
+                    "cantidad": 1,
+                    "precio_unitario": price_value,
+                },
+            )
+            _write_propiedad_sale_event(
+                "quote_item_added",
+                {
+                    "organizacion_id": str(organizacion_id),
+                    "quote_id": str(quote["id"]),
+                    "producto_id": str(product.get("id")),
+                    "cantidad": 1,
+                    "precio_unitario": price_value,
+                },
+            )
         if resolved_oportunidad_id:
             quote_uuid = _safe_uuid(quote.get("id")) or UUID(str(quote["id"]))
             await _render_quote_pdf_after_sale(
