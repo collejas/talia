@@ -25,6 +25,47 @@ def test_lead_quote_item_rejects_unbounded_description() -> None:
         crm_routes.LeadQuoteItemPayload(descripcion=description)
 
 
+def test_build_property_sale_records_uses_persisted_movement_and_unit_name() -> None:
+    unit_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
+
+    logs = crm_routes._build_propiedad_sale_records(
+        [
+            {
+                "id": "movement-1",
+                "unidad_id": str(unit_id),
+                "creado_en": "2026-06-18T17:54:30+00:00",
+                "estado_anterior": "disponible",
+                "estado_nuevo": "vendido",
+                "precio": 1200000,
+                "moneda": "MXN",
+                "motivo": "venta_registrada",
+            }
+        ],
+        geojson={
+            "features": [
+                {"id": str(unit_id), "properties": {"nombre": "Casa 101", "unidad": "101"}}
+            ]
+        },
+    )
+
+    assert logs == [
+        {
+            "id": "movement-1",
+            "timestamp": "2026-06-18T17:54:30+00:00",
+            "unidad_id": str(unit_id),
+            "unidad_nombre": "Casa 101",
+            "oportunidad_id": None,
+            "persona_id": None,
+            "cuenta_id": None,
+            "estado_anterior": "disponible",
+            "estado_nuevo": "vendido",
+            "precio_final": 1200000,
+            "moneda": "MXN",
+            "motivo": "venta_registrada",
+        }
+    ]
+
+
 @pytest.mark.asyncio
 async def test_google_places_types_endpoint_returns_catalog_items() -> None:
     repo = AsyncMock()

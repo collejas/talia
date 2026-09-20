@@ -1780,6 +1780,42 @@ def _read_propiedad_sale_log_records(limit: int = DEFAULT_SALE_LOG_LIMIT) -> lis
     return entries
 
 
+def _build_propiedad_sale_records(
+    movements: list[dict[str, Any]],
+    *,
+    geojson: dict[str, Any],
+) -> list[dict[str, Any]]:
+    unit_names: dict[str, str] = {}
+    for feature in geojson.get("features") or []:
+        if not isinstance(feature, dict):
+            continue
+        unit_id = feature.get("id")
+        properties = feature.get("properties")
+        if not unit_id or not isinstance(properties, dict):
+            continue
+        unit_name = _clean_text(properties.get("nombre") or properties.get("unidad"))
+        if unit_name:
+            unit_names[str(unit_id)] = unit_name
+
+    return [
+        {
+            "id": movement.get("id"),
+            "timestamp": movement.get("creado_en"),
+            "unidad_id": movement.get("unidad_id"),
+            "unidad_nombre": unit_names.get(str(movement.get("unidad_id"))),
+            "oportunidad_id": movement.get("oportunidad_id"),
+            "persona_id": movement.get("persona_id"),
+            "cuenta_id": movement.get("cuenta_id"),
+            "estado_anterior": movement.get("estado_anterior"),
+            "estado_nuevo": movement.get("estado_nuevo"),
+            "precio_final": movement.get("precio"),
+            "moneda": movement.get("moneda"),
+            "motivo": movement.get("motivo"),
+        }
+        for movement in movements
+    ]
+
+
 def _append_inbox_threads_metrics_snapshot(entry: dict[str, Any]) -> None:
     try:
         MAPBOX_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -49673,11 +49709,21 @@ async def registrar_venta_propiedad(
 @router.get("/ventas/logs", response_model=CRMSaleLogsResponse)
 async def list_propiedades_sale_logs(
     *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     limit: Annotated[int, Query(ge=1, le=200)] = DEFAULT_SALE_LOG_LIMIT,
-    _: str = Depends(require_permission("reports.view")),
+    _: str = Depends(require_permission("propiedades.view")),
 ) -> CRMSaleLogsResponse:
     try:
-        logs = _read_propiedad_sale_log_records(limit)
+        movements = await repo.list_propiedades_ventas(
+            organizacion_id=organizacion_id,
+            limit=limit,
+        )
+        geojson = await repo.get_propiedades_geojson(organizacion_id=organizacion_id)
+        logs = _build_propiedad_sale_records(
+            movements,
+            geojson=geojson,
+        )
     except Exception as exc:  # pragma: no cover - fallback
         raise HTTPException(status_code=502, detail="sale_logs_unavailable") from exc
     return CRMSaleLogsResponse(logs=logs)

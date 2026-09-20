@@ -1879,6 +1879,20 @@ export function PropertyMap() {
       unitIds,
     };
   }, [mapboxPanelVersion, mapboxKind, mapboxProps, mapboxPanelFeature, getChildrenForNode]);
+  const mapboxSaleLogs = useMemo(() => {
+    if (!mapboxPanelFeature || !mapboxKind) return [];
+    const unitIds =
+      mapboxKind === "unidad"
+        ? [unidadId]
+        : mapboxSalesSummary?.unitIds ?? [];
+    const allowedUnitIds = new Set(
+      unitIds
+        .filter((value) => value != null && String(value).trim().length)
+        .map((value) => String(value)),
+    );
+    if (!allowedUnitIds.size) return [];
+    return saleLogs.filter((sale) => allowedUnitIds.has(String(sale?.unidad_id ?? "")));
+  }, [mapboxKind, mapboxPanelFeature, mapboxSalesSummary, saleLogs, unidadId]);
   const mapboxStatusLabel =
     typeof mapboxProps?.status === "string" ? mapboxProps.status.toUpperCase() : null;
   const mapboxPriceLabel =
@@ -4508,14 +4522,14 @@ export function PropertyMap() {
                           </Dialog>
                         </>
                       )}
-                      {saleLogs.length > 0 && (
+                      {mapboxSaleLogs.length > 0 && (
                         <div className="mt-4 text-[0.65rem] uppercase tracking-[0.2em] text-slate-400">
                           Última venta registrada:
                           <span className="block text-[0.75rem] font-semibold text-slate-200">
-                            {saleLogs[0]?.timestamp
-                              ? new Date(saleLogs[0].timestamp).toLocaleString()
+                            {mapboxSaleLogs[0]?.timestamp
+                              ? new Date(mapboxSaleLogs[0].timestamp).toLocaleString()
                               : "—"}{" "}
-                            · Unidad {saleLogs[0]?.unidad_id ?? "—"}
+                            · Unidad {mapboxSaleLogs[0]?.unidad_nombre ?? mapboxSaleLogs[0]?.unidad_id ?? "—"}
                           </span>
                         </div>
                       )}

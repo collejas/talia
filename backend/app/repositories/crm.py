@@ -1483,6 +1483,32 @@ class CRMRepository:
             raise CRMRepositoryError("crm_propiedades_ventas_vendedores_invalid_response")
         return result
 
+    async def list_propiedades_ventas(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/propiedad_unidad_movimientos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "estado_nuevo": "eq.vendido",
+                "select": (
+                    "id,organizacion_id,unidad_id,oportunidad_id,persona_id,cuenta_id,"
+                    "estado_anterior,estado_nuevo,precio,moneda,motivo,creado_en,creado_por"
+                ),
+                "order": "creado_en.desc",
+                "limit": str(limit),
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_ventas_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def get_propiedad_hierarquia(self, *, organizacion_id: UUID) -> dict[str, Any]:
         payload = {"p_organizacion": str(organizacion_id)}
         result = await self._rpc("crm_propiedad_hierarquia", payload)
