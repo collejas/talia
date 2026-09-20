@@ -78,6 +78,9 @@ function formatWhatsappLocation(raw: VisitDetailRaw) {
 function getRawValue(row: TableRow, key: keyof VisitDetailRaw) {
   const raw = row.raw as VisitDetailRaw | undefined;
   if (!raw) return null;
+  if (key === "utm_campaign" && raw.prospeccion_campana_nombre) {
+    return raw.prospeccion_campana_nombre;
+  }
   if (key === "state_name" && raw.canal === "whatsapp") {
     return formatWhatsappLocation(raw);
   }

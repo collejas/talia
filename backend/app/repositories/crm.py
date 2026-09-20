@@ -4538,11 +4538,10 @@ class CRMRepository:
 
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "select": "utm_campaign,cid,actualizado_en,last_seen_at",
+            "select": "utm_campaign,cid,eid,actualizado_en,last_seen_at",
             "order": "actualizado_en.desc,last_seen_at.desc",
             "limit": str(max(1, min(limit, 5000))),
             "offset": str(max(0, int(offset))),
-            "cid": "not.is.null",
             "utm_campaign": _postgrest_in_clause(campaign_values),
         }
         if date_from:
@@ -4909,7 +4908,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "id": _postgrest_in_clause(values),
-            "select": "id,prospecto_id,canal,payload,detalle,estado,creado_en",
+            "select": "id,batch_id,prospecto_id,canal,payload,detalle,estado,creado_en",
             "limit": str(min(1000, max(1, len(values)))),
         }
         resp = await self._request("GET", "/rest/v1/prospeccion_contacto_envio", params=params)
@@ -4938,7 +4937,7 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
             "organizacion_id": f"eq.{organizacion_id}",
-                "select": "tid,cid,last_seen_at,actualizado_en",
+                "select": "tid,cid,eid,last_seen_at,actualizado_en",
             "order": "actualizado_en.desc,last_seen_at.desc",
             "limit": str(max(1, min(limit, 10000))),
             "offset": str(max(0, int(offset))),

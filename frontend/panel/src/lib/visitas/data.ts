@@ -85,6 +85,9 @@ type WebSessionAttributionRow = {
   session_id?: string | null;
   eid?: string | null;
   cid?: string | null;
+  prospeccion_campana_id?: string | null;
+  prospeccion_campana_nombre?: string | null;
+  prospeccion_campana_tipo?: string | null;
   persona_id?: string | null;
   contacto_id?: string | null;
   contacto_nombre?: string | null;
@@ -384,8 +387,9 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailR
         cid: row.cid ?? null,
         oportunidad_id: null,
         canal: row.canal ?? "webchat",
-        prospeccion_campana_id: row.cid ?? null,
-        prospeccion_campana_tipo: promotionType,
+        prospeccion_campana_id: row.prospeccion_campana_id ?? row.cid ?? null,
+        prospeccion_campana_nombre: row.prospeccion_campana_nombre ?? null,
+        prospeccion_campana_tipo: row.prospeccion_campana_tipo ?? promotionType,
         ip: row.ip ?? null,
         registrado_en: row.iniciada_en ?? row.first_seen_at ?? null,
         primera_visita_en: row.iniciada_en ?? row.first_seen_at ?? null,

@@ -38351,6 +38351,22 @@ async def prospeccion_campana_update(
         )
     )
 
+    # Cambiar únicamente el nombre no debe reconstruir el lote ni volver a
+    # programar sus envíos. El nombre de la campaña ya quedó persistido arriba;
+    # continuar por el flujo de edición del lote hacía que un error posterior
+    # devolviera 500 aunque el nombre sí se hubiera guardado.
+    if campaign_patch and not has_batch_updates:
+        updated = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=campana_id)
+        return {
+            "ok": True,
+            "campana_id": str(campana_id),
+            "batch_id": None,
+            "campana": {
+                "id": str(campana_id),
+                "nombre": updated.get("nombre") if updated else campaign_patch.get("nombre"),
+            },
+        }
+
     batches, _ = await repo.list_contact_batches(
         usuario_token=user_token,
         limit=100,
@@ -38430,6 +38446,19 @@ async def prospeccion_campana_update(
         existing_canales = _ensure_dict(existing_meta.get("canales_config"), default={})
         canales_config = {k: v for k, v in existing_canales.items() if isinstance(v, dict)}
         programacion = _ensure_dict(target_batch.get("programacion"), default={})
+
+    # La identidad de campaña es necesaria para construir los enlaces de
+    # seguimiento. No depender del nombre ni de metadata enviada por el
+    # navegador: el UUID de la ruta es la fuente canónica.
+    for channel_config in canales_config.values():
+        if not isinstance(channel_config, dict):
+            continue
+        channel_metadata = channel_config.get("metadata")
+        if not isinstance(channel_metadata, dict):
+            channel_metadata = {}
+        channel_metadata["campana_id"] = str(campana_id)
+        channel_config["metadata"] = channel_metadata
+
     programacion = await _align_programacion_with_active_campaign_schedule(
         repo=repo,
         user_token=user_token,
@@ -38523,6 +38552,7 @@ async def prospeccion_campana_update(
         raise HTTPException(status_code=400, detail="prospectos_not_found")
 
     existing_batch_metadata = _ensure_dict(target_batch.get("metadata"), default={})
+    existing_batch_metadata["campana_id"] = str(campana_id)
     if payload.separacion_segundos is not None:
         separacion_segundos = payload.separacion_segundos
     else:
@@ -40883,6 +40913,7 @@ async def get_visits_web_sessions(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("reports.view")),
+    user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -41041,6 +41072,42 @@ async def get_visits_web_sessions(
             for item in envios
             if isinstance(item, dict) and item.get("id")
         }
+        batch_ids = {
+            _clean_text(item.get("batch_id"))
+            for item in envios_map.values()
+            if _clean_text(item.get("batch_id"))
+        }
+        batch_campaign_map: dict[str, str] = {}
+        if batch_ids:
+            linked_batches = await repo.list_contact_batches_by_ids(
+                usuario_token=user_token,
+                batch_ids=batch_ids,
+            )
+            batch_campaign_map = {
+                _clean_text(item.get("id")): _clean_text(item.get("campana_id"))
+                for item in linked_batches
+                if _clean_text(item.get("id")) and _clean_text(item.get("campana_id"))
+            }
+        campaign_ids = {
+            _row_tracking_param(row, "cid")
+            for row in rows
+            if _row_tracking_param(row, "cid")
+        }
+        campaign_ids.update(batch_campaign_map.values())
+        campaign_name_by_id: dict[str, str] = {}
+        campaign_channel_by_id: dict[str, str] = {}
+        if campaign_ids:
+            campaign_rows = await repo.list_campaigns(organizacion_id=organizacion_id)
+            for campaign_row in campaign_rows:
+                campaign_id = _clean_text(campaign_row.get("id"))
+                if campaign_id not in campaign_ids:
+                    continue
+                campaign_name = _clean_text(campaign_row.get("nombre"))
+                if campaign_name:
+                    campaign_name_by_id[campaign_id] = campaign_name
+                campaign_channel = _clean_text(campaign_row.get("canal"))
+                if campaign_channel:
+                    campaign_channel_by_id[campaign_id] = campaign_channel
         for item in envios:
             if not isinstance(item, dict):
                 continue
@@ -41127,6 +41194,10 @@ async def get_visits_web_sessions(
 
         envio_id_value = _row_tracking_param(row, "eid")
         envio_row = envios_map.get(envio_id_value) if envio_id_value else None
+        campaign_id_value = _row_tracking_param(row, "cid")
+        if not campaign_id_value and isinstance(envio_row, dict):
+            campaign_id_value = batch_campaign_map.get(_clean_text(envio_row.get("batch_id")))
+        campaign_name_value = campaign_name_by_id.get(campaign_id_value or "")
         correo_envio = _pick_envio_email(envio_row)
         prospecto_id_value = (
             str(envio_row.get("prospecto_id") or "").strip()
@@ -41247,7 +41318,10 @@ async def get_visits_web_sessions(
                 "utm_campaign": row.get("utm_campaign"),
                 "source_class": row.get("source_class"),
                 "eid": envio_id_value,
-                "cid": _row_tracking_param(row, "cid"),
+                "cid": campaign_id_value,
+                "prospeccion_campana_id": campaign_id_value,
+                "prospeccion_campana_nombre": campaign_name_value,
+                "prospeccion_campana_tipo": campaign_channel_by_id.get(campaign_id_value or ""),
                 "template_id": template_id_value,
                 "template_slug": template_slug,
                 "template_nombre": template_name,
@@ -46877,6 +46951,52 @@ async def demografia_resumen_v2(
             load_whatsapp_conversion_rows(),
             load_whatsapp_rules(),
         )
+
+        # Algunas sesiones históricas fueron registradas con
+        # ``utm_campaign=cold_outreach`` pero conservan ``eid``. Recuperar la
+        # identidad por envío/lote evita perder la campaña porque el enlace
+        # antiguo no llevaba ``cid``.
+        unresolved_eids = {
+            _clean_text(row.get("eid"))
+            for row in [*link_rows, *template_rows]
+            if isinstance(row, dict)
+            and not _clean_text(row.get("cid"))
+            and _clean_text(row.get("eid"))
+        }
+        if unresolved_eids:
+            envio_rows = await repo.list_contact_envios_by_ids(
+                organizacion_id=organizacion_id,
+                envio_ids=list(unresolved_eids),
+            )
+            batch_ids_by_envio = {
+                _clean_text(row.get("id")): _clean_text(row.get("batch_id"))
+                for row in envio_rows
+                if _clean_text(row.get("id")) and _clean_text(row.get("batch_id"))
+            }
+            batch_ids = {batch_id for batch_id in batch_ids_by_envio.values() if batch_id}
+            batches_by_id: dict[str, dict[str, Any]] = {}
+            if batch_ids:
+                linked_batches = await repo.list_contact_batches_by_ids(
+                    usuario_token=effective_user_token,
+                    batch_ids=[UUID(batch_id) for batch_id in batch_ids],
+                )
+                batches_by_id = {
+                    _clean_text(row.get("id")): row
+                    for row in linked_batches
+                    if _clean_text(row.get("id"))
+                }
+            campaign_id_by_eid = {
+                envio_id: _clean_text(batches_by_id.get(batch_id, {}).get("campana_id"))
+                for envio_id, batch_id in batch_ids_by_envio.items()
+                if _clean_text(batches_by_id.get(batch_id, {}).get("campana_id"))
+            }
+            for row in [*link_rows, *template_rows]:
+                if not isinstance(row, dict) or _clean_text(row.get("cid")):
+                    continue
+                resolved_campaign_id = campaign_id_by_eid.get(_clean_text(row.get("eid")))
+                if resolved_campaign_id:
+                    row["cid"] = resolved_campaign_id
+
         for link_row in link_rows:
             if not isinstance(link_row, dict):
                 continue
