@@ -10,8 +10,15 @@
 Reorganizar la experiencia de Tal-IA para que represente el flujo comercial real:
 
 ```text
-Búsqueda → Prospectos → Completar datos → Listas de envío
+Búsqueda → Prospectos → Completar datos → Listas para contactar
 → Campaña → Mensaje → Revisar → Envío → Resultados → CRM
+```
+
+Principio rector de la experiencia:
+
+```text
+BUSCA → ELIGE → COMPLETA → AGRUPA → CONTACTA
+→ REVISA → ENVÍA → MIDE → VENDE
 ```
 
 La arquitectura interna conserva sus nombres técnicos, pero la interfaz debe hablar como una persona y representar acciones reconocibles para el usuario.
@@ -52,13 +59,11 @@ La prioridad es proteger el caso operativo más crítico: crear envíos correcto
 Búsqueda
   Buscar
   Mis búsquedas
-  Resultados
 
 Prospección
   Prospectos
-  Listas de envío
+  Listas para contactar
   Completar datos
-  Historial
 
 Marketing
   Correo
@@ -111,7 +116,7 @@ El backend puede hablar de audiencias, lotes, batches, plantillas, carrier, prev
 
 | Término técnico interno | Texto visible en la interfaz |
 |---|---|
-| Audiencia | Lista de envío |
+| Audiencia | Lista para contactar |
 | Crear audiencia | Crear lista |
 | Audiencia actual | Personas que cumplen estas reglas |
 | Enriquecer | Completar datos |
@@ -142,6 +147,13 @@ Esta tabla es normativa para la UI. Los términos técnicos solo pueden aparecer
 4. Primero se muestran números y explicaciones; después las tablas detalladas.
 5. Los filtros se leen como una oración, no como nombres de columnas.
 6. La complejidad avanzada queda detrás de `Más opciones` o `Detalles técnicos`.
+7. Mostrar como máximo tres o cuatro opciones principales por pantalla.
+8. Una vista secundaria se abre desde el objeto al que pertenece; no necesita aparecer siempre en la navegación.
+9. Usar verbos para las acciones: `Buscar`, `Completar`, `Contactar`, `Enviar` y `Revisar`.
+10. Adaptar las palabras al canal: enviar un correo, enviar un WhatsApp o hacer una llamada.
+11. Nunca pedir al usuario que comprenda la arquitectura para continuar; Tal-IA debe llevarlo naturalmente al siguiente paso.
+
+Las vistas `Resultados` de una búsqueda y `Historial` de un prospecto existen como vistas contextuales. No necesitan convertirse en botones permanentes de navegación.
 
 ## 3. Estado actual que condiciona el refactor
 
@@ -152,7 +164,7 @@ La auditoría existente identificó estas condiciones:
 - GobMX reutiliza el mapa de resultados de Google mediante tipos adaptados; el mapa debe evolucionar a un componente neutral a la fuente.
 - Los historiales cargan páginas sucesivas en el navegador; deben migrar a paginación, búsqueda y ordenamiento server-side.
 - Ya existe una base de filtros de prospectos con estados de teléfono/email, tipo de teléfono, permisos, segmento y cantidad de envíos.
-- Ya existen listas inteligentes con filtros guardados. Internamente pueden mantenerse como `listas` durante la migración, pero la UI debe llamarlas `Listas de envío`.
+- Ya existen listas inteligentes con filtros guardados. Internamente pueden mantenerse como `listas` durante la migración, pero la UI debe llamarlas `Listas para contactar`.
 - El backend ya puede resolver una lista dinámica al crear un envío mediante `lista_id` o filtros.
 - Algunos flujos actuales todavía envían `prospecto_ids` desde el frontend; ese camino no debe ser la ruta principal para audiencias dinámicas.
 - Los filtros actuales cubren `envios_whatsapp_max=0` y `envios_correo_max=0`, pero faltan filtros temporales explícitos para último WhatsApp, último correo y último contacto.
@@ -197,6 +209,8 @@ Requisitos:
 
 **Pregunta que responde:** ¿Qué resultados quiero incorporar a Prospección?
 
+Resultados es una vista contextual de una búsqueda. No aparece como botón permanente del menú principal; se abre después de ejecutar o volver a abrir una búsqueda desde `Mis búsquedas`.
+
 Debe ofrecer:
 
 - Tabla y mapa con modelo neutral a la fuente.
@@ -238,7 +252,7 @@ Ver historial
 
 Enviar directamente desde esta vista debe quedar como acción secundaria o retirarse cuando el flujo de Marketing esté disponible.
 
-### 4.3 Prospección → Listas de envío
+### 4.3 Prospección → Listas para contactar
 
 **Pregunta que responde:** ¿A quién quiero poder contactar bajo determinadas condiciones?
 
@@ -249,7 +263,7 @@ Listado:
 ```text
 + Crear lista
 
-WhatsApp · Inmobiliarias nuevas
+Inmobiliarias nuevas
 842 prospectos
 Actualizada ahora
 
@@ -261,28 +275,40 @@ Actualizada ahora
 Acciones:
 
 - Crear lista.
-- Editar condiciones.
+- Editar reglas.
 - Duplicar.
 - Activar o desactivar.
 - Ver prospectos.
-- Usar en Marketing.
+- Contactar esta lista.
 - Archivar si la política del producto lo permite.
 
 Detalle:
 
 ```text
-[ Resumen ] [ Filtros ] [ Prospectos ]
+[ Resumen ] [ Reglas ] [ Prospectos ]
 ```
 
-La lista no envía directamente. Su CTA es:
+La lista no contacta directamente desde Prospección sin elegir canal. Su CTA es:
 
 ```text
-Usar en Marketing →
+Contactar esta lista →
 ```
 
-La creación debe usar un constructor de condiciones legible:
+Después de pulsarlo, Tal-IA debe preguntar:
 
 ```text
+¿CÓMO QUIERES CONTACTARLOS?
+
+[ Correo ]   [ WhatsApp ]   [ Voz ]
+```
+
+El usuario no necesita entrar manualmente al módulo Marketing para continuar.
+
+La creación debe usar un constructor de reglas legible:
+
+```text
+REGLAS DE ESTA LISTA
+
 Quiero encontrar prospectos que...
 
 sean          [ Inmobiliarias              ]
@@ -291,7 +317,7 @@ y tengan      [ Celular válido             ]
 y puedan      [ Recibir WhatsApp           ]
 y             [ Nunca recibieron WhatsApp  ]
 
-[ + Agregar condición ]
+[ + Agregar otra regla ]
 
 842 prospectos cumplen estas reglas
 
@@ -326,10 +352,25 @@ COMPLETAR DATOS
 Opciones principales:
 
 ```text
-Teléfonos       Revisar si sirven
-Correos         Buscar y revisar
-Sitios web      Buscar y revisar
-Todo            Completar todo
+COMPLETAR DATOS
+
+¿Qué quieres completar?
+
+📱 Teléfonos
+Revisar teléfonos y saber si son móviles o fijos
+[ Revisar ]
+
+✉ Correos
+Buscar y revisar correos
+[ Completar ]
+
+🌐 Sitios web
+Buscar y revisar sitios web
+[ Completar ]
+
+✨ Todo
+Completar todos los datos disponibles
+[ Completar ]
 ```
 
 Debe separar:
@@ -344,11 +385,28 @@ La ejecución debe mostrar progreso, resultados, errores y posibilidad de volver
 
 No debe crear campañas ni cambiar silenciosamente las condiciones de las listas de envío.
 
-### 4.5 Prospección → Historial
+### 4.5 Historial del prospecto (vista contextual)
 
 **Pregunta que responde:** ¿Qué ha ocurrido con este prospecto?
 
-Debe ser una línea de tiempo transversal, no otra pantalla de envíos. En la interfaz se llama `Historial`.
+Debe ser una línea de tiempo transversal, no otra pantalla de envíos. En la interfaz se llama `Historial` y se abre desde el detalle de un prospecto; no aparece como botón principal de Prospección.
+
+Ejemplo:
+
+```text
+Inmobiliaria ABC
+
+[ Datos ] [ Historial ]
+
+Hoy
+✓ WhatsApp enviado
+
+Ayer
+✓ Teléfono revisado
+
+18 Sep
+✓ Agregado a Prospectos
+```
 
 Eventos posibles:
 
@@ -384,6 +442,17 @@ Dentro de cada canal:
 ```
 
 El canal debe filtrar plantillas, configuraciones, métricas y estados válidos.
+
+El lenguaje debe adaptarse al canal:
+
+| Concepto | Correo | WhatsApp | Voz |
+|---|---|---|---|
+| Contenido | Correo | Mensaje | Guion |
+| Acción | Enviar | Enviar | Llamar |
+| Resultado | Correos enviados | Mensajes enviados | Llamadas realizadas |
+| Acción final | Enviar a 817 | Enviar a 817 | Llamar a 817 |
+
+La arquitectura técnica puede ser común, pero la interfaz debe usar la palabra natural de cada canal.
 
 ### 4.7 Marketing → Campañas
 
@@ -501,7 +570,7 @@ Mostrar listas de envío activas compatibles con el canal y su cantidad actual.
 Texto visible:
 
 ```text
-¿A QUIÉN QUIERES ENVIAR?
+¿A QUIÉN QUIERES CONTACTAR?
 Elige una de tus listas.
 ```
 
@@ -564,10 +633,11 @@ Motivos visibles:
 - Se repiten dentro de la selección.
 - Se alcanzó un límite de envío.
 
-El botón debe expresar el resultado final:
+El botón debe expresar el resultado final y adaptarse al canal:
 
 ```text
-Enviar a 817 personas
+Correo/WhatsApp: Enviar a 817 personas
+Voz: Llamar a 817 personas
 ```
 
 La interfaz no debe mostrar `preview`, `opt_out`, `suppression`, `medio_invalido` ni otros códigos internos. Esos códigos pueden conservarse en la respuesta API y mostrarse únicamente en detalles técnicos autorizados.
@@ -893,7 +963,7 @@ No se debe romper el flujo actual en una sola entrega.
 ### Fase de compatibilidad
 
 - Mantener rutas existentes de listas como alias o fachada interna.
-- Mostrar `listas` como `Listas de envío` en la nueva UI.
+- Mostrar `listas` como `Listas para contactar` en la nueva UI.
 - Mantener `lista_id` internamente mientras se adopta `audiencia_id` en los contratos públicos.
 - Mantener campañas y envíos existentes mientras se agrega la relación explícita con audiencia, plantilla y versión.
 - Convertir flujos basados en `prospecto_ids` a flujo dinámico de audiencia cuando el usuario cree un envío desde Marketing.
@@ -914,9 +984,9 @@ Los envíos antiguos deben conservar sus resultados, atribución y trazabilidad.
 
 **Salida:** contrato aprobado y matriz de compatibilidad.
 
-### Fase 1 — Listas de envío
+### Fase 1 — Listas para contactar
 
-- Renombrado visual de listas a Listas de envío.
+- Renombrado visual de listas a Listas para contactar.
 - CRUD y detalle.
 - Versionado de definición.
 - Revisión server-side de personas que cumplen las condiciones.
@@ -1007,17 +1077,17 @@ Controles específicos:
 
 ## 15. Criterios de aceptación
 
-### Listas de envío
+### Listas para contactar
 
 - Se puede crear y editar una lista con múltiples segmentos.
 - Se puede filtrar por canal, validez, permisos e historial temporal.
 - La cantidad actual se recalcula server-side.
 - Editar una lista no altera envíos históricos.
 
-### Campañas y plantillas
+### Campañas y mensajes
 
 - Una campaña pertenece a un canal.
-- Solo muestra plantillas compatibles.
+- Solo muestra mensajes compatibles.
 - Una plantilla puede reutilizarse en campañas compatibles.
 - Campaña, plantilla y audiencia no ejecutan comunicaciones directamente.
 
@@ -1056,7 +1126,7 @@ Controles específicos:
 La primera entrega debe ser únicamente:
 
 ```text
-Listas de envío → Campaña → Crear envío → Revisar → Volver a revisar → Envío
+Listas para contactar → Campaña → Crear envío → Revisar → Volver a revisar → Envío
 ```
 
 Debe incluir:
@@ -1076,7 +1146,7 @@ No debe incluir todavía una reescritura completa de Prospectos, CRM ni todo Mar
 El refactor se considerará terminado cuando:
 
 - La UI use la arquitectura de módulos definida.
-- Listas de envío, campañas, mensajes y envíos tengan responsabilidades separadas.
+- Listas para contactar, campañas, mensajes y envíos tengan responsabilidades separadas.
 - Los envíos se resuelvan dinámicamente y se revaliden en backend.
 - Los lotes históricos sean auditables aunque cambie la audiencia.
 - Los filtros operativos tengan soporte explícito e indexable.
