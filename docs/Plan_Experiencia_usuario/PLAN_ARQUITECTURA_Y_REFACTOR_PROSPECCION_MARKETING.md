@@ -79,7 +79,13 @@ CRM
 Agente IA
 ```
 
-Subtítulo visible de Prospección: `Prepara posibles clientes`.
+Subtítulos visibles:
+
+- Búsqueda — `Encuentra empresas`.
+- Prospección — `Prepara posibles clientes`.
+- Marketing — `Contacta a tus prospectos`.
+- CRM — `Da seguimiento y vende`.
+- Agente IA — `Atiende automáticamente`.
 
 ### 2.2 Definición de objetos
 
@@ -150,19 +156,19 @@ Los estados internos no deben aparecer directamente en la interfaz:
 | `draft` | Borrador |
 | `scheduled` | Programado |
 | `preparing` | Preparando |
-| `running` | Enviando |
+| `running` | Enviando en Correo/WhatsApp; Llamando en Voz |
 | `completed` | Terminado |
 | `partially_completed` | Terminado con algunos errores |
 | `failed` | No se pudo completar |
 | `canceled` | Cancelado |
 | `pending` | Pendiente |
-| `sent` | Enviado |
+| `sent` | Enviado en Correo/WhatsApp; Llamada realizada en Voz |
 | `delivered` | Entregado |
 | `read` | Leído |
 | `replied` | Respondió |
-| `suppressed` | Bloqueado para envíos |
+| `suppressed` | Bloqueado para enviar o llamar |
 
-El texto puede adaptarse al canal: `Correos enviados`, `Mensajes enviados` o `Llamadas realizadas`.
+Los nombres de los resultados también deben adaptarse al canal: `Correos enviados`, `Mensajes enviados` o `Llamadas realizadas`.
 
 ### 2.6 Reglas de experiencia
 
@@ -261,7 +267,7 @@ Responsabilidades:
 
 La tabla debe conservar filtros útiles para:
 
-- Empresa: segmento, ubicación, fuente, SCIAN y rating.
+- Empresa: tipo de empresa, ubicación, fuente, actividad económica y calificación de Google.
 - Contacto: teléfono, email y sitio web.
 - Validación: teléfono válido, tipo de línea, email válido y WhatsApp permitido.
 - Historial: creación, datos completados y último contacto.
@@ -273,10 +279,11 @@ Acciones principales:
 ```text
 Completar datos
 Crear lista con estas reglas
-Ver historial
 ```
 
 Los checkboxes sirven para acciones concretas sobre prospectos seleccionados, como completar datos. No deben convertir silenciosamente una selección de IDs en una lista dinámica.
+
+`Ver historial` aparece al abrir el detalle de un prospecto, dentro de su pestaña contextual `Historial`.
 
 Si el producto necesita listas estáticas en el futuro, deben ser otro objeto visible y explícito, separado de las Listas para contactar.
 
@@ -378,6 +385,23 @@ Puede cumplir cualquiera de estas
 
 Los operadores técnicos `AND`, `OR` e `IN` quedan ocultos.
 
+### Compatibilidad con canales
+
+Una lista puede ser:
+
+- **Genérica:** sus reglas no dependen de un canal específico y puede utilizarse en Correo, WhatsApp o Voz.
+- **Orientada a un canal:** sus reglas contienen condiciones específicas de un canal y solo puede utilizarse donde esas condiciones tengan sentido.
+
+Ejemplo de lista orientada a WhatsApp:
+
+```text
+Tiene WhatsApp = Sí
+Se le puede enviar WhatsApp = Sí
+Nunca recibió WhatsApp = Sí
+```
+
+Al contactar esta lista, Tal-IA solo debe ofrecer WhatsApp. El backend debe calcular esta compatibilidad y el frontend solo representarla; no debe depender de que el usuario la seleccione correctamente.
+
 Ejemplo de definición:
 
 ```text
@@ -473,7 +497,7 @@ Eventos posibles:
 - Prospecto creado.
 - Teléfono verificado.
 - Email encontrado o validado.
-- Agregado a una lista de envío.
+- Agregado a una lista para contactar.
 - WhatsApp enviado.
 - Email enviado.
 - Llamada realizada.
@@ -522,7 +546,7 @@ Listado por canal:
 
 ```text
 Tal-IA Inmobiliarias
-4 mensajes · 8 envíos · Último envío: 21 Sep
+4 contenidos · 8 envíos · Último envío: 21 Sep
 ```
 
 Una campaña no representa una ejecución individual.
@@ -545,10 +569,12 @@ Resumen mínimo:
 - Oportunidades.
 - Ventas, si existe la atribución correspondiente.
 
-Acción principal:
+Acción principal según el canal:
 
 ```text
-+ Crear envío
+Correo: + Crear envío
+WhatsApp: + Crear envío
+Voz: + Crear llamadas
 ```
 
 ### 4.8 Campaña → Contenido del canal
@@ -585,8 +611,8 @@ Una plantilla puede ser reutilizable. La asociación con una campaña no debe im
 Debe mostrar cada ejecución con:
 
 - Fecha de creación y programación.
-- Mensaje.
-- Lista de envío y versión interna de la lista.
+- Correo, mensaje o guion, según el canal.
+- Lista para contactar y versión interna de la lista.
 - Cantidades calculadas.
 - Estado del envío.
 - Resultados parciales o finales.
@@ -606,12 +632,15 @@ La analítica debe permitir bajar por niveles:
 Canal → Campaña → Mensaje → Lista de envío → Envío
 ```
 
+En la interfaz se muestra como `Canal → Campaña → Mensaje/Correo/Guion → Lista para contactar → Envío`, según el canal.
+
 No se deben mezclar los cálculos de revisión con envíos aceptados por el proveedor.
 
 Separar al menos:
 
-- Pueden recibir el mensaje.
-- No recibirán el mensaje.
+- Correo: pueden recibir el correo / no recibirán el correo.
+- WhatsApp: pueden recibir el mensaje / no recibirán el mensaje.
+- Voz: pueden recibir la llamada / no se les llamará.
 - Aceptados para envío.
 - Enviados.
 - Entregados.
@@ -629,7 +658,7 @@ Existen dos entradas al mismo asistente:
 La campaña y el canal ya están definidos:
 
 ```text
-Canal + Campaña → ¿A quién? → ¿Qué mensaje/contenido? → ¿Cuándo? → Revisar
+Canal + Campaña → ¿A quién? → ¿Qué contenido? → ¿Cuándo? → Revisar
 ```
 
 #### Desde una lista para contactar
@@ -637,17 +666,22 @@ Canal + Campaña → ¿A quién? → ¿Qué mensaje/contenido? → ¿Cuándo? �
 La lista ya está definida:
 
 ```text
-Lista → ¿Cómo quieres contactar? → ¿Qué campaña? → ¿Qué mensaje/contenido?
+Lista → ¿Cómo quieres contactar? → ¿Qué campaña? → ¿Qué contenido?
 → ¿Cuándo? → Revisar
 ```
 
 Después de seleccionar Correo, WhatsApp o Voz, el usuario puede elegir una campaña existente o crear una nueva sin perder la lista seleccionada.
 
-Debe ser un asistente de cuatro pasos:
+El paso contextual completa lo que falta:
+
+- Desde una campaña ya existen Canal + Campaña.
+- Desde una lista se elige primero el Canal y después la Campaña.
+
+Después, ambas entradas usan el mismo asistente central de cuatro pasos:
 
 ```text
 1. ¿A quién?
-2. ¿Qué mensaje?
+2. ¿Qué contenido?
 3. ¿Cuándo?
 4. Revisar
 ```
@@ -667,7 +701,7 @@ Cada opción debe mostrar nombre y cantidad de prospectos.
 
 Debe permitir crear una nueva lista sin abandonar el flujo.
 
-### Paso 2: ¿Qué mensaje?
+### Paso 2: ¿Qué contenido?
 
 Mostrar el nombre visible según el canal y únicamente contenido compatible y disponible para uso:
 
@@ -677,10 +711,12 @@ Mostrar el nombre visible según el canal y únicamente contenido compatible y d
 
 La opción debe mostrar una vista previa real del contenido, no solo su nombre.
 
-Texto visible:
+El título visible se adapta al canal:
 
 ```text
-¿QUÉ MENSAJE QUIERES ENVIAR?
+Correo: ¿QUÉ CORREO QUIERES ENVIAR?
+WhatsApp: ¿QUÉ MENSAJE QUIERES ENVIAR?
+Voz: ¿QUÉ GUION QUIERES USAR?
 ```
 
 ### Paso 3: ¿Cuándo?
@@ -693,7 +729,7 @@ Opciones mínimas:
 - Máximo del envío.
 - Control de ritmo, si el canal lo requiere.
 
-### Paso 4: Revisar antes de enviar
+### Paso 4: Revisar antes de enviar o llamar
 
 Mostrar:
 
@@ -710,6 +746,22 @@ Envío: Ahora
 842 prospectos están en esta lista
 817 pueden recibir este mensaje ahora
 25 no recibirán el mensaje
+```
+
+Los textos se adaptan al canal:
+
+```text
+Correo:
+817 pueden recibir este correo ahora
+25 no recibirán el correo
+
+WhatsApp:
+817 pueden recibir este mensaje ahora
+25 no recibirán el mensaje
+
+Voz:
+817 pueden recibir esta llamada ahora
+25 no recibirán la llamada
 ```
 
 Texto visible para el desglose:
