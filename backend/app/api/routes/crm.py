@@ -4660,7 +4660,7 @@ class ProspectoFiltroPayload(BaseModel):
 class ProspeccionCanalConfig(BaseModel):
     """Configuración avanzada por canal dentro del wizard."""
 
-    canal: Literal["correo", "whatsapp", "llamada"]
+    canal: Literal["correo", "whatsapp", "llamada"] | None = None
     template_id: UUID | None = None
     template_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=20)
     subject: str | None = Field(default=None, max_length=200)
@@ -4678,6 +4678,7 @@ class ProspeccionListaPayload(BaseModel):
 
     nombre: str = Field(..., min_length=3, max_length=160)
     descripcion: str | None = Field(default=None, max_length=400)
+    canal: Literal["correo", "whatsapp", "llamada"]
     filtros: ProspectoFiltroPayload
     metadata: dict[str, Any] | None = Field(default=None)
 
@@ -4689,6 +4690,7 @@ class ProspeccionListaUpdatePayload(BaseModel):
 
     nombre: str | None = Field(default=None, min_length=3, max_length=160)
     descripcion: str | None = Field(default=None, max_length=400)
+    canal: Literal["correo", "whatsapp", "llamada"] | None = None
     filtros: ProspectoFiltroPayload | None = None
     metadata: dict[str, Any] | None = Field(default=None)
 
@@ -10956,7 +10958,10 @@ def _resolve_contact_channels(
                 elif not twilio_sid and not (meta_template_name and meta_template_language):
                     raise HTTPException(status_code=400, detail="whatsapp_payload_incompleto")
             elif canal == "llamada":
-                message = _clean_text(canal_config.message or canal_config.body) or "Llamada programada desde Tal IA."
+                message = _clean_text(canal_config.message or canal_config.body)
+                if not message and template_row:
+                    message = _clean_text(template_row.get("cuerpo_texto") or template_row.get("descripcion"))
+                message = message or "Llamada programada desde Tal IA."
                 entry["message"] = message
             else:
                 continue

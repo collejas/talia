@@ -219,3 +219,94 @@ Frontend local: `frontend/panel/src/app/prospeccion/listas/` y `frontend/panel/s
 - Confirmar en el entorno objetivo la semántica de `whatsapp_permitido` antes de ampliar las reglas de compatibilidad por canal.
 - El wizard abierto desde la lista es el flujo existente; la adaptación completa por canal y el asistente de cuatro pasos quedan para F2–F4.
 - Todavía no se ha validado un envío real ni la cadena proveedor → webhook → estado final.
+
+## 2026-09-21 — F1: envío basado en contenido guardado
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 — Listas para contactar
+
+### Referencia
+
+`frontend/panel/src/components/prospeccion/prospeccion-campaign-wizard.tsx` y `backend/app/api/routes/crm.py`.
+
+### Cambios
+
+- El wizard dejó de solicitar asunto, cuerpo, HTML, variables, logos o guiones al crear un envío.
+- El usuario elige un solo canal y un contenido ya guardado en la plantilla correspondiente.
+- El backend continúa resolviendo el contenido desde la plantilla seleccionada mediante `template_id`.
+- Las llamadas ahora también recuperan el guion guardado cuando el envío solo recibe `template_id`.
+
+### Validación
+
+- ESLint del wizard y la vista de listas: correcto.
+- TypeScript del panel con `npx tsc --noEmit`: correcto.
+- Pruebas backend de resolución de plantillas: 2 correctas.
+- `git diff --check`: correcto.
+
+## 2026-09-21 — F1: listas orientadas al canal
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 — Listas para contactar
+
+### Referencia
+
+`frontend/panel/src/app/prospeccion/listas/page.client.tsx` y el contrato actualizado del plan.
+
+### Cambios
+
+- La creación de una lista comienza preguntando si se usará para Correo, WhatsApp o Voz.
+- El formulario muestra únicamente reglas relevantes para el canal seleccionado.
+- Correo usa reglas de correo; WhatsApp usa teléfono móvil, permiso y envíos previos de WhatsApp; Voz usa teléfono, permiso de llamada y envíos previos de Voz.
+- Las reglas se siguen guardando en los campos existentes de `filtros`; no se agregó una columna de canal ni una migración por nomenclatura.
+- Las listas históricas se pueden editar y su canal se infiere únicamente cuando sus reglas actuales permiten determinarlo.
+
+### Validación
+
+- ESLint de la vista de listas: correcto.
+- TypeScript del panel con `npx tsc --noEmit`: correcto.
+- Pruebas backend de resolución de plantillas: 2 correctas.
+- `py_compile` del módulo de rutas y `git diff --check`: correctos.
+
+### Pendientes o riesgos
+
+- La migración fue aplicada mediante MCP Supabase y validada en la base remota.
+- La columna `canal` quedó nullable para conservar listas históricas; actualmente existe 1 lista histórica con `canal = NULL`.
+- Las listas históricas con `canal = NULL` requieren inferencia o selección manual durante la transición.
+
+## 2026-09-21 — F1: wizard contextual por canal
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 — Listas para contactar
+
+### Referencia
+
+`frontend/panel/src/components/prospeccion/prospeccion-campaign-wizard.tsx` y `frontend/panel/src/app/prospeccion/listas/page.client.tsx`.
+
+### Cambios
+
+- El wizard recibe el canal guardado en la lista y oculta los demás canales.
+- El paso de selección cambia a `Lista → Contenido → Cuándo`.
+- El resumen muestra un solo canal, de acuerdo con la selección original.
+- Una lista con canal guardado ya no vuelve a pedir una decisión que Tal-IA conoce.
+- Las campañas y plantillas mantienen sus controles específicos por canal en sus propios modales.
+
+### Validación
+
+- ESLint del wizard y la vista de listas: correcto.
+- TypeScript del panel con `npx tsc --noEmit`: correcto.
+- `git diff --check`: correcto.

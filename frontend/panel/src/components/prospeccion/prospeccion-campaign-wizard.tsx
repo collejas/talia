@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconTargetArrow } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { Textarea } from "@/components/ui/textarea"
 import {
   contactarProspectos,
   createCrmCampaign,
@@ -46,41 +45,6 @@ const STAGES = [
   { value: "launch", label: "Launch" },
   { value: "evaluate", label: "Evaluate" },
 ]
-
-const EMAIL_LOGO_IMG_STYLE = "display:block;max-width:83.333%;height:auto;margin:12px 0;"
-const MAIL_VARIABLE_TOKENS = [
-  "{{display_name}}",
-  "{{nombre}}",
-  "{{titulo}}",
-  "{{primer_apellido}}",
-  "{{segundo_apellido}}",
-  "{{empresa}}",
-  "{{email}}",
-  "{{telefono}}",
-  "{{segmento}}",
-  "{{logo_url}}",
-  "{{tracking_url}}",
-  "{{website_url}}",
-  "{{booking_url}}",
-]
-const LOGO_PLACEHOLDER_REGEX = /{{\s*logo_url\s*}}/i
-
-type LogoAsset = {
-  id: string
-  nombre: string
-  file_url: string
-}
-
-function normalizeLogoUrl(input: string): string {
-  const value = input.trim()
-  if (!value) return ""
-  if (/^https?:\/\//i.test(value)) return value
-  return `https://${value}`
-}
-
-function hasEmailLogoPlaceholder(input: string): boolean {
-  return LOGO_PLACEHOLDER_REGEX.test(input || "")
-}
 
 type ChannelState = Record<
   "correo" | "whatsapp" | "llamada",
@@ -121,6 +85,7 @@ function buildChannelState(overrides?: ChannelOverrides): ChannelState {
 
 export type ProspeccionWizardPreset = {
   source?: WizardSource
+  canal?: "correo" | "whatsapp" | "llamada" | null
   listaId?: string | null
   filtros?: ProspectoFiltroInput
   canales?: ChannelOverrides
@@ -191,15 +156,8 @@ export function ProspeccionCampaignWizard({
   const [newCampaignName, setNewCampaignName] = useState("")
   const [newCampaignSaving, setNewCampaignSaving] = useState(false)
   const [separacionSegundos, setSeparacionSegundos] = useState<string>("5")
-  const correoAsuntoRef = useRef<HTMLInputElement | null>(null)
-  const correoCuerpoRef = useRef<HTMLTextAreaElement | null>(null)
-  const correoHtmlRef = useRef<HTMLTextAreaElement | null>(null)
   const [titulo, setTitulo] = useState("")
   const [channelState, setChannelState] = useState<ChannelState>(() => buildChannelState())
-  const [logos, setLogos] = useState<LogoAsset[]>([])
-  const [logosLoading, setLogosLoading] = useState(false)
-  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string>("")
-  const [quoteLogoUrl, setQuoteLogoUrl] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -213,16 +171,24 @@ export function ProspeccionCampaignWizard({
     setCampanaId(null)
     setCampanaNombre("")
     setTitulo("")
-    setChannelState(buildChannelState())
-    setLogos([])
-    setSelectedLogoUrl("")
-    setQuoteLogoUrl("")
+    const presetCanal = preset?.canal ?? null
+    setChannelState(
+      buildChannelState(
+        presetCanal
+          ? {
+              correo: { enabled: presetCanal === "correo" },
+              whatsapp: { enabled: presetCanal === "whatsapp" },
+              llamada: { enabled: presetCanal === "llamada" },
+            }
+          : undefined,
+      ),
+    )
     setNewCampaignOpen(false)
     setNewCampaignName("")
     setSeparacionSegundos("5")
     setError(null)
     setPresetApplied(false)
-  }, [defaultFilters, defaultSource])
+  }, [defaultFilters, defaultSource, preset?.canal])
 
   useEffect(() => {
     if (!open) {
@@ -303,6 +269,15 @@ export function ProspeccionCampaignWizard({
     } else if (preset.filtros && Object.keys(sanitizeFilters(preset.filtros)).length) {
       setSource("filters")
     }
+    if (preset.canal) {
+      setChannelState((prev) => {
+        const next = { ...prev }
+        ;(Object.keys(next) as Array<keyof ChannelState>).forEach((key) => {
+          next[key] = { ...next[key], enabled: key === preset.canal }
+        })
+        return next
+      })
+    }
     if ("listaId" in preset) {
       setSelectedListaId(preset.listaId ?? null)
     }
@@ -339,27 +314,18 @@ export function ProspeccionCampaignWizard({
         templateSlug: slug,
         enabled: true,
       }
-      if (canal === "correo") {
-        next[canal].subject = template.asunto ?? current.subject
-        next[canal].body = template.cuerpo_texto ?? current.body
-        next[canal].bodyHtml = template.cuerpo_html ?? current.bodyHtml
-      } else if (canal === "whatsapp") {
-        next[canal].body = template.cuerpo_texto ?? current.body
-      } else if (canal === "llamada") {
-        next[canal].message = template.cuerpo_texto ?? template.descripcion ?? current.message
-      }
       return next
     })
   }
 
   const handleChannelToggle = (canal: "correo" | "whatsapp" | "llamada", enabled: boolean) => {
-    setChannelState((prev) => ({
-      ...prev,
-      [canal]: {
-        ...prev[canal],
-        enabled,
-      },
-    }))
+    setChannelState((prev) => {
+      const next = { ...prev }
+      ;(Object.keys(next) as Array<keyof ChannelState>).forEach((key) => {
+        next[key] = { ...next[key], enabled: enabled && key === canal }
+      })
+      return next
+    })
   }
 
   const canContinueStepOne = useMemo(() => {
@@ -378,7 +344,12 @@ export function ProspeccionCampaignWizard({
     [channelState]
   )
 
-  const canContinueStepTwo = activeChannels.length > 0
+  const availableChannelOptions = useMemo(
+    () => CHANNEL_OPTIONS.filter((option) => !preset?.canal || option.key === preset.canal),
+    [preset?.canal],
+  )
+
+  const canContinueStepTwo = activeChannels.length === 1 && activeChannels.every(({ key }) => Boolean(channelState[key].templateSlug))
 
   const campanaOptions = useMemo(() => {
     const options: Array<{ value: string; label: string }> = []
@@ -416,136 +387,6 @@ export function ProspeccionCampaignWizard({
     }
   }, [activeChannels, newCampaignName])
 
-  const resolvePreferredLogo = useCallback(async (): Promise<string> => {
-    if (quoteLogoUrl.trim()) return quoteLogoUrl.trim()
-    try {
-      const response = await fetch("/api/crm/settings/quote-template", { cache: "no-store" })
-      const payload = await response.json().catch(() => ({}))
-      if (response.ok) {
-        const fromConfig =
-          payload && typeof payload === "object" && payload.config && typeof payload.config === "object"
-            ? String((payload.config as Record<string, unknown>).logoUrl ?? "").trim()
-            : ""
-        if (fromConfig) {
-          setQuoteLogoUrl(fromConfig)
-          return fromConfig
-        }
-      }
-    } catch {
-      // fallback below
-    }
-    try {
-      const response = await fetch("/api/settings/logos", { cache: "no-store" })
-      const payload = await response.json().catch(() => ({}))
-      if (response.ok && Array.isArray(payload?.logos) && payload.logos.length) {
-        const first = payload.logos.find(
-          (item: unknown) =>
-            item &&
-            typeof item === "object" &&
-            typeof (item as Record<string, unknown>).file_url === "string" &&
-            String((item as Record<string, unknown>).file_url).trim().length,
-        ) as Record<string, unknown> | undefined
-        const fileUrl = first ? String(first.file_url).trim() : ""
-        if (fileUrl) return fileUrl
-      }
-    } catch {
-      // fallback below
-    }
-    if (typeof window !== "undefined") return `${window.location.origin}/assets/logos/Logo8.png`
-    return "https://talia.mx/assets/logos/Logo8.png"
-  }, [quoteLogoUrl])
-
-  const appendCorreoToken = useCallback(
-    (field: "subject" | "body" | "bodyHtml", token: string) => {
-      const fieldRef =
-        field === "subject" ? correoAsuntoRef.current : field === "body" ? correoCuerpoRef.current : correoHtmlRef.current
-      setChannelState((prev) => {
-        const current = prev.correo[field] ?? ""
-        if (!fieldRef) {
-          const separator = field === "subject" ? (current && !/\s$/.test(current) ? " " : "") : current && !current.endsWith("\n") ? "\n" : ""
-          return {
-            ...prev,
-            correo: { ...prev.correo, [field]: `${current}${separator}${token}` },
-          }
-        }
-        const start = fieldRef.selectionStart ?? current.length
-        const end = fieldRef.selectionEnd ?? current.length
-        const prefix = current.slice(0, start)
-        const suffix = current.slice(end)
-        const needsLeading = field === "subject" && prefix.length > 0 && !/\s$/.test(prefix) ? " " : ""
-        const nextValue = `${prefix}${needsLeading}${token}${suffix}`
-        const caret = prefix.length + needsLeading.length + token.length
-        window.requestAnimationFrame(() => {
-          fieldRef.focus()
-          fieldRef.setSelectionRange(caret, caret)
-        })
-        return {
-          ...prev,
-          correo: { ...prev.correo, [field]: nextValue },
-        }
-      })
-    },
-    [],
-  )
-
-  const insertCorreoLogo = useCallback(
-    (logoUrl: string) => {
-      const url = normalizeLogoUrl(logoUrl)
-      if (!url) return
-      setSelectedLogoUrl(url)
-      appendCorreoToken("body", "{{logo_url}}")
-      const htmlFocused = typeof document !== "undefined" && document.activeElement === correoHtmlRef.current
-      const hasHtmlContent = Boolean((channelState.correo.bodyHtml ?? "").trim())
-      if (htmlFocused || hasHtmlContent) {
-        appendCorreoToken("bodyHtml", `<img src="{{logo_url}}" alt="Logo" style="${EMAIL_LOGO_IMG_STYLE}" />`)
-      }
-    },
-    [appendCorreoToken, channelState.correo.bodyHtml],
-  )
-
-  const handleInsertQuoteLogo = useCallback(async () => {
-    try {
-      const logo = await resolvePreferredLogo()
-      insertCorreoLogo(logo)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudo insertar el logo."
-      setError(message)
-    }
-  }, [insertCorreoLogo, resolvePreferredLogo])
-
-  const loadLogos = useCallback(async () => {
-    if (logosLoading) return
-    setLogosLoading(true)
-    try {
-      const response = await fetch("/api/settings/logos", { cache: "no-store" })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(typeof payload?.detail === "string" ? payload.detail : "No se pudieron cargar los logos.")
-      }
-      const items = Array.isArray(payload?.logos) ? payload.logos : []
-      const normalized = items
-        .map((item: unknown) => {
-          if (!item || typeof item !== "object") return null
-          const row = item as Record<string, unknown>
-          const fileUrl = typeof row.file_url === "string" ? row.file_url.trim() : ""
-          if (!fileUrl) return null
-          return {
-            id: String(row.id ?? fileUrl),
-            nombre: typeof row.nombre === "string" && row.nombre.trim() ? row.nombre.trim() : "Logo",
-            file_url: fileUrl,
-          } as LogoAsset
-        })
-        .filter((item: LogoAsset | null): item is LogoAsset => item != null)
-      setLogos(normalized)
-      if (normalized.length) setSelectedLogoUrl(normalized[0].file_url)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "No se pudieron cargar los logos."
-      setError(message)
-    } finally {
-      setLogosLoading(false)
-    }
-  }, [logosLoading])
-
   const handleSubmit = async () => {
     setError(null)
     if (!campanaId) {
@@ -554,7 +395,7 @@ export function ProspeccionCampaignWizard({
       return
     }
     if (!canContinueStepTwo) {
-      setError("Selecciona al menos un canal para la campaña.")
+      setError("Elige un canal y un contenido guardado para continuar.")
       setStep(1)
       return
     }
@@ -563,19 +404,6 @@ export function ProspeccionCampaignWizard({
       setError("La separación entre envíos debe estar entre 5 y 3600 segundos.")
       setStep(2)
       return
-    }
-    let resolvedLogoUrl = normalizeLogoUrl(selectedLogoUrl.trim() || quoteLogoUrl.trim())
-    const correoConfig = channelState.correo
-    const correoNeedsLogo =
-      correoConfig.enabled &&
-      (hasEmailLogoPlaceholder(correoConfig.subject ?? "") ||
-        hasEmailLogoPlaceholder(correoConfig.body ?? "") ||
-        hasEmailLogoPlaceholder(correoConfig.bodyHtml ?? ""))
-    if (!resolvedLogoUrl && correoNeedsLogo) {
-      resolvedLogoUrl = normalizeLogoUrl(await resolvePreferredLogo())
-      if (resolvedLogoUrl) {
-        setSelectedLogoUrl(resolvedLogoUrl)
-      }
     }
     const payload: ContactarProspectosPayload = {
       canales: activeChannels.map(({ key }) => {
@@ -587,22 +415,7 @@ export function ProspeccionCampaignWizard({
         const channelPayload: ProspeccionCanalConfigInput = {
           canal: key,
           template_id: template?.id,
-          subject: config.subject,
-          body: config.body,
-          body_html: config.bodyHtml,
-          message: config.message,
           programado_en: config.schedule ? new Date(config.schedule).toISOString() : undefined,
-        }
-        if (key === "correo") {
-          const requiresLogo =
-            hasEmailLogoPlaceholder(config.subject ?? "") ||
-            hasEmailLogoPlaceholder(config.body ?? "") ||
-            hasEmailLogoPlaceholder(config.bodyHtml ?? "")
-          if (requiresLogo) {
-            if (resolvedLogoUrl) {
-              channelPayload.metadata = { ...(channelPayload.metadata ?? {}), logo_url: resolvedLogoUrl }
-            }
-          }
         }
         return channelPayload
       }),
@@ -804,8 +617,14 @@ export function ProspeccionCampaignWizard({
 
   const renderStepChannels = () => (
     <div className="space-y-4">
-      {CHANNEL_OPTIONS.map((option) => {
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+        {preset?.canal
+          ? `Canal seleccionado: ${CHANNEL_OPTIONS.find((option) => option.key === preset.canal)?.label ?? preset.canal}. Elige el contenido guardado que quieres usar.`
+          : "El contenido ya está definido en tus plantillas. Aquí eliges el canal y el contenido que quieres usar."}
+      </div>
+      {availableChannelOptions.map((option) => {
         const state = channelState[option.key]
+        const selectedTemplate = templates.find((tpl) => tpl.slug === state.templateSlug && tpl.canal === option.key)
         return (
           <div key={option.key} className="rounded-lg border p-4">
             <div className="flex items-center justify-between gap-3">
@@ -813,15 +632,18 @@ export function ProspeccionCampaignWizard({
                 <p className="text-sm font-semibold">{option.label}</p>
                 <p className="text-xs text-muted-foreground">{option.description}</p>
               </div>
-              <Checkbox
+              <input
+                type="radio"
+                name="prospeccion-canal"
                 checked={state.enabled}
-                onCheckedChange={(checked) => handleChannelToggle(option.key, checked === true)}
+                onChange={() => handleChannelToggle(option.key, true)}
+                aria-label={`Elegir ${option.label}`}
               />
             </div>
             {state.enabled ? (
               <div className="mt-3 space-y-3">
                 <div className="space-y-1">
-                  <Label>Plantilla</Label>
+                  <Label>{option.key === "correo" ? "Correo" : option.key === "whatsapp" ? "Mensaje" : "Guion"}</Label>
                   <Select
                     value={state.templateSlug ?? ""}
                     onValueChange={(value) => handleTemplateSelect(option.key, value)}
@@ -842,165 +664,19 @@ export function ProspeccionCampaignWizard({
                     </SelectContent>
                   </Select>
                 </div>
-                {option.key === "correo" ? (
-                  <>
-                    <div className="space-y-1">
-                      <Label>Asunto</Label>
-                      <Input
-                        ref={correoAsuntoRef}
-                        value={state.subject ?? ""}
-                        onChange={(event) =>
-                          setChannelState((prev) => ({
-                            ...prev,
-                            correo: { ...prev.correo, subject: event.target.value },
-                          }))
-                        }
-                      />
-                      <div className="flex flex-wrap gap-1">
-                        {MAIL_VARIABLE_TOKENS.map((token) => (
-                          <Button
-                            key={`wizard-asunto-${token}`}
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => appendCorreoToken("subject", token)}
-                          >
-                            {token}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Cuerpo</Label>
-                      <Textarea
-                        ref={correoCuerpoRef}
-                        rows={4}
-                        value={state.body ?? ""}
-                        onChange={(event) =>
-                          setChannelState((prev) => ({
-                            ...prev,
-                            correo: { ...prev.correo, body: event.target.value },
-                          }))
-                        }
-                      />
-                      <div className="flex flex-wrap gap-1">
-                        {MAIL_VARIABLE_TOKENS.map((token) => (
-                          <Button
-                            key={`wizard-cuerpo-${token}`}
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => appendCorreoToken("body", token)}
-                          >
-                            {token}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>HTML (opcional)</Label>
-                      <Textarea
-                        ref={correoHtmlRef}
-                        rows={6}
-                        value={state.bodyHtml ?? ""}
-                        onChange={(event) =>
-                          setChannelState((prev) => ({
-                            ...prev,
-                            correo: { ...prev.correo, bodyHtml: event.target.value },
-                          }))
-                        }
-                        placeholder={'<p>Hola {{nombre}}</p><p><img src="https://..." alt="Banner" /></p>'}
-                      />
-                      <div className="flex flex-wrap gap-1">
-                        {MAIL_VARIABLE_TOKENS.map((token) => (
-                          <Button
-                            key={`wizard-html-${token}`}
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => appendCorreoToken("bodyHtml", token)}
-                          >
-                            {token}
-                          </Button>
-                        ))}
-                      </div>
-                      <div className="space-y-2 rounded-md border border-dashed p-2">
-                        <Label className="text-xs">Logo para correo</Label>
-                        <div className="flex flex-wrap gap-2">
-                          <Button type="button" variant="outline" size="sm" onClick={() => void handleInsertQuoteLogo()}>
-                            Insertar logo
-                          </Button>
-                          <Button type="button" variant="outline" size="sm" onClick={() => void loadLogos()} disabled={logosLoading}>
-                            {logosLoading ? "Cargando..." : "Cargar galería"}
-                          </Button>
-                        </div>
-                        {logos.length ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Select value={selectedLogoUrl} onValueChange={setSelectedLogoUrl}>
-                              <SelectTrigger className="w-[280px]">
-                                <SelectValue placeholder="Selecciona un logo" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {logos.map((logo) => (
-                                  <SelectItem key={logo.id} value={logo.file_url}>
-                                    {logo.nombre}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={!selectedLogoUrl}
-                              onClick={() => insertCorreoLogo(selectedLogoUrl)}
-                            >
-                              Insertar seleccionado
-                            </Button>
-                          </div>
-                        ) : null}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Usa URL pública para imágenes. Variables soportadas: {"{{display_name}}, {{nombre}}, {{titulo}}, {{primer_apellido}}, {{segundo_apellido}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}"}.
-                      </p>
-                    </div>
-                  </>
-                ) : null}
-                {option.key === "whatsapp" ? (
-                  <div className="space-y-1">
-                    <Label>Mensaje de WhatsApp</Label>
-                    <Textarea
-                      rows={4}
-                      value={state.body ?? ""}
-                      onChange={(event) =>
-                        setChannelState((prev) => ({
-                          ...prev,
-                          whatsapp: { ...prev.whatsapp, body: event.target.value },
-                        }))
-                      }
-                    />
-                  </div>
-                ) : null}
-                {option.key === "llamada" ? (
-                  <div className="space-y-1">
-                    <Label>Mensaje de llamada</Label>
-                    <Textarea
-                      rows={3}
-                      value={state.message ?? ""}
-                      onChange={(event) =>
-                        setChannelState((prev) => ({
-                          ...prev,
-                          llamada: { ...prev.llamada, message: event.target.value },
-                        }))
-                      }
-                    />
+                {selectedTemplate ? (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                    <p className="font-medium">{selectedTemplate.nombre}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
+                      {selectedTemplate.canal === "correo"
+                        ? selectedTemplate.asunto || "Correo configurado"
+                        : selectedTemplate.cuerpo_texto || selectedTemplate.descripcion || "Contenido configurado"}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">El contenido se toma de la plantilla y no se modifica aquí.</p>
                   </div>
                 ) : null}
                 <div className="space-y-1">
-                  <Label>Programar canal (opcional)</Label>
+                  <Label>Cuándo usarlo (opcional)</Label>
                   <Input
                     type="datetime-local"
                     value={state.schedule ?? ""}
@@ -1034,8 +710,8 @@ export function ProspeccionCampaignWizard({
           </div>
         ) : null}
         <div className="space-y-1">
-          <Label>Nombre interno del lote</Label>
-          <Input value={titulo} onChange={(event) => setTitulo(event.target.value)} placeholder="Ej. Follow up semana 42" />
+          <Label>Nombre de este envío (opcional)</Label>
+          <Input value={titulo} onChange={(event) => setTitulo(event.target.value)} placeholder="Ej. Seguimiento semana 42" />
         </div>
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
@@ -1094,7 +770,7 @@ export function ProspeccionCampaignWizard({
         <p className="font-semibold">Resumen</p>
         <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
           <li>
-            Audiencia:{" "}
+            Lista:{" "}
             {source === "selected"
               ? `${selectedIds.length} seleccionados`
               : source === "lista"
@@ -1102,9 +778,9 @@ export function ProspeccionCampaignWizard({
                 : "Filtros personalizados"}
           </li>
           <li>
-            Canales:{" "}
+            Canal:{" "}
             {activeChannels.length
-              ? activeChannels.map((channel) => channel.label).join(", ")
+              ? activeChannels[0].label
               : "Ninguno"}
           </li>
           <li>
@@ -1155,8 +831,8 @@ export function ProspeccionCampaignWizard({
           </DialogTitle>
           <DialogDescription>
             {editCampanaId
-              ? "Ajusta audiencia, contenido y programación del lote principal de esta campaña."
-              : "Sigue el flujo Descubre → Enriquecer → Preparar → Lanzar para crear un lote multicanal listo para ejecutar."}
+              ? "Ajusta la lista, el contenido y cuándo quieres contactar."
+              : "Elige una lista, un contenido guardado y cuándo quieres contactar."}
           </DialogDescription>
           {preset?.campanaNombre ? (
             <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs font-medium text-primary">
@@ -1173,11 +849,11 @@ export function ProspeccionCampaignWizard({
               <li>Se elige campaña.</li>
               <li>Se elige plantilla filtrada por campaña.</li>
               <li>Se configura programación y separación entre envíos.</li>
-              <li>Se ejecuta lote.</li>
+              <li>Se crea el envío.</li>
             </ol>
           </div>
           <ol className="flex flex-wrap items-center gap-3 text-sm">
-            {["Audiencia", "Canales", "Programación"].map((label, index) => (
+            {["Lista", "Contenido", "Cuándo"].map((label, index) => (
               <li key={label} className="flex items-center gap-2">
                 <span
                   className={cn(

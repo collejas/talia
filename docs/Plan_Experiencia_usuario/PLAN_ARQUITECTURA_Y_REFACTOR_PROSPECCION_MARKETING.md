@@ -370,6 +370,20 @@ Si solo existe un canal compatible, Tal-IA no debe hacer la pregunta: debe conti
 
 El usuario no necesita entrar manualmente al módulo Marketing para continuar.
 
+La creación debe comenzar preguntando el canal de contacto. El canal elegido determina qué reglas se muestran y qué historial de contactos se puede filtrar:
+
+```text
+¿CÓMO QUIERES CONTACTAR A ESTOS PROSPECTOS?
+
+[ Correo ] [ WhatsApp ] [ Voz ]
+```
+
+Después solo deben aparecer reglas aplicables al canal seleccionado:
+
+- **Correo:** correo válido y nunca recibió correo.
+- **WhatsApp:** teléfono válido, móvil, WhatsApp disponible, permiso de contacto y nunca recibió WhatsApp.
+- **Voz:** teléfono válido, tipo de teléfono, permiso para llamadas y nunca recibió una llamada.
+
 La creación debe usar un constructor de reglas legible y siempre guardar las reglas, no los IDs que coincidieron en ese momento:
 
 ```text
@@ -377,12 +391,12 @@ REGLAS DE ESTA LISTA
 
 Quiero encontrar prospectos que...
 
-sean          [ Inmobiliarias              ]
-y estén en    [ San Luis Potosí            ]
-y tengan      [ Celular válido             ]
-y tengan      [ WhatsApp                   ]
+sean          [ Inmobiliarias                 ]
+y estén en    [ San Luis Potosí               ]
+y tengan      [ Celular válido                ]
+y tengan      [ Tipo móvil                    ]
 y             [ Se les pueda enviar WhatsApp ]
-y             [ Nunca recibieron WhatsApp  ]
+y             [ Nunca recibieron WhatsApp    ]
 
 [ + Agregar otra regla ]
 
@@ -417,7 +431,7 @@ Los operadores técnicos `AND`, `OR` e `IN` quedan ocultos.
 
 ### Compatibilidad con canales
 
-Una lista puede ser:
+Las listas nuevas se crean orientadas a un canal. Las listas históricas que no tengan reglas específicas de canal deben conservarse y tratarse como genéricas durante la transición:
 
 - **Genérica:** sus reglas no dependen de un canal específico y puede utilizarse en Correo, WhatsApp o Voz.
 - **Orientada a un canal:** sus reglas contienen condiciones específicas de un canal y solo puede utilizarse donde esas condiciones tengan sentido.

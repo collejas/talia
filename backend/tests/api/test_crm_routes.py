@@ -2193,6 +2193,35 @@ def test_resolve_contact_channels_uses_each_whatsapp_template_body() -> None:
     ]
 
 
+def test_resolve_contact_channels_uses_saved_voice_template_content() -> None:
+    template_id = uuid.uuid4()
+    payload = crm_routes.ProspectoContactarPayload(
+        prospecto_ids=[uuid.uuid4()],
+        campana_id=uuid.uuid4(),
+        canales=[
+            crm_routes.ProspeccionCanalConfig(
+                canal="llamada",
+                template_id=template_id,
+            )
+        ],
+    )
+
+    canales, programacion = crm_routes._resolve_contact_channels(
+        payload,
+        template_map={
+            str(template_id): {
+                "id": str(template_id),
+                "canal": "llamada",
+                "nombre": "Guion de primer contacto",
+                "cuerpo_texto": "Hola {{nombre}}, te llamamos de Tal-IA.",
+            }
+        },
+    )
+
+    assert programacion == {}
+    assert canales["llamada"]["message"] == "Hola {{nombre}}, te llamamos de Tal-IA."
+
+
 class _FrozenCampaignScheduleDateTime(crm_routes.datetime):
     @classmethod
     def now(cls, tz=None):  # type: ignore[override]

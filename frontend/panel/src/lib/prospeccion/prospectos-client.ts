@@ -140,6 +140,7 @@ export type ProspeccionLista = {
   id: string
   nombre: string
   descripcion?: string | null
+  canal?: "correo" | "whatsapp" | "llamada" | null
   filtros: Record<string, unknown>
   metadata?: Record<string, unknown> | null
   total_estimado?: number | null
@@ -1408,6 +1409,7 @@ export async function listProspeccionListas(params: {
 export async function createProspeccionLista(payload: {
   nombre: string
   descripcion?: string
+  canal?: "correo" | "whatsapp" | "llamada"
   filtros: ProspectoFiltroInput
   metadata?: Record<string, unknown>
 }): Promise<{ ok: boolean; lista: ProspeccionLista }> {

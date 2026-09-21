@@ -21,50 +21,80 @@ import {
 } from "@/lib/prospeccion/prospectos-client"
 
 type FormState = {
+  canal: "correo" | "whatsapp" | "llamada" | ""
   nombre: string
   descripcion: string
   segmento: string
   lookupStatus: string
+  emailLookupStatus: string
   carrierType: string
   whatsappPermitido: string
+  llamadaPermitida: string
   nuncaWhatsApp: boolean
   nuncaCorreo: boolean
+  nuncaLlamada: boolean
 }
 
 const EMPTY_FORM: FormState = {
+  canal: "",
   nombre: "",
   descripcion: "",
   segmento: "",
   lookupStatus: "",
+  emailLookupStatus: "",
   carrierType: "",
   whatsappPermitido: "",
+  llamadaPermitida: "",
   nuncaWhatsApp: false,
   nuncaCorreo: false,
+  nuncaLlamada: false,
+}
+
+function inferChannel(filtros: Record<string, unknown>): FormState["canal"] {
+  if (filtros.whatsapp_permitido !== undefined || filtros.envios_whatsapp_max !== undefined) return "whatsapp"
+  if (filtros.llamada_permitida !== undefined || filtros.envios_voz_max !== undefined) return "llamada"
+  if (typeof filtros.email_lookup_status === "string" || filtros.envios_correo_max !== undefined) return "correo"
+  return ""
 }
 
 function formFromLista(lista?: ProspeccionLista | null): FormState {
   const filtros = lista?.filtros ?? {}
   return {
+    canal: lista?.canal ?? inferChannel(filtros),
     nombre: lista?.nombre ?? "",
     descripcion: lista?.descripcion ?? "",
     segmento: typeof filtros.segmento === "string" ? filtros.segmento : "",
     lookupStatus: typeof filtros.lookup_status === "string" ? filtros.lookup_status : "",
+    emailLookupStatus: typeof filtros.email_lookup_status === "string" ? filtros.email_lookup_status : "",
     carrierType: typeof filtros.carrier_type === "string" ? filtros.carrier_type : "",
     whatsappPermitido:
       typeof filtros.whatsapp_permitido === "boolean" ? String(filtros.whatsapp_permitido) : "",
+    llamadaPermitida: typeof filtros.llamada_permitida === "boolean" ? String(filtros.llamada_permitida) : "",
     nuncaWhatsApp: filtros.envios_whatsapp_max === 0,
     nuncaCorreo: filtros.envios_correo_max === 0,
+    nuncaLlamada: filtros.envios_voz_max === 0,
   }
 }
 
 function filtersFromForm(form: FormState): ProspectoFiltroInput {
   const filtros: ProspectoFiltroInput = {}
   if (form.segmento.trim()) filtros.segmento = form.segmento.trim()
-  if (form.lookupStatus) filtros.lookup_status = form.lookupStatus
-  if (form.carrierType) filtros.carrier_type = form.carrierType as ProspectoFiltroInput["carrier_type"]
-  if (form.whatsappPermitido) filtros.whatsapp_permitido = form.whatsappPermitido === "true"
-  if (form.nuncaWhatsApp) filtros.envios_whatsapp_max = 0
-  if (form.nuncaCorreo) filtros.envios_correo_max = 0
+  if (form.canal === "correo") {
+    if (form.emailLookupStatus) filtros.email_lookup_status = form.emailLookupStatus
+    if (form.nuncaCorreo) filtros.envios_correo_max = 0
+  }
+  if (form.canal === "whatsapp") {
+    if (form.lookupStatus) filtros.lookup_status = form.lookupStatus
+    if (form.carrierType) filtros.carrier_type = form.carrierType as ProspectoFiltroInput["carrier_type"]
+    if (form.whatsappPermitido) filtros.whatsapp_permitido = form.whatsappPermitido === "true"
+    if (form.nuncaWhatsApp) filtros.envios_whatsapp_max = 0
+  }
+  if (form.canal === "llamada") {
+    if (form.lookupStatus) filtros.lookup_status = form.lookupStatus
+    if (form.carrierType) filtros.carrier_type = form.carrierType as ProspectoFiltroInput["carrier_type"]
+    if (form.llamadaPermitida) filtros.llamada_permitida = form.llamadaPermitida === "true"
+    if (form.nuncaLlamada) filtros.envios_voz_max = 0
+  }
   return filtros
 }
 
@@ -74,6 +104,7 @@ function ruleLabels(lista: ProspeccionLista): string[] {
   if (typeof filtros.segmento === "string" && filtros.segmento.trim()) {
     labels.push(`Tipo de empresa: ${filtros.segmento}`)
   }
+  if (filtros.email_lookup_status === "verified") labels.push("Correo válido")
   if (filtros.lookup_status === "verified") labels.push("Teléfono válido")
   if (filtros.carrier_type === "mobile") labels.push("Teléfono móvil")
   if (filtros.carrier_type === "landline") labels.push("Teléfono fijo")
@@ -82,6 +113,9 @@ function ruleLabels(lista: ProspeccionLista): string[] {
   if (filtros.whatsapp_permitido === false) labels.push("No se le puede enviar WhatsApp")
   if (filtros.envios_whatsapp_max === 0) labels.push("Nunca recibió WhatsApp")
   if (filtros.envios_correo_max === 0) labels.push("Nunca recibió correo")
+  if (filtros.llamada_permitida === true) labels.push("Se le puede llamar")
+  if (filtros.llamada_permitida === false) labels.push("No se le puede llamar")
+  if (filtros.envios_voz_max === 0) labels.push("Nunca recibió una llamada")
   return labels
 }
 
@@ -138,6 +172,10 @@ export function ListasParaContactarClient() {
       setError("Escribe un nombre para la lista.")
       return
     }
+    if (!form.canal) {
+      setError("Elige primero cómo quieres contactar a estos prospectos.")
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -146,6 +184,7 @@ export function ListasParaContactarClient() {
         await updateProspeccionLista(editingLista.id, {
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || null,
+          canal: form.canal || undefined,
           filtros,
         })
         setNotice("Lista actualizada.")
@@ -153,6 +192,7 @@ export function ListasParaContactarClient() {
         await createProspeccionLista({
           nombre: form.nombre.trim(),
           descripcion: form.descripcion.trim() || undefined,
+          canal: form.canal || undefined,
           filtros,
         })
         setNotice("Lista creada.")
@@ -236,7 +276,7 @@ export function ListasParaContactarClient() {
                       <div className="min-w-0">
                         <CardTitle className="truncate text-lg">{lista.nombre}</CardTitle>
                         <CardDescription className="mt-1 line-clamp-2">
-                          {lista.descripcion || "Lista basada en reglas guardadas."}
+                          {lista.descripcion || (lista.canal ? `Lista para ${lista.canal === "llamada" ? "Voz" : lista.canal}.` : "Lista basada en reglas guardadas.")}
                         </CardDescription>
                       </div>
                       <Badge variant="secondary" className="shrink-0">
@@ -282,6 +322,36 @@ export function ListasParaContactarClient() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-5 py-2">
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <Label htmlFor="lista-canal">¿Cómo quieres contactar a estos prospectos?</Label>
+              <p className="mt-1 text-xs text-muted-foreground">Mostraremos únicamente las reglas que aplican a ese canal.</p>
+              <Select
+                value={form.canal || ""}
+                onValueChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    canal: value as FormState["canal"],
+                    lookupStatus: "",
+                    emailLookupStatus: "",
+                    carrierType: "",
+                    whatsappPermitido: "",
+                    llamadaPermitida: "",
+                    nuncaWhatsApp: false,
+                    nuncaCorreo: false,
+                    nuncaLlamada: false,
+                  }))
+                }
+              >
+                <SelectTrigger id="lista-canal" className="mt-3">
+                  <SelectValue placeholder="Elige un canal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="correo">Correo</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="llamada">Voz</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="lista-nombre">Nombre</Label>
               <Input
@@ -301,7 +371,7 @@ export function ListasParaContactarClient() {
                 rows={2}
               />
             </div>
-            <div className="rounded-lg border bg-muted/20 p-4">
+            {form.canal ? <div className="rounded-lg border bg-muted/20 p-4">
               <p className="mb-4 text-sm font-medium">Quiero prospectos que...</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -313,29 +383,41 @@ export function ListasParaContactarClient() {
                     placeholder="Inmobiliarias"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lista-telefono">Tengan</Label>
-                  <Select value={form.lookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, lookupStatus: value === "any" ? "" : value }))}>
-                    <SelectTrigger id="lista-telefono"><SelectValue placeholder="Cualquier teléfono" /></SelectTrigger>
+                {form.canal === "correo" ? <div className="space-y-2">
+                  <Label htmlFor="lista-correo-valido">Tengan</Label>
+                  <Select value={form.emailLookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, emailLookupStatus: value === "any" ? "" : value }))}>
+                    <SelectTrigger id="lista-correo-valido"><SelectValue placeholder="Cualquier correo" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="any">Cualquier teléfono</SelectItem>
-                      <SelectItem value="verified">Teléfono válido</SelectItem>
+                      <SelectItem value="any">Cualquier correo</SelectItem>
+                      <SelectItem value="verified">Correo válido</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lista-tipo-telefono">Tipo de teléfono</Label>
-                  <Select value={form.carrierType || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, carrierType: value === "any" ? "" : value }))}>
-                    <SelectTrigger id="lista-tipo-telefono"><SelectValue placeholder="Cualquier tipo" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Cualquier tipo</SelectItem>
-                      <SelectItem value="mobile">Móvil</SelectItem>
-                      <SelectItem value="landline">Fijo</SelectItem>
-                      <SelectItem value="voip">Teléfono por internet</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
+                </div> : null}
+                {form.canal !== "correo" ? <>
+                  <div className="space-y-2">
+                    <Label htmlFor="lista-telefono">Tengan</Label>
+                    <Select value={form.lookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, lookupStatus: value === "any" ? "" : value }))}>
+                      <SelectTrigger id="lista-telefono"><SelectValue placeholder="Cualquier teléfono" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Cualquier teléfono</SelectItem>
+                        <SelectItem value="verified">Teléfono válido</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lista-tipo-telefono">Tipo de teléfono</Label>
+                    <Select value={form.carrierType || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, carrierType: value === "any" ? "" : value }))}>
+                      <SelectTrigger id="lista-tipo-telefono"><SelectValue placeholder="Cualquier tipo" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Cualquier tipo</SelectItem>
+                        <SelectItem value="mobile">Móvil</SelectItem>
+                        <SelectItem value="landline">Fijo</SelectItem>
+                        <SelectItem value="voip">Teléfono por internet</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </> : null}
+                {form.canal === "whatsapp" ? <div className="space-y-2">
                   <Label htmlFor="lista-whatsapp">WhatsApp</Label>
                   <Select value={form.whatsappPermitido || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, whatsappPermitido: value === "any" ? "" : value }))}>
                     <SelectTrigger id="lista-whatsapp"><SelectValue placeholder="Sin regla de WhatsApp" /></SelectTrigger>
@@ -345,19 +427,34 @@ export function ListasParaContactarClient() {
                       <SelectItem value="false">No se le puede enviar WhatsApp</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </div> : null}
+                {form.canal === "llamada" ? <div className="space-y-2">
+                  <Label htmlFor="lista-llamada">Llamadas</Label>
+                  <Select value={form.llamadaPermitida || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, llamadaPermitida: value === "any" ? "" : value }))}>
+                    <SelectTrigger id="lista-llamada"><SelectValue placeholder="Sin regla de llamadas" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Sin regla de llamadas</SelectItem>
+                      <SelectItem value="true">Se le puede llamar</SelectItem>
+                      <SelectItem value="false">No se le puede llamar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div> : null}
               </div>
               <div className="mt-4 space-y-3">
-                <label className="flex items-center gap-3 text-sm">
+                {form.canal === "whatsapp" ? <label className="flex items-center gap-3 text-sm">
                   <input type="checkbox" checked={form.nuncaWhatsApp} onChange={(event) => setForm((prev) => ({ ...prev, nuncaWhatsApp: event.target.checked }))} />
                   Nunca recibió WhatsApp
-                </label>
-                <label className="flex items-center gap-3 text-sm">
+                </label> : null}
+                {form.canal === "correo" ? <label className="flex items-center gap-3 text-sm">
                   <input type="checkbox" checked={form.nuncaCorreo} onChange={(event) => setForm((prev) => ({ ...prev, nuncaCorreo: event.target.checked }))} />
                   Nunca recibió correo
-                </label>
+                </label> : null}
+                {form.canal === "llamada" ? <label className="flex items-center gap-3 text-sm">
+                  <input type="checkbox" checked={form.nuncaLlamada} onChange={(event) => setForm((prev) => ({ ...prev, nuncaLlamada: event.target.checked }))} />
+                  Nunca recibió una llamada
+                </label> : null}
               </div>
-            </div>
+            </div> : <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Elige un canal para mostrar las reglas correspondientes.</div>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditorOpen(false)} disabled={saving}>Cancelar</Button>
@@ -373,7 +470,7 @@ export function ListasParaContactarClient() {
         open={Boolean(wizardLista)}
         onClose={() => setWizardLista(null)}
         selectedIds={[]}
-        preset={wizardLista ? { source: "lista", listaId: wizardLista.id } : null}
+        preset={wizardLista ? { source: "lista", listaId: wizardLista.id, canal: wizardLista.canal } : null}
         onCompleted={() => setWizardLista(null)}
       />
     </div>
