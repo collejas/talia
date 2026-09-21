@@ -1,7 +1,7 @@
 # Plan de arquitectura y refactor de experiencia de usuario
 
 **Proyecto:** Tal-IA  
-**Estado:** Arquitectura funcional cerrada; pendiente de implementación  
+**Estado:** Arquitectura funcional y UX aprobadas; lista para implementación  
 **Fecha:** 2026-09-21  
 **Alcance:** Búsqueda, Prospección y Marketing
 
@@ -335,9 +335,11 @@ Después de pulsarlo, Tal-IA debe preguntar:
 
 ```text
 ¿CÓMO QUIERES CONTACTARLOS?
-
-[ Correo ]   [ WhatsApp ]   [ Voz ]
 ```
+
+Debe mostrar únicamente los canales compatibles con esta lista.
+
+Si solo existe un canal compatible, Tal-IA no debe hacer la pregunta: debe continuar directamente con ese canal. Por ejemplo, una lista con `Tiene WhatsApp` y `Nunca recibió WhatsApp` puede llevar directamente al flujo de WhatsApp.
 
 El usuario no necesita entrar manualmente al módulo Marketing para continuar.
 
@@ -547,20 +549,23 @@ Listado por canal:
 
 ```text
 Tal-IA Inmobiliarias
-Correo: 4 correos · 8 envíos · Último envío: 21 Sep
-WhatsApp: 4 mensajes · 8 envíos · Último envío: 21 Sep
-Voz: 4 guiones · 8 llamadas · Última llamada: 21 Sep
+4 mensajes · 8 envíos
+Último envío: 21 Sep
 ```
+
+La tarjeta usa el lenguaje del canal actual. En Correo mostraría `4 correos`; en WhatsApp, `4 mensajes`; y en Voz, `4 guiones · 8 llamadas`.
 
 Una campaña no representa una ejecución individual.
 
 Detalle:
 
 ```text
-[ Resumen ] [ Mensajes/Correos/Guiones ] [ Envíos ] [ Resultados ]
+Correo:   [ Resumen ] [ Correos ] [ Envíos ] [ Resultados ]
+WhatsApp: [ Resumen ] [ Mensajes ] [ Envíos ] [ Resultados ]
+Voz:      [ Resumen ] [ Guiones ] [ Llamadas ] [ Resultados ]
 ```
 
-La segunda pestaña se etiqueta según el canal: `Correos` para Correo, `Mensajes` para WhatsApp y `Guiones` para Voz.
+Las pestañas deben mostrar solo el lenguaje del canal actual. En Voz, `Llamadas` reemplaza completamente a `Envíos` como etiqueta visible.
 
 Resumen mínimo:
 
@@ -752,9 +757,22 @@ Opciones mínimas:
 
 - Ahora.
 - Más tarde, con fecha y hora.
-- Configuración propia del canal.
-- Máximo del envío.
-- Control de ritmo, si el canal lo requiere.
+- `Más opciones`, para configuraciones avanzadas del canal.
+
+Dentro de `Más opciones`:
+
+```text
+Máximo de personas
+[ 500 ]
+
+Correo/WhatsApp: Tiempo entre mensajes
+[ 8 segundos ]
+
+Voz: Tiempo entre llamadas
+[ 8 segundos ]
+```
+
+Los límites, ritmo y configuraciones avanzadas no deben ocupar la pantalla principal del asistente.
 
 ### Paso 4: Revisar antes de enviar o llamar
 
@@ -775,18 +793,22 @@ Envío: Ahora
 25 no recibirán el mensaje
 ```
 
-Los textos se adaptan al canal:
+El título, la información temporal y los textos se adaptan al canal:
 
 ```text
 Correo:
+REVISAR ENVÍO
 817 pueden recibir este correo ahora
 25 no recibirán el correo
 
 WhatsApp:
+REVISAR ENVÍO
 817 pueden recibir este mensaje ahora
 25 no recibirán el mensaje
 
 Voz:
+REVISAR LLAMADAS
+Llamadas: Ahora
 817 pueden ser llamados ahora
 25 no serán llamados
 ```
