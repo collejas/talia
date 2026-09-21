@@ -30,9 +30,8 @@ type FormState = {
   carrierType: string
   whatsappPermitido: string
   llamadaPermitida: string
-  nuncaWhatsApp: boolean
-  nuncaCorreo: boolean
-  nuncaLlamada: boolean
+  enviosMin: string
+  enviosMax: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -45,9 +44,18 @@ const EMPTY_FORM: FormState = {
   carrierType: "",
   whatsappPermitido: "",
   llamadaPermitida: "",
-  nuncaWhatsApp: false,
-  nuncaCorreo: false,
-  nuncaLlamada: false,
+  enviosMin: "",
+  enviosMax: "",
+}
+
+function envioCountFields(canal: FormState["canal"]): {
+  min: "envios_correo_min" | "envios_whatsapp_min" | "envios_voz_min"
+  max: "envios_correo_max" | "envios_whatsapp_max" | "envios_voz_max"
+} | null {
+  if (canal === "correo") return { min: "envios_correo_min", max: "envios_correo_max" }
+  if (canal === "whatsapp") return { min: "envios_whatsapp_min", max: "envios_whatsapp_max" }
+  if (canal === "llamada") return { min: "envios_voz_min", max: "envios_voz_max" }
+  return null
 }
 
 function inferChannel(filtros: Record<string, unknown>): FormState["canal"] {
@@ -59,8 +67,12 @@ function inferChannel(filtros: Record<string, unknown>): FormState["canal"] {
 
 function formFromLista(lista?: ProspeccionLista | null): FormState {
   const filtros = lista?.filtros ?? {}
+  const canal = lista?.canal ?? inferChannel(filtros)
+  const countFields = envioCountFields(canal)
+  const minCount = countFields ? filtros[countFields.min] : undefined
+  const maxCount = countFields ? filtros[countFields.max] : undefined
   return {
-    canal: lista?.canal ?? inferChannel(filtros),
+    canal,
     nombre: lista?.nombre ?? "",
     descripcion: lista?.descripcion ?? "",
     segmento: typeof filtros.segmento === "string" ? filtros.segmento : "",
@@ -70,30 +82,35 @@ function formFromLista(lista?: ProspeccionLista | null): FormState {
     whatsappPermitido:
       typeof filtros.whatsapp_permitido === "boolean" ? String(filtros.whatsapp_permitido) : "",
     llamadaPermitida: typeof filtros.llamada_permitida === "boolean" ? String(filtros.llamada_permitida) : "",
-    nuncaWhatsApp: filtros.envios_whatsapp_max === 0,
-    nuncaCorreo: filtros.envios_correo_max === 0,
-    nuncaLlamada: filtros.envios_voz_max === 0,
+    enviosMin: typeof minCount === "number" ? String(minCount) : "",
+    enviosMax: typeof maxCount === "number" ? String(maxCount) : "",
   }
 }
 
 function filtersFromForm(form: FormState): ProspectoFiltroInput {
   const filtros: ProspectoFiltroInput = {}
   if (form.segmento.trim()) filtros.segmento = form.segmento.trim()
+  const minCount = form.enviosMin.trim() ? Number.parseInt(form.enviosMin, 10) : undefined
+  const maxCount = form.enviosMax.trim() ? Number.parseInt(form.enviosMax, 10) : undefined
+  const countFields = envioCountFields(form.canal)
+  if (countFields && typeof minCount === "number" && Number.isInteger(minCount) && minCount >= 0) {
+    filtros[countFields.min] = minCount
+  }
+  if (countFields && typeof maxCount === "number" && Number.isInteger(maxCount) && maxCount >= 0) {
+    filtros[countFields.max] = maxCount
+  }
   if (form.canal === "correo") {
     if (form.emailLookupStatus) filtros.email_lookup_status = form.emailLookupStatus
-    if (form.nuncaCorreo) filtros.envios_correo_max = 0
   }
   if (form.canal === "whatsapp") {
     if (form.lookupStatus) filtros.lookup_status = form.lookupStatus
     if (form.carrierType) filtros.carrier_type = form.carrierType as ProspectoFiltroInput["carrier_type"]
     if (form.whatsappPermitido) filtros.whatsapp_permitido = form.whatsappPermitido === "true"
-    if (form.nuncaWhatsApp) filtros.envios_whatsapp_max = 0
   }
   if (form.canal === "llamada") {
     if (form.lookupStatus) filtros.lookup_status = form.lookupStatus
     if (form.carrierType) filtros.carrier_type = form.carrierType as ProspectoFiltroInput["carrier_type"]
     if (form.llamadaPermitida) filtros.llamada_permitida = form.llamadaPermitida === "true"
-    if (form.nuncaLlamada) filtros.envios_voz_max = 0
   }
   return filtros
 }
@@ -111,11 +128,24 @@ function ruleLabels(lista: ProspeccionLista): string[] {
   if (filtros.carrier_type === "voip") labels.push("Teléfono por internet")
   if (filtros.whatsapp_permitido === true) labels.push("Se le puede enviar WhatsApp")
   if (filtros.whatsapp_permitido === false) labels.push("No se le puede enviar WhatsApp")
-  if (filtros.envios_whatsapp_max === 0) labels.push("Nunca recibió WhatsApp")
-  if (filtros.envios_correo_max === 0) labels.push("Nunca recibió correo")
   if (filtros.llamada_permitida === true) labels.push("Se le puede llamar")
   if (filtros.llamada_permitida === false) labels.push("No se le puede llamar")
-  if (filtros.envios_voz_max === 0) labels.push("Nunca recibió una llamada")
+  const canal = lista.canal ?? inferChannel(filtros)
+  const countFields = envioCountFields(canal)
+  const minimum = countFields ? filtros[countFields.min] : undefined
+  const maximum = countFields ? filtros[countFields.max] : undefined
+  if (typeof minimum === "number" || typeof maximum === "number") {
+    const channelName = canal === "correo" ? "correos" : canal === "whatsapp" ? "WhatsApps" : "llamadas"
+    const countLabel =
+      typeof minimum === "number" && typeof maximum === "number" && minimum === maximum
+        ? `Exactamente ${minimum} ${channelName}`
+        : typeof minimum === "number" && typeof maximum === "number"
+          ? `${minimum} a ${maximum} ${channelName}`
+          : typeof minimum === "number"
+            ? `${minimum} o más ${channelName}`
+            : `Hasta ${maximum} ${channelName}`
+    labels.push(countLabel)
+  }
   return labels
 }
 
@@ -174,6 +204,19 @@ export function ListasParaContactarClient() {
     }
     if (!form.canal) {
       setError("Elige primero cómo quieres contactar a estos prospectos.")
+      return
+    }
+    const minCount = form.enviosMin.trim() ? Number.parseInt(form.enviosMin, 10) : undefined
+    const maxCount = form.enviosMax.trim() ? Number.parseInt(form.enviosMax, 10) : undefined
+    if (
+      (minCount !== undefined && (!Number.isInteger(minCount) || minCount < 0)) ||
+      (maxCount !== undefined && (!Number.isInteger(maxCount) || maxCount < 0))
+    ) {
+      setError("Los envíos deben ser números enteros iguales o mayores que cero.")
+      return
+    }
+    if (minCount !== undefined && maxCount !== undefined && minCount > maxCount) {
+      setError("El mínimo de envíos no puede ser mayor que el máximo.")
       return
     }
     setSaving(true)
@@ -336,9 +379,8 @@ export function ListasParaContactarClient() {
                     carrierType: "",
                     whatsappPermitido: "",
                     llamadaPermitida: "",
-                    nuncaWhatsApp: false,
-                    nuncaCorreo: false,
-                    nuncaLlamada: false,
+                    enviosMin: "",
+                    enviosMax: "",
                   }))
                 }
               >
@@ -440,19 +482,42 @@ export function ListasParaContactarClient() {
                   </Select>
                 </div> : null}
               </div>
-              <div className="mt-4 space-y-3">
-                {form.canal === "whatsapp" ? <label className="flex items-center gap-3 text-sm">
-                  <input type="checkbox" checked={form.nuncaWhatsApp} onChange={(event) => setForm((prev) => ({ ...prev, nuncaWhatsApp: event.target.checked }))} />
-                  Nunca recibió WhatsApp
-                </label> : null}
-                {form.canal === "correo" ? <label className="flex items-center gap-3 text-sm">
-                  <input type="checkbox" checked={form.nuncaCorreo} onChange={(event) => setForm((prev) => ({ ...prev, nuncaCorreo: event.target.checked }))} />
-                  Nunca recibió correo
-                </label> : null}
-                {form.canal === "llamada" ? <label className="flex items-center gap-3 text-sm">
-                  <input type="checkbox" checked={form.nuncaLlamada} onChange={(event) => setForm((prev) => ({ ...prev, nuncaLlamada: event.target.checked }))} />
-                  Nunca recibió una llamada
-                </label> : null}
+              <div className="mt-5 border-t pt-4">
+                <p className="text-sm font-medium">
+                  ¿Cuántas veces ya fueron contactados por {form.canal === "correo" ? "correo" : form.canal === "whatsapp" ? "WhatsApp" : "voz"}?
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Deja un campo vacío si no quieres limitarlo. Si escribes el mismo número en ambos, buscarás exactamente esa cantidad.
+                </p>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="lista-envios-min">Como mínimo</Label>
+                    <Input
+                      id="lista-envios-min"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={form.enviosMin}
+                      onChange={(event) => setForm((prev) => ({ ...prev, enviosMin: event.target.value }))}
+                      placeholder="Ej. 2"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lista-envios-max">Como máximo</Label>
+                    <Input
+                      id="lista-envios-max"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={form.enviosMax}
+                      onChange={(event) => setForm((prev) => ({ ...prev, enviosMax: event.target.value }))}
+                      placeholder="Ej. 5"
+                    />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Ejemplos: mínimo 2 = “2 o más”; máximo 2 = “2 o menos”; ambos en 2 = “exactamente 2”.
+                </p>
               </div>
             </div> : <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Elige un canal para mostrar las reglas correspondientes.</div>}
           </div>

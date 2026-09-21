@@ -135,6 +135,44 @@ Plan actualizado; código todavía sin modificar.
 - Definir pruebas funcionales autenticadas para preview, revalidación, compatibilidad de canal, idempotencia y aislamiento por organización.
 - Definir pruebas de concurrencia, recuperación de workers y activación progresiva por feature flag.
 
+## 2026-09-21 — Rangos de envíos en Listas para contactar
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 — Listas para contactar
+
+### Referencia
+
+`frontend/panel/src/app/prospeccion/listas/page.client.tsx`
+
+### Cambios
+
+- La creación y edición de una lista ahora permite indicar un mínimo y un máximo de contactos previos por el canal seleccionado.
+- Se soportan expresamente los casos “2 o más”, “2 o menos” y “exactamente 2”.
+- El canal elegido determina si se guardan `envios_correo_*`, `envios_whatsapp_*` o `envios_voz_*`.
+- Las listas existentes con `máximo = 0` continúan mostrándose y editándose como “nunca contactados”.
+- Se agregó validación visible para impedir números negativos y mínimos mayores que máximos.
+
+### Archivos o superficies afectadas
+
+- `frontend/panel/src/app/prospeccion/listas/page.client.tsx`
+- Contrato existente `ProspectoFiltroPayload` y filtros server-side de prospectos reutilizados sin migración.
+
+### Validación
+
+- ESLint del archivo modificado: correcto.
+- TypeScript del panel (`tsc --noEmit`): correcto.
+- `git diff --check`: correcto.
+
+### Pendientes o riesgos
+
+- Todavía faltan filtros temporales como “no contactado en los últimos N días”.
+- Todavía falta trasladar a la lista todos los filtros avanzados de `Prospectos` como presencia de datos, ubicación, calificación, campaña y estado CRM.
+
 ## 2026-09-21 — Inventario inicial de F0
 
 ### Estado
