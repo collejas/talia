@@ -1,0 +1,1086 @@
+# Plan de arquitectura y refactor de experiencia de usuario
+
+**Proyecto:** Tal-IA  
+**Estado:** Arquitectura funcional cerrada; pendiente de implementación  
+**Fecha:** 2026-09-21  
+**Alcance:** Búsqueda, Prospección y Marketing
+
+## 1. Objetivo
+
+Reorganizar la experiencia de Tal-IA para que represente el flujo comercial real:
+
+```text
+Búsqueda → Prospectos → Completar datos → Listas de envío
+→ Campaña → Mensaje → Revisar → Envío → Resultados → CRM
+```
+
+La arquitectura interna conserva sus nombres técnicos, pero la interfaz debe hablar como una persona y representar acciones reconocibles para el usuario.
+
+Cómo lo ve el usuario:
+
+```text
+BUSCA EMPRESAS
+      ↓
+ELIGE TUS PROSPECTOS
+      ↓
+COMPLETA SUS DATOS
+      ↓
+DECIDE A QUIÉN CONTACTAR
+      ↓
+ELIGE UNA CAMPAÑA
+      ↓
+ELIGE EL MENSAJE
+      ↓
+REVISA
+      ↓
+ENVÍA
+      ↓
+MIRA LOS RESULTADOS
+      ↓
+ATIENDE LAS OPORTUNIDADES
+```
+
+El refactor debe separar configuración, exploración y ejecución, sin perder las capacidades actuales de filtros, verificación, envíos, historial y métricas.
+
+La prioridad es proteger el caso operativo más crítico: crear envíos correctos y no repetitivos a partir de audiencias dinámicas.
+
+## 2. Decisiones cerradas
+
+### 2.1 Módulos principales
+
+```text
+Búsqueda
+  Buscar
+  Mis búsquedas
+  Resultados
+
+Prospección
+  Prospectos
+  Listas de envío
+  Completar datos
+  Historial
+
+Marketing
+  Correo
+  WhatsApp
+  Voz
+
+CRM
+  Contactos
+  Oportunidades
+  Embudo
+  Actividades
+
+Agente IA
+```
+
+### 2.2 Definición de objetos
+
+| Objeto | Responsabilidad |
+|---|---|
+| Resultado de búsqueda | Empresa encontrada por una fuente antes de incorporarse a Prospección. |
+| Prospecto | Registro operativo que forma parte de la base de prospección. |
+| Segmento | Clasificación del prospecto, por ejemplo Inmobiliarias o Constructoras. |
+| Audiencia | Definición dinámica de quién puede ser contactado bajo ciertas condiciones. |
+| Actividad | Evento transversal relacionado con un prospecto. |
+| Canal | Medio de comunicación: Correo, WhatsApp o Voz. |
+| Campaña | Iniciativa comercial dentro de un canal. |
+| Plantilla | Contenido o guion compatible con un canal. |
+| Envío/Lote | Ejecución concreta de campaña + audiencia + plantilla + programación. |
+| Destinatario de lote | Resultado individual de un prospecto dentro de un lote. |
+
+### 2.3 Regla de ejecución
+
+Una audiencia, una campaña o una plantilla nunca envía por sí sola.
+
+Solo un lote/envío puede producir comunicaciones reales.
+
+```text
+Audiencia ───────┐
+                 ├──→ Lote → Destinatarios → Resultados
+Plantilla ───────┤
+Campaña ─────────┤
+Programación ────┘
+```
+
+La audiencia y la plantilla son insumos independientes del lote.
+
+### 2.4 Regla de lenguaje de producto
+
+El backend puede hablar de audiencias, lotes, batches, plantillas, carrier, preview, suppression, elegibilidad, idempotencia y versiones. La interfaz no debe exigir esos conceptos al usuario.
+
+| Término técnico interno | Texto visible en la interfaz |
+|---|---|
+| Audiencia | Lista de envío |
+| Crear audiencia | Crear lista |
+| Audiencia actual | Personas que cumplen estas reglas |
+| Enriquecer | Completar datos |
+| Carrier | Tipo de teléfono |
+| Plantilla | Mensaje |
+| Preview | Revisar antes de enviar |
+| Elegibles | Pueden recibir el mensaje |
+| Omitidos | No recibirán el mensaje |
+| Opt-out | Pidió no recibir mensajes |
+| Suppression | Bloqueado para envíos |
+| Lote / batch | Envío |
+| Métricas | Resultados |
+| Actividad | Historial |
+| Historial de búsquedas | Mis búsquedas |
+| Programación | Cuándo enviarlo |
+| Canal compatible | Disponible para WhatsApp, Correo o Voz |
+| Revalidación | Volver a revisar antes de enviar |
+| Prospecto IDs | Nunca visible |
+| Tenant / `organizacion_id` | Nunca visible |
+
+Esta tabla es normativa para la UI. Los términos técnicos solo pueden aparecer en soporte, permisos, exportaciones técnicas o una sección explícita de detalles técnicos.
+
+### 2.5 Reglas de experiencia
+
+1. Cada pantalla responde una sola pregunta principal.
+2. Cada pantalla tiene una acción principal visible.
+3. Las funciones importantes muestran icono y palabra; nunca solo un icono.
+4. Primero se muestran números y explicaciones; después las tablas detalladas.
+5. Los filtros se leen como una oración, no como nombres de columnas.
+6. La complejidad avanzada queda detrás de `Más opciones` o `Detalles técnicos`.
+
+## 3. Estado actual que condiciona el refactor
+
+La auditoría existente identificó estas condiciones:
+
+- `prospectos/page.client.tsx` concentra filtros, tabla, grupos, vistas guardadas, verificación, scraping, edición, borrado, historial, auditoría, planner, campañas, plantillas, cuotas y conversiones.
+- Google y GobMX repiten búsqueda, historial, resultados, selección, mapa y guardado de prospectos.
+- GobMX reutiliza el mapa de resultados de Google mediante tipos adaptados; el mapa debe evolucionar a un componente neutral a la fuente.
+- Los historiales cargan páginas sucesivas en el navegador; deben migrar a paginación, búsqueda y ordenamiento server-side.
+- Ya existe una base de filtros de prospectos con estados de teléfono/email, tipo de teléfono, permisos, segmento y cantidad de envíos.
+- Ya existen listas inteligentes con filtros guardados. Internamente pueden mantenerse como `listas` durante la migración, pero la UI debe llamarlas `Listas de envío`.
+- El backend ya puede resolver una lista dinámica al crear un envío mediante `lista_id` o filtros.
+- Algunos flujos actuales todavía envían `prospecto_ids` desde el frontend; ese camino no debe ser la ruta principal para audiencias dinámicas.
+- Los filtros actuales cubren `envios_whatsapp_max=0` y `envios_correo_max=0`, pero faltan filtros temporales explícitos para último WhatsApp, último correo y último contacto.
+- La documentación de búsqueda y columnaización contiene estados contradictorios; antes de implementar migraciones se debe actualizar el estado real contra código, esquema y despliegue.
+
+## 4. Contratos de vista
+
+### 4.1 Búsqueda
+
+### Buscar
+
+**Pregunta que responde:** ¿Qué empresas quiero encontrar?
+
+Responsabilidades:
+
+- Recibir término, ubicación y filtros propios de la búsqueda.
+- Permitir seleccionar fuente: Google, GobMX y futuras fuentes.
+- Usar un workspace común y adaptadores por fuente.
+- Crear una búsqueda identificable y consultar su estado.
+
+No debe contener filtros operativos de envío ni lógica de campañas.
+
+Acción principal:
+
+```text
+Buscar prospectos
+```
+
+### Mis búsquedas
+
+**Pregunta que responde:** ¿Qué búsquedas se han ejecutado?
+
+Debe mostrar fuente, consulta, ubicación, fecha, estado, total y acciones `Ver resultados` y `Repetir`.
+
+Requisitos:
+
+- Paginación server-side.
+- Búsqueda y ordenamiento server-side.
+- No cargar todo el historial en el navegador.
+
+### Resultados
+
+**Pregunta que responde:** ¿Qué resultados quiero incorporar a Prospección?
+
+Debe ofrecer:
+
+- Tabla y mapa con modelo neutral a la fuente.
+- Selección de resultados.
+- Filtros propios de resultado.
+- Acción `Agregar a Prospección`.
+- Confirmación del total agregado y navegación a Prospectos.
+
+No debe ejecutar campañas ni envíos.
+
+### 4.2 Prospección → Prospectos
+
+**Pregunta que responde:** ¿Qué prospectos tengo y cómo los preparo?
+
+Responsabilidades:
+
+- Explorar toda la base.
+- Aplicar filtros libres.
+- Revisar calidad y disponibilidad de datos.
+- Seleccionar prospectos para completar datos o crear una lista de envío.
+- Consultar información operativa sin convertir la vista en un centro de campañas.
+
+La tabla debe conservar filtros útiles para:
+
+- Empresa: segmento, ubicación, fuente, SCIAN y rating.
+- Contacto: teléfono, email y sitio web.
+- Validación: teléfono válido, tipo de línea, email válido y WhatsApp permitido.
+- Historial: creación, datos completados y último contacto.
+- Envíos: último WhatsApp, último correo, número de envíos y respuesta.
+- CRM: estado comercial, cliente, oportunidad y perdido.
+
+Acciones principales:
+
+```text
+Completar datos
+Crear lista
+Ver historial
+```
+
+Enviar directamente desde esta vista debe quedar como acción secundaria o retirarse cuando el flujo de Marketing esté disponible.
+
+### 4.3 Prospección → Listas de envío
+
+**Pregunta que responde:** ¿A quién quiero poder contactar bajo determinadas condiciones?
+
+La interfaz debe explicar que aquí se guardan grupos de prospectos que cumplen ciertas reglas. El término técnico `audiencia` no debe ser necesario para operar esta pantalla.
+
+Listado:
+
+```text
++ Crear lista
+
+WhatsApp · Inmobiliarias nuevas
+842 prospectos
+Actualizada ahora
+
+✓ Tienen celular válido
+✓ Pueden recibir WhatsApp
+✓ Nunca les hemos enviado WhatsApp
+```
+
+Acciones:
+
+- Crear lista.
+- Editar condiciones.
+- Duplicar.
+- Activar o desactivar.
+- Ver prospectos.
+- Usar en Marketing.
+- Archivar si la política del producto lo permite.
+
+Detalle:
+
+```text
+[ Resumen ] [ Filtros ] [ Prospectos ]
+```
+
+La lista no envía directamente. Su CTA es:
+
+```text
+Usar en Marketing →
+```
+
+La creación debe usar un constructor de condiciones legible:
+
+```text
+Quiero encontrar prospectos que...
+
+sean          [ Inmobiliarias              ]
+y estén en    [ San Luis Potosí            ]
+y tengan      [ Celular válido             ]
+y puedan      [ Recibir WhatsApp           ]
+y             [ Nunca recibieron WhatsApp  ]
+
+[ + Agregar condición ]
+
+842 prospectos cumplen estas reglas
+
+[ Ver prospectos ]       [ Guardar lista ]
+```
+
+El usuario no debe ver nombres como `lookup_status`, `carrier_type`, `envios_whatsapp_max` u `opt_out`.
+
+Ejemplo de definición:
+
+```text
+Segmento = Inmobiliarias
+Teléfono verificado = Sí
+Tipo de teléfono = Móvil
+Puede recibir WhatsApp = Sí
+Pidió no recibir mensajes = No
+Último WhatsApp = Nunca
+```
+
+Una audiencia puede usar múltiples segmentos y ubicaciones mediante operadores `IN`, además de filtros temporales.
+
+### 4.4 Prospección → Completar datos
+
+**Pregunta que responde:** ¿Qué datos faltan o deben validarse?
+
+Título visible:
+
+```text
+COMPLETAR DATOS
+```
+
+Opciones principales:
+
+```text
+Teléfonos       Revisar si sirven
+Correos         Buscar y revisar
+Sitios web      Buscar y revisar
+Todo            Completar todo
+```
+
+Debe separar:
+
+- Verificación de teléfono.
+- Tipo de teléfono: móvil, fijo, internet/VoIP o desconocido.
+- Búsqueda y verificación de email.
+- Búsqueda de sitio web.
+- Extracción de información web.
+
+La ejecución debe mostrar progreso, resultados, errores y posibilidad de volver a Prospectos. La palabra `enriquecimiento` queda reservada para documentación interna.
+
+No debe crear campañas ni cambiar silenciosamente las condiciones de las listas de envío.
+
+### 4.5 Prospección → Historial
+
+**Pregunta que responde:** ¿Qué ha ocurrido con este prospecto?
+
+Debe ser una línea de tiempo transversal, no otra pantalla de envíos. En la interfaz se llama `Historial`.
+
+Eventos posibles:
+
+- Prospecto creado.
+- Teléfono verificado.
+- Email encontrado o validado.
+- Agregado a una lista de envío.
+- WhatsApp enviado.
+- Email enviado.
+- Llamada realizada.
+- Respondió.
+- Convertido en contacto.
+- Convertido en oportunidad.
+
+Marketing conserva el detalle de campañas, envíos y resultados. Historial muestra el efecto sobre el prospecto.
+
+### 4.6 Marketing → Canal
+
+La entrada de Marketing debe mostrar los canales como primer nivel:
+
+```text
+Correo
+WhatsApp
+Voz
+```
+
+No se deben mezclar campañas de distintos canales en una misma pantalla operativa.
+
+Dentro de cada canal:
+
+```text
+[ Campañas ] [ Resultados ]
+```
+
+El canal debe filtrar plantillas, configuraciones, métricas y estados válidos.
+
+### 4.7 Marketing → Campañas
+
+**Pregunta que responde:** ¿Qué iniciativa comercial estoy gestionando?
+
+Listado por canal:
+
+```text
+Tal-IA Inmobiliarias
+4 mensajes · 8 envíos · Último envío: 21 Sep
+```
+
+Una campaña no representa una ejecución individual.
+
+Detalle:
+
+```text
+[ Resumen ] [ Mensajes ] [ Envíos ] [ Resultados ]
+```
+
+Resumen mínimo:
+
+- Canal.
+- Mensajes activos.
+- Envíos realizados.
+- Prospectos contactados.
+- Respuestas.
+- Oportunidades.
+- Ventas, si existe la atribución correspondiente.
+
+Acción principal:
+
+```text
++ Crear envío
+```
+
+### 4.8 Campaña → Mensajes
+
+Los mensajes se administran dentro del canal y se muestran dentro de la campaña. Internamente siguen siendo plantillas.
+
+Texto de ayuda:
+
+```text
+Estos son los mensajes que puedes usar en esta campaña.
+```
+
+Acciones:
+
+- Crear.
+- Editar.
+- Duplicar.
+- Activar/desactivar.
+- Ver historial de cambios.
+- Validar compatibilidad del canal.
+
+Correo, WhatsApp y Voz tendrán editores y validaciones diferentes.
+
+Una plantilla puede ser reutilizable. La asociación con una campaña no debe impedir que se use en otra campaña compatible.
+
+### 4.9 Campaña → Envíos
+
+Debe mostrar cada ejecución con:
+
+- Fecha de creación y programación.
+- Mensaje.
+- Lista de envío y versión interna de la lista.
+- Cantidades calculadas.
+- Estado del envío.
+- Resultados parciales o finales.
+
+Acciones condicionadas por estado:
+
+- Ver detalle.
+- Cancelar si aún es cancelable.
+- Reintentar solo los fallidos si el canal lo permite.
+- Duplicar configuración para crear un nuevo envío, nunca reactivar silenciosamente el lote anterior.
+
+### 4.10 Campaña → Resultados
+
+La analítica debe permitir bajar por niveles:
+
+```text
+Canal → Campaña → Mensaje → Lista de envío → Envío
+```
+
+No se deben mezclar los cálculos de revisión con envíos aceptados por el proveedor.
+
+Separar al menos:
+
+- Pueden recibir el mensaje.
+- No recibirán el mensaje.
+- Aceptados para envío.
+- Enviados.
+- Entregados.
+- Leídos, cuando aplique.
+- Respondidos.
+- Oportunidades.
+- Ventas atribuidas.
+
+### 4.11 Crear envío
+
+Debe ser un asistente de cuatro pasos:
+
+```text
+1. ¿A quién?
+2. ¿Qué mensaje?
+3. ¿Cuándo?
+4. Revisar
+```
+
+### Paso 1: ¿A quién?
+
+Mostrar listas de envío activas compatibles con el canal y su cantidad actual.
+
+Texto visible:
+
+```text
+¿A QUIÉN QUIERES ENVIAR?
+Elige una de tus listas.
+```
+
+Cada opción debe mostrar nombre y cantidad de prospectos.
+
+Debe permitir crear una nueva lista sin abandonar el flujo.
+
+### Paso 2: ¿Qué mensaje?
+
+Mostrar únicamente mensajes compatibles con el canal y disponibles para uso. La opción debe mostrar una vista previa real del contenido, no solo su nombre.
+
+Texto visible:
+
+```text
+¿QUÉ MENSAJE QUIERES ENVIAR?
+```
+
+### Paso 3: ¿Cuándo?
+
+Opciones mínimas:
+
+- Ahora.
+- Más tarde, con fecha y hora.
+- Configuración propia del canal.
+- Máximo del envío.
+- Control de ritmo, si el canal lo requiere.
+
+### Paso 4: Revisar antes de enviar
+
+Mostrar:
+
+```text
+REVISAR ENVÍO
+
+WhatsApp
+Tal-IA Inmobiliarias
+
+Lista: Inmobiliarias nuevas
+Mensaje: Primer contacto
+Envío: Ahora
+
+842 prospectos están en esta lista
+817 pueden recibir este mensaje ahora
+25 no recibirán el mensaje
+```
+
+Texto visible para el desglose:
+
+```text
+25 NO RECIBIRÁN EL MENSAJE
+```
+
+Motivos visibles:
+
+- Recibieron un mensaje recientemente.
+- No tienen un teléfono o correo válido.
+- Pidieron no recibir mensajes.
+- No pueden recibir mensajes por este canal.
+- Están bloqueados para envíos.
+- Se repiten dentro de la selección.
+- Se alcanzó un límite de envío.
+
+El botón debe expresar el resultado final:
+
+```text
+Enviar a 817 personas
+```
+
+La interfaz no debe mostrar `preview`, `opt_out`, `suppression`, `medio_invalido` ni otros códigos internos. Esos códigos pueden conservarse en la respuesta API y mostrarse únicamente en detalles técnicos autorizados.
+
+El backend debe repetir la resolución y la elegibilidad al confirmar. Nunca se deben reutilizar ciegamente los IDs del preview.
+
+## 5. Contrato técnico de ejecución
+
+### 5.1 Flujo obligatorio
+
+```text
+POST preview
+  → resolver audiencia actual
+  → aplicar elegibilidad del canal
+  → devolver conteos y razones
+
+POST create/send
+  → resolver audiencia otra vez
+  → aplicar elegibilidad otra vez
+  → crear versión/snapshot de audiencia
+  → crear lote
+  → crear destinatarios reales
+  → iniciar o programar ejecución
+```
+
+### 5.2 Reglas de elegibilidad
+
+La elegibilidad final debe validar en backend:
+
+- Tenant/organización del usuario.
+- Audiencia activa y accesible.
+- Canal compatible.
+- Plantilla activa y compatible.
+- Medio válido.
+- Permiso de contacto.
+- Opt-out y suppression.
+- Historial del mismo canal.
+- Reglas de recontacto.
+- Duplicados dentro del lote.
+- Cuotas y límites del tenant.
+- Estado CRM que excluya clientes, perdidos u otros estados configurados.
+
+### 5.3 Reintentos e idempotencia
+
+Crear envío debe aceptar una clave de idempotencia para evitar lotes duplicados cuando el usuario reintente una solicitud o el navegador pierda conexión.
+
+El worker/proveedor debe poder reintentar eventos sin duplicar destinatarios ni mensajes.
+
+## 6. Contratos API propuestos
+
+Los nombres finales deben alinearse con las rutas existentes, pero el contrato objetivo es:
+
+### Audiencias
+
+```text
+GET    /api/crm/prospeccion/audiencias
+POST   /api/crm/prospeccion/audiencias
+GET    /api/crm/prospeccion/audiencias/{audiencia_id}
+PATCH  /api/crm/prospeccion/audiencias/{audiencia_id}
+POST   /api/crm/prospeccion/audiencias/{audiencia_id}/duplicar
+POST   /api/crm/prospeccion/audiencias/{audiencia_id}/activar
+POST   /api/crm/prospeccion/audiencias/{audiencia_id}/desactivar
+POST   /api/crm/prospeccion/audiencias/{audiencia_id}/preview
+GET    /api/crm/prospeccion/audiencias/{audiencia_id}/prospectos
+```
+
+Durante la transición, los endpoints actuales de listas pueden mantenerse como compatibilidad interna o alias.
+
+### Canales y campañas
+
+```text
+GET    /api/marketing/canales
+GET    /api/marketing/{canal}/campanas
+POST   /api/marketing/{canal}/campanas
+GET    /api/marketing/{canal}/campanas/{campana_id}
+PATCH  /api/marketing/{canal}/campanas/{campana_id}
+```
+
+### Plantillas
+
+```text
+GET    /api/marketing/{canal}/plantillas
+POST   /api/marketing/{canal}/plantillas
+GET    /api/marketing/{canal}/plantillas/{plantilla_id}
+PATCH  /api/marketing/{canal}/plantillas/{plantilla_id}
+POST   /api/marketing/{canal}/plantillas/{plantilla_id}/duplicar
+```
+
+### Envíos/lotes
+
+```text
+POST   /api/marketing/{canal}/campanas/{campana_id}/envios/preview
+POST   /api/marketing/{canal}/campanas/{campana_id}/envios
+GET    /api/marketing/{canal}/campanas/{campana_id}/envios
+GET    /api/marketing/{canal}/envios/{envio_id}
+POST   /api/marketing/{canal}/envios/{envio_id}/cancelar
+POST   /api/marketing/{canal}/envios/{envio_id}/reintentar-fallidos
+```
+
+### Forma conceptual del preview
+
+```json
+{
+  "audiencia_id": "uuid",
+  "plantilla_id": "uuid",
+  "cantidad_audiencia": 842,
+  "cantidad_elegibles": 817,
+  "cantidad_omitidos": 25,
+  "omisiones": [
+    {"codigo": "ya_contactado", "cantidad": 11},
+    {"codigo": "medio_invalido", "cantidad": 6},
+    {"codigo": "opt_out", "cantidad": 4}
+  ],
+  "preview_token": "opcional_temporal"
+}
+```
+
+El preview no autoriza por sí mismo el envío.
+
+## 7. Modelo de datos objetivo
+
+La implementación debe reutilizar tablas existentes cuando su semántica y ownership sean compatibles. No se crearán tablas paralelas solo por cambiar nombres visibles.
+
+### Entidades principales
+
+```text
+audiencias
+audiencia_versiones
+marketing_canales o catálogo equivalente
+marketing_campanas
+marketing_plantillas
+marketing_campana_plantillas
+marketing_envios_lotes
+marketing_envio_destinatarios
+actividades_prospeccion o fuente equivalente de actividad
+```
+
+### Relaciones
+
+```text
+audiencias 1 ─── N audiencia_versiones
+campanas   1 ─── N envios_lotes
+plantillas N ─── N campanas
+envios_lotes N ─── 1 audiencia_version
+envios_lotes N ─── 1 plantilla
+envios_lotes 1 ─── N envio_destinatarios
+envio_destinatarios N ─── 1 prospecto
+```
+
+### Campos explícitos del lote
+
+Como mínimo:
+
+```text
+id
+organizacion_id
+campana_id
+plantilla_id
+audiencia_id
+audiencia_version_id
+canal
+estado
+programado_para
+iniciado_en
+finalizado_en
+cantidad_audiencia
+cantidad_elegibles
+cantidad_omitidos
+cantidad_aceptados
+cantidad_entregados
+cantidad_respondidos
+creado_por
+creado_en
+actualizado_en
+```
+
+### Snapshot y versionado
+
+Los datos usados para reportes, filtros y estados deben ser columnas explícitas.
+
+La definición histórica de una audiencia debe conservarse con una versión inmutable. Un snapshot estructurado puede almacenarse únicamente como apoyo de auditoría y reconstrucción visual, con estas condiciones:
+
+- No ser la fuente principal de filtros operativos.
+- No sustituir columnas consultadas frecuentemente.
+- Tener relación con el lote y la versión concreta.
+- Mantenerse inmutable después de crear el lote.
+
+### Estados del lote
+
+```text
+draft
+scheduled
+preparing
+running
+completed
+partially_completed
+failed
+canceled
+```
+
+### Estados del destinatario
+
+```text
+pending
+sent
+delivered
+read
+replied
+failed
+suppressed
+```
+
+Los estados disponibles pueden variar por canal, pero no se deben mezclar estados del lote con estados individuales.
+
+## 8. Filtros temporales requeridos
+
+Los siguientes datos deben ser consultables sin depender de JSON:
+
+- `ultimo_whatsapp_enviado_en`.
+- `ultimo_correo_enviado_en`.
+- `ultima_llamada_en`.
+- `ultima_actividad_en`.
+- Contadores por canal, si no existe una fuente agregada confiable.
+
+Filtros mínimos:
+
+```text
+Nunca enviado
+Enviado alguna vez
+No enviado en los últimos N días
+Último envío antes de una fecha
+Último envío después de una fecha
+Respondió / no respondió
+```
+
+La consulta debe tener índices adecuados y respetar siempre `organizacion_id`.
+
+## 9. Refactor frontend
+
+### 9.1 Principio
+
+No dividir `prospectos/page.client.tsx` únicamente por tamaño. Cada extracción debe corresponder a una responsabilidad de producto.
+
+### 9.2 Componentes objetivo
+
+```text
+prospeccion/
+  prospectos/
+    prospectos-workspace.tsx
+    prospectos-table.tsx
+    prospectos-filters.tsx
+    prospectos-selection-actions.tsx
+    prospectos-columns.tsx
+  audiencias/
+    audiencias-list.tsx
+    audiencia-editor.tsx
+    audiencia-detail.tsx
+    audiencia-preview.tsx
+  enriquecer/
+    enrichment-workspace.tsx
+  actividad/
+    prospecto-activity-timeline.tsx
+
+marketing/
+  channel-workspace.tsx
+  campaign-list.tsx
+  campaign-detail.tsx
+  campaign-templates.tsx
+  campaign-sends.tsx
+  campaign-metrics.tsx
+  send-wizard/
+    send-wizard.tsx
+    send-audience-step.tsx
+    send-template-step.tsx
+    send-schedule-step.tsx
+    send-review-step.tsx
+```
+
+Los nombres deben adaptarse a las convenciones ya existentes del panel.
+
+### 9.3 Estado de UI obligatorio
+
+Cada vista debe contemplar:
+
+- Carga inicial.
+- Carga parcial o actualización de conteo.
+- Vacío sin registros.
+- Error recuperable.
+- Error de permisos.
+- Guardado exitoso.
+- Operación en progreso.
+- Confirmación de acción irreversible o costosa.
+
+## 10. Refactor backend
+
+Separar progresivamente:
+
+```text
+routes
+  → schemas
+  → services
+  → repositories
+  → proveedores/colas
+```
+
+Servicios objetivo:
+
+- `audience_service`: CRUD, versiones y resolución dinámica.
+- `eligibility_service`: reglas finales por canal.
+- `campaign_service`: campañas y relación con plantillas.
+- `template_service`: plantillas por canal.
+- `send_preview_service`: conteos y razones de omisión.
+- `send_batch_service`: revalidación, creación de lote y destinatarios.
+- `activity_service`: eventos de prospectos.
+- `metrics_service`: agregaciones por canal, campaña, plantilla, audiencia y lote.
+
+Los endpoints deben quedarse delgados: autenticar, validar permisos, llamar al servicio y responder con un contrato consistente.
+
+## 11. Migración de compatibilidad
+
+No se debe romper el flujo actual en una sola entrega.
+
+### Fase de compatibilidad
+
+- Mantener rutas existentes de listas como alias o fachada interna.
+- Mostrar `listas` como `Listas de envío` en la nueva UI.
+- Mantener `lista_id` internamente mientras se adopta `audiencia_id` en los contratos públicos.
+- Mantener campañas y envíos existentes mientras se agrega la relación explícita con audiencia, plantilla y versión.
+- Convertir flujos basados en `prospecto_ids` a flujo dinámico de audiencia cuando el usuario cree un envío desde Marketing.
+
+### Regla de no regresión
+
+Los envíos antiguos deben conservar sus resultados, atribución y trazabilidad. No se debe recalcular retroactivamente una audiencia histórica con sus filtros actuales.
+
+## 12. Fases de implementación
+
+### Fase 0 — Contratos y baseline
+
+- Confirmar tablas y columnas existentes.
+- Confirmar nombres reales de campañas, plantillas, listas, lotes y envíos.
+- Resolver contradicciones de documentación.
+- Definir estados y códigos de omisión.
+- Medir consultas actuales de prospectos, listas y envíos.
+
+**Salida:** contrato aprobado y matriz de compatibilidad.
+
+### Fase 1 — Listas de envío
+
+- Renombrado visual de listas a Listas de envío.
+- CRUD y detalle.
+- Versionado de definición.
+- Revisión server-side de personas que cumplen las condiciones.
+- Filtros temporales.
+- Paginación server-side de prospectos de la lista.
+
+**Salida:** una lista puede calcular su cantidad actual y mostrar sus prospectos.
+
+### Fase 2 — Campañas por canal
+
+- Separar vistas de Correo, WhatsApp y Voz.
+- Listar campañas dentro del canal.
+- Detalle de campaña.
+- Relación de plantillas compatibles.
+
+**Salida:** el usuario puede administrar objetivos comerciales sin mezclar canales.
+
+### Fase 3 — Plantillas
+
+- CRUD por canal.
+- Asociación campaña-plantilla.
+- Validaciones específicas por canal.
+- Duplicación y activación/desactivación.
+
+**Salida:** las plantillas pueden reutilizarse sin vincularlas artificialmente a una audiencia.
+
+### Fase 4 — Crear envío
+
+- Asistente de cuatro pasos.
+- Revisión previa con razones de exclusión.
+- Revalidación en confirmación.
+- Creación de versión de audiencia.
+- Creación idempotente del lote.
+- Destinatarios reales del lote.
+
+**Salida:** ningún envío depende de IDs congelados en el navegador.
+
+### Fase 5 — Resultados y actividad
+
+- Detalle de lote.
+- Estados por destinatario.
+- Actividad transversal del prospecto.
+- Métricas por canal, campaña, plantilla, audiencia y lote.
+- Atribución hacia CRM.
+
+**Salida:** el usuario puede explicar qué se envió, a quién, con qué mensaje y qué ocurrió.
+
+### Fase 6 — Prospectos y Búsqueda
+
+- Extraer responsabilidades del componente monolítico.
+- Crear workspace común de búsqueda.
+- Unificar mapa y tipos de resultado.
+- Paginación server-side de historial.
+- Retirar duplicación de Google/GobMX.
+
+**Salida:** la UI representa etapas del trabajo y no implementaciones técnicas.
+
+## 13. Seguridad y aislamiento
+
+Todo endpoint de audiencias, campañas, plantillas, lotes y métricas debe validar:
+
+- Autenticación.
+- Organización/tenant.
+- Ownership del recurso.
+- Permiso para crear, editar, ejecutar, cancelar o consultar.
+- Compatibilidad del canal.
+- Acceso a la audiencia y sus prospectos.
+
+Controles específicos:
+
+- No confiar en `organizacion_id` enviado por el frontend.
+- No permitir que un `audiencia_id`, `plantilla_id` o `campana_id` cruce tenant.
+- No exponer tokens, credenciales ni payloads completos de proveedores.
+- No permitir que un preview se use como autorización permanente.
+- Registrar quién creó, programó, ejecutó o canceló cada lote.
+- Proteger webhooks y eventos de proveedores contra replay y duplicados.
+- Aplicar límites, cuotas e idempotencia antes de producir comunicaciones.
+
+## 14. Rendimiento
+
+- Todas las listas grandes deben usar paginación server-side.
+- La resolución de audiencias debe evitar cargar prospectos completos en memoria.
+- Los filtros frecuentes deben corresponder a columnas e índices reales.
+- Las consultas deben filtrar por tenant desde el inicio.
+- Preview y creación de lote deben usar una consulta de elegibilidad compartida para evitar divergencias.
+- Los envíos grandes deben procesarse fuera del request HTTP cuando el canal o tamaño lo requiera.
+- Las métricas deben usar agregaciones controladas y no recalcular todo el histórico en cada render.
+
+## 15. Criterios de aceptación
+
+### Listas de envío
+
+- Se puede crear y editar una lista con múltiples segmentos.
+- Se puede filtrar por canal, validez, permisos e historial temporal.
+- La cantidad actual se recalcula server-side.
+- Editar una lista no altera envíos históricos.
+
+### Campañas y plantillas
+
+- Una campaña pertenece a un canal.
+- Solo muestra plantillas compatibles.
+- Una plantilla puede reutilizarse en campañas compatibles.
+- Campaña, plantilla y audiencia no ejecutan comunicaciones directamente.
+
+### Envíos
+
+- El preview devuelve elegibles y razones de omisión.
+- La confirmación vuelve a resolver la audiencia.
+- El lote conserva la versión histórica de la audiencia.
+- No se duplican envíos por doble clic o reintento HTTP.
+- El lote y sus destinatarios tienen estados independientes.
+
+### Historial y resultados
+
+- Historial muestra eventos del prospecto sin duplicar la pantalla de envíos.
+- Es posible bajar de canal a campaña, mensaje, lista y envío.
+- Las métricas diferencian aceptación del proveedor, entrega, lectura, respuesta y conversión.
+
+### UI
+
+- Cada pantalla tiene una acción principal clara.
+- No se mezclan filtros operativos con configuración de campañas.
+- Existen estados de carga, vacío, error y éxito.
+- No se depende de IDs técnicos como texto principal para el usuario.
+
+## 16. Riesgos y decisiones pendientes
+
+1. **Nomenclatura interna:** decidir si se mantiene `listas` como nombre de persistencia o si se crea una migración gradual a `audiencias`.
+2. **Plantillas reutilizables:** definir si una plantilla nace global al canal o dentro de una campaña con posibilidad de reutilización posterior.
+3. **Historial de envíos existente:** mapear tablas actuales de campañas, batches y envíos antes de agregar nuevas relaciones.
+4. **Voz:** confirmar proveedor, estados, métricas y configuración específica antes de compartir completamente el contrato con WhatsApp y Correo.
+5. **Métricas de oportunidad y venta:** confirmar la fuente canónica de atribución CRM antes de presentar tasas comerciales.
+6. **Documentación contradictoria:** cerrar el estado real de migraciones y publicación de Google/GobMX antes de ejecutar cambios estructurales.
+
+## 17. Primer entregable de implementación recomendado
+
+La primera entrega debe ser únicamente:
+
+```text
+Listas de envío → Campaña → Crear envío → Revisar → Volver a revisar → Envío
+```
+
+Debe incluir:
+
+- Contratos API.
+- Versionado de audiencia.
+- Reglas finales para decidir quién puede recibir el mensaje.
+- Revisión previa con motivos de exclusión.
+- Revalidación al confirmar.
+- Estados de lote y destinatario.
+- UI mínima funcional.
+
+No debe incluir todavía una reescritura completa de Prospectos, CRM ni todo Marketing. Esa separación reduce riesgo y valida primero el flujo de mayor valor operativo.
+
+## 18. Definición de terminado global
+
+El refactor se considerará terminado cuando:
+
+- La UI use la arquitectura de módulos definida.
+- Listas de envío, campañas, mensajes y envíos tengan responsabilidades separadas.
+- Los envíos se resuelvan dinámicamente y se revaliden en backend.
+- Los lotes históricos sean auditables aunque cambie la audiencia.
+- Los filtros operativos tengan soporte explícito e indexable.
+- La tabla de Prospectos ya no concentre campañas, plantillas, planificación y actividad.
+- Google y GobMX compartan workspace sin duplicar responsabilidades.
+- Se prueben permisos, tenant isolation, idempotencia, estados y resultados visibles en el panel.
+- Se verifiquen backend, API desplegada, bundle del panel y flujo autenticado real.
