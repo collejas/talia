@@ -187,6 +187,33 @@ Los nombres de los resultados también deben adaptarse al canal: `Correos enviad
 
 Las vistas `Resultados` de una búsqueda y `Historial` de un prospecto existen como vistas contextuales. No necesitan convertirse en botones permanentes de navegación.
 
+### 2.7 Regla de nombres y compatibilidad
+
+Los nombres humanos de la interfaz no implican renombrar tablas, columnas, relaciones ni contratos internos existentes.
+
+```text
+Base de datos / backend existente
+        ↓
+Regla de negocio o schema de respuesta
+        ↓
+Texto visible para el usuario
+```
+
+La implementación debe conservar los nombres actuales cuando ya cumplen su función. El cambio de UX será únicamente de presentación:
+
+| Nombre interno | Texto visible |
+|---|---|
+| `lista_id` / `audiencia_id` | Lista para contactar |
+| `carrier_type` | Tipo de teléfono |
+| `envios_whatsapp_max = 0` | Nunca recibió WhatsApp |
+| `opt_out` | Pidió no ser contactado |
+| `plantilla_id` | Correo, mensaje o guion según canal |
+| `marketing_envios_lotes` | Envíos |
+
+No se deben crear migraciones de renombrado, tablas paralelas ni cambios masivos de columnas solo para hacer coincidir el backend con el lenguaje del frontend.
+
+Si un nombre interno es ambiguo, primero se debe documentar su semántica o crear una regla/campo adicional explícito. No se debe reutilizar una columna para representar dos conceptos diferentes.
+
 ## 3. Estado actual que condiciona el refactor
 
 La auditoría existente identificó estas condiciones:
@@ -886,7 +913,7 @@ El worker/proveedor debe poder reintentar eventos sin duplicar destinatarios ni 
 
 ## 6. Contratos API propuestos
 
-Los nombres finales deben alinearse con las rutas existentes, pero el contrato objetivo es:
+Los contratos nuevos deben alinearse con las rutas existentes. Las rutas con nombres de `audiencias` son una propuesta semántica de producto; no obligan a renombrar tablas, columnas ni endpoints actuales.
 
 ### Audiencias
 
@@ -902,7 +929,7 @@ POST   /api/crm/prospeccion/audiencias/{audiencia_id}/preview
 GET    /api/crm/prospeccion/audiencias/{audiencia_id}/prospectos
 ```
 
-Durante la transición, los endpoints actuales de listas pueden mantenerse como compatibilidad interna o alias.
+Durante la transición, los endpoints actuales de listas deben mantenerse. Si se agregan rutas con nombres de `audiencias`, deben funcionar como alias o fachada compatible, sin romper consumidores existentes.
 
 ### Canales y campañas
 
@@ -1160,9 +1187,9 @@ No se debe romper el flujo actual en una sola entrega.
 
 ### Fase de compatibilidad
 
-- Mantener rutas existentes de listas como alias o fachada interna.
+- Mantener rutas y nombres internos existentes.
 - Mostrar `listas` como `Listas para contactar` en la nueva UI.
-- Mantener `lista_id` internamente mientras se adopta `audiencia_id` en los contratos públicos.
+- Mantener `lista_id` y otros nombres actuales; usar `audiencia_id` solo como alias de contrato si aporta claridad y sin migración obligatoria.
 - Mantener campañas y envíos existentes mientras se agrega la relación explícita con audiencia, plantilla y versión.
 - Convertir flujos basados en `prospecto_ids` a flujo dinámico de audiencia cuando el usuario cree un envío desde Marketing.
 
@@ -1184,7 +1211,7 @@ Los envíos antiguos deben conservar sus resultados, atribución y trazabilidad.
 
 ### Fase 1 — Listas para contactar
 
-- Renombrado visual de listas a Listas para contactar.
+- Renombrado únicamente visual de listas a Listas para contactar.
 - CRUD y detalle.
 - Versionado de definición.
 - Revisión server-side de personas que cumplen las condiciones.
@@ -1317,7 +1344,7 @@ Controles específicos:
 
 ## 16. Riesgos y decisiones pendientes
 
-1. **Nomenclatura interna:** decidir si se mantiene `listas` como nombre de persistencia o si se crea una migración gradual a `audiencias`.
+1. **Nomenclatura interna:** se mantienen los nombres de persistencia existentes. Cualquier alias de API será opcional, compatible y no implicará renombrar tablas o columnas.
 2. **Plantillas reutilizables:** definir si una plantilla nace global al canal o dentro de una campaña con posibilidad de reutilización posterior.
 3. **Historial de envíos existente:** mapear tablas actuales de campañas, batches y envíos antes de agregar nuevas relaciones.
 4. **Voz:** confirmar proveedor, estados, métricas y configuración específica antes de compartir completamente el contrato con WhatsApp y Correo.
