@@ -982,37 +982,41 @@ POST   /api/marketing/{canal}/envios/{envio_id}/reintentar-fallidos
 
 El preview no autoriza por sí mismo el envío.
 
-## 7. Modelo de datos objetivo
+## 7. Modelo conceptual y datos requeridos
 
-La implementación debe reutilizar tablas existentes cuando su semántica y ownership sean compatibles. No se crearán tablas paralelas solo por cambiar nombres visibles.
+Las siguientes entidades representan responsabilidades conceptuales. Primero deben mapearse contra las tablas, columnas y relaciones existentes. No implican crear tablas nuevas ni renombrar las actuales.
 
-### Entidades principales
+Solo se crearán estructuras adicionales cuando una capacidad requerida no exista actualmente y no pueda resolverse reutilizando el modelo disponible.
+
+### Mapeo conceptual a persistencia
+
+| Concepto | Persistencia inicial esperada |
+|---|---|
+| Audiencia | Lista existente o equivalente |
+| Versión de audiencia | Estructura existente o nueva si hace falta conservar reglas históricas |
+| Campaña | Campaña existente |
+| Plantilla | Plantilla existente |
+| Relación campaña-plantilla | Relación existente o nueva si la reutilización lo requiere |
+| Envío/Lote | Batch o envío existente |
+| Destinatario | Detalle de envío existente |
+| Actividad | Historial o eventos existentes |
+| Canal | Catálogo, enum o campo existente |
+
+### Relaciones conceptuales
 
 ```text
-audiencias
-audiencia_versiones
-marketing_canales o catálogo equivalente
-marketing_campanas
-marketing_plantillas
-marketing_campana_plantillas
-marketing_envios_lotes
-marketing_envio_destinatarios
-actividades_prospeccion o fuente equivalente de actividad
+Lista existente 1 ─── N versiones, si se requiere versionado
+Campaña          1 ─── N envíos/lotes
+Plantilla        N ─── N campañas, si se permite reutilización
+Envío/lote       N ─── 1 versión de lista
+Envío/lote       N ─── 1 plantilla
+Envío/lote       1 ─── N destinatarios
+Destinatario     N ─── 1 prospecto
 ```
 
-### Relaciones
+Estas relaciones describen lo que el sistema debe poder representar, no nombres obligatorios de tablas.
 
-```text
-audiencias 1 ─── N audiencia_versiones
-campanas   1 ─── N envios_lotes
-plantillas N ─── N campanas
-envios_lotes N ─── 1 audiencia_version
-envios_lotes N ─── 1 plantilla
-envios_lotes 1 ─── N envio_destinatarios
-envio_destinatarios N ─── 1 prospecto
-```
-
-### Campos explícitos del lote
+### Datos que el envío/lote debe poder representar
 
 Como mínimo:
 
@@ -1021,8 +1025,8 @@ id
 organizacion_id
 campana_id
 plantilla_id
-audiencia_id
-audiencia_version_id
+lista_id o equivalente existente
+version de las reglas, si existe
 canal
 estado
 programado_para
@@ -1039,16 +1043,20 @@ creado_en
 actualizado_en
 ```
 
+Durante la Fase 0 se determinará qué columnas actuales representan cada dato, cuáles tienen otro nombre y cuáles verdaderamente faltan.
+
 ### Snapshot y versionado
 
 Los datos usados para reportes, filtros y estados deben ser columnas explícitas.
 
-La definición histórica de una audiencia debe conservarse con una versión inmutable. Un snapshot estructurado puede almacenarse únicamente como apoyo de auditoría y reconstrucción visual, con estas condiciones:
+La definición histórica de una lista debe conservarse con una versión inmutable si el modelo actual no puede responder qué reglas se utilizaron en un envío anterior. Un snapshot estructurado puede almacenarse únicamente como apoyo de auditoría y reconstrucción visual, con estas condiciones:
 
 - No ser la fuente principal de filtros operativos.
 - No sustituir columnas consultadas frecuentemente.
 - Tener relación con el lote y la versión concreta.
 - Mantenerse inmutable después de crear el lote.
+
+Crear una versión histórica sí puede justificar una migración o estructura adicional cuando esa capacidad no exista. El motivo sería conservar la historia de las reglas, no cambiar el nombre de `lista` a `audiencia`.
 
 ### Estados del lote
 
@@ -1190,7 +1198,7 @@ No se debe romper el flujo actual en una sola entrega.
 - Mantener rutas y nombres internos existentes.
 - Mostrar `listas` como `Listas para contactar` en la nueva UI.
 - Mantener `lista_id` y otros nombres actuales; usar `audiencia_id` solo como alias de contrato si aporta claridad y sin migración obligatoria.
-- Mantener campañas y envíos existentes mientras se agrega la relación explícita con audiencia, plantilla y versión.
+- Mantener campañas y envíos existentes; agregar relaciones explícitas con lista, plantilla o versión únicamente si no existen y son necesarias para la capacidad requerida.
 - Convertir flujos basados en `prospecto_ids` a flujo dinámico de audiencia cuando el usuario cree un envío desde Marketing.
 
 ### Regla de no regresión
@@ -1202,12 +1210,30 @@ Los envíos antiguos deben conservar sus resultados, atribución y trazabilidad.
 ### Fase 0 — Contratos y baseline
 
 - Confirmar tablas y columnas existentes.
+- Elaborar una matriz concepto → tabla/columna/relación/endpoint actual.
+- Identificar capacidades faltantes, especialmente versionado histórico de reglas.
 - Confirmar nombres reales de campañas, plantillas, listas, lotes y envíos.
 - Resolver contradicciones de documentación.
 - Definir estados y códigos de omisión.
 - Medir consultas actuales de prospectos, listas y envíos.
 
-**Salida:** contrato aprobado y matriz de compatibilidad.
+**Salida:** inventario actual, matriz de compatibilidad y lista justificada de capacidades que realmente requieren cambios de datos.
+
+### Regla de migraciones
+
+Una migración solo se justifica por una capacidad de negocio o auditoría que no exista actualmente.
+
+```text
+PRIMERO    revisar lo existente
+↓
+REUTILIZAR tablas, campos y endpoints actuales
+↓
+AGREGAR solo lo que realmente falta
+↓
+FRONTEND   mostrar nombres sencillos al usuario
+```
+
+No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan utilice un nombre conceptual diferente.
 
 ### Fase 1 — Listas para contactar
 
