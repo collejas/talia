@@ -131,6 +131,7 @@ const NAVIGATION: {
         { title: `${PROSPECCION_SOURCE_LABELS.denue} búsqueda`, url: "/prospeccion/denue-busqueda", permission: "busquedas.view" },
         { title: "Buscador web", url: "/prospeccion/buscador", permission: "busquedas.run" },
         { title: "Prospectos", url: "/prospeccion/prospectos", permission: "busquedas.run" },
+        { title: "Listas para contactar", url: "/prospeccion/listas", permission: "busquedas.run" },
         { title: "Contactos", url: "/prospeccion/contactos", permission: "contacts.read" },
         { title: "Campañas", url: "/prospeccion/campanas", permission: "campaigns.view" },
         { title: "Métricas", url: "/prospeccion/metricas", permission: "reports.view" },

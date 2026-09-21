@@ -183,3 +183,39 @@ Inspección local de rutas, schemas, wizard, repositorio y migraciones existente
 - Completar la matriz concepto → tabla/columna/relación/endpoint.
 - Confirmar el contrato desplegado de las rutas actuales.
 - Validar en el entorno objetivo la estructura y restricciones existentes antes de modificar código o datos.
+
+## 2026-09-21 — Primera entrega F1: Listas para contactar
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 — Listas para contactar
+
+### Referencia
+
+Frontend local: `frontend/panel/src/app/prospeccion/listas/` y `frontend/panel/src/components/AppSidebar.tsx`.
+
+### Cambios
+
+- Se agregó la vista `Prospección → Listas para contactar` reutilizando las rutas actuales de listas.
+- Se agregó búsqueda, actualización, estado vacío y carga de listas existentes.
+- Se agregó creación y edición de listas con reglas visibles en lenguaje humano.
+- Las reglas de la primera entrega se traducen a los campos actuales: tipo de empresa, teléfono válido, tipo de teléfono, permiso de WhatsApp y cantidad histórica de correos/WhatsApps.
+- Se agregó `Contactar esta lista`, que abre el wizard actual con `lista_id` preseleccionado.
+- Se agregó la entrada de navegación lateral sin crear tablas, migraciones, endpoints nuevos ni renombrar campos existentes.
+
+### Validación
+
+- ESLint sobre los archivos nuevos y `AppSidebar.tsx`: correcto.
+- TypeScript del panel con `npx tsc --noEmit`: correcto.
+- `git diff --check`: correcto.
+
+### Pendientes o riesgos
+
+- Validar visualmente la ruta autenticada en el panel desplegado.
+- Confirmar en el entorno objetivo la semántica de `whatsapp_permitido` antes de ampliar las reglas de compatibilidad por canal.
+- El wizard abierto desde la lista es el flujo existente; la adaptación completa por canal y el asistente de cuatro pasos quedan para F2–F4.
+- Todavía no se ha validado un envío real ni la cadena proveedor → webhook → estado final.
