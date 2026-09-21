@@ -26779,6 +26779,13 @@ async def update_persona_legacy(
     skip_conversation_sync: bool = Query(False),
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    insight_metadata = _ensure_dict(body.get("metadata"), default={})
+    if "notes" in body or "notas" in body:
+        insight_metadata["tal_ia_contexto_source"] = "manual"
+    if "necesidad_proposito" in body:
+        insight_metadata["tal_ia_necesidad_source"] = "manual"
+    if insight_metadata:
+        body["metadata"] = insight_metadata
     try:
         existing_row = await repo.get_persona(
             organizacion_id=organizacion_id,
@@ -26854,6 +26861,13 @@ async def update_persona_crud(
     skip_conversation_sync: bool = Query(False),
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    insight_metadata = _ensure_dict(body.get("metadata"), default={})
+    if "notes" in body or "notas" in body:
+        insight_metadata["tal_ia_contexto_source"] = "manual"
+    if "necesidad_proposito" in body:
+        insight_metadata["tal_ia_necesidad_source"] = "manual"
+    if insight_metadata:
+        body["metadata"] = insight_metadata
     try:
         existing_row = await repo.get_persona(
             organizacion_id=organizacion_id,
@@ -29702,6 +29716,7 @@ async def get_inbox_conversation_detail(
         batch_id=batch_id,
         campana_id=campana_id,
         asignado_id=asignado_id,
+        search=None,
         limit=1,
         offset=thread_offset,
         message_limit=message_limit,
@@ -52813,14 +52828,18 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     contacto = _ensure_dict(row.get("contacto"), default={})
     cuenta = _ensure_dict(row.get("cuenta"), default={})
     asignado = _ensure_dict(row.get("asignado"), default={})
+    contacto_persona_datos = _ensure_dict(
+        contacto.get("persona_datos") or contacto.get("contacto_datos"),
+        default={},
+    )
+    contacto_metadata = _ensure_dict(contacto.get("metadata"), default={})
 
     account_person_type = _clean_text(cuenta.get("tipo"))
     contact_person_type = _clean_text(contacto.get("persona_fisica_moral"))
-    contact_person_data = _ensure_dict(contacto.get("persona_datos"), default={})
-    contact_metadata = _ensure_dict(contacto.get("metadata"), default={})
+    contact_person_data = contacto_persona_datos
     context_person_type = (
         _clean_text(contact_person_data.get("contexto_modo"))
-        or _clean_text(contact_metadata.get("contexto_modo"))
+        or _clean_text(contacto_metadata.get("contexto_modo"))
     )
     normalized_account_type = (account_person_type or "").strip().lower()
     normalized_contact_type = (contact_person_type or "").strip().lower()
@@ -52908,6 +52927,8 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     )
     necesidad_proposito = (
         _clean_text(contacto.get("necesidad_proposito"))
+        or _clean_text(contacto_persona_datos.get("necesidad_proposito"))
+        or _clean_text(contacto_metadata.get("necesidad_proposito"))
         or cuenta.get("necesidad_proposito")
         or _clean_text(metadata.get("contacto_necesidad"))
         or metadata.get("necesidad_proposito")

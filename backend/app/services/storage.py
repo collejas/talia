@@ -2536,6 +2536,9 @@ async def refresh_persona_insights_from_conversation(
     conversation_id: str,
     persona_id: str | None,
     summary_text: str | None = None,
+    need_text: str | None = None,
+    next_step: str | None = None,
+    force_generated: bool = False,
     source: str = "conversation_summary",
 ) -> dict[str, Any] | None:
     """Rellena/normaliza notes y necesidad_proposito sin pisar valores manuales buenos."""
@@ -2562,13 +2565,38 @@ async def refresh_persona_insights_from_conversation(
             resolved_summary = _clean_text(summary_row.get("resumen"))
 
     notes, necesidad = _build_persona_insights(persona=persona, summary_text=resolved_summary)
+    resolved_need = _clean_text(need_text) or necesidad
+    resolved_next_step = _clean_text(next_step)
     current_notes = _clean_text(persona.get("notes"))
     current_need = _clean_text(persona.get("necesidad_proposito"))
     patch: dict[str, Any] = {}
-    if not current_notes or _looks_like_placeholder_insight(current_notes):
+    persona_metadata = _ensure_dict(persona.get("metadata"))
+    context_source = _clean_text(persona_metadata.get("tal_ia_contexto_source"))
+    need_source = _clean_text(persona_metadata.get("tal_ia_necesidad_source"))
+    can_refresh_context = context_source != "manual"
+    can_refresh_need = need_source != "manual"
+    if can_refresh_context and (
+        force_generated
+        or not current_notes
+        or _looks_like_placeholder_insight(current_notes)
+        or context_source == "tal_ia"
+    ):
         patch["notes"] = notes
-    if not current_need or _looks_like_placeholder_insight(current_need):
-        patch["necesidad_proposito"] = necesidad
+    if can_refresh_need and (
+        force_generated
+        or not current_need
+        or _looks_like_placeholder_insight(current_need)
+        or need_source == "tal_ia"
+    ):
+        patch["necesidad_proposito"] = resolved_need
+    if resolved_next_step:
+        persona_metadata["tal_ia_siguiente_accion"] = resolved_next_step
+    if "notes" in patch:
+        persona_metadata["tal_ia_contexto_source"] = "tal_ia"
+    if "necesidad_proposito" in patch:
+        persona_metadata["tal_ia_necesidad_source"] = "tal_ia"
+    if persona_metadata:
+        patch["metadata"] = persona_metadata
     if not patch:
         return {
             "persona_id": persona_id,
@@ -2589,8 +2617,9 @@ async def refresh_persona_insights_from_conversation(
     try:
         await upsert_conversation_insights(
             conversation_id=conversation_id,
-            resumen=patch.get("notes", notes),
-            intencion=patch.get("necesidad_proposito", necesidad),
+            resumen=patch.get("notes", current_notes or notes),
+            intencion=patch.get("necesidad_proposito", current_need or resolved_need),
+            siguiente_accion=resolved_next_step or None,
         )
     except StorageError as exc:
         logger.warning(
@@ -3902,13 +3931,26 @@ async def sync_persona_opportunity_context(
     metadata = _ensure_dict(opportunity.get("metadata"))
     patch: dict[str, Any] = {}
 
+    try:
+        conversation_insights = await repo.get_conversation_insights(
+            conversation_id=conversation_id,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.sync_persona_opportunity_context.insights_lookup_failed",
+            extra={"opportunity_id": opportunity_id, "conversation_id": conversation_id, "error": str(exc)},
+        )
+        conversation_insights = None
+
     full_name = _clean_text(persona.get("nombre_completo"))
     email = _clean_text(persona.get("correo_principal"))
     phone = _clean_text(persona.get("telefono_principal_e164"))
     company_name = _clean_text(persona.get("company_name"))
-    need = _clean_text(persona.get("necesidad_proposito"))
-    notes = _clean_text(persona.get("notes"))
-    summary = need or notes
+    insight_need = _clean_text((conversation_insights or {}).get("intencion"))
+    insight_summary = _clean_text((conversation_insights or {}).get("resumen"))
+    need = insight_need or _clean_text(persona.get("necesidad_proposito"))
+    notes = insight_summary or _clean_text(persona.get("notes"))
+    summary = insight_summary or notes or need
     proposed_title = _build_opportunity_title(contact=persona, summary=summary)
     persona_account_id = persona.get("cuenta_id")
     current_description = _clean_text(opportunity.get("descripcion"))

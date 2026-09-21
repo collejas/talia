@@ -80,9 +80,17 @@ def _build_prompt(messages: list[dict[str, Any]], context_data: dict[str, Any] |
         lines.append("")
         lines.extend(context_lines)
     instruction = (
-        "Eres un asistente que resume conversaciones de ventas en español. "
-        "Resume lo esencial en máximo tres frases, identifica la necesidad principal, "
-        "menciona si hay una oportunidad abierta y sugiere el siguiente paso."
+        "Eres un asistente que analiza conversaciones de ventas en español. "
+        "Resume únicamente lo que el cliente expresó o confirmó; no inventes datos. "
+        "Conserva detalles comerciales concretos como producto, uso, cantidad, ubicación, "
+        "medidas, presupuesto, plazo, estilo, restricciones o preguntas. "
+        "Devuelve exclusivamente JSON válido con estas claves: resumen_contexto, "
+        "necesidad_proposito y siguiente_accion. "
+        "resumen_contexto debe explicar el contexto general en máximo cuatro frases. "
+        "necesidad_proposito debe ser una frase concreta y accionable sobre lo que busca el cliente; "
+        "no uses frases genéricas si existen detalles específicos. "
+        "siguiente_accion debe indicar un paso únicamente si está respaldado por la conversación; "
+        "si no existe, usa una cadena vacía."
     )
     return f"{instruction}\n\nMensajes recientes:\n" + "\n".join(lines)
 
@@ -106,6 +114,22 @@ def _extract_text_from_response(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _normalize_generated_insights(value: Any) -> dict[str, str]:
+    """Normaliza la respuesta del modelo y conserva compatibilidad con texto legado."""
+    if isinstance(value, dict):
+        return {
+            "resumen_contexto": str(value.get("resumen_contexto") or value.get("context_summary") or "").strip(),
+            "necesidad_proposito": str(value.get("necesidad_proposito") or value.get("need") or "").strip(),
+            "siguiente_accion": str(value.get("siguiente_accion") or value.get("next_step") or "").strip(),
+        }
+    text = str(value or "").strip()
+    return {
+        "resumen_contexto": text,
+        "necesidad_proposito": text,
+        "siguiente_accion": "",
+    }
+
+
 def _resolve_organizacion_uuid(value: str | UUID | None) -> UUID | None:
     if isinstance(value, UUID):
         return value
@@ -124,7 +148,7 @@ async def _summarize_messages(
     persona_id: str | None = None,
     organizacion_id: UUID | None = None,
     context_data: dict[str, Any] | None = None,
-) -> str | None:
+) -> dict[str, str] | None:
     if not messages:
         return None
     prompt_text = _build_prompt(messages, context_data=context_data)
@@ -148,7 +172,23 @@ async def _summarize_messages(
                     ],
                 }
             ],
-            text={"format": {"type": "text"}},
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "conversation_insights",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "resumen_contexto": {"type": "string"},
+                            "necesidad_proposito": {"type": "string"},
+                            "siguiente_accion": {"type": "string"},
+                        },
+                        "required": ["resumen_contexto", "necesidad_proposito", "siguiente_accion"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
         )
     except Exception as exc:  # pragma: no cover
         logger.exception("conversation_summary.llm_failed", exc_info=exc)
@@ -173,7 +213,16 @@ async def _summarize_messages(
     text = _extract_text_from_response(response_data)
     if not text:
         return None
-    return text.strip()
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = text.strip()
+    normalized = _normalize_generated_insights(parsed)
+    if not normalized["resumen_contexto"]:
+        return None
+    if not normalized["necesidad_proposito"]:
+        normalized["necesidad_proposito"] = normalized["resumen_contexto"]
+    return normalized
 
 
 async def rebuild_conversation_summary(
@@ -200,15 +249,19 @@ async def rebuild_conversation_summary(
     if not messages:
         return None
 
-    summary_text = await _summarize_messages(
+    generated_raw = await _summarize_messages(
         messages,
         conversation_id=conversation_id,
         persona_id=persona_id,
         organizacion_id=_resolve_organizacion_uuid(organizacion_id),
         context_data=context_data,
     )
-    if not summary_text:
+    if not generated_raw:
         return None
+    generated = _normalize_generated_insights(generated_raw)
+    summary_text = generated["resumen_contexto"]
+    need_text = generated["necesidad_proposito"]
+    next_step = generated["siguiente_accion"]
 
     last_message = messages[-1]
     last_message_id = str(last_message.get("id") or "").strip()
@@ -246,10 +299,19 @@ async def rebuild_conversation_summary(
 
     created["metadatos"] = _ensure_dict(created.get("metadatos"))
     try:
+        await storage.upsert_conversation_insights(
+            conversation_id=conversation_id,
+            resumen=summary_text,
+            intencion=need_text,
+            siguiente_accion=next_step or None,
+        )
         await storage.refresh_persona_insights_from_conversation(
             conversation_id=conversation_id,
             persona_id=persona_id,
             summary_text=summary_text,
+            need_text=need_text,
+            next_step=next_step,
+            force_generated=True,
             source="conversation_summary_rebuild",
         )
     except StorageError as exc:
@@ -310,29 +372,39 @@ async def ensure_conversation_summary(
         metadata = _ensure_metadata_with_type(summary.get("metadatos"))
         if metadata.get("last_message_id") == last_message_id:
             summary["metadatos"] = metadata
-        return summary
+            return summary
+        # Existe un resumen, pero ya no representa el último mensaje. Continúa
+        # hasta regenerarlo con el historial actual y deja una nueva versión
+        # auditable en conversation_summaries.
     else:
         if not generate_if_missing:
             return None
         metadata = {}
 
-    summary_text = await _summarize_messages(
+    generated_raw = await _summarize_messages(
         messages,
         conversation_id=conversation_id,
         persona_id=persona_id,
         organizacion_id=organizacion_uuid,
         context_data=context_data,
     )
-    if not summary_text:
+    if not generated_raw:
         if summary:
             summary["metadatos"] = metadata
         return summary
+    generated = _normalize_generated_insights(generated_raw)
+    summary_text = generated["resumen_contexto"]
+    need_text = generated["necesidad_proposito"]
+    next_step = generated["siguiente_accion"]
 
     new_metadata = {
         "last_message_id": last_message_id,
         "last_message_timestamp": str(last_message.get("creado_en") or ""),
         "messages_count": len(messages),
+        "source": "conversation_summary_refresh" if summary else "conversation_summary",
     }
+    if summary and summary.get("id"):
+        new_metadata["previous_summary_id"] = str(summary["id"])
     new_metadata = _ensure_metadata_with_type(new_metadata)
     try:
         resolved_org_id: str | None
@@ -362,10 +434,19 @@ async def ensure_conversation_summary(
 
     created["metadatos"] = _ensure_dict(created.get("metadatos"))
     try:
+        await storage.upsert_conversation_insights(
+            conversation_id=conversation_id,
+            resumen=summary_text,
+            intencion=need_text,
+            siguiente_accion=next_step or None,
+        )
         await storage.refresh_persona_insights_from_conversation(
             conversation_id=conversation_id,
             persona_id=persona_id,
             summary_text=summary_text,
+            need_text=need_text,
+            next_step=next_step,
+            force_generated=True,
             source="conversation_summary",
         )
     except StorageError as exc:

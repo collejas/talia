@@ -7182,6 +7182,30 @@ class CRMRepository:
             prefer="resolution=merge-duplicates",
         )
 
+    async def get_conversation_insights(
+        self,
+        *,
+        conversation_id: str,
+    ) -> dict[str, Any] | None:
+        conversation_key = conversation_id.strip()
+        if not conversation_key:
+            return None
+        resp = await self._request(
+            "GET",
+            "/rest/v1/conversaciones_insights",
+            params={
+                "conversacion_id": f"eq.{conversation_key}",
+                "select": "conversacion_id,resumen,intencion,siguiente_accion,lead_score",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        return None
+
     async def create_opportunity_scoring_event(
         self,
         *,
@@ -10819,7 +10843,7 @@ class CRMRepository:
             persona_data_payload.setdefault("company_name", company_name)
             persona_data_payload.setdefault("empresa", company_name)
         if necesidad_proposito:
-            persona_data_payload.setdefault("necesidad_proposito", necesidad_proposito)
+            persona_data_payload["necesidad_proposito"] = necesidad_proposito
         if company_name or necesidad_proposito:
             metadata = _deep_merge_metadata(metadata, persona_data_payload)
 

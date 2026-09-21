@@ -2081,8 +2081,10 @@ export function LeadDrawer({
       telefono_e164: telefonoRaw.length ? telefonoRaw : null,
       telefono_principal_e164: telefonoRaw.length ? telefonoRaw : null,
       company_name: empresaRaw.length ? empresaRaw : null,
-      notes: notasRaw.length ? notasRaw : null,
-      necesidad_proposito: necesidadPropositoRaw.length ? necesidadPropositoRaw : null,
+      ...(dirtyFields.notas ? { notes: notasRaw.length ? notasRaw : null } : {}),
+      ...(dirtyFields.necesidadProposito
+        ? { necesidad_proposito: necesidadPropositoRaw.length ? necesidadPropositoRaw : null }
+        : {}),
     };
     if (dirtyFields.nombre) contactoUpdates.nombre_nombres = nombreRaw || null;
     if (dirtyFields.apellidoPaterno) contactoUpdates.apellido_paterno = apellidoPaternoRaw || null;

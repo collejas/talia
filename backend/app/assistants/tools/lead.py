@@ -14,6 +14,7 @@ from app.assistants.tool_runtime import ToolRuntimeContext
 from app.channels.webchat import service as webchat_service
 from app.core.logging import get_logger
 from app.services import assistant_document_delivery as document_delivery_service
+from app.services import conversation_summary
 from app.services import send_email, storage, tenant_runtime
 from app.services.email import EmailSendError
 from app.services.storage import StorageError
@@ -411,8 +412,13 @@ async def _maybe_auto_close_lead(
 
     summary_text = ""
     try:
-        summary_row = await storage.fetch_latest_conversation_summary(conversation_id=context.conversation_id)
-    except StorageError:
+        summary_row = await conversation_summary.ensure_conversation_summary(
+            conversation_id=context.conversation_id,
+            persona_id=context.persona_id,
+            organizacion_id=context.organizacion_id,
+            generate_if_missing=False,
+        )
+    except Exception:
         summary_row = None
     if isinstance(summary_row, dict):
         summary_text = str(summary_row.get("resumen") or "").strip()
@@ -479,10 +485,13 @@ async def _complete_close_lead(
     persona_record = persona or await storage.fetch_persona(persona_id)
     summary_text = ""
     try:
-        summary_row = await storage.fetch_latest_conversation_summary(
-            conversation_id=context.conversation_id
+        summary_row = await conversation_summary.ensure_conversation_summary(
+            conversation_id=context.conversation_id,
+            persona_id=context.persona_id,
+            organizacion_id=context.organizacion_id,
+            generate_if_missing=False,
         )
-    except StorageError:
+    except Exception:
         summary_row = None
     if isinstance(summary_row, dict):
         summary_text = str(summary_row.get("resumen") or "").strip()
