@@ -381,9 +381,12 @@ type OpportunityQuote = {
   id: string;
   estatus: string;
   total: number | null;
+  subtotal?: number | null;
+  impuestos?: number | null;
   moneda: string;
   valida_hasta: string | null;
   creado_en: string;
+  metadata?: Record<string, unknown> | null;
 };
 
 type OpportunityHistory = {
@@ -627,7 +630,7 @@ function OpportunityRowDetails({
     "Sin asignar";
   const canal = extractString(raw, ["metadata", "canal"]) || extractString(raw, ["metadata", "channel"]) || "Sin canal";
   const restartSequence = parseNumber(extractUnknown(raw, ["metadata", "restart_sequence"])) ?? 1;
-  const monetaryValue = extractNumber(raw, ["monto_estimado"]);
+  const manualMonetaryValue = extractNumber(raw, ["monto_estimado"]);
   const probability = extractNumber(raw, ["probabilidad"]);
   const currency = extractString(raw, ["moneda"]) || "MXN";
   const createdAt = extractString(raw, ["creado_en"]);
@@ -635,8 +638,6 @@ function OpportunityRowDetails({
   const closeAt = extractString(raw, ["fecha_cierre_probable"]);
   const ageDays = diffDays(createdAt);
   const staleDays = diffDays(updatedAt);
-  const weightedValue =
-    monetaryValue != null && probability != null ? (monetaryValue * probability) / 100 : null;
   const source =
     extractString(raw, ["created_via"]) ||
     extractString(raw, ["metadata", "created_via"]) ||
@@ -704,6 +705,35 @@ function OpportunityRowDetails({
     extractString(opportunityDetail, ["metadata", "proyecto_necesidades"]) ||
     "Sin necesidad detectada";
   const quoteItems = detailState.data?.quotes ?? [];
+  const activeQuote = quoteItems.find((quote) =>
+    ["borrador", "enviada", "aceptada"].includes(quote.estatus.toLowerCase()),
+  );
+  const quoteNetAmount = activeQuote
+    ? (() => {
+        const metadata = activeQuote.metadata ?? {};
+        const subtotal =
+          typeof activeQuote.subtotal === "number"
+            ? activeQuote.subtotal
+            : typeof metadata.subtotal === "number"
+            ? metadata.subtotal
+            : null;
+        if (subtotal != null && Number.isFinite(subtotal)) return Math.max(0, subtotal);
+        const total = activeQuote.total;
+        const taxes =
+          typeof activeQuote.impuestos === "number"
+            ? activeQuote.impuestos
+            : typeof metadata.impuestos === "number"
+            ? metadata.impuestos
+            : null;
+        if (total != null && taxes != null && Number.isFinite(total) && Number.isFinite(taxes)) {
+          return Math.max(0, total - taxes);
+        }
+        return total != null && Number.isFinite(total) ? Math.max(0, total) : null;
+      })()
+    : null;
+  const monetaryValue = quoteNetAmount ?? manualMonetaryValue;
+  const weightedValue =
+    monetaryValue != null && probability != null ? (monetaryValue * probability) / 100 : null;
   const noteItems = detailState.data?.notes ?? [];
   const activityItems = detailState.data?.activities ?? [];
   const historyItems = detailState.data?.history ?? [];
@@ -962,7 +992,10 @@ function OpportunityRowDetails({
           description="Lectura rápida del valor y del estado comercial de la oportunidad."
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <DetailField label="Monto" value={formatCurrency(monetaryValue, currency)} />
+            <DetailField
+              label={quoteNetAmount != null ? "Monto de cotización · Total neto" : "Monto estimado"}
+              value={formatCurrency(monetaryValue, currency)}
+            />
             <DetailField label="Probabilidad" value={formatProbability(probability)} />
             <DetailField label="Valor ponderado" value={formatCurrency(weightedValue, currency)} />
             <DetailField label="Cierre probable" value={formatDate(closeAt)} />

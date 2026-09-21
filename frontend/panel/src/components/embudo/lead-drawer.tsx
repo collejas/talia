@@ -249,6 +249,15 @@ type LeadQuoteEntry = {
   items: LeadQuoteItemEntry[] | null;
 };
 
+function getLeadQuoteNetAmount(quote: LeadQuoteEntry | null | undefined): number | null {
+  if (!quote) return null;
+  if (quote.subtotal != null && Number.isFinite(quote.subtotal)) return Math.max(0, quote.subtotal);
+  if (quote.total != null && quote.taxes != null && Number.isFinite(quote.total) && Number.isFinite(quote.taxes)) {
+    return Math.max(0, quote.total - quote.taxes);
+  }
+  return quote.total != null && Number.isFinite(quote.total) ? Math.max(0, quote.total) : null;
+}
+
 type QuotesState =
   | { status: "idle"; data: LeadQuoteEntry[] }
   | { status: "loading"; data: LeadQuoteEntry[] }
@@ -1009,6 +1018,13 @@ export function LeadDrawer({
   const [error, setError] = useState<string | null>(null);
   const [historyState, setHistoryState] = useState<HistoryState>({ status: "idle", data: [] });
   const [quotesState, setQuotesState] = useState<QuotesState>({ status: "idle", data: [] });
+  const activeQuoteNet = useMemo(() => {
+    const quote = quotesState.data.find((item) =>
+      ["borrador", "enviada", "aceptada"].includes(item.status.toLowerCase()),
+    );
+    return getLeadQuoteNetAmount(quote);
+  }, [quotesState.data]);
+  const hasActiveQuoteAmount = quotesState.status === "loaded" && activeQuoteNet != null;
   const [quotePdfLoadingId, setQuotePdfLoadingId] = useState<string | null>(null);
   const [quotePreviewPdfLoading, setQuotePreviewPdfLoading] = useState(false);
   const [quotePreviewPdfUrl, setQuotePreviewPdfUrl] = useState<string | null>(null);
@@ -1661,6 +1677,17 @@ export function LeadDrawer({
   }, [open, card?.oportunidadId, quotesState.status, fetchQuotes]);
 
   useEffect(() => {
+    if (!hasActiveQuoteAmount || activeQuoteNet == null) return;
+    const formatted = formatCurrencyInputValue(
+      activeQuoteNet,
+      getValues("moneda") || card?.moneda || "MXN",
+    );
+    if (getValues("monto") !== formatted) {
+      setValue("monto", formatted, { shouldDirty: false, shouldValidate: true });
+    }
+  }, [activeQuoteNet, card?.moneda, getValues, hasActiveQuoteAmount, setValue]);
+
+  useEffect(() => {
     if ((quoteDialogOpen || quoteCatalogPickerOpen) && catalogState.status === "idle") {
       void loadCatalogItems();
     }
@@ -2076,7 +2103,11 @@ export function LeadDrawer({
     if (dirtyFields.rfc) contactoUpdates.rfc = rfcRaw || null;
     if (dirtyFields.regimenCapital) contactoUpdates.regimen_capital = regimenCapitalRaw || null;
 
-    const montoParsed = montoRaw.length ? parseNumberInput(montoRaw) : null;
+    const montoParsed = activeQuoteNet != null
+      ? activeQuoteNet
+      : montoRaw.length
+      ? parseNumberInput(montoRaw)
+      : null;
     const probabilidadParsed = probRaw.length ? parseNumberInput(probRaw) : null;
     const oportunidadUpdates: Record<string, unknown> = {
       monto_estimado: montoParsed ?? null,
@@ -2418,7 +2449,7 @@ export function LeadDrawer({
     if (quotesState.status !== "loaded") return;
     const acceptedQuote = quotesState.data.find((quote) => quote.status === "aceptada");
     if (!acceptedQuote) return;
-    updateWonStagePrep(acceptedQuote.total ?? null);
+    updateWonStagePrep(getLeadQuoteNetAmount(acceptedQuote));
   }, [card?.oportunidadId, quotesState.status, quotesState.data, updateWonStagePrep]);
 
   const quoteValidityDays = useMemo(
@@ -3699,13 +3730,14 @@ export function LeadDrawer({
                 <h4 className="text-sm font-semibold text-foreground">Estimación</h4>
                 <div className="grid gap-2">
                   <label className="text-xs font-medium text-muted-foreground" htmlFor="lead-monto">
-                    Monto estimado
+                    {hasActiveQuoteAmount ? "Monto de cotización · Total neto" : "Monto estimado"}
                   </label>
                   <Input
                     id="lead-monto"
                     placeholder="$0.00"
                     inputMode="decimal"
                     disabled={isBusy}
+                    readOnly={hasActiveQuoteAmount}
                     aria-invalid={errors.monto ? "true" : "false"}
                     {...montoField}
                     onBlur={(event) => {

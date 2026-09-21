@@ -334,6 +334,10 @@ class DummyCRMRepository(CRMRepository):
             **kwargs["payload"],
         }
 
+    async def list_current_quote_amounts_by_opportunity_ids(self, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_current_quote_amounts_by_opportunity_ids", kwargs))
+        return []
+
     async def list_pipeline_opportunities(self, **kwargs: Any) -> tuple[list[dict[str, Any]], int]:
         """Simula la lista de oportunidades del pipeline."""
 

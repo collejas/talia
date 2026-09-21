@@ -2534,6 +2534,11 @@ async def _ensure_property_quote_for_status(
             organizacion_id=organizacion_id,
             quote_id=UUID(str(quote["id"])),
         )
+    await _sync_opportunity_amount_from_current_quote(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
     return quote
 
 
@@ -9372,6 +9377,111 @@ def _quote_totals_from_items(items: list[dict[str, Any]]) -> dict[str, float] | 
     }
 
 
+def _quote_net_amount(row: Mapping[str, Any]) -> float | None:
+    metadata = _ensure_dict(row.get("metadata"), default={})
+    subtotal_raw = metadata.get("subtotal")
+    if subtotal_raw is None:
+        subtotal_raw = row.get("subtotal")
+    subtotal = _as_number(subtotal_raw)
+    if subtotal is not None:
+        return max(0.0, subtotal)
+    total = _as_number(row.get("total"))
+    taxes_raw = metadata.get("impuestos")
+    if taxes_raw is None:
+        taxes_raw = row.get("impuestos")
+    taxes = _as_number(taxes_raw)
+    if total is not None and taxes is not None:
+        return max(0.0, total - taxes)
+    return max(0.0, total) if total is not None else None
+
+
+async def _current_quote_net_amount(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+) -> tuple[float | None, str | None]:
+    quotes = await repo.list_current_quote_amounts_by_opportunity_ids(
+        organizacion_id=organizacion_id,
+        oportunidad_ids=[oportunidad_id],
+    )
+    quote = next(
+        (
+            row
+            for row in quotes
+            if isinstance(row, Mapping) and _quote_net_amount(row) is not None
+        ),
+        None,
+    )
+    if quote is None:
+        return None, None
+    net_amount = _quote_net_amount(quote)
+    if net_amount is None:
+        return None, None
+    quote_currency = _clean_text(quote.get("moneda"))
+    return net_amount, quote_currency.upper() if quote_currency else None
+
+
+async def _sync_opportunity_amount_from_current_quote(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+) -> float | None:
+    net_amount, quote_currency = await _current_quote_net_amount(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if net_amount is None:
+        return None
+    update_payload: dict[str, Any] = {"monto_estimado": net_amount}
+    if quote_currency:
+        update_payload["moneda"] = quote_currency
+    await repo.update_opportunity(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        payload=update_payload,
+    )
+    return net_amount
+
+
+async def _overlay_current_quote_amounts(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    rows: list[dict[str, Any]],
+) -> None:
+    opportunity_ids = [
+        UUID(str(row["id"]))
+        for row in rows
+        if isinstance(row, dict) and row.get("id")
+    ]
+    if not opportunity_ids:
+        return
+    current_quotes = await repo.list_current_quote_amounts_by_opportunity_ids(
+        organizacion_id=organizacion_id,
+        oportunidad_ids=opportunity_ids,
+    )
+    quote_by_opportunity: dict[str, dict[str, Any]] = {}
+    for quote in current_quotes:
+        opportunity_id = _clean_text(quote.get("oportunidad_id"))
+        if opportunity_id and opportunity_id not in quote_by_opportunity:
+            quote_by_opportunity[opportunity_id] = quote
+    for row in rows:
+        quote = quote_by_opportunity.get(_clean_text(row.get("id")))
+        if not quote:
+            continue
+        net_amount = _quote_net_amount(quote)
+        if net_amount is None:
+            continue
+        row["monto_estimado"] = net_amount
+        row["monto_real"] = net_amount
+        quote_currency = _clean_text(quote.get("moneda"))
+        if quote_currency:
+            row["moneda"] = quote_currency.upper()
+
+
 def _concepts_from_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     concepts: list[dict[str, Any]] = []
     for item in items:
@@ -10075,8 +10185,15 @@ async def _ensure_won_stage_metadata(
     if not existing_close:
         closed_prep["close_date"] = today
         changed = True
-    if quote and quote.total is not None and "contract_value" not in closed_prep:
-        closed_prep["contract_value"] = float(quote.total)
+    quote_net_amount = None
+    if quote:
+        quote_net_amount = quote.subtotal
+        if quote_net_amount is None and quote.total is not None and quote.impuestos is not None:
+            quote_net_amount = max(0.0, float(quote.total) - float(quote.impuestos))
+        if quote_net_amount is None:
+            quote_net_amount = quote.total
+    if quote_net_amount is not None and "contract_value" not in closed_prep:
+        closed_prep["contract_value"] = float(quote_net_amount)
         changed = True
     elif "contract_value" not in closed_prep:
         monto = oportunidad_row.get("monto_estimado")
@@ -19687,29 +19804,11 @@ async def list_opportunities(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    opportunity_ids = [row.get("id") for row in rows if isinstance(row, dict) and row.get("id")]
-    current_quotes = await repo.list_current_quote_amounts_by_opportunity_ids(
+    await _overlay_current_quote_amounts(
+        repo=repo,
         organizacion_id=organizacion_id,
-        oportunidad_ids=[UUID(str(value)) for value in opportunity_ids],
-    ) if opportunity_ids else []
-    quote_by_opportunity: dict[str, dict[str, Any]] = {}
-    for quote in current_quotes:
-        opportunity_id = _clean_text(quote.get("oportunidad_id"))
-        if opportunity_id and opportunity_id not in quote_by_opportunity:
-            quote_by_opportunity[opportunity_id] = quote
-    for row in rows:
-        opportunity_id = _clean_text(row.get("id"))
-        quote = quote_by_opportunity.get(opportunity_id)
-        quote_metadata = _ensure_dict(quote.get("metadata"), default={}) if quote else {}
-        real_amount = _as_number(quote_metadata.get("subtotal"))
-        if real_amount is None and quote:
-            total_value = _as_number(quote.get("total"))
-            taxes = _as_number(quote_metadata.get("impuestos"))
-            if total_value is not None and taxes is not None:
-                real_amount = max(0.0, total_value - taxes)
-            elif total_value is not None:
-                real_amount = total_value
-        row["monto_real"] = real_amount
+        rows=rows,
+    )
     items = [CRMOpportunity.model_validate(row) for row in rows]
     return CRMOpportunitiesResponse(items=items, limit=limit, offset=offset, total=total or len(items))
 
@@ -20132,6 +20231,19 @@ async def pipeline_update_opportunity(
         new_metadata = _ensure_dict(update_body.get("metadata"), default={})
         merged_metadata = {**current_metadata, **new_metadata}
         update_body["metadata"] = merged_metadata
+    if "monto_estimado" in update_body:
+        try:
+            quote_net, quote_currency = await _current_quote_net_amount(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                oportunidad_id=oportunidad_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="opportunity_amount_sync_failed") from exc
+        if quote_net is not None:
+            update_body["monto_estimado"] = quote_net
+            if quote_currency:
+                update_body["moneda"] = quote_currency
     try:
         await repo.update_opportunity(
             organizacion_id=organizacion_id,
@@ -32143,6 +32255,14 @@ async def create_lead_quote(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        await _sync_opportunity_amount_from_current_quote(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="opportunity_amount_sync_failed") from exc
     quote = _quote_from_row(created_row)
     return LeadQuoteResponse(quote=quote)
 
@@ -32596,6 +32716,15 @@ async def send_lead_quote(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    try:
+        await _sync_opportunity_amount_from_current_quote(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="opportunity_amount_sync_failed") from exc
+
     quote = _quote_from_row(quote_row)
     if quote.estado == "aceptada":
         await _auto_move_opportunity_to_won(
@@ -32714,6 +32843,15 @@ async def mark_lead_quote(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     quote = _quote_from_row(quote_row)
+    if quote.oportunidad_id:
+        try:
+            await _sync_opportunity_amount_from_current_quote(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                oportunidad_id=UUID(str(quote.oportunidad_id)),
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="opportunity_amount_sync_failed") from exc
     if quote.estado == "aceptada":
         oportunidad_id = quote.oportunidad_id
         if oportunidad_id:
@@ -43244,6 +43382,11 @@ async def pipeline_overview(
             created_from=created_from,
             created_to=created_to,
         )
+        await _overlay_current_quote_amounts(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            rows=rows,
+        )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     overview = _build_pipeline_overview(
@@ -43307,6 +43450,11 @@ async def pipeline_recovery(
             q=q,
             include_contact_rows=False,
             count_exact=False,
+        )
+        await _overlay_current_quote_amounts(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            rows=rows,
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="No se pudo cargar la recuperación de oportunidades.") from exc
@@ -43626,6 +43774,11 @@ async def pipeline_board(
             # vez dispara N+1 queries y degrada la vista.
             include_contact_rows=False,
             count_exact=False,
+        )
+        await _overlay_current_quote_amounts(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            rows=rows,
         )
         logger.info(
             "crm.pipeline_board.list_pipeline_opportunities.done",
@@ -49844,6 +49997,11 @@ async def registrar_venta_propiedad(
                 organizacion_id,
                 quote_uuid,
                 usuario_id,
+            )
+            await _sync_opportunity_amount_from_current_quote(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                oportunidad_id=resolved_oportunidad_id,
             )
         await repo.update_propiedad_unidad(
             organizacion_id=organizacion_id,
