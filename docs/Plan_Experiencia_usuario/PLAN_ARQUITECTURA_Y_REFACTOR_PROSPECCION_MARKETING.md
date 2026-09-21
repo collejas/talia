@@ -79,6 +79,8 @@ CRM
 Agente IA
 ```
 
+Subtítulo visible de Prospección: `Prepara posibles clientes`.
+
 ### 2.2 Definición de objetos
 
 | Objeto | Responsabilidad |
@@ -139,7 +141,30 @@ El backend puede hablar de audiencias, lotes, batches, plantillas, carrier, prev
 
 Esta tabla es normativa para la UI. Los términos técnicos solo pueden aparecer en soporte, permisos, exportaciones técnicas o una sección explícita de detalles técnicos.
 
-### 2.5 Reglas de experiencia
+### 2.5 Estados visibles
+
+Los estados internos no deben aparecer directamente en la interfaz:
+
+| Estado interno | Texto visible |
+|---|---|
+| `draft` | Borrador |
+| `scheduled` | Programado |
+| `preparing` | Preparando |
+| `running` | Enviando |
+| `completed` | Terminado |
+| `partially_completed` | Terminado con algunos errores |
+| `failed` | No se pudo completar |
+| `canceled` | Cancelado |
+| `pending` | Pendiente |
+| `sent` | Enviado |
+| `delivered` | Entregado |
+| `read` | Leído |
+| `replied` | Respondió |
+| `suppressed` | Bloqueado para envíos |
+
+El texto puede adaptarse al canal: `Correos enviados`, `Mensajes enviados` o `Llamadas realizadas`.
+
+### 2.6 Reglas de experiencia
 
 1. Cada pantalla responde una sola pregunta principal.
 2. Cada pantalla tiene una acción principal visible.
@@ -190,7 +215,7 @@ No debe contener filtros operativos de envío ni lógica de campañas.
 Acción principal:
 
 ```text
-Buscar prospectos
+Buscar empresas
 ```
 
 ### Mis búsquedas
@@ -216,7 +241,7 @@ Debe ofrecer:
 - Tabla y mapa con modelo neutral a la fuente.
 - Selección de resultados.
 - Filtros propios de resultado.
-- Acción `Agregar a Prospección`.
+- Acción `Agregar a mis prospectos`.
 - Confirmación del total agregado y navegación a Prospectos.
 
 No debe ejecutar campañas ni envíos.
@@ -230,7 +255,8 @@ Responsabilidades:
 - Explorar toda la base.
 - Aplicar filtros libres.
 - Revisar calidad y disponibilidad de datos.
-- Seleccionar prospectos para completar datos o crear una lista de envío.
+- Seleccionar prospectos para acciones concretas, principalmente completar datos.
+- Crear una lista para contactar a partir de las reglas aplicadas, nunca a partir de una fotografía de IDs seleccionados.
 - Consultar información operativa sin convertir la vista en un centro de campañas.
 
 La tabla debe conservar filtros útiles para:
@@ -246,11 +272,13 @@ Acciones principales:
 
 ```text
 Completar datos
-Crear lista
+Crear lista con estas reglas
 Ver historial
 ```
 
-Enviar directamente desde esta vista debe quedar como acción secundaria o retirarse cuando el flujo de Marketing esté disponible.
+Los checkboxes sirven para acciones concretas sobre prospectos seleccionados, como completar datos. No deben convertir silenciosamente una selección de IDs en una lista dinámica.
+
+Si el producto necesita listas estáticas en el futuro, deben ser otro objeto visible y explícito, separado de las Listas para contactar.
 
 ### 4.3 Prospección → Listas para contactar
 
@@ -265,10 +293,11 @@ Listado:
 
 Inmobiliarias nuevas
 842 prospectos
-Actualizada ahora
+Revisada hace 2 min
 
 ✓ Tienen celular válido
-✓ Pueden recibir WhatsApp
+✓ Tienen WhatsApp
+✓ Se les puede enviar WhatsApp
 ✓ Nunca les hemos enviado WhatsApp
 ```
 
@@ -304,7 +333,7 @@ Después de pulsarlo, Tal-IA debe preguntar:
 
 El usuario no necesita entrar manualmente al módulo Marketing para continuar.
 
-La creación debe usar un constructor de reglas legible:
+La creación debe usar un constructor de reglas legible y siempre guardar las reglas, no los IDs que coincidieron en ese momento:
 
 ```text
 REGLAS DE ESTA LISTA
@@ -314,7 +343,8 @@ Quiero encontrar prospectos que...
 sean          [ Inmobiliarias              ]
 y estén en    [ San Luis Potosí            ]
 y tengan      [ Celular válido             ]
-y puedan      [ Recibir WhatsApp           ]
+y tengan      [ WhatsApp                   ]
+y             [ Se les pueda enviar WhatsApp ]
 y             [ Nunca recibieron WhatsApp  ]
 
 [ + Agregar otra regla ]
@@ -324,7 +354,29 @@ y             [ Nunca recibieron WhatsApp  ]
 [ Ver prospectos ]       [ Guardar lista ]
 ```
 
+La tarjeta debe distinguir entre:
+
+```text
+842 prospectos cumplen estas reglas
+```
+
+y la cantidad que puede contactarse en un momento concreto. Cumplir las reglas no garantiza que todos recibirán un mensaje; la elegibilidad se vuelve a revisar al contactar.
+
 El usuario no debe ver nombres como `lookup_status`, `carrier_type`, `envios_whatsapp_max` u `opt_out`.
+
+Las reglas deben expresarse como:
+
+```text
+Debe cumplir todas estas reglas
+```
+
+Cuando se necesite una alternativa:
+
+```text
+Puede cumplir cualquiera de estas
+```
+
+Los operadores técnicos `AND`, `OR` e `IN` quedan ocultos.
 
 Ejemplo de definición:
 
@@ -332,12 +384,20 @@ Ejemplo de definición:
 Segmento = Inmobiliarias
 Teléfono verificado = Sí
 Tipo de teléfono = Móvil
-Puede recibir WhatsApp = Sí
+Tiene WhatsApp = Sí
+Se le puede enviar WhatsApp = Sí
 Pidió no recibir mensajes = No
 Último WhatsApp = Nunca
 ```
 
-Una audiencia puede usar múltiples segmentos y ubicaciones mediante operadores `IN`, además de filtros temporales.
+Una lista puede usar múltiples segmentos y ubicaciones, además de filtros temporales. Los operadores técnicos no se muestran.
+
+La interfaz debe distinguir siempre:
+
+- `Tiene WhatsApp`: el número parece estar técnicamente asociado con WhatsApp.
+- `Se le puede enviar WhatsApp`: el prospecto tiene permiso comercial/legal y no está bloqueado para ese canal.
+
+El contrato backend debe documentar cuál columna o regla representa cada concepto. `whatsapp_permitido` no puede quedar ambiguo.
 
 ### 4.4 Prospección → Completar datos
 
@@ -383,7 +443,7 @@ Debe separar:
 
 La ejecución debe mostrar progreso, resultados, errores y posibilidad de volver a Prospectos. La palabra `enriquecimiento` queda reservada para documentación interna.
 
-No debe crear campañas ni cambiar silenciosamente las condiciones de las listas de envío.
+No debe crear campañas ni cambiar silenciosamente las condiciones de las listas para contactar.
 
 ### 4.5 Historial del prospecto (vista contextual)
 
@@ -470,13 +530,15 @@ Una campaña no representa una ejecución individual.
 Detalle:
 
 ```text
-[ Resumen ] [ Mensajes ] [ Envíos ] [ Resultados ]
+[ Resumen ] [ Mensajes/Correos/Guiones ] [ Envíos ] [ Resultados ]
 ```
+
+La segunda pestaña se etiqueta según el canal: `Correos` para Correo, `Mensajes` para WhatsApp y `Guiones` para Voz.
 
 Resumen mínimo:
 
 - Canal.
-- Mensajes activos.
+- Contenido activo del canal.
 - Envíos realizados.
 - Prospectos contactados.
 - Respuestas.
@@ -489,14 +551,20 @@ Acción principal:
 + Crear envío
 ```
 
-### 4.8 Campaña → Mensajes
+### 4.8 Campaña → Contenido del canal
 
-Los mensajes se administran dentro del canal y se muestran dentro de la campaña. Internamente siguen siendo plantillas.
+El nombre visible depende del canal. Internamente todos siguen siendo plantillas.
+
+| Canal | Nombre visible |
+|---|---|
+| Correo | Correos |
+| WhatsApp | Mensajes |
+| Voz | Guiones |
 
 Texto de ayuda:
 
 ```text
-Estos son los mensajes que puedes usar en esta campaña.
+Estos son los contenidos que puedes usar en esta campaña.
 ```
 
 Acciones:
@@ -508,7 +576,7 @@ Acciones:
 - Ver historial de cambios.
 - Validar compatibilidad del canal.
 
-Correo, WhatsApp y Voz tendrán editores y validaciones diferentes.
+Correo, WhatsApp y Voz tendrán editores y validaciones diferentes. Los botones y títulos deben usar el nombre del canal, por ejemplo `+ Nuevo correo`, `+ Nuevo mensaje` o `+ Nuevo guion`.
 
 Una plantilla puede ser reutilizable. La asociación con una campaña no debe impedir que se use en otra campaña compatible.
 
@@ -554,6 +622,27 @@ Separar al menos:
 
 ### 4.11 Crear envío
 
+Existen dos entradas al mismo asistente:
+
+#### Desde una campaña
+
+La campaña y el canal ya están definidos:
+
+```text
+Canal + Campaña → ¿A quién? → ¿Qué mensaje/contenido? → ¿Cuándo? → Revisar
+```
+
+#### Desde una lista para contactar
+
+La lista ya está definida:
+
+```text
+Lista → ¿Cómo quieres contactar? → ¿Qué campaña? → ¿Qué mensaje/contenido?
+→ ¿Cuándo? → Revisar
+```
+
+Después de seleccionar Correo, WhatsApp o Voz, el usuario puede elegir una campaña existente o crear una nueva sin perder la lista seleccionada.
+
 Debe ser un asistente de cuatro pasos:
 
 ```text
@@ -565,7 +654,7 @@ Debe ser un asistente de cuatro pasos:
 
 ### Paso 1: ¿A quién?
 
-Mostrar listas de envío activas compatibles con el canal y su cantidad actual.
+Mostrar listas para contactar activas compatibles con el canal y su cantidad actual.
 
 Texto visible:
 
@@ -580,7 +669,13 @@ Debe permitir crear una nueva lista sin abandonar el flujo.
 
 ### Paso 2: ¿Qué mensaje?
 
-Mostrar únicamente mensajes compatibles con el canal y disponibles para uso. La opción debe mostrar una vista previa real del contenido, no solo su nombre.
+Mostrar el nombre visible según el canal y únicamente contenido compatible y disponible para uso:
+
+- Correo: `¿Qué correo quieres enviar?`
+- WhatsApp: `¿Qué mensaje quieres enviar?`
+- Voz: `¿Qué guion quieres usar?`
+
+La opción debe mostrar una vista previa real del contenido, no solo su nombre.
 
 Texto visible:
 
@@ -1080,15 +1175,19 @@ Controles específicos:
 ### Listas para contactar
 
 - Se puede crear y editar una lista con múltiples segmentos.
+- La lista guarda reglas dinámicas, no una fotografía de IDs seleccionados.
+- `Crear lista con estas reglas` conserva las condiciones aplicadas.
 - Se puede filtrar por canal, validez, permisos e historial temporal.
 - La cantidad actual se recalcula server-side.
 - Editar una lista no altera envíos históricos.
+- La tarjeta distingue personas que cumplen las reglas de personas que pueden contactarse ahora.
 
 ### Campañas y mensajes
 
 - Una campaña pertenece a un canal.
 - Solo muestra mensajes compatibles.
 - Una plantilla puede reutilizarse en campañas compatibles.
+- Correo muestra Correos, WhatsApp muestra Mensajes y Voz muestra Guiones.
 - Campaña, plantilla y audiencia no ejecutan comunicaciones directamente.
 
 ### Envíos
@@ -1108,6 +1207,7 @@ Controles específicos:
 ### UI
 
 - Cada pantalla tiene una acción principal clara.
+- La navegación principal no muestra Resultados ni el Historial del prospecto como botones permanentes.
 - No se mezclan filtros operativos con configuración de campañas.
 - Existen estados de carga, vacío, error y éxito.
 - No se depende de IDs técnicos como texto principal para el usuario.
