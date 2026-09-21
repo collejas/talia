@@ -690,14 +690,24 @@ function OpportunityRowDetails({
     extractString(opportunityDetail, ["metadata", "project_name"]) ||
     extractString(opportunityDetail, ["titulo"]) ||
     "Sin proyecto";
+  const contactMetadata =
+    opportunityDetail.contacto && typeof opportunityDetail.contacto === "object"
+      ? ((opportunityDetail.contacto as Record<string, unknown>).metadata as Record<string, unknown> | undefined)
+      : undefined;
+  const aiContextSource =
+    typeof contactMetadata?.tal_ia_contexto_source === "string"
+      ? contactMetadata.tal_ia_contexto_source.trim().toLowerCase()
+      : "";
   const projectNeeds =
     extractString(opportunityDetail, ["metadata", "proyecto_necesidades"]) ||
     extractString(opportunityDetail, ["descripcion"]) ||
     "Sin necesidades";
   const talIaSummary =
     extractString(opportunityDetail, ["metadata", "tal_ia", "resumen"]) ||
-    extractString(opportunityDetail, ["contacto", "notes"]) ||
-    extractString(opportunityDetail, ["contacto", "notas"]) ||
+    (aiContextSource === "tal_ia"
+      ? extractString(opportunityDetail, ["contacto", "notes"]) ||
+        extractString(opportunityDetail, ["contacto", "notas"])
+      : "") ||
     "Sin resumen generado";
   const talIaNeed =
     extractString(opportunityDetail, ["contacto", "necesidad_proposito"]) ||

@@ -25714,6 +25714,10 @@ async def create_persona_alta(
         extras=extras,
         existing_account=existing_account,
     )
+    if _persona_alta_clean_text(contact_payload.get("notes")):
+        contact_payload["metadata"] = {
+            "tal_ia_contexto_source": "manual",
+        }
 
     try:
         if dedupe_contacto_id:
@@ -26631,6 +26635,11 @@ async def create_persona_legacy(
     payload: CRMPersonaCreate,
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    contact_notes = _clean_text(body.get("notes") or body.get("notas"))
+    if contact_notes:
+        contact_metadata = _ensure_dict(body.get("metadata"), default={})
+        contact_metadata["tal_ia_contexto_source"] = "manual"
+        body["metadata"] = contact_metadata
     try:
         row = await repo.create_persona(
             organizacion_id=organizacion_id,
@@ -26650,6 +26659,11 @@ async def create_persona(
     payload: CRMPersonaCreate,
 ) -> CRMPersona:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    contact_notes = _clean_text(body.get("notes") or body.get("notas"))
+    if contact_notes:
+        contact_metadata = _ensure_dict(body.get("metadata"), default={})
+        contact_metadata["tal_ia_contexto_source"] = "manual"
+        body["metadata"] = contact_metadata
     try:
         row = await repo.create_persona(
             organizacion_id=organizacion_id,
@@ -52956,6 +52970,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
     resumen_contexto = (
         None
         if oportunidad_creada_desde_embudo
+        or (_clean_text(contacto_metadata.get("tal_ia_contexto_source")) or "").lower() != "tal_ia"
         else (_clean_text(metadata.get("contacto_notas")) or contacto.get("notas") or contacto.get("notes"))
     )
 

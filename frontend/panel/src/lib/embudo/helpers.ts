@@ -112,13 +112,13 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
         ? metadata.contacto_empresa.trim()
         : null;
   const resolvedNotas =
-    createdVia === "embudo_manual"
+    createdVia === "embudo_manual" ||
+    typeof metadata.tal_ia_contexto_source !== "string" ||
+    metadata.tal_ia_contexto_source.trim().toLowerCase() !== "tal_ia"
       ? null
       : typeof card.notas === "string" && card.notas.trim().length
         ? card.notas.trim()
-        : typeof metadata.contacto_notas === "string" && metadata.contacto_notas.trim().length
-          ? metadata.contacto_notas.trim()
-          : null;
+        : null;
   const resolvedNecesidadProposito =
     typeof card.necesidad_proposito === "string" && card.necesidad_proposito.trim().length
       ? card.necesidad_proposito.trim()

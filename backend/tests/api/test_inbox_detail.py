@@ -64,3 +64,22 @@ def test_pipeline_card_uses_insight_need_for_auto_generated_description():
 
     assert card is not None
     assert card.proyecto_necesidades == "Comprar una vivienda de dos recámaras."
+
+
+def test_pipeline_card_does_not_expose_manual_contact_notes_as_ai_context():
+    row = {
+        "id": str(uuid4()),
+        "etapa_id": str(uuid4()),
+        "metadata": {},
+        "contacto": {
+            "notas": "Nota interna del contacto.",
+            "metadata": {"tal_ia_contexto_source": "manual"},
+        },
+        "cuenta": {},
+        "asignado": {},
+    }
+
+    card = crm._card_from_opportunity(row)
+
+    assert card is not None
+    assert card.notas is None
