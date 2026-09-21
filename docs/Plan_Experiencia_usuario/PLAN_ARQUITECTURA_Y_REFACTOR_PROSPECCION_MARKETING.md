@@ -129,10 +129,10 @@ El backend puede hablar de audiencias, lotes, batches, plantillas, carrier, prev
 | Audiencia actual | Personas que cumplen estas reglas |
 | Enriquecer | Completar datos |
 | Carrier | Tipo de teléfono |
-| Plantilla | Mensaje |
-| Preview | Revisar antes de enviar |
-| Elegibles | Pueden recibir el mensaje |
-| Omitidos | No recibirán el mensaje |
+| Plantilla | Correo, mensaje o guion según el canal |
+| Preview | Revisar antes de enviar o llamar |
+| Elegibles | Pueden ser contactados |
+| Omitidos | No serán contactados |
 | Opt-out | Pidió no recibir mensajes |
 | Suppression | Bloqueado para envíos |
 | Lote / batch | Envío |
@@ -270,7 +270,7 @@ La tabla debe conservar filtros útiles para:
 
 - Empresa: tipo de empresa, ubicación, fuente, actividad económica y calificación de Google.
 - Contacto: teléfono, email y sitio web.
-- Validación: teléfono válido, tipo de línea, email válido y WhatsApp permitido.
+- Validación: teléfono válido, tipo de teléfono, email válido, Tiene WhatsApp y Se le puede enviar WhatsApp.
 - Historial: creación, datos completados y último contacto.
 - Envíos: último WhatsApp, último correo, número de envíos y respuesta.
 - CRM: estado comercial, cliente, oportunidad y perdido.
@@ -823,13 +823,13 @@ Voz: 25 NO SERÁN LLAMADOS
 
 Motivos visibles:
 
-- Recibieron un mensaje recientemente.
-- No tienen un teléfono o correo válido.
-- Pidieron no recibir mensajes.
-- No pueden recibir mensajes por este canal.
-- Están bloqueados para envíos.
-- Se repiten dentro de la selección.
-- Se alcanzó un límite de envío.
+- Ya fueron contactados recientemente.
+- No tienen un medio de contacto válido.
+- Pidieron no ser contactados.
+- No pueden ser contactados por este canal.
+- Están bloqueados para este canal.
+- Aparecen más de una vez.
+- Se alcanzó el límite permitido.
 
 El botón debe expresar el resultado final y adaptarse al canal:
 
