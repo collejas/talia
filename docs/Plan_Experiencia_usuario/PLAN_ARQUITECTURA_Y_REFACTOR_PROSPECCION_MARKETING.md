@@ -911,25 +911,82 @@ Crear envío debe aceptar una clave de idempotencia para evitar lotes duplicados
 
 El worker/proveedor debe poder reintentar eventos sin duplicar destinatarios ni mensajes.
 
-## 6. Contratos API propuestos
+### 5.4 Concurrencia y no duplicación
 
-Los contratos nuevos deben alinearse con las rutas existentes. Las rutas con nombres de `audiencias` son una propuesta semántica de producto; no obligan a renombrar tablas, columnas ni endpoints actuales.
+La idempotencia de la solicitud no es suficiente para proteger dos workers que procesen simultáneamente el mismo envío o destinatario.
 
-### Audiencias
+La implementación debe incluir:
+
+- Restricción única sobre el envío, prospecto y canal, o equivalente lógico que impida duplicados.
+- Transición atómica de `pending` a `processing`/equivalente mediante claim seguro.
+- Lease, timeout o recuperación de registros abandonados por un worker detenido.
+- Revisión de estado antes de llamar al proveedor.
+- Persistencia idempotente de la respuesta del proveedor y de sus webhooks.
+- Pruebas concurrentes con dos workers intentando procesar el mismo destinatario.
+
+No debe existir un camino en el que dos procesos puedan enviar el mismo contacto solo porque ambos leyeron `pending` antes de actualizarlo.
+
+### 5.5 Observabilidad y trazabilidad
+
+Cada comunicación debe poder seguirse de extremo a extremo sin exponer secretos ni payloads sensibles innecesarios:
 
 ```text
-GET    /api/crm/prospeccion/audiencias
-POST   /api/crm/prospeccion/audiencias
-GET    /api/crm/prospeccion/audiencias/{audiencia_id}
-PATCH  /api/crm/prospeccion/audiencias/{audiencia_id}
-POST   /api/crm/prospeccion/audiencias/{audiencia_id}/duplicar
-POST   /api/crm/prospeccion/audiencias/{audiencia_id}/activar
-POST   /api/crm/prospeccion/audiencias/{audiencia_id}/desactivar
-POST   /api/crm/prospeccion/audiencias/{audiencia_id}/preview
-GET    /api/crm/prospeccion/audiencias/{audiencia_id}/prospectos
+envío → destinatario → proveedor → provider_message_id
+→ webhook → estado final
 ```
 
-Durante la transición, los endpoints actuales de listas deben mantenerse y ser la opción inicial. No se crearán rutas con nombres de `audiencias` salvo que exista una razón concreta de contrato; si se agregan posteriormente, deben funcionar como alias o fachada compatible, sin romper consumidores existentes.
+El sistema debe permitir responder qué ocurrió con un destinatario concreto y conservar, como mínimo:
+
+- Identificador interno del envío.
+- Prospecto y canal.
+- Proveedor utilizado.
+- Identificador externo del proveedor, cuando exista.
+- Fechas de preparación, intento, aceptación, entrega, lectura, respuesta o fallo.
+- Código y motivo normalizado del fallo.
+- Referencia al evento/webhook procesado.
+
+La observabilidad debe respetar tenant isolation y no registrar tokens, credenciales, headers de autorización, cuerpos completos sensibles ni datos personales innecesarios.
+
+### 5.6 Activación progresiva
+
+El nuevo flujo debe poder activarse gradualmente mediante feature flags por organización o módulo.
+
+Flag inicial sugerido:
+
+```text
+marketing_send_wizard_v2
+```
+
+Estrategia:
+
+1. Activarlo en el tenant interno Tal-IA.
+2. Validarlo con un cliente controlado.
+3. Ampliarlo progresivamente.
+4. Mantener rollback al flujo actual mientras existan riesgos abiertos.
+
+La activación debe estar protegida en backend; ocultar un botón en frontend no constituye control suficiente.
+
+## 6. Contratos API y compatibilidad
+
+Los contratos deben reutilizar inicialmente los endpoints actuales de listas, campañas, plantillas y envíos. El usuario no ve las URLs, por lo que no existe valor en crear rutas nuevas únicamente para reflejar el nombre `Lista para contactar`.
+
+### Listas para contactar
+
+Usar las rutas actuales de listas para:
+
+```text
+listar
+crear
+consultar
+editar reglas
+duplicar
+activar o desactivar
+calcular prospectos actuales
+```
+
+La ruta concreta y sus nombres de campos deben confirmarse en F0 contra el backend actual. No se debe crear inicialmente una familia `/api/crm/prospeccion/audiencias` si las rutas existentes de listas cubren estas operaciones.
+
+Si en el futuro una integración externa necesita un contrato con nombre `audiencias`, podrá agregarse como alias o fachada compatible, pero no será requisito del refactor de UX.
 
 ### Canales y campañas
 
@@ -966,7 +1023,7 @@ POST   /api/marketing/{canal}/envios/{envio_id}/reintentar-fallidos
 
 ```json
 {
-  "audiencia_id": "uuid",
+  "lista_id": "uuid",
   "plantilla_id": "uuid",
   "cantidad_audiencia": 842,
   "cantidad_elegibles": 817,
@@ -1043,7 +1100,7 @@ creado_en
 actualizado_en
 ```
 
-Durante la Fase 0 se determinará qué columnas actuales representan cada dato, cuáles tienen otro nombre y cuáles verdaderamente faltan.
+Durante F0 se determinará qué columnas actuales representan cada dato, cuáles tienen otro nombre y cuáles verdaderamente faltan.
 
 Regla de implementación:
 
@@ -1217,7 +1274,7 @@ Los envíos antiguos deben conservar sus resultados, atribución y trazabilidad.
 
 ## 12. Fases de implementación
 
-### Fase 0 — Contratos y baseline
+### F0 — Baseline y contratos
 
 - Confirmar tablas y columnas existentes.
 - Elaborar una matriz concepto → tabla/columna/relación/endpoint actual.
@@ -1245,7 +1302,7 @@ FRONTEND   mostrar nombres sencillos al usuario
 
 No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan utilice un nombre conceptual diferente.
 
-### Fase 1 — Listas para contactar
+### F1 — Listas para contactar
 
 - Renombrado únicamente visual de listas a Listas para contactar.
 - CRUD y detalle.
@@ -1256,7 +1313,7 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 
 **Salida:** una lista puede calcular su cantidad actual y mostrar sus prospectos.
 
-### Fase 2 — Campañas por canal
+### F2 — Campañas por canal
 
 - Separar vistas de Correo, WhatsApp y Voz.
 - Listar campañas dentro del canal.
@@ -1265,7 +1322,7 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 
 **Salida:** el usuario puede administrar objetivos comerciales sin mezclar canales.
 
-### Fase 3 — Plantillas
+### F3 — Contenido: correos, mensajes y guiones
 
 - CRUD por canal.
 - Asociación campaña-plantilla.
@@ -1274,7 +1331,7 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 
 **Salida:** las plantillas pueden reutilizarse sin vincularlas artificialmente a una audiencia.
 
-### Fase 4 — Crear envío
+### F4 — Envíos
 
 - Asistente de cuatro pasos.
 - Revisión previa con razones de exclusión.
@@ -1285,7 +1342,7 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 
 **Salida:** ningún envío depende de IDs congelados en el navegador.
 
-### Fase 5 — Resultados y actividad
+### F5 — Resultados e historial
 
 - Detalle de lote.
 - Estados por destinatario.
@@ -1295,7 +1352,7 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 
 **Salida:** el usuario puede explicar qué se envió, a quién, con qué mensaje y qué ocurrió.
 
-### Fase 6 — Prospectos y Búsqueda
+### F6 — Prospectos y Búsqueda
 
 - Extraer responsabilidades del componente monolítico.
 - Crear workspace común de búsqueda.

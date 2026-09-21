@@ -34,6 +34,9 @@ Plan principal: [PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md](./PLAN_A
 - Una comunicación real solo se produce al crear y ejecutar un envío.
 - El backend vuelve a resolver y validar la lista antes de crear el envío.
 - Los envíos históricos deben conservar las reglas históricas utilizadas para seleccionar prospectos cuando esa capacidad sea necesaria.
+- La idempotencia debe complementarse con control de concurrencia para impedir que dos workers procesen el mismo destinatario.
+- Cada comunicación debe conservar trazabilidad desde el envío hasta el proveedor, webhook y estado final.
+- El nuevo asistente se activará progresivamente mediante un feature flag por organización o módulo, inicialmente `marketing_send_wizard_v2`.
 
 ### Regla de nombres y persistencia
 
@@ -46,13 +49,13 @@ Plan principal: [PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md](./PLAN_A
 
 ### Fases aprobadas
 
-1. Contratos y baseline: inventario real y matriz de compatibilidad.
-2. Listas para contactar: reglas, compatibilidad y conteo actual.
-3. Campañas por canal.
-4. Mensajes, correos y guiones.
-5. Crear envío, revisión, revalidación y ejecución.
-6. Resultados, historial y métricas.
-7. Refactor posterior de Prospectos y Búsqueda.
+- **F0 Baseline y contratos:** inventario real y matriz de compatibilidad.
+- **F1 Listas para contactar:** reglas, compatibilidad y conteo actual.
+- **F2 Campañas por canal.**
+- **F3 Contenido:** correos, mensajes y guiones.
+- **F4 Envíos:** crear, revisar, revalidar y ejecutar.
+- **F5 Resultados e historial.**
+- **F6 Prospectos y Búsqueda.**
 
 ## Registro de avances
 
@@ -64,6 +67,14 @@ Usar este formato para cada cambio posterior:
 ### Estado
 
 En desarrollo | En validación | Completado | Bloqueado
+
+### Fase
+
+F0 Baseline y contratos | F1 Listas para contactar | F2 Campañas por canal | F3 Contenido | F4 Envíos | F5 Resultados e historial | F6 Prospectos y Búsqueda
+
+### Referencia
+
+PR / commit / issue / migración relacionada, si aplica.
 
 ### Cambios
 
@@ -85,9 +96,11 @@ En desarrollo | En validación | Completado | Bloqueado
 ## Pendientes iniciales
 
 - Auditar tablas, columnas, relaciones y endpoints actuales antes de diseñar migraciones.
+- Confirmar la estrategia de claim, estados y restricciones únicas para evitar duplicados concurrentes.
+- Definir la cadena de observabilidad `envío → destinatario → proveedor → webhook → estado final`.
 - Confirmar cómo se conserva actualmente la definición histórica de las reglas de una lista.
 - Confirmar la semántica real de `whatsapp_permitido` y separar, si corresponde, `Tiene WhatsApp` de `Se le puede enviar WhatsApp`.
 - Confirmar estados y métricas reales disponibles para Voz con el proveedor actual.
 - Diseñar wireframes de `Prospectos → Crear lista → Contactar lista → Campaña → Revisar → Enviar`.
 - Definir pruebas funcionales autenticadas para preview, revalidación, compatibilidad de canal, idempotencia y aislamiento por organización.
-
+- Definir pruebas de concurrencia, recuperación de workers y activación progresiva por feature flag.
