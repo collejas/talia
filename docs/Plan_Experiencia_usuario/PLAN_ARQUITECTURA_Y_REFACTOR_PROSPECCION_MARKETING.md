@@ -882,7 +882,7 @@ POST preview
 POST create/send
   → resolver audiencia otra vez
   → aplicar elegibilidad otra vez
-  → crear versión/snapshot de audiencia
+  → conservar la versión histórica de las reglas utilizadas, si esa capacidad no existe actualmente
   → crear lote
   → crear destinatarios reales
   → iniciar o programar ejecución
@@ -929,7 +929,7 @@ POST   /api/crm/prospeccion/audiencias/{audiencia_id}/preview
 GET    /api/crm/prospeccion/audiencias/{audiencia_id}/prospectos
 ```
 
-Durante la transición, los endpoints actuales de listas deben mantenerse. Si se agregan rutas con nombres de `audiencias`, deben funcionar como alias o fachada compatible, sin romper consumidores existentes.
+Durante la transición, los endpoints actuales de listas deben mantenerse y ser la opción inicial. No se crearán rutas con nombres de `audiencias` salvo que exista una razón concreta de contrato; si se agregan posteriormente, deben funcionar como alias o fachada compatible, sin romper consumidores existentes.
 
 ### Canales y campañas
 
@@ -1044,6 +1044,16 @@ actualizado_en
 ```
 
 Durante la Fase 0 se determinará qué columnas actuales representan cada dato, cuáles tienen otro nombre y cuáles verdaderamente faltan.
+
+Regla de implementación:
+
+```text
+Si la capacidad ya existe:       REUTILIZARLA.
+Si existe con otro nombre:       MAPEARLA.
+Si realmente no existe:          CREARLA.
+```
+
+Esta regla aplica a tablas, columnas, relaciones, endpoints y servicios.
 
 ### Snapshot y versionado
 
@@ -1269,7 +1279,7 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 - Asistente de cuatro pasos.
 - Revisión previa con razones de exclusión.
 - Revalidación en confirmación.
-- Creación de versión de audiencia.
+- Creación de versión histórica de las reglas de la lista, únicamente si la capacidad no existe.
 - Creación idempotente del lote.
 - Destinatarios reales del lote.
 
@@ -1350,7 +1360,7 @@ Controles específicos:
 
 - El preview devuelve elegibles y razones de omisión.
 - La confirmación vuelve a resolver la audiencia.
-- El lote conserva la versión histórica de la audiencia.
+- El envío conserva la versión histórica de las reglas utilizadas para seleccionar a los prospectos.
 - No se duplican envíos por doble clic o reintento HTTP.
 - El lote y sus destinatarios tienen estados independientes.
 
@@ -1388,7 +1398,7 @@ Listas para contactar → Campaña → Crear envío → Revisar → Volver a rev
 Debe incluir:
 
 - Contratos API.
-- Versionado de audiencia.
+- Conservación histórica de las reglas de la lista, si hace falta implementarla.
 - Reglas finales para decidir quién puede recibir el mensaje.
 - Revisión previa con motivos de exclusión.
 - Revalidación al confirmar.
@@ -1404,7 +1414,7 @@ El refactor se considerará terminado cuando:
 - La UI use la arquitectura de módulos definida.
 - Listas para contactar, campañas, mensajes y envíos tengan responsabilidades separadas.
 - Los envíos se resuelvan dinámicamente y se revaliden en backend.
-- Los lotes históricos sean auditables aunque cambie la audiencia.
+- Los envíos históricos sean auditables aunque posteriormente cambien las reglas de la lista.
 - Los filtros operativos tengan soporte explícito e indexable.
 - La tabla de Prospectos ya no concentre campañas, plantillas, planificación y actividad.
 - Google y GobMX compartan workspace sin duplicar responsabilidades.
