@@ -93,6 +93,36 @@ PR / commit / issue / migración relacionada, si aplica.
 - ...
 ```
 
+## 2026-09-21 — Preparación operativa del refactor
+
+### Estado
+
+Aprobado
+
+### Fase
+
+F0 — Baseline y contratos
+
+### Referencia
+
+Plan actualizado; código todavía sin modificar.
+
+### Cambios
+
+- Se unificó la numeración F0–F6 entre el plan y este changelog.
+- Se estableció que las rutas actuales de listas son la opción inicial y no se crearán rutas `/audiencias` solo por limpieza semántica.
+- Se agregaron requisitos de control de concurrencia e idempotencia para impedir destinatarios duplicados.
+- Se agregó trazabilidad desde envío y destinatario hasta proveedor, webhook y estado final.
+- Se agregó activación progresiva mediante `marketing_send_wizard_v2`.
+
+### Validación
+
+- Plan y changelog revisados para consistencia de fases y alcance.
+
+### Pendientes o riesgos
+
+- Ejecutar el inventario real de tablas, endpoints, workers, estados y proveedores en F0.
+
 ## Pendientes iniciales
 
 - Auditar tablas, columnas, relaciones y endpoints actuales antes de diseñar migraciones.
