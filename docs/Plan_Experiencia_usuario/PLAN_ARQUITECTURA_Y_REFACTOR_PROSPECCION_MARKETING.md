@@ -183,6 +183,7 @@ Los nombres de los resultados también deben adaptarse al canal: `Correos enviad
 9. Usar verbos para las acciones: `Buscar`, `Completar`, `Contactar`, `Enviar` y `Revisar`.
 10. Adaptar las palabras al canal: enviar un correo, enviar un WhatsApp o hacer una llamada.
 11. Nunca pedir al usuario que comprenda la arquitectura para continuar; Tal-IA debe llevarlo naturalmente al siguiente paso.
+12. Tal-IA nunca vuelve a preguntar algo que ya sabe; lo muestra como completado y continúa con lo que falta.
 
 Las vistas `Resultados` de una búsqueda y `Historial` de un prospecto existen como vistas contextuales. No necesitan convertirse en botones permanentes de navegación.
 
@@ -460,7 +461,7 @@ Completar todos los datos disponibles
 Debe separar:
 
 - Verificación de teléfono.
-- Tipo de teléfono: móvil, fijo, internet/VoIP o desconocido.
+- Tipo de teléfono: móvil, fijo, teléfono por Internet o desconocido.
 - Búsqueda y verificación de email.
 - Búsqueda de sitio web.
 - Extracción de información web.
@@ -546,7 +547,9 @@ Listado por canal:
 
 ```text
 Tal-IA Inmobiliarias
-4 contenidos · 8 envíos · Último envío: 21 Sep
+Correo: 4 correos · 8 envíos · Último envío: 21 Sep
+WhatsApp: 4 mensajes · 8 envíos · Último envío: 21 Sep
+Voz: 4 guiones · 8 llamadas · Última llamada: 21 Sep
 ```
 
 Una campaña no representa una ejecución individual.
@@ -563,7 +566,9 @@ Resumen mínimo:
 
 - Canal.
 - Contenido activo del canal.
-- Envíos realizados.
+- Correo: correos enviados.
+- WhatsApp: mensajes enviados.
+- Voz: llamadas realizadas.
 - Prospectos contactados.
 - Respuestas.
 - Oportunidades.
@@ -590,7 +595,9 @@ El nombre visible depende del canal. Internamente todos siguen siendo plantillas
 Texto de ayuda:
 
 ```text
-Estos son los contenidos que puedes usar en esta campaña.
+Correo: Estos son los correos que puedes usar en esta campaña.
+WhatsApp: Estos son los mensajes que puedes usar en esta campaña.
+Voz: Estos son los guiones que puedes usar en esta campaña.
 ```
 
 Acciones:
@@ -629,7 +636,7 @@ Acciones condicionadas por estado:
 La analítica debe permitir bajar por niveles:
 
 ```text
-Canal → Campaña → Mensaje → Lista de envío → Envío
+Canal → Campaña → Mensaje → Lista para contactar → Envío
 ```
 
 En la interfaz se muestra como `Canal → Campaña → Mensaje/Correo/Guion → Lista para contactar → Envío`, según el canal.
@@ -638,16 +645,27 @@ No se deben mezclar los cálculos de revisión con envíos aceptados por el prov
 
 Separar al menos:
 
-- Correo: pueden recibir el correo / no recibirán el correo.
-- WhatsApp: pueden recibir el mensaje / no recibirán el mensaje.
-- Voz: pueden recibir la llamada / no se les llamará.
-- Aceptados para envío.
-- Enviados.
-- Entregados.
-- Leídos, cuando aplique.
-- Respondidos.
-- Oportunidades.
-- Ventas atribuidas.
+Correo:
+
+```text
+Correos enviados → Entregados → Abiertos → Respondieron
+```
+
+WhatsApp:
+
+```text
+Mensajes enviados → Entregados → Leídos → Respondieron
+```
+
+Voz:
+
+```text
+Llamadas realizadas → Contestadas → No contestadas → Interesados
+```
+
+Las métricas de Voz quedan condicionadas a lo que finalmente soporte el proveedor. No se deben mostrar etapas que no existan realmente.
+
+En todos los canales también deben poder consultarse las personas que no recibieron el contacto, las oportunidades y las ventas atribuidas cuando exista esa información.
 
 ### 4.11 Crear envío
 
@@ -686,9 +704,18 @@ Después, ambas entradas usan el mismo asistente central de cuatro pasos:
 4. Revisar
 ```
 
+El asistente conserva los cuatro pasos, pero no obliga a repetir información. Si el flujo comenzó desde una lista, `¿A quién?` aparece como completado con esa lista y Tal-IA lleva al usuario directamente a elegir el contenido. Si comenzó desde una campaña, Canal y Campaña aparecen como contexto ya conocido y el primer dato que falta es la lista.
+
 ### Paso 1: ¿A quién?
 
 Mostrar listas para contactar activas compatibles con el canal y su cantidad actual.
+
+Este paso se muestra solo cuando la lista todavía no está definida. Si el flujo comenzó desde una lista, se muestra como completado:
+
+```text
+✓ Lista: Inmobiliarias nuevas
+842 prospectos
+```
 
 Texto visible:
 
@@ -760,14 +787,16 @@ WhatsApp:
 25 no recibirán el mensaje
 
 Voz:
-817 pueden recibir esta llamada ahora
-25 no recibirán la llamada
+817 pueden ser llamados ahora
+25 no serán llamados
 ```
 
-Texto visible para el desglose:
+Texto visible para el desglose, adaptado al canal:
 
 ```text
-25 NO RECIBIRÁN EL MENSAJE
+Correo: 25 NO RECIBIRÁN EL CORREO
+WhatsApp: 25 NO RECIBIRÁN EL MENSAJE
+Voz: 25 NO SERÁN LLAMADOS
 ```
 
 Motivos visibles:
