@@ -3961,7 +3961,7 @@ async def sync_persona_opportunity_context(
         or description_auto_generated
         or _looks_like_placeholder_opportunity_description(current_description)
     )
-    should_refresh_contact_need = bool(summary) and (
+    should_refresh_contact_need = bool(need) and (
         not current_contact_need
         or description_auto_generated
         or _looks_like_placeholder_insight(current_contact_need)
@@ -3979,8 +3979,8 @@ async def sync_persona_opportunity_context(
         metadata["contacto_telefono"] = phone
     if company_name:
         metadata["contacto_empresa"] = company_name
-    if summary and should_refresh_contact_need:
-        metadata["contacto_necesidad"] = summary
+    if need and should_refresh_contact_need:
+        metadata["contacto_necesidad"] = need
         metadata["contacto_necesidad_auto_generated"] = True
         metadata["contacto_necesidad_auto_source"] = "persona_sync"
         metadata["contacto_necesidad_auto_updated_at"] = datetime.now(timezone.utc).isoformat()

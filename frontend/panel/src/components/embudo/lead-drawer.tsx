@@ -862,7 +862,7 @@ export function LeadDrawer({
       notas: card?.notas ?? "",
       necesidadProposito: card?.necesidadProposito ?? "",
       proyectoNombre: card?.proyectoNombre ?? "",
-      proyectoNecesidades: card?.proyectoNecesidades ?? "",
+      proyectoNecesidades: card?.proyectoNecesidades ?? card?.necesidadProposito ?? "",
     };
   }, [card]);
 

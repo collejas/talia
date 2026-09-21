@@ -47,3 +47,20 @@ def test_pipeline_card_reads_contact_metadata_without_name_error():
     card = crm._card_from_opportunity(row)
 
     assert card is not None
+
+
+def test_pipeline_card_uses_insight_need_for_auto_generated_description():
+    row = {
+        "id": str(uuid4()),
+        "etapa_id": str(uuid4()),
+        "descripcion": "Resumen largo del contexto de la conversación.",
+        "metadata": {"description_auto_generated": True},
+        "contacto": {"necesidad_proposito": "Comprar una vivienda de dos recámaras."},
+        "cuenta": {},
+        "asignado": {},
+    }
+
+    card = crm._card_from_opportunity(row)
+
+    assert card is not None
+    assert card.proyecto_necesidades == "Comprar una vivienda de dos recámaras."

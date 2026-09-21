@@ -52939,7 +52939,16 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         or _clean_text(cuenta.get("nombre"))
         or None
     )
-    proyecto_necesidades = _clean_text(metadata.get("proyecto_necesidades")) or _clean_text(row.get("descripcion")) or None
+    proyecto_necesidades = _clean_text(metadata.get("proyecto_necesidades"))
+    if not proyecto_necesidades:
+        description_auto_generated = metadata.get("description_auto_generated") is True or str(
+            metadata.get("description_auto_generated") or ""
+        ).strip().lower() in {"1", "true", "yes", "si"}
+        proyecto_necesidades = (
+            necesidad_proposito
+            if description_auto_generated
+            else _clean_text(row.get("descripcion"))
+        ) or None
     # Las notas del contacto pertenecen al contacto. No deben aparecer como
     # "Resumen del contexto" en oportunidades creadas manualmente desde el
     # embudo; esa sección queda reservada para insights de Tal-IA.
