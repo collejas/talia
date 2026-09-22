@@ -321,6 +321,84 @@ Si el producto necesita listas estáticas en el futuro, deben ser otro objeto vi
 
 La interfaz debe explicar que aquí se guardan grupos de prospectos que cumplen ciertas reglas. El término técnico `audiencia` no debe ser necesario para operar esta pantalla.
 
+#### Regla principal: lista = vista guardada de Prospectos
+
+Una `Lista para contactar` no es un segmento reducido ni una lista de IDs congelados. Es una vista guardada de la base de `Prospectos` que conserva las reglas de filtrado para reutilizarlas en futuros contactos.
+
+Debe existir paridad funcional entre los filtros de `Prospectos` y los filtros que pueden guardarse en una lista. El usuario debe poder:
+
+```text
+Filtrar Prospectos
+        ↓
+Revisar el resultado
+        ↓
+Guardar esas reglas como Lista para contactar
+        ↓
+Reutilizar la lista sin volver a filtrar manualmente
+```
+
+El modal de creación y edición de listas debe incluir todos los filtros que tengan sentido para decidir a quién contactar. No debe limitarse a tipo de empresa, teléfono válido y “nunca contactado”. Si un filtro existe en `Prospectos` y sirve para construir una selección comercial, debe poder guardarse en la lista y resolverse nuevamente server-side.
+
+El canal se pregunta primero porque determina compatibilidad, lenguaje y reglas específicas, pero no debe ocultar los filtros generales. Elegir WhatsApp no debe impedir filtrar también por actividad económica, ubicación, calificación, campaña o tamaño de empresa.
+
+#### Filtros que debe poder conservar una lista
+
+Los filtros deben presentarse agrupados y con lenguaje humano:
+
+- **Empresa y clasificación:** Segmento guardado, Actividad económica, Tipo de negocio, fuente, tamaño de empresa y calificación de Google.
+- **Ubicación:** estado, municipio y demás campos geográficos disponibles en Prospectos.
+- **Datos de contacto:** tiene teléfono, tiene correo, tiene sitio web, teléfono válido, correo válido, sitio web válido y relación entre correo y sitio web.
+- **Tipo de teléfono:** móvil, fijo, teléfono por internet o desconocido, cuando el canal utilice teléfono.
+- **Permisos y disponibilidad:** Tiene WhatsApp, Se le puede enviar WhatsApp, Se le puede llamar y estados de no contacto.
+- **Historial de contacto:** número mínimo y máximo de correos, WhatsApps y llamadas; campaña; mensaje, correo o guion utilizado; respuestas y última actividad disponible.
+- **Fechas:** fecha de creación, último contacto por canal y ventanas como “no contactado en los últimos N días”, cuando la fuente de datos lo permita.
+- **CRM y operación:** etapa, estado comercial, cliente, oportunidad, perdido, datos completados y scraper, cuando esos filtros estén disponibles para Prospectos.
+
+La lista debe distinguir tres conceptos que no pueden mezclarse:
+
+```text
+Segmento guardado
+→ etiqueta comercial asignada al prospecto
+
+Actividad económica
+→ clasificación proveniente de DENUE u otra fuente empresarial
+
+Tipo de negocio
+→ clasificación proveniente de Google u otra fuente de búsqueda
+```
+
+Por ejemplo, una lista puede decir:
+
+```text
+Actividad económica = Consultorios de medicina general
+Tipo de negocio = Doctor / médico
+Estado = San Luis Potosí
+WhatsApps anteriores = 2 o más
+Calificación de Google = 4 o más
+```
+
+El campo visible no debe pedir al usuario que escriba libremente “doctores” si lo que se necesita es filtrar una clasificación real. Los valores deben provenir del catálogo o de los campos correspondientes de `Prospectos`, mostrando `Segmento guardado`, `Actividad económica` y `Tipo de negocio` como filtros separados.
+
+La relación normativa entre los tres campos es:
+
+| Campo visible | Dato interno actual | Fuente/semántica | Uso del filtro |
+|---|---|---|---|
+| Segmento guardado | `segmento` | Etiqueta comercial asignada manualmente al prospecto. | Coincidencia exacta contra uno o varios segmentos guardados. |
+| Actividad económica (DENUE/SCIAN) | `actividad` | Actividad económica registrada por DENUE/SCIAN u otra fuente empresarial equivalente. | Coincidencia exacta contra una o varias actividades existentes. |
+| Tipo de negocio (Google) | `google_primary_type_display_name` y `google_primary_type` | Clasificación principal proporcionada por Google. | Coincidencia contra el nombre visible o el identificador principal de Google. |
+
+`Búsqueda de origen` es un filtro independiente: utiliza la consulta que originó el prospecto (`query_sort`/`busqueda_ref`) y no debe mezclarse con ninguno de los tres campos anteriores. La interfaz debe ofrecer valores reales del tenant mediante autocompletado; el backend debe aplicar la misma relación que se mostró al usuario.
+
+Al crear una lista, la protección de permisos se determina automáticamente por el canal elegido. Para Correo y WhatsApp, la regla inicial es incluir únicamente personas que no tengan una baja activa para ese canal. Esta regla no requiere que el usuario configure manualmente un campo de opt-out y se vuelve a validar al preparar el contacto.
+
+Los clasificadores también dependen de la fuente seleccionada:
+
+- Google: tipo de negocio, nombre o texto de empresa y calificación de Google.
+- GobMX/DENUE: actividad económica, clasificación SCIAN y tamaño/estrato de empresa.
+- Sin fuente específica: se muestran inicialmente los grupos de Google y GobMX/DENUE para que el usuario conozca sus opciones; al elegir una fuente, se oculta el grupo incompatible y los catálogos comunes de origen se filtran por esa fuente.
+
+La interfaz no debe mostrar un clasificador de Google como si fuera una actividad económica DENUE, ni mostrar tamaño/estrato GobMX para resultados de Google.
+
 Listado:
 
 ```text
@@ -370,7 +448,7 @@ Si solo existe un canal compatible, Tal-IA no debe hacer la pregunta: debe conti
 
 El usuario no necesita entrar manualmente al módulo Marketing para continuar.
 
-La creación debe comenzar preguntando el canal de contacto. El canal elegido determina qué reglas se muestran y qué historial de contactos se puede filtrar:
+La creación debe comenzar preguntando el canal de contacto. El canal elegido determina el lenguaje, la compatibilidad y las reglas específicas del canal, pero los filtros generales permanecen disponibles:
 
 ```text
 ¿CÓMO QUIERES CONTACTAR A ESTOS PROSPECTOS?
@@ -378,11 +456,25 @@ La creación debe comenzar preguntando el canal de contacto. El canal elegido de
 [ Correo ] [ WhatsApp ] [ Voz ]
 ```
 
-Después solo deben aparecer reglas aplicables al canal seleccionado:
+Después se muestran primero las reglas generales y después las reglas aplicables al canal seleccionado:
 
-- **Correo:** correo válido y nunca recibió correo.
-- **WhatsApp:** teléfono válido, móvil, WhatsApp disponible, permiso de contacto y nunca recibió WhatsApp.
-- **Voz:** teléfono válido, tipo de teléfono, permiso para llamadas y nunca recibió una llamada.
+- **Correo:** correo válido, número de correos anteriores, último correo y permiso para contactar.
+- **WhatsApp:** teléfono válido, móvil, Tiene WhatsApp, Se le puede enviar WhatsApp, número de WhatsApps anteriores y último WhatsApp.
+- **Voz:** teléfono válido, tipo de teléfono, permiso para llamadas, número de llamadas anteriores y última llamada.
+
+Los filtros de historial deben permitir como mínimo:
+
+```text
+Nunca contactado
+Ya contactado
+Dos o menos contactos
+Dos o más contactos
+Exactamente dos contactos
+No contactado en los últimos [ N ] días
+Último contacto antes de [ fecha ]
+```
+
+La lista debe guardar las reglas, no los IDs que coincidieron en ese momento. La cantidad mostrada es informativa y debe recalcularse cuando se abre la lista, cuando se revisa un envío y cuando se confirma el contacto.
 
 La creación debe usar un constructor de reglas legible y siempre guardar las reglas, no los IDs que coincidieron en ese momento:
 
@@ -458,7 +550,7 @@ Pidió no recibir mensajes = No
 Último WhatsApp = Nunca
 ```
 
-Una lista puede usar múltiples segmentos y ubicaciones, además de filtros temporales. Los operadores técnicos no se muestran.
+Una lista puede usar múltiples segmentos, actividades económicas, tipos de negocio, ubicaciones y filtros temporales. Los operadores técnicos no se muestran.
 
 La interfaz debe distinguir siempre:
 

@@ -112,10 +112,30 @@ export type ProspectoFiltroInput = {
   email_lookup_status?: string | null
   email_domain_relation?: "same_as_website" | "different_from_website" | "no_website" | "no_email" | ""
   segmento?: string | null
+  segmentos?: string[] | null
+  actividades?: string[] | null
+  metadata_queries?: string[] | null
+  tipo_negocio?: string[] | null
   carrier_type?: "mobile" | "landline" | "voip" | ""
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate" | ""
   whatsapp_permitido?: boolean | null
   llamada_permitida?: boolean | null
+  phone_present?: boolean | null
+  email_present?: boolean | null
+  website_present?: boolean | null
+  geo_estado?: string | null
+  geo_municipio?: string | null
+  min_rating?: number | null
+  estrato_group?: string | null
+  date_from?: string | null
+  date_to?: string | null
+  campana_id?: string | null
+  template_id?: string | null
+  con_envio?: boolean | null
+  con_envio_canales?: Array<"correo" | "whatsapp" | "llamada"> | null
+  opt_out_canal?: "correo" | "whatsapp" | "llamada" | null
+  opt_out_whatsapp?: boolean | null
+  con_scraper?: boolean | null
   envios_correo_min?: number | null
   envios_correo_max?: number | null
   envios_whatsapp_min?: number | null
@@ -250,6 +270,7 @@ export type ProspectosBootstrapResponse = {
     queries: ProspectoQueryOption[]
     activities: string[]
     segmentos: string[]
+    tipos_negocio: string[]
   }
   preferences?: Record<string, unknown> | null
 }
@@ -866,6 +887,7 @@ type ListProspectosParams = {
   templateId?: string
   conEnvio?: boolean
   conEnvioCanales?: Array<"correo" | "whatsapp" | "llamada">
+  optOutCanal?: "correo" | "whatsapp" | "llamada"
   optOutWhatsapp?: boolean
   conScraper?: boolean
   enviosCorreoMin?: number
@@ -957,6 +979,9 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   if (typeof params.optOutWhatsapp === "boolean") {
     url.searchParams.set("opt_out_whatsapp", params.optOutWhatsapp ? "true" : "false")
   }
+  if (params.optOutCanal) {
+    url.searchParams.set("opt_out_canal", params.optOutCanal)
+  }
   if (typeof params.conScraper === "boolean") {
     url.searchParams.set("con_scraper", params.conScraper ? "true" : "false")
   }
@@ -1035,10 +1060,11 @@ export type ProspectoQueryOption = {
   municipio?: string | null
 }
 
-type ProspectosQueryMetadataResult = {
+export type ProspectosQueryMetadataResult = {
   queries: ProspectoQueryOption[]
   activities: string[]
   segmentos: string[]
+  tipos_negocio: string[]
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -1150,6 +1176,7 @@ export async function listProspectosQueryMetadata(params?: {
     >
     activities: string[]
     segmentos?: string[]
+    tipos_negocio?: string[]
   }>(url.toString(), { cache: "no-store", signal: params?.signal })
   const normalizedQueries = (response.queries ?? [])
     .map((item) => {
@@ -1170,6 +1197,7 @@ export async function listProspectosQueryMetadata(params?: {
     queries: normalizedQueries,
     activities: response.activities ?? [],
     segmentos: response.segmentos ?? [],
+    tipos_negocio: response.tipos_negocio ?? [],
   }
   })()
   prospectosQueryMetadataInflight.set(inflightKey, requestPromise)

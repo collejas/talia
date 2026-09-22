@@ -4579,6 +4579,10 @@ class ProspectoListQuery(BaseModel):
     website_lookup_status: str | None = Field(default=None, max_length=60)
     email_domain_relation: Literal["same_as_website", "different_from_website", "no_website", "no_email", ""] | None = Field(default=None)
     segmento: str | None = Field(default=None, max_length=120)
+    segmentos: list[str] | None = Field(default=None, max_length=50)
+    actividades: list[str] | None = Field(default=None, max_length=50)
+    metadata_queries: list[str] | None = Field(default=None, max_length=50)
+    tipo_negocio: list[str] | None = Field(default=None, max_length=50)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     order: Literal["creado", "nombre", "diverso"] | None = Field(default=None)
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
@@ -4595,6 +4599,7 @@ class ProspectoListQuery(BaseModel):
     estrato_group: str | None = Field(default=None, max_length=40)
     campana_id: UUID | None = Field(default=None)
     con_envio: bool | None = Field(default=None)
+    opt_out_canal: Literal["correo", "whatsapp", "llamada"] | None = Field(default=None)
     opt_out_whatsapp: bool | None = Field(default=None)
     con_scraper: bool | None = Field(default=None)
     envios_correo_min: int | None = Field(default=None, ge=0, le=1_000_000)
@@ -4630,12 +4635,29 @@ class ProspectoFiltroPayload(BaseModel):
     website_lookup_status: str | None = Field(default=None, max_length=60)
     email_domain_relation: Literal["same_as_website", "different_from_website", "no_website", "no_email", ""] | None = Field(default=None)
     segmento: str | None = Field(default=None, max_length=120)
+    segmentos: list[str] | None = Field(default=None, max_length=50)
+    actividades: list[str] | None = Field(default=None, max_length=50)
+    metadata_queries: list[str] | None = Field(default=None, max_length=50)
+    tipo_negocio: list[str] | None = Field(default=None, max_length=50)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
     whatsapp_permitido: bool | None = Field(default=None)
     llamada_permitida: bool | None = Field(default=None)
+    phone_present: bool | None = Field(default=None)
+    email_present: bool | None = Field(default=None)
+    website_present: bool | None = Field(default=None)
+    geo_estado: str | None = Field(default=None, max_length=120)
+    geo_municipio: str | None = Field(default=None, max_length=120)
+    min_rating: float | None = Field(default=None, ge=0, le=5)
+    estrato_group: str | None = Field(default=None, max_length=40)
+    date_from: date | None = Field(default=None)
+    date_to: date | None = Field(default=None)
     campana_id: UUID | None = Field(default=None)
+    template_id: UUID | None = Field(default=None)
     con_envio: bool | None = Field(default=None)
+    opt_out_canal: Literal["correo", "whatsapp", "llamada"] | None = Field(default=None)
+    con_envio_canales: list[Literal["correo", "whatsapp", "llamada"]] | None = Field(default=None, max_length=3)
+    opt_out_whatsapp: bool | None = Field(default=None)
     con_scraper: bool | None = Field(default=None)
     envios_correo_min: int | None = Field(default=None, ge=0, le=1_000_000)
     envios_correo_max: int | None = Field(default=None, ge=0, le=1_000_000)
@@ -4654,6 +4676,8 @@ class ProspectoFiltroPayload(BaseModel):
         for name, minimum, maximum in ranges:
             if minimum is not None and maximum is not None and minimum > maximum:
                 raise ValueError(f"{name}_min_must_be_less_or_equal_than_max")
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("date_from_must_be_less_or_equal_than_date_to")
         return self
 
 
@@ -11372,12 +11396,29 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
         "website_lookup_status": filters.website_lookup_status,
         "email_domain_relation": filters.email_domain_relation or None,
         "segmento": filters.segmento,
+        "segmentos": filters.segmentos,
+        "actividades": filters.actividades,
+        "metadata_queries": filters.metadata_queries,
+        "tipo_negocio": filters.tipo_negocio,
         "carrier_type": filters.carrier_type or None,
         "stage": filters.stage or None,
         "whatsapp_permitido": filters.whatsapp_permitido,
         "llamada_permitida": filters.llamada_permitida,
+        "phone_present": filters.phone_present,
+        "email_present": filters.email_present,
+        "website_present": filters.website_present,
+        "geo_estado": filters.geo_estado,
+        "geo_municipio": filters.geo_municipio,
+        "min_rating": filters.min_rating,
+        "estrato_group": filters.estrato_group,
+        "date_from": filters.date_from,
+        "date_to": filters.date_to,
         "campana_id": filters.campana_id,
+        "template_id": filters.template_id,
         "con_envio": filters.con_envio,
+        "opt_out_canal": filters.opt_out_canal,
+        "con_envio_canales": filters.con_envio_canales,
+        "opt_out_whatsapp": filters.opt_out_whatsapp,
         "con_scraper": filters.con_scraper,
         "envios_correo_min": filters.envios_correo_min,
         "envios_correo_max": filters.envios_correo_max,
@@ -34779,6 +34820,7 @@ async def listar_prospectos(
                 template_id=template_id,
                 con_envio=params.con_envio,
                 con_envio_canales=con_envio_canales_values or None,
+                opt_out_canal=params.opt_out_canal,
                 opt_out_whatsapp=params.opt_out_whatsapp,
                 con_scraper=params.con_scraper,
                 envios_correo_min=envios_correo_min,
@@ -35015,6 +35057,7 @@ async def listar_prospectos_query_metadata(
             "queries": metadata.get("queries", []),
             "activities": metadata.get("activities", []),
             "segmentos": metadata.get("segmentos", []),
+            "tipos_negocio": metadata.get("tipos_negocio", []),
         }
         if not inflight_future.done():
             inflight_future.set_result(payload)
@@ -35128,7 +35171,7 @@ async def listar_prospectos_bootstrap(
                             "limit": params.limit,
                             "offset": params.offset,
                         },
-                        {"ok": True, "queries": [], "activities": [], "segmentos": []},
+                        {"ok": True, "queries": [], "activities": [], "segmentos": [], "tipos_negocio": []},
                     ]
                     if include_preferences:
                         results.append({"ok": True, "preferences": None})
@@ -35153,6 +35196,7 @@ async def listar_prospectos_bootstrap(
             "queries": len(query_payload.get("queries") or []),
             "activities": len(query_payload.get("activities") or []),
             "segmentos": len(query_payload.get("segmentos") or []),
+            "tipos_negocio": len(query_payload.get("tipos_negocio") or []),
             "limit": params.limit,
             "offset": params.offset,
             "include_preferences": include_preferences,

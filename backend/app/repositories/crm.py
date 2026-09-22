@@ -20305,6 +20305,7 @@ class CRMRepository:
         email_domain_relation: str | None = None,
         segmento: str | None = None,
         segmentos: Sequence[str] | None = None,
+        tipo_negocio: Sequence[str] | None = None,
         carrier_type: str | None = None,
         order: str | None = None,
         stage: str | None = None,
@@ -20325,6 +20326,7 @@ class CRMRepository:
         template_id: UUID | None = None,
         con_envio: bool | None = None,
         con_envio_canales: Sequence[str] | None = None,
+        opt_out_canal: str | None = None,
         con_scraper: bool | None = None,
         envios_correo_min: int | None = None,
         envios_correo_max: int | None = None,
@@ -20422,6 +20424,13 @@ class CRMRepository:
             normalized_segmentos = sorted({str(value).strip() for value in segmentos if str(value).strip()})
             if normalized_segmentos:
                 params["segmento"] = _postgrest_in_clause(normalized_segmentos)
+        if tipo_negocio:
+            normalized_business_types = sorted({str(value).strip() for value in tipo_negocio if str(value).strip()})
+            if normalized_business_types:
+                business_type_clause = _postgrest_in_clause(normalized_business_types)
+                and_filters.append(
+                    f"or(google_primary_type_display_name.{business_type_clause},google_primary_type.{business_type_clause})"
+                )
         if carrier_type:
             params["carrier_type"] = f"eq.{carrier_type}"
         if stage:
@@ -20647,7 +20656,15 @@ class CRMRepository:
             elif scraper_prospecto_ids:
                 exclude_ids.update(scraper_prospecto_ids)
 
-        if opt_out_whatsapp is not None:
+        if opt_out_canal:
+            opt_out_ids = await self._list_prospecto_ids_with_contact_suppressions(
+                usuario_token=usuario_token,
+                organizacion_id=organizacion_id,
+                canal=opt_out_canal,
+            )
+            # Las listas para contactar excluyen por defecto las bajas del canal elegido.
+            exclude_ids.update(opt_out_ids)
+        elif opt_out_whatsapp is not None:
             opt_out_ids = await self._list_prospecto_ids_with_contact_suppressions(
                 usuario_token=usuario_token,
                 organizacion_id=organizacion_id,
@@ -21472,6 +21489,7 @@ class CRMRepository:
 
         # Fast path: usamos RPCs agregados en DB para evitar scans masivos en Python.
         # Si algo falla (migración faltante o error puntual), se usa fallback legacy.
+        tipos_negocio: list[str] = []
         try:
             if (
                 con_envio is not None
@@ -21587,6 +21605,9 @@ class CRMRepository:
                 )
                 activities = sorted(direct_taxonomy["activities"], key=lambda value: value.casefold())
                 segmentos = sorted(direct_taxonomy["segmentos"], key=lambda value: value.casefold())
+                tipos_negocio = sorted(direct_taxonomy["tipos_negocio"], key=lambda value: value.casefold())
+            else:
+                tipos_negocio = []
             if normalized_query_filters is not None:
                 queries = [
                     {
@@ -21621,12 +21642,13 @@ class CRMRepository:
                 "queries": queries,
                 "activities": activities,
                 "segmentos": segmentos,
+                "tipos_negocio": tipos_negocio,
             }
         except CRMRepositoryError:
             pass
 
         params: dict[str, str] = {
-            "select": "id,actividad,segmento,metadata,creado_en,busqueda_ref,envios_correo_total,envios_whatsapp_total,envios_voz_total",
+            "select": "id,actividad,segmento,google_primary_type_display_name,google_primary_type,google_types,metadata,creado_en,busqueda_ref,envios_correo_total,envios_whatsapp_total,envios_voz_total",
             # Orden estable para paginación con offset: evita duplicados/saltos entre páginas.
             "order": "query_sort.asc,actividad.asc,id.asc",
         }
@@ -21766,6 +21788,7 @@ class CRMRepository:
         query_municipality_labels: dict[str, str] = {}
         activity_values: set[str] = set()
         segmento_values: set[str] = set()
+        business_type_values: set[str] = set()
         for row in data:
             metadata = row.get("metadata")
             row_queries: list[str] = []
@@ -21914,6 +21937,10 @@ class CRMRepository:
                 candidate = segmento.strip()
                 if candidate:
                     segmento_values.add(candidate)
+            for field_name in ("google_primary_type_display_name", "google_primary_type"):
+                business_type = row.get(field_name)
+                if isinstance(business_type, str) and business_type.strip():
+                    business_type_values.add(business_type.strip())
 
         if selected_queries is not None:
             query_values = {str(value).strip() for value in (normalized_query_filters or []) if str(value or "").strip()}
@@ -21933,6 +21960,7 @@ class CRMRepository:
             "queries": queries,
             "activities": sorted(activity_values),
             "segmentos": sorted(segmento_values, key=lambda value: value.casefold()),
+            "tipos_negocio": sorted(business_type_values, key=lambda value: value.casefold()),
         }
 
     async def _list_prospect_taxonomy(
@@ -21947,7 +21975,7 @@ class CRMRepository:
     ) -> dict[str, set[str]]:
         zone = _resolve_timezone_zone(timezone_name)
         params: dict[str, str] = {
-            "select": "id,actividad,segmento",
+            "select": "id,actividad,segmento,google_primary_type_display_name,google_primary_type,google_types",
             "order": "id.asc",
         }
         if organizacion_id is not None:
@@ -21969,6 +21997,7 @@ class CRMRepository:
 
         activities: set[str] = set()
         segmentos: set[str] = set()
+        tipos_negocio: set[str] = set()
         seen_row_ids: set[str] = set()
         scan_offset = 0
         page_size = 1000
@@ -22007,11 +22036,16 @@ class CRMRepository:
                     candidate = segmento.strip()
                     if candidate:
                         segmentos.add(candidate)
+                for field_name in ("google_primary_type_display_name", "google_primary_type"):
+                    business_type = row.get(field_name)
+                    if isinstance(business_type, str) and business_type.strip():
+                        tipos_negocio.add(business_type.strip())
             scan_offset += len(page)
 
         return {
             "activities": activities,
             "segmentos": segmentos,
+            "tipos_negocio": tipos_negocio,
         }
 
     async def get_prospeccion_user_preference(

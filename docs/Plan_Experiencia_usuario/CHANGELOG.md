@@ -37,6 +37,10 @@ Plan principal: [PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md](./PLAN_A
 - La idempotencia debe complementarse con control de concurrencia para impedir que dos workers procesen el mismo destinatario.
 - Cada comunicación debe conservar trazabilidad desde el envío hasta el proveedor, webhook y estado final.
 - El nuevo asistente se activará progresivamente mediante un feature flag por organización o módulo, inicialmente `marketing_send_wizard_v2`.
+- Una Lista para contactar es una vista guardada de los filtros de Prospectos; no es una lista reducida de reglas ni una fotografía de IDs.
+- El modal de listas debe conservar todos los filtros de Prospectos que sirvan para decidir a quién contactar, agrupados por empresa, actividad, ubicación, contacto, historial, canal, fechas y CRM.
+- `Segmento guardado`, `Actividad económica` y `Tipo de negocio` son filtros distintos y deben utilizar sus fuentes de datos correspondientes.
+- Elegir canal primero determina compatibilidad y reglas específicas, pero no elimina los filtros generales de la lista.
 
 ### Regla de nombres y persistencia
 
@@ -50,7 +54,7 @@ Plan principal: [PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md](./PLAN_A
 ### Fases aprobadas
 
 - **F0 Baseline y contratos:** inventario real y matriz de compatibilidad.
-- **F1 Listas para contactar:** reglas, compatibilidad y conteo actual.
+- **F1 Listas para contactar:** vista guardada de filtros de Prospectos, compatibilidad, conteos e historial por canal.
 - **F2 Campañas por canal.**
 - **F3 Contenido:** correos, mensajes y guiones.
 - **F4 Envíos:** crear, revisar, revalidar y ejecutar.
@@ -92,6 +96,121 @@ PR / commit / issue / migración relacionada, si aplica.
 
 - ...
 ```
+
+## 2026-09-22 — Alineación de clasificación y origen de prospectos
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 Listas para contactar
+
+### Referencia
+
+Filtros dinámicos de Prospectos; sin migración de nombres ni estructura de base de datos.
+
+### Cambios
+
+- `Segmento guardado` se mantiene como la etiqueta comercial asignada al prospecto.
+- `Actividad económica (DENUE/SCIAN)` se filtra contra el campo `actividad`.
+- `Tipo de negocio (Google)` se filtra contra `google_primary_type_display_name` y `google_primary_type`, manteniendo la misma relación entre las opciones mostradas y la consulta aplicada.
+- `Búsqueda de origen` se mantiene separada y representa la consulta que originó el prospecto (`query_sort`/`busqueda_ref`).
+- El endpoint de metadatos de Prospectos entrega valores reales para autocompletar estos filtros en la creación de una Lista para contactar.
+- Se conservaron los nombres internos existentes; las etiquetas humanas se resuelven en la interfaz.
+
+### Archivos o superficies afectadas
+
+- `backend/app/repositories/crm.py`
+- `backend/app/api/routes/crm.py`
+- `frontend/panel/src/lib/prospeccion/prospectos-client.ts`
+- `frontend/panel/src/app/prospeccion/listas/page.client.tsx`
+
+### Validación
+
+- Validación sintáctica de backend pendiente de ejecutar con el entorno virtual del proyecto.
+- Validación de tipos y lint del panel pendiente.
+
+### Pendientes o riesgos
+
+- Confirmar en la interfaz autenticada que los valores mostrados provienen del tenant actual y que las tres reglas devuelven resultados esperados.
+
+## 2026-09-22 — Selectores visibles para clasificación de prospectos
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 Listas para contactar
+
+### Cambios
+
+- Los cuatro campos (`Segmento guardado`, `Actividad económica`, `Tipo de negocio` y `Búsqueda de origen`) ahora usan selectores visibles desde el primer clic.
+- Se eliminó el uso de `datalist`, que hacía que las opciones dependieran de una interacción poco evidente del navegador.
+- Los selectores permiten elegir varios valores y muestran los valores seleccionados con opción explícita para quitarlos.
+- Se corrigió el contrato de respuesta del endpoint para incluir `tipos_negocio`; antes el backend lo calculaba, pero la ruta no lo enviaba al frontend.
+
+### Validación
+
+- Pendiente validar visualmente con datos reales del tenant y confirmar que `Tipo de negocio (Google)` muestra opciones.
+
+## 2026-09-22 — Permisos por canal con exclusión predeterminada de bajas
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 Listas para contactar
+
+### Cambios
+
+- Las listas de Correo y WhatsApp guardan automáticamente el canal para aplicar la protección de permisos correspondiente.
+- Por defecto se excluyen las personas con una baja activa del canal seleccionado.
+- Se reutiliza la tabla existente de supresiones; no se agregó ni renombró estructura de base de datos.
+- La interfaz dejó de pedir manualmente un opt-out de WhatsApp dentro de los filtros generales y muestra la protección activa según el canal.
+- Se conserva el comportamiento legado de `opt_out_whatsapp` para consultas antiguas de Prospectos.
+
+## 2026-09-22 — Clasificadores específicos por fuente
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 Listas para contactar
+
+### Cambios
+
+- Google muestra tipo de negocio, nombre/texto de empresa y calificación de Google.
+- GobMX/DENUE muestra actividad económica y tamaño de empresa.
+- Al elegir una fuente se limpian los clasificadores incompatibles de la fuente anterior.
+- Con “Todas las fuentes” se muestran únicamente filtros comunes y se solicita elegir una fuente para ver clasificadores específicos.
+- Los catálogos de actividad, tipo de negocio y búsqueda de origen se solicitan al backend con la fuente seleccionada, evitando mezclar valores de Google y DENUE.
+- Al abrir el modal se muestran ambos grupos de clasificadores; al seleccionar una fuente se oculta el grupo incompatible sin perder los filtros comunes.
+
+## 2026-09-22 — Selector simple para historial de contactos
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 Listas para contactar
+
+### Cambios
+
+- El primer filtro después de elegir el canal ahora es `Historial de contactos`.
+- Se agregaron las opciones `Cualquier cantidad`, `Nunca contactados`, `Contactados al menos una vez` y `Cantidad personalizada`.
+- `Nunca contactados` se traduce internamente a mínimo `0` y máximo `0` para el canal seleccionado.
+- `Contactados al menos una vez` se traduce internamente a mínimo `1` sin máximo.
+- Las listas nuevas inician por defecto en `Nunca contactados` (`0` y `0`); al editar listas existentes se conservan sus reglas actuales.
 
 ## 2026-09-21 — Preparación operativa del refactor
 
@@ -172,6 +291,83 @@ F1 — Listas para contactar
 
 - Todavía faltan filtros temporales como “no contactado en los últimos N días”.
 - Todavía falta trasladar a la lista todos los filtros avanzados de `Prospectos` como presencia de datos, ubicación, calificación, campaña y estado CRM.
+
+## 2026-09-21 — Reglas generales para Listas para contactar
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 — Listas para contactar
+
+### Referencia
+
+`frontend/panel/src/app/prospeccion/listas/page.client.tsx` y `backend/app/api/routes/crm.py`
+
+### Cambios
+
+- Las listas pueden guardar estado, municipio, existencia de teléfono, correo y sitio web.
+- Se agregaron filtros de calificación mínima de Google y tamaño de empresa.
+- Estos filtros se reutilizan mediante el contrato existente y se resuelven server-side al recalcular la lista o crear un envío.
+- No se crearon tablas, columnas ni endpoints nuevos.
+
+### Validación
+
+- `py_compile` del módulo FastAPI modificado: correcto.
+- ESLint de los archivos frontend modificados: correcto.
+- TypeScript del panel (`tsc --noEmit`): correcto.
+- `git diff --check`: correcto.
+
+### Pendientes o riesgos
+
+- Falta implementar el filtro de último contacto por canal y ventanas como “no contactado en los últimos N días”.
+- Falta trasladar filtros de campaña, plantilla, respuestas, conversiones y estado CRM cuando se defina su semántica de lista.
+
+## 2026-09-22 — Modal completo de reglas para Listas para contactar
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 — Listas para contactar
+
+### Referencia
+
+`frontend/panel/src/app/prospeccion/listas/page.client.tsx`
+
+### Cambios
+
+- El modal conserva filtros generales de Prospectos además de los filtros específicos del canal.
+- Se agregaron fuente, segmentos múltiples, actividad económica, tipo de negocio, búsqueda de origen, etapa, campaña, estados de validación, presencia de datos, ubicación, calificación, tamaño, historial, fechas y scraper.
+- El contrato de filtros reutilizable acepta listas de actividades, tipos de negocio, consultas de origen, campañas, canales con historial y fechas.
+- El repositorio aplica `tipo_negocio` contra las clasificaciones existentes de Google y conserva la resolución server-side.
+- El canal sigue determinando compatibilidad y lenguaje, pero ya no elimina filtros generales.
+- La campaña y el contenido disponibles en el modal se filtran por el canal elegido; al cambiar de canal se limpian selecciones incompatibles.
+- No se crearon tablas ni endpoints nuevos.
+
+### Archivos o superficies afectadas
+
+- `backend/app/api/routes/crm.py`
+- `backend/app/repositories/crm.py`
+- `frontend/panel/src/lib/prospeccion/prospectos-client.ts`
+- `frontend/panel/src/app/prospeccion/listas/page.client.tsx`
+
+### Validación
+
+- Contrato Pydantic probado con actividad, tipo de negocio, segmentos múltiples, rango de envíos y fechas.
+- Backend compila correctamente.
+- ESLint del panel: correcto.
+- TypeScript del panel (`tsc --noEmit`): correcto.
+- `git diff --check`: correcto.
+
+### Pendientes o riesgos
+
+- Falta implementar el último contacto por canal y ventanas relativas como “no contactado en los últimos N días”.
+- La selección de actividad y tipo de negocio todavía usa texto separado por comas; debe evolucionar a catálogos/autocompletado basados en los valores reales disponibles.
 
 ## 2026-09-21 — Inventario inicial de F0
 
