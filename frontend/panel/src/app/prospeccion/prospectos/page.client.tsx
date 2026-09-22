@@ -34,6 +34,7 @@ import {
   ProspectosContactCounts,
   ProspectosClassificationFilters,
   ProspectosOperationalFilters,
+  ProspectosSearchFilters,
   type ProspectosFlowStep,
 } from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
@@ -3932,103 +3933,24 @@ function ProspectosView() {
               })}
               onClearSegments={() => setFilters((prev) => ({ ...prev, segmento: "", segmentoFilters: [] }))}
             />
-            <div className="grid gap-3 lg:grid-cols-[minmax(160px,260px)_180px_180px_160px_auto] lg:items-end">
-            <div className="space-y-1">
-              <Label>Buscar</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="Nombre, actividad, teléfono o email"
-                />
-                <Button type="submit" variant="secondary" size="sm">
-                  <IconSearch className="mr-2 size-4" />
-                  Buscar
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Estado</Label>
-              <Select
-                value={filters.geoEstado || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    geoEstado: value === "all" ? "" : value,
-                    geoMunicipio: "",
-                  }))
-                }
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder={geoLoading ? "Cargando..." : "Todos los estados"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {geoEstadoOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Municipio</Label>
-              <Select
-                value={filters.geoMunicipio || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    geoMunicipio: value === "all" ? "" : value,
-                  }))
-                }
-                disabled={!filters.geoEstado || !geoMunicipioOptions.length}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder={filters.geoEstado ? "Todos los municipios" : "Selecciona estado"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {geoMunicipioOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Ordenar por</Label>
-              <Select
-                value={filters.order}
-                onValueChange={(value) => {
-                  const nextOrder = (value as OrderOption) || "creado"
-                  setFilters((prev) => ({ ...prev, order: nextOrder }))
-                  setTableSort(
-                    nextOrder === "nombre"
-                      ? { key: "prospecto", direction: "asc" }
-                      : nextOrder === "diverso"
-                        ? { key: "diverso", direction: "asc" }
-                        : { key: "creado", direction: "desc" },
-                  )
-                }}
-              >
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="Orden" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="creado">Más recientes</SelectItem>
-                  <SelectItem value="nombre">Nombre (A-Z)</SelectItem>
-                  <SelectItem value="diverso">Orden diverso</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button type="button" variant="ghost" size="sm" onClick={handleClearFilters}>
-                Limpiar filtros
-              </Button>
-            </div>
-            </div>
+            <ProspectosSearchFilters
+              search={searchInput}
+              geoEstado={filters.geoEstado}
+              geoMunicipio={filters.geoMunicipio}
+              order={filters.order}
+              geoLoading={geoLoading}
+              geoEstados={geoEstadoOptions}
+              geoMunicipios={geoMunicipioOptions}
+              onSearchChange={setSearchInput}
+              onEstadoChange={(value) => setFilters((prev) => ({ ...prev, geoEstado: value === "all" ? "" : value, geoMunicipio: "" }))}
+              onMunicipioChange={(value) => setFilters((prev) => ({ ...prev, geoMunicipio: value === "all" ? "" : value }))}
+              onOrderChange={(value) => {
+                const nextOrder = (value as OrderOption) || "creado"
+                setFilters((prev) => ({ ...prev, order: nextOrder }))
+                setTableSort(nextOrder === "nombre" ? { key: "prospecto", direction: "asc" } : nextOrder === "diverso" ? { key: "diverso", direction: "asc" } : { key: "creado", direction: "desc" })
+              }}
+              onClear={handleClearFilters}
+            />
           </div>
         </form>
       </section>

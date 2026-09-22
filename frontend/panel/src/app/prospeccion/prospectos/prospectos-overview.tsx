@@ -1,6 +1,6 @@
 import type { ComponentType } from "react"
 import Link from "next/link"
-import { IconAlertTriangle, IconCalendar, IconChevronDown, IconLoader, IconRefresh } from "@tabler/icons-react"
+import { IconAlertTriangle, IconCalendar, IconChevronDown, IconLoader, IconRefresh, IconSearch } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -508,6 +508,71 @@ export function ProspectosOperationalFilters({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+    </div>
+  )
+}
+
+type LocationFilterOption = { value: string; label: string }
+type ProspectosSearchFiltersProps = {
+  search: string
+  geoEstado: string
+  geoMunicipio: string
+  order: "creado" | "nombre" | "diverso"
+  geoLoading: boolean
+  geoEstados: LocationFilterOption[]
+  geoMunicipios: LocationFilterOption[]
+  onSearchChange: (value: string) => void
+  onEstadoChange: (value: string) => void
+  onMunicipioChange: (value: string) => void
+  onOrderChange: (value: string) => void
+  onClear: () => void
+}
+
+export function ProspectosSearchFilters({
+  search,
+  geoEstado,
+  geoMunicipio,
+  order,
+  geoLoading,
+  geoEstados,
+  geoMunicipios,
+  onSearchChange,
+  onEstadoChange,
+  onMunicipioChange,
+  onOrderChange,
+  onClear,
+}: ProspectosSearchFiltersProps) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-[minmax(160px,260px)_180px_180px_160px_auto] lg:items-end">
+      <div className="space-y-1">
+        <Label>Buscar</Label>
+        <div className="flex items-center gap-2">
+          <Input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Nombre, actividad, teléfono o email" />
+          <Button type="submit" variant="secondary" size="sm"><IconSearch className="mr-2 size-4" />Buscar</Button>
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label>Estado</Label>
+        <Select value={geoEstado || "all"} onValueChange={onEstadoChange}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder={geoLoading ? "Cargando..." : "Todos los estados"} /></SelectTrigger>
+          <SelectContent><SelectItem value="all">Todos</SelectItem>{geoEstados.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label>Municipio</Label>
+        <Select value={geoMunicipio || "all"} onValueChange={onMunicipioChange} disabled={!geoEstado || !geoMunicipios.length}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder={geoEstado ? "Todos los municipios" : "Selecciona estado"} /></SelectTrigger>
+          <SelectContent><SelectItem value="all">Todos</SelectItem>{geoMunicipios.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label>Ordenar por</Label>
+        <Select value={order} onValueChange={onOrderChange}>
+          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Orden" /></SelectTrigger>
+          <SelectContent><SelectItem value="creado">Más recientes</SelectItem><SelectItem value="nombre">Nombre (A-Z)</SelectItem><SelectItem value="diverso">Orden diverso</SelectItem></SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-end"><Button type="button" variant="ghost" size="sm" onClick={onClear}>Limpiar filtros</Button></div>
     </div>
   )
 }
