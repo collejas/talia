@@ -170,6 +170,7 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - Se extrajo el grupo de clasificación y fecha a `ProspectosClassificationFilters`.
 - Se extrajo el grupo operativo de consulta, actividad, contacto, WhatsApp y Segmento guardado a `ProspectosOperationalFilters`.
 - Se extrajo el bloque de búsqueda general, ubicación, ordenamiento y limpieza a `ProspectosSearchFilters`.
+- Se extrajo la cabecera de resultados, cambio entre Grupos/Prospectos y resumen de paginación a `ProspectosResultsHeader`.
 - La página principal conserva los callbacks, datos, rutas y estados existentes.
 - Se movieron a componentes visuales las tarjetas de flujo, estados de carga, errores, vacío, resumen de envíos y vistas guardadas.
 - El grupo extraído continúa usando los mismos valores y filtros server-side: `fuente`, `lookup_status`, `email_lookup_status` y `website_lookup_status`.
@@ -178,6 +179,7 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - La extracción conserva dominio correo/sitio, calificación, tamaño/estrato y rangos de fecha, incluidos los rangos personalizados.
 - Se conservaron selecciones múltiples, búsqueda de opciones, estados de carga y las reglas existentes de Segmento guardado y contacto.
 - Se conservaron los cambios dependientes de ubicación: al cambiar estado se limpia el municipio y se mantienen las opciones server-side actuales.
+- Las acciones existentes de crear, importar, actualizar, configurar columnas, validar, ejecutar scraper, preparar envíos y eliminar siguen conectadas desde la página principal.
 - No se modificaron endpoints, contratos, filtros, consultas, base de datos ni métodos de envío.
 
 #### Validación realizada

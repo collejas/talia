@@ -35,6 +35,7 @@ import {
   ProspectosClassificationFilters,
   ProspectosOperationalFilters,
   ProspectosSearchFilters,
+  ProspectosResultsHeader,
   type ProspectosFlowStep,
 } from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
@@ -4275,46 +4276,21 @@ function ProspectosView() {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+
       <section id="prospectos" className="overflow-hidden rounded-lg border bg-card shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
-            <div>
-              <p className="text-sm font-medium">Prospectos guardados</p>
-              <p className="text-xs text-muted-foreground">
-                {prospectosViewMode === "grupos"
-                  ? `${groupedQueryOptions.length} grupos de búsqueda`
-                  : `Total: ${effectiveTotal} registros · Mostrando ${showingFrom}-${Math.max(showingFrom, showingTo)} · Página ${currentPage} de ${Math.max(pageCount, 1)}`}
-                {activeQueryGroupLabel && prospectosViewMode === "prospectos"
-                  ? ` · Grupo: ${activeQueryGroupLabel}`
-                  : ""}
-              </p>
-            </div>
-	            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-md border p-0.5">
-                <Button
-                  type="button"
-                  variant={prospectosViewMode === "grupos" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => setProspectosViewMode("grupos")}
-                >
-                  Grupos
-                </Button>
-                <Button
-                  type="button"
-                  variant={prospectosViewMode === "prospectos" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => setProspectosViewMode("prospectos")}
-                >
-                  Prospectos
-                </Button>
-              </div>
-              {prospectosViewMode === "prospectos" ? renderProspectosPaginationControls() : null}
-              {prospectosViewMode === "prospectos" && activeQueryGroup ? (
-                <Button variant="outline" size="sm" onClick={handleBackToQueryGroups}>
-                  Ver grupos
-                </Button>
-              ) : null}
+        <ProspectosResultsHeader
+          viewMode={prospectosViewMode}
+          total={effectiveTotal}
+          showingFrom={showingFrom}
+          showingTo={showingTo}
+          currentPage={currentPage}
+          pageCount={pageCount}
+          groupCount={groupedQueryOptions.length}
+          activeGroupLabel={activeQueryGroupLabel}
+          pagination={renderProspectosPaginationControls()}
+          onViewModeChange={setProspectosViewMode}
+          onBackToGroups={handleBackToQueryGroups}
+        >
 	              <Button size="sm" onClick={handleOpenCreateDialog}>
 	                <IconPlus className="mr-1.5 size-4" />
 	                Agregar prospecto
@@ -4426,8 +4402,7 @@ function ProspectosView() {
                 Eliminar grupos
               </Button>
             ) : null}
-          </div>
-        </div>
+        </ProspectosResultsHeader>
 
           {error ? (
             <div className="flex flex-wrap items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:px-6">

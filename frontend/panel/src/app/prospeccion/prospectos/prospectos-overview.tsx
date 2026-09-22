@@ -1,4 +1,4 @@
-import type { ComponentType } from "react"
+import type { ComponentType, ReactNode } from "react"
 import Link from "next/link"
 import { IconAlertTriangle, IconCalendar, IconChevronDown, IconLoader, IconRefresh, IconSearch } from "@tabler/icons-react"
 
@@ -573,6 +573,59 @@ export function ProspectosSearchFilters({
         </Select>
       </div>
       <div className="flex items-end"><Button type="button" variant="ghost" size="sm" onClick={onClear}>Limpiar filtros</Button></div>
+    </div>
+  )
+}
+
+type ProspectosResultsHeaderProps = {
+  viewMode: "grupos" | "prospectos"
+  total: number
+  showingFrom: number
+  showingTo: number
+  currentPage: number
+  pageCount: number
+  groupCount: number
+  activeGroupLabel: string | null
+  pagination: ReactNode
+  children: ReactNode
+  onViewModeChange: (mode: "grupos" | "prospectos") => void
+  onBackToGroups: () => void
+}
+
+export function ProspectosResultsHeader({
+  viewMode,
+  total,
+  showingFrom,
+  showingTo,
+  currentPage,
+  pageCount,
+  groupCount,
+  activeGroupLabel,
+  pagination,
+  children,
+  onViewModeChange,
+  onBackToGroups,
+}: ProspectosResultsHeaderProps) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
+      <div>
+        <p className="text-sm font-medium">Prospectos guardados</p>
+        <p className="text-xs text-muted-foreground">
+          {viewMode === "grupos"
+            ? `${groupCount} grupos de búsqueda`
+            : `Total: ${total} registros · Mostrando ${showingFrom}-${Math.max(showingFrom, showingTo)} · Página ${currentPage} de ${Math.max(pageCount, 1)}`}
+          {activeGroupLabel && viewMode === "prospectos" ? ` · Grupo: ${activeGroupLabel}` : ""}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center rounded-md border p-0.5">
+          <Button type="button" variant={viewMode === "grupos" ? "secondary" : "ghost"} size="sm" className="h-7 px-2 text-xs" onClick={() => onViewModeChange("grupos")}>Grupos</Button>
+          <Button type="button" variant={viewMode === "prospectos" ? "secondary" : "ghost"} size="sm" className="h-7 px-2 text-xs" onClick={() => onViewModeChange("prospectos")}>Prospectos</Button>
+        </div>
+        {viewMode === "prospectos" ? pagination : null}
+        {viewMode === "prospectos" && activeGroupLabel ? <Button variant="outline" size="sm" onClick={onBackToGroups}>Ver grupos</Button> : null}
+        {children}
+      </div>
     </div>
   )
 }
