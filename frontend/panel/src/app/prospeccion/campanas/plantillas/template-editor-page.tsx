@@ -1512,11 +1512,18 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
                   {logos.map((logo) => {
                     const selected = imageIds[selectedImageSlot] === logo.id
                     return (
-                      <button
+                      <div
                         key={logo.id}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
                         className={`overflow-hidden rounded-lg border p-2 text-left transition-colors ${selected ? "border-primary ring-2 ring-primary/20" : "hover:border-primary/60"}`}
                         onClick={() => setImageIds((previous) => ({ ...previous, [selectedImageSlot]: logo.id }))}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault()
+                            setImageIds((previous) => ({ ...previous, [selectedImageSlot]: logo.id }))
+                          }
+                        }}
                       >
                         <div className="flex h-36 items-center justify-center overflow-hidden rounded-md bg-muted/30">
                           <Image
@@ -1545,7 +1552,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
                             </Button>
                           </div>
                         </div>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>

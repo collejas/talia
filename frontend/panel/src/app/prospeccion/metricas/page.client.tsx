@@ -27,11 +27,13 @@ import {
   getContactoBatchResumen,
   listContactoBatches,
   listContactoEnvios,
+  listProspeccionListas,
   listContactoTemplates,
   downloadProspeccionMetricasXlsx,
   type ContactoBatch,
   type ContactoBatchResumen,
   type ContactoEnvio,
+  type ProspeccionLista,
   type ContactoTemplate,
   type ProspeccionMetricasResponse,
   type ProspeccionCampanaAtribucionItem,
@@ -81,6 +83,23 @@ function getRecipientLabel(envio: ContactoEnvio, index: number) {
     if (typeof candidate === "string") return candidate.trim()
   }
   return `Destinatario ${index + 1}`
+}
+
+function getBatchContentLabel(batch: ContactoBatch) {
+  const metadata = batch.metadata && typeof batch.metadata === "object" ? batch.metadata : {}
+  const programacion = batch.programacion && typeof batch.programacion === "object" ? batch.programacion : {}
+  const candidate = [
+    metadata.template_nombre,
+    metadata.template_name,
+    metadata.template_label,
+    metadata.whatsapp_template_name_snapshot,
+    metadata.correo_asunto,
+    metadata.whatsapp_mensaje,
+    metadata.llamada_notas,
+    programacion.template_nombre,
+    programacion.template_name,
+  ].find((value) => typeof value === "string" && value.trim())
+  return typeof candidate === "string" ? candidate.trim() : "Contenido no identificado"
 }
 
 function escapeCsvValue(value: string | number | null | undefined) {
@@ -159,6 +178,7 @@ export default function ProspeccionMetricasPageClient() {
   const [selectedCampaignName, setSelectedCampaignName] = useState<string | null>(null)
   const [campaignBatches, setCampaignBatches] = useState<ContactoBatch[]>([])
   const [campaignBatchesLoading, setCampaignBatchesLoading] = useState(false)
+  const [contactListsById, setContactListsById] = useState<Record<string, ProspeccionLista>>({})
   const [selectedBatch, setSelectedBatch] = useState<ContactoBatch | null>(null)
   const [selectedBatchSummary, setSelectedBatchSummary] = useState<ContactoBatchResumen | null>(null)
   const [batchEnvios, setBatchEnvios] = useState<ContactoEnvio[]>([])
@@ -825,14 +845,31 @@ export default function ProspeccionMetricasPageClient() {
     setBatchEnvios([])
     setCampaignBatchesLoading(true)
     try {
-      const response = await listContactoBatches({
-        campana_id: campaignId,
-        limit: 100,
-        include_resumen: true,
-        include_total: false,
-        order: "reciente",
-      })
+      const [response, listsResponse] = await Promise.all([
+        listContactoBatches({
+          campana_id: campaignId,
+          limit: 100,
+          include_resumen: true,
+          include_total: false,
+          order: "reciente",
+        }),
+        listProspeccionListas({ limit: 200, offset: 0 }),
+      ])
       setCampaignBatches(Array.isArray(response.items) ? response.items : [])
+      if (Array.isArray(listsResponse.items)) {
+        const remainingOffsets = []
+        for (let offset = listsResponse.items.length; offset < listsResponse.total; offset += 200) {
+          remainingOffsets.push(offset)
+        }
+        const remainingPages = await Promise.all(
+          remainingOffsets.map((offset) => listProspeccionListas({ limit: 200, offset })),
+        )
+        const allLists = [listsResponse, ...remainingPages].flatMap((page) => page.items || [])
+        setContactListsById((previous) => ({
+          ...previous,
+          ...Object.fromEntries(allLists.map((list) => [list.id, list])),
+        }))
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron cargar los envíos de la campaña.")
       setCampaignBatches([])
@@ -1213,6 +1250,10 @@ export default function ProspeccionMetricasPageClient() {
               <p className="text-sm text-muted-foreground">
                 {selectedBatch.titulo || selectedCampaignName || "Envío"} · {selectedBatch.creado_en ? new Date(selectedBatch.creado_en).toLocaleString("es-MX") : "Fecha no disponible"}
               </p>
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                <span><strong className="font-medium text-foreground">Contenido:</strong> {getBatchContentLabel(selectedBatch)}</span>
+                <span><strong className="font-medium text-foreground">Lista:</strong> {selectedBatch.lista_id ? contactListsById[selectedBatch.lista_id]?.nombre || "Lista para contactar" : "Reglas directas"}</span>
+              </div>
             </div>
             <Badge variant="outline">{formatContactStatus(selectedBatch.estado)}</Badge>
           </div>
@@ -1293,9 +1334,10 @@ export default function ProspeccionMetricasPageClient() {
                     const total = batch.total_envios ?? batch.total_prospectos ?? 0
                     const completed = Object.entries(batch.totales || {}).filter(([status]) => ["entregado", "completado", "respondido", "enviado"].includes(status)).reduce((sum, [, value]) => sum + Number(value || 0), 0)
                     return (
-                      <button key={batch.id} type="button" onClick={() => void openBatchDetails(batch)} className="grid w-full gap-3 px-5 py-4 text-left transition hover:bg-muted/50 md:grid-cols-[1.4fr_1fr_0.8fr_0.8fr_auto] md:items-center">
+                      <button key={batch.id} type="button" onClick={() => void openBatchDetails(batch)} className="grid w-full gap-3 px-5 py-4 text-left transition hover:bg-muted/50 md:grid-cols-[1.25fr_1.15fr_1.1fr_0.7fr_0.7fr_auto] md:items-center">
                         <span><span className="block font-medium">{batch.titulo || "Envío sin título"}</span><span className="text-xs text-muted-foreground">{batch.creado_en ? new Date(batch.creado_en).toLocaleString("es-MX") : "Fecha no disponible"}</span></span>
-                        <span className="text-sm text-muted-foreground">{(batch.canales || []).map((value) => value === "llamada" ? "Voz" : value === "whatsapp" ? "WhatsApp" : "Correo").join(", ") || "—"}</span>
+                        <span><span className="block text-xs text-muted-foreground">Contenido</span><span className="truncate text-sm text-muted-foreground">{getBatchContentLabel(batch)}</span></span>
+                        <span><span className="block text-xs text-muted-foreground">Lista</span><span className="truncate text-sm text-muted-foreground">{batch.lista_id ? contactListsById[batch.lista_id]?.nombre || "Lista para contactar" : "Reglas directas"}</span></span>
                         <span><span className="block text-xs text-muted-foreground">Personas</span><span className="font-semibold">{number.format(total)}</span></span>
                         <span><span className="block text-xs text-muted-foreground">Procesadas</span><span className="font-semibold">{number.format(completed)}</span></span>
                         <span className="text-sm font-medium text-primary">Ver detalle →</span>

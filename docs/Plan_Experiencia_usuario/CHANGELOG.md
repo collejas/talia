@@ -101,6 +101,17 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - La solución recomendada es guardar metadatos en la base de datos y el HTML/texto en almacenamiento privado con retención definida.
 - No se modifican por ahora los métodos, proveedores, workers ni contratos actuales de envío de Correo.
 
+### F5 — Drill-down de contenido y lista
+
+**Estado:** En validación
+
+- El detalle de una campaña ahora muestra cada envío con su contenido utilizado y la Lista para contactar asociada.
+- El detalle del destinatario conserva esa misma trazabilidad: campaña, contenido, lista, envío y estado individual.
+- Se reutilizan `metadata`, `lista_id` y los endpoints actuales; no se agregaron tablas ni contratos paralelos.
+- Las listas se consultan solo al abrir el detalle de campaña para evitar cargar información innecesaria en el Resumen.
+
+**Validación realizada:** ESLint, TypeScript y `git diff --check` sin errores.
+
 ## 2026-09-22 — F5: Resumen general y salud de canales documentados
 
 ### Estado
