@@ -1704,6 +1704,8 @@ F6.6  Validación completa
 
 ##### F6.0 — Inventario y contratos actuales
 
+**Estado actual:** inventario técnico documentado en [F6_BASELINE_INVENTARIO.md](./F6_BASELINE_INVENTARIO.md). Pendiente validación visual y autorización de F6.1.
+
 Antes de modificar la pantalla se debe documentar:
 
 - Componentes actuales de `prospeccion/prospectos`.

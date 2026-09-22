@@ -126,6 +126,33 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - Se estableció que Segmento guardado, Actividad económica, Tipo de negocio y Búsqueda de origen deben conservar relaciones semánticas distintas.
 - Se estableció que cada subfase debe tener contrato, validación técnica, validación visual, revisión de tenant y evidencia de no regresión.
 
+### F6.0 — Línea base técnica de Prospectos y Búsqueda
+
+**Estado:** Inventario técnico completado; pendiente revisión visual y aprobación para F6.1
+**Fase:** F6.0 — Inventario y contratos actuales
+**Referencia:** [`F6_BASELINE_INVENTARIO.md`](./F6_BASELINE_INVENTARIO.md)
+
+#### Cambios documentados
+
+- Se inventariaron las vistas monolíticas de Prospectos, Google Places y GobMX/DENUE, junto con sus clientes frontend.
+- Se identificaron los contratos actuales de listado, bootstrap, metadatos, resultados, mapa, bounds, jobs y guardado de prospectos.
+- Se confirmó que Prospectos ya usa filtros y paginación server-side; el límite actual del listado es 500 y el offset 10,000.
+- Se documentaron los filtros actuales de fuente, contacto, validación, envíos por canal, actividad, segmento, ubicación, origen y clasificación.
+- Se documentaron las diferencias semánticas entre Segmento guardado, Actividad económica, Tipo de negocio, Búsqueda de origen, Tamaño de empresa y Calificación de Google.
+- Se identificó que `tipo_negocio` existe en schemas/repositorio, pero no está conectado completamente al listado actual; queda como brecha de F6.2.
+- Se documentaron las tablas y relaciones existentes sin proponer renombrarlas ni crear estructuras paralelas.
+
+#### Validación
+
+- Revisión estática de archivos frontend, clientes TypeScript, rutas FastAPI, repositorio CRM y migraciones existentes.
+- No se modificó código de ejecución, base de datos, API ni servicios en F6.0.
+- Se ejecutará `git diff --check` después de registrar este documento.
+
+#### Pendientes
+
+- Revisión visual de las tres vistas en navegador.
+- Inicio de F6.1 para separar Prospectos en componentes pequeños conservando el comportamiento actual.
+
 ### F5 — Drill-down de contenido y lista
 
 **Estado:** En validación
