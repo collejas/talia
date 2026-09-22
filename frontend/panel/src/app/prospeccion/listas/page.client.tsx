@@ -755,8 +755,20 @@ export function ListasParaContactarClient() {
                       <SelectItem value="google_places">Google</SelectItem>
                       <SelectItem value="denue">DENUE</SelectItem>
                       <SelectItem value="usuario">Agregado manualmente</SelectItem>
-                    </SelectContent>
+                  </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lista-segmento">Segmento guardado</Label>
+                  <TaxonomySelect
+                    id="lista-segmento"
+                    value={form.segmento}
+                    options={taxonomyOptions.segmentos}
+                    placeholder="Selecciona uno o más segmentos"
+                    emptyMessage="No hay segmentos guardados disponibles"
+                    onChange={(value) => setForm((prev) => ({ ...prev, segmento: value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">Etiqueta comercial asignada a tus prospectos.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lista-campana">Campaña</Label>
@@ -902,84 +914,82 @@ export function ListasParaContactarClient() {
                 </p>
                 </> : null}
               </div>
-              <p className="mb-4 text-sm font-medium">Quiero prospectos que...</p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="lista-segmento">Segmento guardado</Label>
-                  <TaxonomySelect
-                    id="lista-segmento"
-                    value={form.segmento}
-                    options={taxonomyOptions.segmentos}
-                    placeholder="Selecciona uno o más segmentos"
-                    emptyMessage="No hay segmentos guardados disponibles"
-                    onChange={(value) => setForm((prev) => ({ ...prev, segmento: value }))}
-                  />
-                  <p className="text-xs text-muted-foreground">Etiqueta comercial asignada a tus prospectos. Puedes separar varios con comas.</p>
+              <div className="mt-5 border-t pt-4">
+                <p className="mb-3 text-sm font-medium">Datos de contacto del canal</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {form.canal === "correo" ? <div className="space-y-2">
+                    <Label htmlFor="lista-correo-valido">Correo electrónico</Label>
+                    <Select value={form.emailLookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, emailLookupStatus: value === "any" ? "" : value }))}>
+                      <SelectTrigger id="lista-correo-valido"><SelectValue placeholder="Cualquier correo" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Cualquier correo</SelectItem>
+                        <SelectItem value="valido">Correo válido</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div> : null}
+                  {form.canal !== "correo" ? <>
+                    <div className="space-y-2">
+                      <Label htmlFor="lista-telefono">Teléfono</Label>
+                      <Select value={form.lookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, lookupStatus: value === "any" ? "" : value }))}>
+                        <SelectTrigger id="lista-telefono"><SelectValue placeholder="Cualquier teléfono" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">Cualquier teléfono</SelectItem>
+                          <SelectItem value="verificado">Teléfono válido</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lista-tipo-telefono">Tipo de teléfono</Label>
+                      <Select value={form.carrierType || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, carrierType: value === "any" ? "" : value }))}>
+                        <SelectTrigger id="lista-tipo-telefono"><SelectValue placeholder="Cualquier tipo" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">Cualquier tipo</SelectItem>
+                          <SelectItem value="mobile">Móvil</SelectItem>
+                          <SelectItem value="landline">Fijo</SelectItem>
+                          <SelectItem value="voip">Teléfono por internet</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </> : null}
                 </div>
-                {form.canal === "correo" ? <div className="space-y-2">
-                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-                    <p className="font-medium">Protección de permisos activa</p>
-                    <p className="mt-1">Por defecto se excluyen las personas que pidieron no recibir correo.</p>
-                  </div>
-                  <Label htmlFor="lista-correo-valido">Tengan</Label>
-                  <Select value={form.emailLookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, emailLookupStatus: value === "any" ? "" : value }))}>
-                    <SelectTrigger id="lista-correo-valido"><SelectValue placeholder="Cualquier correo" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Cualquier correo</SelectItem>
-                      <SelectItem value="valido">Correo válido</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div> : null}
-                {form.canal !== "correo" ? <>
-                  <div className="space-y-2">
-                    <Label htmlFor="lista-telefono">Tengan</Label>
-                    <Select value={form.lookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, lookupStatus: value === "any" ? "" : value }))}>
-                      <SelectTrigger id="lista-telefono"><SelectValue placeholder="Cualquier teléfono" /></SelectTrigger>
+              </div>
+              <div className="mt-5 border-t pt-4">
+                <p className="mb-3 text-sm font-medium">Permisos para contactar</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {form.canal === "whatsapp" ? <div className="space-y-2">
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+                      <p className="font-medium">Protección de permisos activa</p>
+                      <p className="mt-1">Por defecto se excluyen las personas que pidieron no recibir WhatsApp.</p>
+                    </div>
+                    <Label htmlFor="lista-whatsapp">WhatsApp</Label>
+                    <Select value={form.whatsappPermitido || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, whatsappPermitido: value === "any" ? "" : value }))}>
+                      <SelectTrigger id="lista-whatsapp"><SelectValue placeholder="Sin regla de WhatsApp" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="any">Cualquier teléfono</SelectItem>
-                        <SelectItem value="verificado">Teléfono válido</SelectItem>
+                        <SelectItem value="any">Sin regla de WhatsApp</SelectItem>
+                        <SelectItem value="true">Se le puede enviar WhatsApp</SelectItem>
+                        <SelectItem value="false">No se le puede enviar WhatsApp</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lista-tipo-telefono">Tipo de teléfono</Label>
-                    <Select value={form.carrierType || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, carrierType: value === "any" ? "" : value }))}>
-                      <SelectTrigger id="lista-tipo-telefono"><SelectValue placeholder="Cualquier tipo" /></SelectTrigger>
+                  </div> : null}
+                  {form.canal === "correo" ? <div className="space-y-2">
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+                      <p className="font-medium">Protección de permisos activa</p>
+                      <p className="mt-1">Por defecto se excluyen las personas que pidieron no recibir correo.</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Las bajas de correo se excluyen automáticamente.</p>
+                  </div> : null}
+                  {form.canal === "llamada" ? <div className="space-y-2">
+                    <Label htmlFor="lista-llamada">Llamadas</Label>
+                    <Select value={form.llamadaPermitida || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, llamadaPermitida: value === "any" ? "" : value }))}>
+                      <SelectTrigger id="lista-llamada"><SelectValue placeholder="Sin regla de llamadas" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="any">Cualquier tipo</SelectItem>
-                        <SelectItem value="mobile">Móvil</SelectItem>
-                        <SelectItem value="landline">Fijo</SelectItem>
-                        <SelectItem value="voip">Teléfono por internet</SelectItem>
+                        <SelectItem value="any">Sin regla de llamadas</SelectItem>
+                        <SelectItem value="true">Se le puede llamar</SelectItem>
+                        <SelectItem value="false">No se le puede llamar</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                </> : null}
-                {form.canal === "whatsapp" ? <div className="space-y-2">
-                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-                    <p className="font-medium">Protección de permisos activa</p>
-                    <p className="mt-1">Por defecto se excluyen las personas que pidieron no recibir WhatsApp.</p>
-                  </div>
-                  <Label htmlFor="lista-whatsapp">WhatsApp</Label>
-                  <Select value={form.whatsappPermitido || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, whatsappPermitido: value === "any" ? "" : value }))}>
-                    <SelectTrigger id="lista-whatsapp"><SelectValue placeholder="Sin regla de WhatsApp" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Sin regla de WhatsApp</SelectItem>
-                      <SelectItem value="true">Se le puede enviar WhatsApp</SelectItem>
-                      <SelectItem value="false">No se le puede enviar WhatsApp</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div> : null}
-                {form.canal === "llamada" ? <div className="space-y-2">
-                  <Label htmlFor="lista-llamada">Llamadas</Label>
-                  <Select value={form.llamadaPermitida || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, llamadaPermitida: value === "any" ? "" : value }))}>
-                    <SelectTrigger id="lista-llamada"><SelectValue placeholder="Sin regla de llamadas" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Sin regla de llamadas</SelectItem>
-                      <SelectItem value="true">Se le puede llamar</SelectItem>
-                      <SelectItem value="false">No se le puede llamar</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div> : null}
+                  </div> : null}
+                </div>
               </div>
               <div className="mt-5 border-t pt-4">
                 <p className="mb-3 text-sm font-medium">Validación, historial y CRM</p>

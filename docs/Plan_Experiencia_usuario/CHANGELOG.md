@@ -212,6 +212,24 @@ F1 Listas para contactar
 - `Contactados al menos una vez` se traduce internamente a mínimo `1` sin máximo.
 - Las listas nuevas inician por defecto en `Nunca contactados` (`0` y `0`); al editar listas existentes se conservan sus reglas actuales.
 
+## 2026-09-22 — Reordenamiento lógico de filtros por responsabilidad
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 Listas para contactar
+
+### Cambios
+
+- `Segmento guardado` pasó a `Filtros generales de Prospectos`.
+- El filtro de correo quedó dentro de `Datos de contacto del canal`.
+- `Teléfono` y `Tipo de teléfono` quedaron agrupados como datos de contacto telefónico.
+- WhatsApp y llamadas quedaron agrupados en `Permisos para contactar`.
+- Se eliminó la mezcla de estos campos dentro de la sección genérica de reglas.
+
 ## 2026-09-21 — Preparación operativa del refactor
 
 ### Estado
