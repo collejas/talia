@@ -305,7 +305,7 @@ F1 — Listas para contactar
 - TypeScript del panel (`tsc --noEmit`): correcto.
 - `git diff --check`: correcto.
 
-## 2026-09-22 — Regla operativa de Correo y separación de WhatsApp
+## 2026-09-22 — Refactor UX sin cambios en procesamiento de Correo ni WhatsApp
 
 ### Estado
 
@@ -325,12 +325,13 @@ F4 — Envíos
 - El wizard no debe controlar separación entre correos ni tamaño técnico de bloques para Correo.
 - Postmark mantiene bloques de hasta 500 mediante `/email/batch` y su pausa operativa entre bloques.
 - Brevo conserva sus propios workers, cuotas y límites.
-- La configuración operativa de WhatsApp quedó explícitamente pendiente y no heredará reglas de Correo.
+- WhatsApp conserva sus métodos actuales de envío, proveedor, workers, límites y reintentos.
+- El refactor se limita a la experiencia de usuario y a la organización del wizard.
 
 ### Pendientes
 
 - Ajustar el wizard para ocultar controles de separación y lote cuando el canal sea Correo.
-- Definir posteriormente la operación específica de WhatsApp.
+- No cambiar el procesamiento backend de Correo ni WhatsApp dentro de este refactor.
 
 ## 2026-09-22 — F1: compatibilidad con plantillas WhatsApp históricas
 

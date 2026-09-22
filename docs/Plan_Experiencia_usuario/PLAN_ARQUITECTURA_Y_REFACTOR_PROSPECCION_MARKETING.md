@@ -244,16 +244,41 @@ No debe mostrar `Tiempo entre mensajes`, `Tamaño de lote`, `Pausa entre correos
 
 Esta regla no autoriza cambios en proveedores, workers, cuotas, colas, contratos ni migraciones de Postmark o Brevo.
 
-### 2.9 WhatsApp: decisión operativa pendiente
+### 2.9 Regla operativa por canal: WhatsApp
 
-La operación específica de WhatsApp queda pendiente de definición del producto.
+La operación de WhatsApp existente también queda fuera del alcance del refactor.
 
-No se debe asumir que WhatsApp utiliza la misma separación, tamaño de bloque, cuota o programación de Correo. Hasta que esa decisión sea aprobada:
+El frontend debe conservar los métodos actuales de envío y no debe modificar la forma en que WhatsApp procesa, programa, agrupa, reintenta, valida o entrega sus mensajes.
 
-- No copiar los valores de Postmark/Brevo al flujo de WhatsApp.
-- No presentar una pausa o un máximo como regla definitiva del canal.
-- Mantener la selección de lista, campaña, plantilla y revalidación de elegibilidad.
-- Documentar la regla final de cantidad, ritmo, programación, límites y ejecución antes de cerrar la implementación de WhatsApp.
+Reglas cerradas para este refactor:
+
+- No cambiar el proveedor ni los workers actuales de WhatsApp.
+- No cambiar plantillas aprobadas, variables, cuotas, límites, reintentos o webhooks.
+- No cambiar la separación, agrupación o programación que ya utiliza el envío actual.
+- No introducir una nueva cola, batch, scheduler o estrategia de concurrencia desde la UX.
+- No copiar automáticamente las reglas de Postmark/Brevo hacia WhatsApp.
+- El wizard únicamente organiza la selección de lista, campaña, plantilla y momento según los contratos actuales.
+- La revalidación de elegibilidad debe reutilizar la lógica existente; no se rediseña el procesamiento del proveedor.
+
+Si posteriormente se requiere cambiar cantidad, ritmo, límites o programación de WhatsApp, deberá documentarse como un proyecto operativo/backend independiente, no como parte de este refactor de experiencia.
+
+### 2.10 Alcance explícito del refactor
+
+Este documento modifica la experiencia de usuario y la organización de las vistas.
+
+No modifica la forma en que se procesan los envíos de Correo ni de WhatsApp.
+
+```text
+UX nueva
+  ↓
+Contratos actuales
+  ↓
+Procesamiento actual de cada canal
+  ↓
+Resultados actuales
+```
+
+La interfaz debe traducir los contratos existentes a un flujo claro. No debe crear una nueva arquitectura de ejecución por el solo hecho de reorganizar las pantallas.
 
 ## 3. Estado actual que condiciona el refactor
 
@@ -941,7 +966,8 @@ Correo:
   Postmark/Brevo aplican sus reglas operativas existentes.
 
 WhatsApp:
-  Pendiente de definición operativa del producto.
+  Mostrar únicamente la configuración que ya soporta el envío actual.
+  No cambiar su procesamiento desde este refactor.
 
 Voz:
   Tiempo entre llamadas
@@ -1485,7 +1511,7 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 - Asistente de cuatro pasos.
 - Aplicar configuración específica por canal; Correo respeta Postmark/Brevo y no expone controles internos del proveedor.
 - No modificar la separación, lotes, cuotas ni workers de Correo como parte del refactor UX.
-- Mantener WhatsApp pendiente de la decisión operativa específica del producto.
+- Mantener WhatsApp sobre sus métodos actuales de envío y procesamiento.
 - Revisión previa con razones de exclusión.
 - Revalidación en confirmación.
 - Creación de versión histórica de las reglas de la lista, únicamente si la capacidad no existe.
@@ -1574,7 +1600,8 @@ Controles específicos:
 - El lote y sus destinatarios tienen estados independientes.
 - Correo no recibe desde el wizard una separación o tamaño de bloque que altere Postmark/Brevo.
 - La preparación, pausa, agrupación y entrega de Correo continúan bajo los workers y reglas ya definidos.
-- La configuración operativa de WhatsApp permanece pendiente hasta contar con una decisión específica del producto.
+- WhatsApp conserva sus métodos actuales de envío, procesamiento, límites, workers y proveedor.
+- El refactor no introduce cambios de backend para procesar Correo o WhatsApp.
 
 ### Historial y resultados
 
@@ -1598,9 +1625,9 @@ Controles específicos:
 4. **Voz:** confirmar proveedor, estados, métricas y configuración específica antes de compartir completamente el contrato con WhatsApp y Correo.
 5. **Métricas de oportunidad y venta:** confirmar la fuente canónica de atribución CRM antes de presentar tasas comerciales.
 6. **Documentación contradictoria:** cerrar el estado real de migraciones y publicación de Google/GobMX antes de ejecutar cambios estructurales.
-7. **WhatsApp:** definir por separado cantidad, ritmo, separación, límites, programación y ejecución. No heredar la operación de Correo.
+7. **WhatsApp:** conservar sus métodos actuales de envío y procesamiento. Cualquier cambio operativo posterior debe tratarse como un proyecto backend independiente.
 
-La operación de Correo no es una decisión pendiente de este plan: queda regida por `docs/Plan_Postmark` y sus reglas actuales de Postmark/Brevo.
+La operación de Correo queda regida por `docs/Plan_Postmark` y sus reglas actuales de Postmark/Brevo. La operación de WhatsApp queda regida por sus contratos, workers y proveedores actuales.
 
 ## 17. Primer entregable de implementación recomendado
 
