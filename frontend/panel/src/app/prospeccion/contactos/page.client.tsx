@@ -50,9 +50,27 @@ const RETRYABLE_ESTADOS = new Set(["error", "fallido", "omitido"])
 const TERMINAL_BATCH_STATES = new Set(["completado", "cancelado", "error", "fallido"])
 const SUCCESSFUL_ENVIO_STATES = new Set(["enviado", "entregado", "leido", "completado", "respondido"])
 const envioEstadoLabel: Record<string, string> = {
+  pendiente: "Pendiente",
+  procesando: "Procesando",
+  enviado: "Aceptado por proveedor",
+  entregado: "Entregado",
+  leido: "Leído",
+  respondido: "Respondió",
+  completado: "Completado",
+  cancelado: "Cancelado",
   fallido: "No enviado",
   error: "No enviado",
   omitido: "No enviado",
+}
+
+const batchEstadoLabel: Record<string, string> = {
+  pendiente: "Pendiente",
+  preparando: "Preparando",
+  procesando: "Procesando",
+  completado: "Completado",
+  cancelado: "Cancelado",
+  error: "Completado con errores",
+  fallido: "No se pudo completar",
 }
 
 // Algunos eventos de estado de Meta llegan únicamente con el código. Este
@@ -315,6 +333,7 @@ export default function ContactosPageClient() {
     batches,
     selectedBatchId,
   ])
+  const selectedBatchDetails = batchSummary?.batch ?? selectedBatch
   const canCancelBatch =
     selectedBatch && !["completado", "cancelado"].includes(selectedBatch.estado ?? "")
 
@@ -322,7 +341,7 @@ export default function ContactosPageClient() {
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base font-semibold">Lotes recientes</CardTitle>
+          <CardTitle className="text-base font-semibold">Envíos recientes</CardTitle>
           <a className="text-sm text-primary underline-offset-4 hover:underline" href="/prospeccion/metricas">
             Ver métricas globales
           </a>
@@ -342,7 +361,7 @@ export default function ContactosPageClient() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Lote</TableHead>
+                  <TableHead>Envío</TableHead>
                   <TableHead>Canales</TableHead>
                   <TableHead>Enviados</TableHead>
                   <TableHead>Estado</TableHead>
@@ -392,7 +411,7 @@ export default function ContactosPageClient() {
                         </TableCell>
                         <TableCell>
                           <Badge variant={batch.estado === "error" ? "outline" : estadoVariant[batch.estado] ?? "default"}>
-                            {batch.estado === "error" ? "Completado con no enviados" : batch.estado}
+                            {batchEstadoLabel[batch.estado] ?? batch.estado}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{formatDate(batch.creado_en)}</TableCell>
@@ -407,7 +426,7 @@ export default function ContactosPageClient() {
       <Card>
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-base font-semibold">
-            {selectedBatch ? `Envíos del lote ${selectedBatch.id}` : "Selecciona un lote"}
+            {selectedBatch ? "Detalle del envío" : "Selecciona un envío"}
           </CardTitle>
           {selectedBatch && canCancelBatch ? (
             <Button variant="destructive" size="sm" onClick={() => void handleCancelBatch()} disabled={cancelLoading}>
@@ -417,7 +436,7 @@ export default function ContactosPageClient() {
                   Cancelando...
                 </>
               ) : (
-                "Cancelar lote"
+                "Cancelar envío"
               )}
             </Button>
           ) : null}
@@ -436,21 +455,35 @@ export default function ContactosPageClient() {
             </div>
           ) : null}
           {batchSummary ? (
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              {Object.entries(batchSummary.totales).map(([estado, count]) => (
-                <Badge key={estado} variant={envioEstadoVariant[estado] ?? "outline"}>
-                  {envioEstadoLabel[estado] ?? estado}: {count}
-                </Badge>
-              ))}
-              <span className="text-xs text-muted-foreground">
-                Enviados: {countSuccessfulEnvios(batchSummary.totales)}/{batchSummary.total_envios}
-              </span>
-              {selectedBatch?.total_lotes && selectedBatch.total_lotes > 1 ? (
+            <div className="mb-4 space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Canal</p>
+                  <p className="mt-1 font-medium">{selectedBatchDetails?.canales.map((canal) => canalLabel[canal] ?? canal).join(", ") || "—"}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Lista</p>
+                  <p className="mt-1 font-medium">{getBatchListLabel(selectedBatchDetails) ?? "Lista dinámica"}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Contenido</p>
+                  <p className="mt-1 font-medium">{getBatchContentLabel(selectedBatchDetails) ?? "—"}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Personas</p>
+                  <p className="mt-1 font-medium">{batchSummary.total_envios}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {Object.entries(batchSummary.totales).map(([estado, count]) => (
+                  <Badge key={estado} variant={envioEstadoVariant[estado] ?? "outline"}>
+                    {envioEstadoLabel[estado] ?? estado}: {count}
+                  </Badge>
+                ))}
                 <span className="text-xs text-muted-foreground">
-                  Sublotes: {selectedBatch.envios_por_lote ?? "—"} cada{" "}
-                  {Math.round((selectedBatch.intervalo_entre_lotes_segundos ?? 0) / 60)} min
+                  Aceptados o procesados: {countSuccessfulEnvios(batchSummary.totales)}/{batchSummary.total_envios}
                 </span>
-              ) : null}
+              </div>
             </div>
           ) : null}
           {envioError ? (
@@ -466,7 +499,6 @@ export default function ContactosPageClient() {
                 <TableRow>
                   <TableHead>Prospecto</TableHead>
                   <TableHead>Canal</TableHead>
-                  <TableHead>Sublote</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Detalle</TableHead>
                   <TableHead className="text-right">Procesado</TableHead>
@@ -476,14 +508,14 @@ export default function ContactosPageClient() {
                 <TableBody>
                   {envioLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                         <IconLoader className="mr-2 inline size-4 animate-spin" /> Cargando envíos...
                       </TableCell>
                     </TableRow>
                   ) : null}
                   {!envioLoading && !envios.length ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                         El lote aún no tiene envíos registrados.
                       </TableCell>
                     </TableRow>
@@ -497,11 +529,6 @@ export default function ContactosPageClient() {
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{canalLabel[envio.canal] ?? envio.canal}</Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {envio.numero_lote && selectedBatch?.total_lotes
-                              ? `${envio.numero_lote}/${selectedBatch.total_lotes}`
-                              : envio.numero_lote ?? "—"}
                           </TableCell>
                           <TableCell>
                             <Badge variant={envioEstadoVariant[envio.estado] ?? "default"}>
@@ -553,9 +580,9 @@ export default function ContactosPageClient() {
       <Card>
         <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-base font-semibold">Timeline del lote</CardTitle>
+              <CardTitle className="text-base font-semibold">Historial del envío</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Eventos detallados registrados en la bitácora (Brevo/Twilio/voz) para el lote seleccionado.
+              Eventos detallados registrados para el envío seleccionado.
             </p>
           </div>
           <Button
@@ -605,9 +632,6 @@ export default function ContactosPageClient() {
                         <span>{formatDate(log.creado_en)}</span>
                       </div>
                     </div>
-                    {log.envio_id ? (
-                      <p className="mt-1 text-xs text-muted-foreground">Envio: {log.envio_id}</p>
-                    ) : null}
                     {log.detalle ? (
                       <p className="mt-1 text-xs text-muted-foreground">
                         {formatLogMessage(log.detalle) || "Sin mensaje adicional."}
@@ -659,7 +683,31 @@ function formatDate(value?: string | null) {
 function batchLabel(batch: ContactoBatch): string {
   const canales = batch.canales.map((canal) => canalLabel[canal] ?? canal).join(", ")
   const created = formatDate(batch.creado_en)
-  return `${canales || "Lote"} · ${created}`
+  return `${canales || "Envío"} · ${created}`
+}
+
+function getBatchListLabel(batch?: ContactoBatch | null): string | null {
+  const metadata = batch?.metadata
+  const value = metadata && typeof metadata["lista_nombre"] === "string" ? metadata["lista_nombre"].trim() : ""
+  return value || null
+}
+
+function getBatchContentLabel(batch?: ContactoBatch | null): string | null {
+  const metadata = batch?.metadata
+  const channels = metadata && typeof metadata["canales_config"] === "object" && metadata["canales_config"] !== null
+    ? metadata["canales_config"] as Record<string, unknown>
+    : null
+  if (!channels) return null
+  for (const value of Object.values(channels)) {
+    if (!value || typeof value !== "object") continue
+    const config = value as Record<string, unknown>
+    const configMetadata = config["metadata"] && typeof config["metadata"] === "object"
+      ? config["metadata"] as Record<string, unknown>
+      : null
+    const label = configMetadata?.["template_label"] ?? configMetadata?.["template_name"] ?? config["template_label"] ?? config["template_name"]
+    if (typeof label === "string" && label.trim()) return label.trim()
+  }
+  return null
 }
 
 function prospectoLabel(envio: ContactoEnvio): string {

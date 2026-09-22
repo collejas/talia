@@ -753,7 +753,7 @@ export default function ProspeccionMetricasPageClient() {
         <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_180px] lg:items-center">
           <div className="text-right">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Prospección</p>
-            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Métricas</h1>
+            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Resultados</h1>
           </div>
           <div className="grid w-full min-w-0 max-w-[520px] grid-cols-4 justify-self-center gap-2">
             <button

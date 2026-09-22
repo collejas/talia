@@ -4,11 +4,42 @@ Este archivo registra decisiones, avances, validaciones, pendientes y bloqueos d
 
 Plan principal: [PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md](./PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md)
 
-## 2026-09-22 — Cantidad máxima por envío
+## 2026-09-22 — F5: Resumen general y salud de canales documentados
 
 ### Estado
 
-En desarrollo.
+Aprobado para diseño e implementación de la vista Resultados.
+
+### Fase
+
+F5 — Resultados e historial.
+
+### Decisiones
+
+- Marketing tendrá una vista general `Resumen` antes de Correo, WhatsApp y Voz.
+- El Resumen mostrará resultados comerciales consolidados y comparación por canal.
+- Se diferenciarán personas únicas contactadas de contactos realizados.
+- La salud de cada canal se mostrará separada del embudo comercial.
+- Correo podrá mostrar entregados, abiertos, clics, respuestas, soft bounce, hard bounce, bajas y quejas de spam cuando Postmark/Brevo entreguen esos eventos.
+- WhatsApp podrá mostrar entregados, leídos, respuestas, no entregados, fallidos, bajas y bloqueados según los estados reales del proveedor actual.
+- Voz solo mostrará estados y métricas soportados realmente por su proveedor.
+- Las categorías `hard bounce` y `soft bounce` no se reutilizarán para WhatsApp.
+- La normalización de estados será de presentación y reporte; no cambia proveedores, workers, cuotas, métodos de envío ni procesamiento existente.
+- Los nombres de proveedores quedan restringidos a documentación técnica, soporte interno y auditoría; la interfaz solo muestra el canal y resultados comprensibles.
+- Las bajas y bloqueos deben afectar la elegibilidad futura del prospecto para el canal correspondiente.
+
+### Pendientes
+
+- Confirmar qué eventos y métricas están disponibles actualmente en Postmark, Brevo, WhatsApp y Voz.
+- Mapear cada estado del proveedor a una etiqueta visible y a un motivo de exclusión.
+- Definir la atribución canónica de oportunidades, ventas y costos.
+- Construir el drill-down `Canal → Campaña → Contenido → Lista → Envío → Destinatario`.
+
+## 2026-09-22 — F4 validada parcialmente y comienzo de F5
+
+### Estado
+
+En validación.
 
 ### Fase
 
@@ -24,6 +55,21 @@ F4 — Envíos.
 - La cantidad máxima no se mezcla con la separación entre mensajes ni con los bloques técnicos de Postmark, Brevo, WhatsApp o Voz.
 - El botón final adapta el verbo al canal: `Enviar correo`, `Enviar mensaje` o `Llamar`.
 
+### Validación realizada
+
+- Se ejecutó el envío `2b64105b-e675-4f96-9573-b32bfa5c0dff` mediante la lista `CORREO NUNCA CONTACTADO`.
+- Los filtros conservados fueron: correo presente, correo válido, cero correos previos y permiso del canal correo.
+- Se crearon 10 destinatarios, los 10 fueron aceptados por Postmark y no hubo errores.
+- La aceptación del proveedor quedó comprobada; la entrega final depende de los webhooks de Postmark.
+
+### F5 — Resultados e historial iniciada
+
+- Se reutilizará la vista existente `/prospeccion/contactos` y sus endpoints de batches, envíos y logs.
+- La entrada visible principal será **Resultados**, conservando inicialmente la ruta compatible `/prospeccion/metricas`.
+- `/prospeccion/contactos` queda como superficie técnica heredada y no como módulo visible de navegación.
+- La primera corrección de UX elimina la exposición de `lote`, IDs técnicos y estados internos como lenguaje principal.
+- La vista debe mostrar qué se contactó, a quién, por qué canal, con qué resultado y qué ocurrió después.
+
 ### Archivos o superficies afectadas
 
 - `frontend/panel/src/components/prospeccion/prospeccion-campaign-wizard.tsx`
@@ -35,6 +81,9 @@ F4 — Envíos.
 
 - Probar manualmente un envío con todas las personas elegibles y otro con cantidad específica en cada canal.
 - Confirmar que la cantidad solicitada no cambia el procesamiento existente de cada proveedor.
+- Probar WhatsApp y Voz.
+- Confirmar webhooks y entrega final.
+- Validar idempotencia, concurrencia y actualización de listas después del envío.
 
 ## Estados de seguimiento
 

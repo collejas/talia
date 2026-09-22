@@ -43,14 +43,14 @@ const STAGES: StageConfig[] = [
     key: "lanzar",
     label: "Lanzar",
     description: "Configura lotes de contacto y canales.",
-    href: "/prospeccion/contactos",
-    matches: ["/prospeccion/contactos"],
+    href: "/prospeccion/listas",
+    matches: ["/prospeccion/listas"],
   },
   {
     key: "evaluar",
     label: "Evaluar",
-    description: "Monitorea métricas y campañas recientes.",
-    href: "/prospeccion/campanas",
+    description: "Revisa qué ocurrió con tus envíos y campañas.",
+    href: "/prospeccion/metricas",
     matches: ["/prospeccion/campanas", "/prospeccion/metricas", "/prospeccion/mensajes"],
   },
 ]

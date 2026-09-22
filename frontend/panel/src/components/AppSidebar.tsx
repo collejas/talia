@@ -132,9 +132,8 @@ const NAVIGATION: {
         { title: "Buscador web", url: "/prospeccion/buscador", permission: "busquedas.run" },
         { title: "Prospectos", url: "/prospeccion/prospectos", permission: "busquedas.run" },
         { title: "Listas para contactar", url: "/prospeccion/listas", permission: "busquedas.run" },
-        { title: "Contactos", url: "/prospeccion/contactos", permission: "contacts.read" },
         { title: "Campañas", url: "/prospeccion/campanas", permission: "campaigns.view" },
-        { title: "Métricas", url: "/prospeccion/metricas", permission: "reports.view" },
+        { title: "Resultados", url: "/prospeccion/metricas", permission: "reports.view" },
         { title: "Landing A/B/C", url: "/prospeccion/landing-ab", permission: "reports.view" },
         { title: "Atribución WhatsApp", url: "/prospeccion/whatsapp-atribucion", permission: "busquedas.run" },
         {

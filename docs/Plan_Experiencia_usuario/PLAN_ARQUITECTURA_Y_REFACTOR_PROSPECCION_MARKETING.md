@@ -721,6 +721,75 @@ Eventos posibles:
 
 Marketing conserva el detalle de campañas, envíos y resultados. Historial muestra el efecto sobre el prospecto.
 
+### 4.5 Marketing → Resumen general
+
+Marketing debe tener una vista visible de **Resumen** antes de entrar a un canal específico:
+
+```text
+Marketing
+├── Resumen
+├── Correo
+│   ├── Campañas
+│   └── Resultados
+├── WhatsApp
+│   ├── Campañas
+│   └── Resultados
+└── Voz
+    ├── Campañas
+    └── Resultados
+```
+
+**Pregunta que responde:** ¿Cómo está funcionando globalmente mi estrategia de contacto?
+
+El Resumen es un dashboard ejecutivo. No sustituye la operación de campañas ni el detalle de resultados de cada canal. Debe permitir seleccionar un periodo y mostrar:
+
+- Prospectos contactados.
+- Contactos realizados, diferenciando personas únicas cuando sea posible.
+- Respuestas.
+- Oportunidades.
+- Ventas atribuidas, cuando exista una fuente CRM canónica.
+- Tasa de respuesta.
+- Tasa de conversión.
+- Costo, únicamente cuando exista información confiable del proveedor o del sistema de facturación.
+- Comparación de resultados entre Correo, WhatsApp y Voz.
+
+La interfaz debe distinguir dos conceptos para evitar doble conteo:
+
+- **Personas contactadas:** prospectos únicos contactados en el periodo.
+- **Contactos realizados:** suma de correos, mensajes y llamadas ejecutados.
+
+El Resumen también debe mostrar la salud y entregabilidad de cada canal. Estas métricas no sustituyen el embudo comercial; son una vista operativa de lo que ocurrió con cada contacto.
+
+Los nombres de proveedores son información interna de integración. Postmark, Brevo, Twilio u otros proveedores no deben aparecer en la interfaz normal; el usuario debe ver el canal y el resultado, no la tecnología que lo procesa.
+
+Para Correo, cuando el proveedor de correo lo entregue:
+
+```text
+Enviados → Entregados → Abiertos → Clics → Respondieron
+                 ├── Soft bounce
+                 ├── Hard bounce
+                 ├── Bajas
+                 └── Quejas de spam
+```
+
+Para WhatsApp:
+
+```text
+Enviados → Entregados → Leídos → Respondieron
+     ├── No entregados
+     ├── Fallidos
+     ├── Bajas
+     └── Bloqueados
+```
+
+No se deben utilizar `hard bounce` y `soft bounce` como estados de WhatsApp. Son categorías propias de Correo. WhatsApp debe conservar sus estados y códigos reales del proveedor, traducidos a etiquetas comprensibles para el usuario.
+
+Para Voz se mostrarán únicamente los estados soportados realmente por el proveedor, por ejemplo llamadas realizadas, contestadas, no contestadas, ocupadas e interesados.
+
+Las ramas de fallo, baja y bloqueo no deben mostrarse como etapas normales del embudo comercial. Deben presentarse como motivos de exclusión o problemas de entrega relacionados con el contacto.
+
+Las métricas del Resumen deben poder llevar al usuario al detalle correspondiente: canal, campaña, contenido, Lista para contactar, envío y destinatario.
+
 ### 4.6 Marketing → Canal
 
 La entrada de Marketing debe mostrar los canales como primer nivel:
@@ -882,6 +951,25 @@ Llamadas realizadas → Contestadas → No contestadas → Interesados
 Las métricas de Voz quedan condicionadas a lo que finalmente soporte el proveedor. No se deben mostrar etapas que no existan realmente.
 
 En todos los canales también deben poder consultarse las personas que no recibieron el contacto, las oportunidades y las ventas atribuidas cuando exista esa información.
+
+#### 4.10.1 Salud y entregabilidad por canal
+
+La vista de Resultados de cada canal debe separar explícitamente:
+
+1. **Resultado del contacto:** entregado, leído, respondido, interesado, oportunidad o venta.
+2. **Estado técnico o de permiso:** no entregado, fallido, baja, bloqueado, rebote o queja.
+
+La interfaz debe conservar el estado original del proveedor para auditoría, pero mostrar una explicación humana. Ejemplos:
+
+| Canal | Métricas específicas |
+|---|---|
+| Correo | Entregados, abiertos, clics, respondieron, rebote temporal, rebote permanente, bajas y quejas de spam |
+| WhatsApp | Entregados, leídos, respondieron, no entregados, fallidos, bajas y bloqueados |
+| Voz | Realizadas, contestadas, no contestadas, ocupadas e interesados, si el proveedor lo soporta |
+
+Las bajas y bloqueos deben afectar la elegibilidad futura del prospecto para ese canal. El sistema debe permitir consultar el motivo, la fecha, el canal y el envío relacionado. El proveedor que originó el evento solo se muestra en detalles técnicos, soporte interno o auditoría.
+
+No se deben mostrar métricas que el proveedor no soporte realmente. La normalización de estados sirve para la experiencia de usuario y los reportes; no autoriza cambiar los métodos actuales de envío, workers, proveedores, cuotas, reintentos o webhooks. La interfaz normal no muestra nombres de proveedores, IDs de proveedor ni detalles técnicos de integración.
 
 ### 4.11 Crear envío
 
@@ -1538,10 +1626,18 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 
 ### F5 — Resultados e historial
 
+- La entrada visible principal será `Resultados`, conservando inicialmente la ruta compatible `/prospeccion/metricas`.
+- La vista existente `/prospeccion/contactos` no será una entrada principal de navegación; queda como superficie técnica heredada mientras se reutilizan sus contratos.
 - Detalle de lote.
 - Estados por destinatario.
 - Actividad transversal del prospecto.
 - Métricas por canal, campaña, plantilla, audiencia y lote.
+- Resumen general de Marketing con comparación entre Correo, WhatsApp y Voz.
+- Resultados comerciales separados de salud y entregabilidad del canal.
+- Estados de Correo como rebote temporal, rebote permanente, bajas y quejas de spam cuando existan en el proveedor de correo.
+- Estados de WhatsApp como entregado, leído, fallido, no entregado, baja y bloqueado cuando existan en el proveedor actual.
+- Estados de Voz limitados a los eventos realmente soportados por su proveedor.
+- Diferenciación entre personas únicas contactadas y cantidad total de contactos realizados.
 - Atribución hacia CRM.
 
 **Salida:** el usuario puede explicar qué se envió, a quién, con qué mensaje y qué ocurrió.
@@ -1621,9 +1717,15 @@ Controles específicos:
 
 ### Historial y resultados
 
+- `Resultados` es el nombre visible para la vista global de desempeño; la palabra `Métricas` puede conservarse únicamente en detalles técnicos o documentación interna.
 - Historial muestra eventos del prospecto sin duplicar la pantalla de envíos.
 - Es posible bajar de canal a campaña, mensaje, lista y envío.
 - Las métricas diferencian aceptación del proveedor, entrega, lectura, respuesta y conversión.
+- El Resumen general compara los tres canales sin sustituir el detalle operativo de cada canal.
+- Correo distingue rebotes temporales, rebotes permanentes, bajas y quejas de spam cuando esos eventos existan.
+- WhatsApp distingue fallos, no entregados, bajas y bloqueos sin utilizar categorías de rebote propias del correo.
+- Las métricas de entregabilidad y las métricas comerciales se muestran separadas.
+- No se presentan estados o métricas que no estén respaldados por el proveedor correspondiente.
 
 ### UI
 

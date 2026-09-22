@@ -5,12 +5,12 @@ import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-lay
 import ProspeccionMetricasPageClient from "./page.client"
 
 export const metadata: Metadata = {
-  title: "Métricas · Prospección",
+  title: "Resultados · Prospección",
 }
 
 export default function ProspeccionMetricasPage() {
   return (
-    <ProspeccionViewLayout title="Prospección · Métricas">
+    <ProspeccionViewLayout title="Prospección · Resultados">
       <ProspeccionMetricasPageClient />
     </ProspeccionViewLayout>
   )

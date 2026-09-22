@@ -93,7 +93,7 @@ export function ProspeccionContactDrawer({ open, onOpenChange, data, onPromote }
         <DrawerHeader className="shrink-0 items-start space-y-2">
           <DrawerTitle>Campaña programada</DrawerTitle>
           <DrawerDescription>
-            {data.batchId ? "Lote generado correctamente." : "Se creó un lote de contacto reciente."}
+            {data.batchId ? "Envío creado correctamente." : "Se creó un envío reciente."}
           </DrawerDescription>
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span>{results.length} prospectos incluidos.</span>
@@ -105,19 +105,11 @@ export function ProspeccionContactDrawer({ open, onOpenChange, data, onPromote }
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>
-              <Link href="/prospeccion/contactos" className="inline-flex items-center gap-1">
+              <Link href="/prospeccion/metricas" className="inline-flex items-center gap-1">
                 <IconExternalLink className="size-3.5" />
-                Ver panel de lotes
+                Ver resultados
               </Link>
             </Button>
-            {data.batchId ? (
-              <Button variant="ghost" size="sm" asChild>
-                <Link href={`/prospeccion/contactos?batch=${data.batchId}`} className="inline-flex items-center gap-1">
-                  <IconExternalLink className="size-3.5" />
-                  Abrir lote
-                </Link>
-              </Button>
-            ) : null}
           </div>
         </DrawerHeader>
         <Separator />

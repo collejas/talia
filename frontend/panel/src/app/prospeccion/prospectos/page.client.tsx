@@ -3892,7 +3892,7 @@ function ProspectosView() {
               Actualizar
             </Button>
             <Button asChild variant="outline" size="sm">
-              <Link href="/prospeccion/contactos">Ver monitor</Link>
+              <Link href="/prospeccion/metricas">Ver resultados</Link>
             </Button>
           </div>
         </div>
@@ -3962,7 +3962,7 @@ function ProspectosView() {
                 </div>
                 <div className="mt-2 flex flex-1 items-end justify-end text-[11px] text-muted-foreground">
                   <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-[11px]">
-                    <Link href="/prospeccion/contactos">Ver detalle</Link>
+                    <Link href="/prospeccion/metricas">Ver resultados</Link>
                   </Button>
                 </div>
               </div>
