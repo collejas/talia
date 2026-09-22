@@ -26,7 +26,13 @@ import {
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
 import { ProspectosImportador } from "@/components/prospeccion/prospectos-importador"
-import { ProspectosFlow, ProspectosRecentBatches, ProspectosSavedViews, type ProspectosFlowStep } from "./prospectos-overview"
+import {
+  ProspectosFlow,
+  ProspectosRecentBatches,
+  ProspectosSavedViews,
+  ProspectosSourceVerification,
+  type ProspectosFlowStep,
+} from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -3842,104 +3848,16 @@ function ProspectosView() {
             onDelete={() => void handleDeleteSavedView()}
           />
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1">
-              <Label>Fuente</Label>
-              <Select
-                value={filters.fuente || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    fuente: value === "all" ? "" : (value as FuenteFilter),
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas las fuentes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="google_places">Google Places</SelectItem>
-                  <SelectItem value="denue">{PROSPECCION_SOURCE_LABELS.denue}</SelectItem>
-                  <SelectItem value="usuario">Usuario</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Estado verificación teléfono</Label>
-              <Select
-                value={filters.lookupStatus || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    lookupStatus: value === "all" ? "" : (value as LookupFilter),
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos los estados" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="verificado">Verificado</SelectItem>
-                  <SelectItem value="sin_numero">Sin número</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Estado verificación correo</Label>
-              <Select
-                value={filters.emailLookupStatus || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    emailLookupStatus: value === "all" ? "" : (value as EmailLookupFilter),
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos los estados" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="sin_email">Sin correo</SelectItem>
-                  <SelectItem value="valido">Válido</SelectItem>
-                  <SelectItem value="invalido">Inválido</SelectItem>
-                  <SelectItem value="dudoso">Dudoso</SelectItem>
-                  <SelectItem value="omitido_por_sitio">Omitido por sitio</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Estado verificación sitio web</Label>
-              <Select
-                value={filters.websiteLookupStatus || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    websiteLookupStatus: value === "all" ? "" : (value as WebsiteLookupFilter),
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos los estados" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="sin_sitio">Sin sitio</SelectItem>
-                  <SelectItem value="valido">Válido</SelectItem>
-                  <SelectItem value="dudoso">Dudoso</SelectItem>
-                  <SelectItem value="invalido">Inválido</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            </div>
+            <ProspectosSourceVerification
+              fuente={filters.fuente}
+              lookupStatus={filters.lookupStatus}
+              emailLookupStatus={filters.emailLookupStatus}
+              websiteLookupStatus={filters.websiteLookupStatus}
+              onFuenteChange={(value) => setFilters((prev) => ({ ...prev, fuente: value === "all" ? "" : value as FuenteFilter }))}
+              onLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, lookupStatus: value === "all" ? "" : value as LookupFilter }))}
+              onEmailLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, emailLookupStatus: value === "all" ? "" : value as EmailLookupFilter }))}
+              onWebsiteLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, websiteLookupStatus: value === "all" ? "" : value as WebsiteLookupFilter }))}
+            />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
               <Label>Campaña</Label>

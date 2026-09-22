@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels"
 import type { ContactoBatch, ProspectosSavedView } from "@/lib/prospeccion/prospectos-client"
 
 export type ProspectosFlowStep = {
@@ -231,6 +232,87 @@ export function ProspectosSavedViews({
       </div>
       {loading ? <p className="text-xs text-muted-foreground">Cargando vistas guardadas...</p> : null}
     </>
+  )
+}
+
+type ProspectosSourceVerificationProps = {
+  fuente: string
+  lookupStatus: string
+  emailLookupStatus: string
+  websiteLookupStatus: string
+  onFuenteChange: (value: string) => void
+  onLookupStatusChange: (value: string) => void
+  onEmailLookupStatusChange: (value: string) => void
+  onWebsiteLookupStatusChange: (value: string) => void
+}
+
+export function ProspectosSourceVerification({
+  fuente,
+  lookupStatus,
+  emailLookupStatus,
+  websiteLookupStatus,
+  onFuenteChange,
+  onLookupStatusChange,
+  onEmailLookupStatusChange,
+  onWebsiteLookupStatusChange,
+}: ProspectosSourceVerificationProps) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-1">
+        <Label>Fuente</Label>
+        <Select value={fuente || "all"} onValueChange={onFuenteChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="Todas las fuentes" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="google_places">Google Places</SelectItem>
+            <SelectItem value="denue">{PROSPECCION_SOURCE_LABELS.denue}</SelectItem>
+            <SelectItem value="usuario">Usuario</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <FilterSelect label="Estado verificación teléfono" value={lookupStatus} onChange={onLookupStatusChange} options={[
+        ["pendiente", "Pendiente"], ["verificado", "Verificado"], ["sin_numero", "Sin número"], ["error", "Error"],
+      ]} />
+      <FilterSelect label="Estado verificación correo" value={emailLookupStatus} onChange={onEmailLookupStatusChange} options={[
+        ["pendiente", "Pendiente"], ["sin_email", "Sin correo"], ["valido", "Válido"], ["invalido", "Inválido"],
+        ["dudoso", "Dudoso"], ["omitido_por_sitio", "Omitido por sitio"], ["error", "Error"],
+      ]} />
+      <FilterSelect label="Estado verificación sitio web" value={websiteLookupStatus} onChange={onWebsiteLookupStatusChange} options={[
+        ["pendiente", "Pendiente"], ["sin_sitio", "Sin sitio"], ["valido", "Válido"], ["dudoso", "Dudoso"],
+        ["invalido", "Inválido"], ["error", "Error"],
+      ]} />
+    </div>
+  )
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  options: Array<[string, string]>
+}) {
+  return (
+    <div className="space-y-1">
+      <Label>{label}</Label>
+      <Select value={value || "all"} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue placeholder="Todos los estados" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          {options.map(([optionValue, optionLabel]) => (
+            <SelectItem key={optionValue} value={optionValue}>{optionLabel}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   )
 }
 
