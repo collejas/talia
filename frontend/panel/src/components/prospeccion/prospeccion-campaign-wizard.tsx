@@ -218,13 +218,6 @@ export function ProspeccionCampaignWizard({
         }
         if (Array.isArray(campanasResponse)) {
           setCampanas(campanasResponse)
-          setCampanaId((prev) => {
-            if (prev) return prev
-            return campanasResponse[0]?.id ?? null
-          })
-          if (campanasResponse[0]?.nombre) {
-            setCampanaNombre((prev) => (prev.trim() ? prev : campanasResponse[0].nombre ?? ""))
-          }
         }
       })
       .catch((err) => {
@@ -236,21 +229,6 @@ export function ProspeccionCampaignWizard({
         setCampanasLoading(false)
       })
   }, [open, preset, presetApplied, resetState])
-
-  useEffect(() => {
-    if (!open) return
-    setTemplatesLoading(true)
-    void listContactoTemplates(campanaId ? { campana_id: campanaId } : {})
-      .then((response) => {
-        setTemplates(Array.isArray(response?.items) ? response.items : [])
-      })
-      .catch(() => {
-        setTemplates([])
-      })
-      .finally(() => {
-        setTemplatesLoading(false)
-      })
-  }, [open, campanaId])
 
   useEffect(() => {
     if (!campanaId) return
@@ -326,6 +304,10 @@ export function ProspeccionCampaignWizard({
       })
       return next
     })
+    if (enabled) {
+      setCampanaId(null)
+      setCampanaNombre("")
+    }
   }
 
   const canContinueStepOne = useMemo(() => {
@@ -344,6 +326,35 @@ export function ProspeccionCampaignWizard({
     [channelState]
   )
 
+  const selectedCanal = activeChannels[0]?.key ?? null
+
+  useEffect(() => {
+    if (!open || !campanaId) {
+      setTemplates([])
+      return
+    }
+    setTemplatesLoading(true)
+    void listContactoTemplates(
+      selectedCanal
+        ? { canal: selectedCanal, campana_id: campanaId }
+        : { campana_id: campanaId },
+    )
+      .then((response) => {
+        setTemplates(Array.isArray(response?.items) ? response.items : [])
+      })
+      .catch(() => {
+        setTemplates([])
+      })
+      .finally(() => {
+        setTemplatesLoading(false)
+      })
+  }, [open, campanaId, selectedCanal])
+
+  const channelCampanas = useMemo(
+    () => (selectedCanal ? campanas.filter((campana) => campana.canal === selectedCanal) : campanas),
+    [campanas, selectedCanal],
+  )
+
   const availableChannelOptions = useMemo(
     () => CHANNEL_OPTIONS.filter((option) => !preset?.canal || option.key === preset.canal),
     [preset?.canal],
@@ -351,9 +362,11 @@ export function ProspeccionCampaignWizard({
 
   const canContinueStepTwo = activeChannels.length === 1 && activeChannels.every(({ key }) => Boolean(channelState[key].templateSlug))
 
+  const canContinueCampaignStep = Boolean(selectedCanal && campanaId && channelCampanas.some((campana) => campana.id === campanaId))
+
   const campanaOptions = useMemo(() => {
     const options: Array<{ value: string; label: string }> = []
-    campanas.forEach((group) => {
+    channelCampanas.forEach((group) => {
       if (group.id) {
         options.push({
           value: group.id,
@@ -362,7 +375,18 @@ export function ProspeccionCampaignWizard({
       }
     })
     return options
-  }, [campanas])
+  }, [channelCampanas])
+
+  useEffect(() => {
+    if (!open || !selectedCanal) return
+    if (!campanaId || channelCampanas.some((campana) => campana.id === campanaId)) return
+    setCampanaId(null)
+    setCampanaNombre("")
+    setChannelState((prev) => ({
+      ...prev,
+      [selectedCanal]: { ...prev[selectedCanal], templateSlug: undefined },
+    }))
+  }, [campanaId, channelCampanas, open, selectedCanal])
 
   const handleCreateCampaign = useCallback(async () => {
     const nombre = newCampaignName.trim()
@@ -615,30 +639,94 @@ export function ProspeccionCampaignWizard({
     </div>
   )
 
+  const renderStepCampaign = () => (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+        {selectedCanal
+          ? `Canal seleccionado: ${CHANNEL_OPTIONS.find((option) => option.key === selectedCanal)?.label ?? selectedCanal}. Ahora elige la campaña de este canal.`
+          : "Primero elige el canal y después la campaña que quieres utilizar."}
+      </div>
+      {!preset?.canal ? (
+        <div className="grid gap-3 md:grid-cols-3">
+          {availableChannelOptions.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              className={cn("rounded-lg border p-4 text-left transition hover:border-primary", selectedCanal === option.key ? "border-primary bg-primary/5" : "border-border")}
+              onClick={() => handleChannelToggle(option.key, true)}
+            >
+              <p className="text-sm font-semibold">{option.label}</p>
+              <p className="text-xs text-muted-foreground">{option.description}</p>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <Label>Campaña</Label>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setNewCampaignOpen((prev) => !prev)} disabled={!selectedCanal}>
+            {newCampaignOpen ? "Cancelar" : "Nueva campaña"}
+          </Button>
+        </div>
+        <Select
+          value={campanaId ?? ""}
+          onValueChange={(value) => {
+            setCampanaId(value)
+            setChannelState((prev) => ({
+              ...prev,
+              ...(selectedCanal ? { [selectedCanal]: { ...prev[selectedCanal], templateSlug: undefined } } : {}),
+            }))
+          }}
+          disabled={!selectedCanal || campanasLoading || !campanaOptions.length}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder={campanasLoading ? "Cargando campañas..." : "Selecciona una campaña"} />
+          </SelectTrigger>
+          <SelectContent>
+            {campanaOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!campanasLoading && selectedCanal && !campanaOptions.length ? (
+          <p className="text-xs text-muted-foreground">Todavía no hay campañas para este canal. Crea una para continuar.</p>
+        ) : null}
+        {newCampaignOpen ? (
+          <div className="mt-2 flex flex-col gap-2 rounded-md border bg-muted/30 p-2 md:flex-row">
+            <Input value={newCampaignName} onChange={(event) => setNewCampaignName(event.target.value)} placeholder="Ej. Prospección inmobiliarias Q1" />
+            <Button type="button" onClick={() => void handleCreateCampaign()} disabled={newCampaignSaving || !selectedCanal}>
+              {newCampaignSaving ? "Guardando..." : "Guardar"}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+
   const renderStepChannels = () => (
     <div className="space-y-4">
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
-        {preset?.canal
-          ? `Canal seleccionado: ${CHANNEL_OPTIONS.find((option) => option.key === preset.canal)?.label ?? preset.canal}. Elige el contenido guardado que quieres usar.`
-          : "El contenido ya está definido en tus plantillas. Aquí eliges el canal y el contenido que quieres usar."}
+        Elige la plantilla de la campaña seleccionada. El contenido y sus variables ya están configurados en ella.
       </div>
       {availableChannelOptions.map((option) => {
         const state = channelState[option.key]
         const selectedTemplate = templates.find((tpl) => tpl.slug === state.templateSlug && tpl.canal === option.key)
         return (
           <div key={option.key} className="rounded-lg border p-4">
-            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold">{option.label}</p>
                 <p className="text-xs text-muted-foreground">{option.description}</p>
               </div>
-              <input
-                type="radio"
-                name="prospeccion-canal"
-                checked={state.enabled}
-                onChange={() => handleChannelToggle(option.key, true)}
-                aria-label={`Elegir ${option.label}`}
-              />
+              {!preset?.canal ? (
+                <input
+                  type="radio"
+                  name="prospeccion-canal"
+                  checked={state.enabled}
+                  onChange={() => handleChannelToggle(option.key, true)}
+                  aria-label={`Elegir ${option.label}`}
+                />
+              ) : null}
             </div>
             {state.enabled ? (
               <div className="mt-3 space-y-3">
@@ -714,42 +802,6 @@ export function ProspeccionCampaignWizard({
           <Input value={titulo} onChange={(event) => setTitulo(event.target.value)} placeholder="Ej. Seguimiento semana 42" />
         </div>
         <div className="space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <Label>Campaña CRM</Label>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setNewCampaignOpen((prev) => !prev)}>
-              {newCampaignOpen ? "Cancelar" : "Nueva campaña CRM"}
-            </Button>
-          </div>
-          <Select
-            value={campanaId ?? ""}
-            onValueChange={setCampanaId}
-            disabled={campanasLoading || !campanaOptions.length}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={campanasLoading ? "Cargando..." : "Selecciona campaña"} />
-            </SelectTrigger>
-            <SelectContent>
-              {campanaOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {newCampaignOpen ? (
-            <div className="mt-2 flex flex-col gap-2 rounded-md border bg-muted/30 p-2 md:flex-row">
-              <Input
-                value={newCampaignName}
-                onChange={(event) => setNewCampaignName(event.target.value)}
-                placeholder="Ej. Prospección inmobiliarias Q1"
-              />
-              <Button type="button" onClick={() => void handleCreateCampaign()} disabled={newCampaignSaving}>
-                {newCampaignSaving ? "Guardando..." : "Guardar"}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-        <div className="space-y-1">
           <Label>Separación entre envíos (segundos)</Label>
           <Input
             type="number"
@@ -798,6 +850,9 @@ export function ProspeccionCampaignWizard({
       return renderStepAudience()
     }
     if (step === 1) {
+      return renderStepCampaign()
+    }
+    if (step === 2) {
       return renderStepChannels()
     }
     return renderStepSchedule()
@@ -808,12 +863,16 @@ export function ProspeccionCampaignWizard({
       setError("Selecciona una fuente para la audiencia.")
       return
     }
-    if (step === 1 && !canContinueStepTwo) {
-      setError("Activa al menos un canal.")
+    if (step === 1 && !canContinueCampaignStep) {
+      setError("Selecciona una campaña del canal elegido para continuar.")
+      return
+    }
+    if (step === 2 && !canContinueStepTwo) {
+      setError("Selecciona una plantilla de la campaña para continuar.")
       return
     }
     setError(null)
-    setStep((prev) => Math.min(prev + 1, 2))
+    setStep((prev) => Math.min(prev + 1, 3))
   }
 
   const handlePrev = () => {
@@ -853,7 +912,7 @@ export function ProspeccionCampaignWizard({
             </ol>
           </div>
           <ol className="flex flex-wrap items-center gap-3 text-sm">
-            {["Lista", "Contenido", "Cuándo"].map((label, index) => (
+            {["Lista", "Campaña", "Plantilla", "Cuándo"].map((label, index) => (
               <li key={label} className="flex items-center gap-2">
                 <span
                   className={cn(
@@ -891,7 +950,7 @@ export function ProspeccionCampaignWizard({
               )}
             </Button>
             <div className="flex gap-2">
-              {step < 2 ? (
+              {step < 3 ? (
                 <Button onClick={handleNext}>
                   Siguiente
                   <IconChevronRight className="ml-1 h-4 w-4" />

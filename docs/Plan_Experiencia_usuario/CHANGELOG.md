@@ -562,3 +562,32 @@ F1 — Listas para contactar
 - ESLint del wizard y la vista de listas: correcto.
 - TypeScript del panel con `npx tsc --noEmit`: correcto.
 - `git diff --check`: correcto.
+
+## 2026-09-22 — F1: campaña antes de plantilla en Contactar esta lista
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 — Listas para contactar
+
+### Referencia
+
+`frontend/panel/src/components/prospeccion/prospeccion-campaign-wizard.tsx`.
+
+### Cambios
+
+- El flujo ahora sigue `Lista → Campaña → Plantilla → Cuándo`.
+- La campaña se selecciona antes de consultar o mostrar plantillas.
+- Solo se muestran campañas compatibles con el canal seleccionado.
+- Solo se consultan plantillas del canal y de la campaña seleccionada.
+- La campaña ya no aparece como un campo dentro del paso `Cuándo`.
+- Crear una campaña desde el wizard también respeta el canal elegido.
+
+### Validación
+
+- ESLint del wizard, la vista de listas y el cliente de prospección: correcto.
+- TypeScript del panel con `npx tsc --noEmit`: correcto.
+- `git diff --check`: correcto.
