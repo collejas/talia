@@ -101,6 +101,15 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - La solución recomendada es guardar metadatos en la base de datos y el HTML/texto en almacenamiento privado con retención definida.
 - No se modifican por ahora los métodos, proveedores, workers ni contratos actuales de envío de Correo.
 
+### Plan relacionado — Secuencias automáticas de Marketing
+
+- Se creó [`PLAN_SECUENCIAS_AUTOMATICAS_MARKETING.md`](../Plan_Experiencia_usuario_Marketing/PLAN_SECUENCIAS_AUTOMATICAS_MARKETING.md).
+- El nuevo plan documenta seguimientos por pasos: primer contacto, seguimiento y oferta.
+- Cada paso genera un envío independiente y solo continúa si la persona no respondió ni avanzó.
+- Se definieron reglas de detención por respuesta, oportunidad, conversión, baja, bloqueo, medio inválido y límite de contactos.
+- La automatización queda separada del envío manual actual y no modifica proveedores, workers, cuotas ni métodos de Correo, WhatsApp o Voz.
+- La capacidad queda pendiente de implementación posterior a la estabilización de F4/F5.
+
 ### F5 — Drill-down de contenido y lista
 
 **Estado:** En validación

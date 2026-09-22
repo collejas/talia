@@ -49,6 +49,8 @@ ATIENDE LAS OPORTUNIDADES
 
 El refactor debe separar configuración, exploración y ejecución, sin perder las capacidades actuales de filtros, verificación, envíos, historial y métricas.
 
+Las secuencias automáticas de seguimiento se documentan en el plan relacionado [`../Plan_Experiencia_usuario_Marketing/PLAN_SECUENCIAS_AUTOMATICAS_MARKETING.md`](../Plan_Experiencia_usuario_Marketing/PLAN_SECUENCIAS_AUTOMATICAS_MARKETING.md). Ese plan amplía Marketing después de la estabilización de los envíos manuales; no cambia la arquitectura principal ni los métodos actuales de Correo, WhatsApp o Voz.
+
 La prioridad es proteger el caso operativo más crítico: crear envíos correctos y no repetitivos a partir de audiencias dinámicas.
 
 ## 2. Decisiones cerradas
@@ -1773,6 +1775,7 @@ Controles específicos:
 6. **Documentación contradictoria:** cerrar el estado real de migraciones y publicación de Google/GobMX antes de ejecutar cambios estructurales.
 7. **WhatsApp:** conservar sus métodos actuales de envío y procesamiento. Cualquier cambio operativo posterior debe tratarse como un proyecto backend independiente.
 8. **Contenido histórico de Correo:** actualmente se consulta el estado y los eventos del envío, pero no se garantiza conservar el HTML final personalizado por destinatario. La vista `Ver correo enviado` queda pendiente hasta definir almacenamiento privado, retención, protección de datos y capacidad disponible.
+9. **Secuencias automáticas:** se documentan en el plan relacionado y quedan fuera de la implementación actual de envíos manuales. Requieren definir condiciones de avance, esperas, pausa, no duplicación, activación progresiva y fuente canónica de respuestas/oportunidades.
 
 La operación de Correo queda regida por `docs/Plan_Postmark` y sus reglas actuales de Postmark/Brevo. La operación de WhatsApp queda regida por sus contratos, workers y proveedores actuales.
 
