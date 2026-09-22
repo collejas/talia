@@ -22938,6 +22938,7 @@ class CRMRepository:
         template_status: str | None = None,
         meta_category: str | None = None,
         search: str | None = None,
+        campana_id: UUID | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -22957,6 +22958,8 @@ class CRMRepository:
             params["template_status"] = f"eq.{template_status}"
         if meta_category:
             params["meta_category"] = f"eq.{meta_category}"
+        if campana_id:
+            params["campana_id"] = f"eq.{campana_id}"
         if search:
             sanitized = search.strip()
             for char in "(),*":

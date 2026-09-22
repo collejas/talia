@@ -305,6 +305,60 @@ F1 — Listas para contactar
 - TypeScript del panel (`tsc --noEmit`): correcto.
 - `git diff --check`: correcto.
 
+## 2026-09-22 — F1: compatibilidad con plantillas WhatsApp históricas
+
+### Estado
+
+En validación
+
+### Cambios
+
+- Se evitó bloquear la selección de plantillas WhatsApp cuando no tienen campaña asociada.
+- Si existen plantillas WhatsApp asociadas a la campaña, se muestran únicamente esas.
+- Las plantillas históricas sin asociación siguen disponibles para no romper envíos existentes.
+
+### Validación
+
+- ESLint y TypeScript del panel: correctos.
+- `py_compile` de rutas y repositorio CRM: correcto.
+- `git diff --check`: correcto.
+
+## 2026-09-22 — F1: preview real de contenido e imágenes por canal
+
+### Estado
+
+En validación
+
+### Cambios
+
+- El preview reemplaza variables de texto e imágenes con valores de ejemplo y recursos configurados.
+- Correo renderiza el HTML real de la plantilla dentro de un iframe aislado, incluyendo sus imágenes.
+- WhatsApp muestra la imagen de encabezado antes del cuerpo y elimina el marcador de imagen del texto.
+- Las plantillas WhatsApp ahora se filtran también por la campaña seleccionada.
+
+### Validación
+
+- ESLint y TypeScript del panel: correctos.
+- `py_compile` de rutas y repositorio CRM: correcto.
+- `git diff --check`: correcto.
+
+## 2026-09-22 — F1: vista previa completa de plantillas en el envío
+
+### Estado
+
+En validación
+
+### Cambios
+
+- Correo muestra asunto y cuerpo HTML o texto de la plantilla seleccionada.
+- WhatsApp muestra el texto configurado y las imágenes asociadas cuando existen.
+- La vista previa sigue siendo de solo lectura; no solicita variables ni permite modificar la plantilla.
+
+### Validación
+
+- ESLint y TypeScript del panel: correctos.
+- `git diff --check`: correcto.
+
 ## 2026-09-22 — F1: orden persistente de las listas
 
 ### Estado

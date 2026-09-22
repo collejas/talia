@@ -4868,6 +4868,7 @@ class WhatsProspTemplateQuery(BaseModel):
     template_status: Literal["draft", "approved", "rejected", "archived"] | None = Field(default=None)
     meta_category: Literal["marketing", "utility", "authentication"] | None = Field(default=None)
     search: str | None = Field(default=None, max_length=120)
+    campana_id: UUID | None = Field(default=None)
     page: int = Field(default=1, ge=1, le=1000)
     page_size: int = Field(default=20, ge=1, le=100)
 
@@ -36476,6 +36477,7 @@ async def listar_whats_prosp_templates(
             template_status=params.template_status,
             meta_category=params.meta_category,
             search=params.search,
+            campana_id=params.campana_id,
             limit=params.page_size,
             offset=offset,
         )

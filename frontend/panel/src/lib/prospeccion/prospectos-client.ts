@@ -1825,6 +1825,16 @@ export async function listContactoTemplates(params: {
       merged.push(item)
     })
   })
+  if (params.campana_id?.trim()) {
+    const campaignId = params.campana_id.trim()
+    const campaignItems = merged.filter((item) => {
+      const metadataCampaignId = item.metadata && typeof item.metadata.campana_id === "string" ? item.metadata.campana_id : ""
+      return item.campana_id === campaignId || metadataCampaignId === campaignId
+    })
+    // Las plantillas WhatsApp históricas no siempre guardan campaña. No se ocultan
+    // mientras no exista ninguna plantilla asociada que permita filtrar con seguridad.
+    if (campaignItems.length) return { ok: true, items: campaignItems }
+  }
   return { ok: true, items: merged }
 }
 

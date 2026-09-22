@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import Image from "next/image"
 import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconTargetArrow } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
@@ -66,6 +67,37 @@ const DEFAULT_CHANNEL_STATE: ChannelState = {
 }
 
 type ChannelOverrides = Partial<Record<keyof ChannelState, Partial<ChannelState["correo"]>>>
+
+const PREVIEW_VALUES: Record<string, string> = {
+  display_name: "Empresa de ejemplo",
+  nombre: "Empresa de ejemplo",
+  titulo: "Empresa de ejemplo",
+  primer_apellido: "",
+  segundo_apellido: "",
+  empresa: "Empresa de ejemplo",
+  email: "contacto@ejemplo.com",
+  telefono: "+52 444 000 0000",
+  segmento: "Prospectos",
+  canal_origen: "Prospección",
+  tracking_url: "https://talia.mx/",
+  website_url: "https://talia.mx/",
+  booking_url: "https://talia.mx/demo.html",
+  booking_link_text: "Agenda una demostración",
+}
+
+function renderTemplatePreviewContent(template: ContactoTemplate, content: string, includeImages: boolean): string {
+  if (!content) return ""
+  const images = Object.fromEntries(
+    (template.imagenes ?? [])
+      .filter((image) => image.file_url)
+      .map((image) => [image.variable_clave, image.file_url as string]),
+  )
+  return content.replace(/{{\s*([^{}]+?)\s*}}/g, (_match, rawKey: string) => {
+    const key = rawKey.trim()
+    if (key in images) return includeImages ? images[key] : ""
+    return PREVIEW_VALUES[key] ?? ""
+  })
+}
 
 function buildChannelState(overrides?: ChannelOverrides): ChannelState {
   const base: ChannelState = {
@@ -755,11 +787,44 @@ export function ProspeccionCampaignWizard({
                 {selectedTemplate ? (
                   <div className="rounded-md border bg-muted/30 p-3 text-sm">
                     <p className="font-medium">{selectedTemplate.nombre}</p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
-                      {selectedTemplate.canal === "correo"
-                        ? selectedTemplate.asunto || "Correo configurado"
-                        : selectedTemplate.cuerpo_texto || selectedTemplate.descripcion || "Contenido configurado"}
-                    </p>
+                    {selectedTemplate.canal === "correo" ? (
+                      <div className="mt-2 space-y-2 text-xs">
+                        <p><span className="font-medium">Asunto:</span> {selectedTemplate.asunto || "Sin asunto"}</p>
+                        {selectedTemplate.cuerpo_html ? (
+                          <iframe
+                            title={`Vista previa de ${selectedTemplate.nombre}`}
+                            sandbox=""
+                            srcDoc={renderTemplatePreviewContent(selectedTemplate, selectedTemplate.cuerpo_html, true)}
+                            className="h-56 w-full rounded border bg-white"
+                          />
+                        ) : (
+                          <p className="whitespace-pre-wrap rounded border bg-background p-2 text-muted-foreground">
+                            {renderTemplatePreviewContent(selectedTemplate, selectedTemplate.cuerpo_texto || selectedTemplate.descripcion || "Sin contenido", false)}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        {(() => {
+                          const whatsappImage = (selectedTemplate.imagenes ?? [])
+                            .filter((image) => image.file_url)
+                            .sort((a, b) => {
+                              const priority = ["logo_url", "hero_image_url", "product_image_1_url", "warranty_image_url"]
+                              return priority.indexOf(a.variable_clave) - priority.indexOf(b.variable_clave)
+                            })[0]
+                          return (
+                            <div className="mx-auto w-full max-w-sm overflow-hidden rounded-lg border bg-background shadow-sm">
+                              {whatsappImage?.file_url ? (
+                                <Image src={whatsappImage.file_url} alt={whatsappImage.nombre ?? "Imagen de la plantilla"} width={360} height={240} unoptimized className="mx-auto max-h-48 w-full object-contain" />
+                              ) : null}
+                              <p className="whitespace-pre-wrap px-3 py-2 text-xs leading-5 text-foreground">
+                                {renderTemplatePreviewContent(selectedTemplate, selectedTemplate.cuerpo_texto || selectedTemplate.descripcion || "Sin contenido", false)}
+                              </p>
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
                     <p className="mt-2 text-xs text-muted-foreground">El contenido se toma de la plantilla y no se modifica aquí.</p>
                   </div>
                 ) : null}
