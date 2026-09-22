@@ -4640,6 +4640,7 @@ class ProspectoFiltroPayload(BaseModel):
     metadata_queries: list[str] | None = Field(default=None, max_length=50)
     tipo_negocio: list[str] | None = Field(default=None, max_length=50)
     carrier_type: Literal["mobile", "landline", "voip", ""] | None = Field(default=None)
+    order: Literal["creado", "nombre", "diverso"] | None = Field(default=None)
     stage: Literal["discover", "enrich", "prepare", "launch", "evaluate", ""] | None = Field(default=None)
     whatsapp_permitido: bool | None = Field(default=None)
     llamada_permitida: bool | None = Field(default=None)
@@ -11401,6 +11402,13 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
         "metadata_queries": filters.metadata_queries,
         "tipo_negocio": filters.tipo_negocio,
         "carrier_type": filters.carrier_type or None,
+        "order": (
+            "display_name.asc.nullslast"
+            if filters.order == "nombre"
+            else "orden_diverso.asc,id.asc"
+            if filters.order == "diverso"
+            else None
+        ),
         "stage": filters.stage or None,
         "whatsapp_permitido": filters.whatsapp_permitido,
         "llamada_permitida": filters.llamada_permitida,

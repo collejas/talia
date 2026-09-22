@@ -30,6 +30,7 @@ type FormState = {
   nombre: string
   descripcion: string
   fuente: string
+  order: "creado" | "nombre" | "diverso"
   search: string
   segmento: string
   actividades: string
@@ -148,6 +149,7 @@ const EMPTY_FORM: FormState = {
   nombre: "",
   descripcion: "",
   fuente: "",
+  order: "creado",
   search: "",
   segmento: "",
   actividades: "",
@@ -226,6 +228,7 @@ function formFromLista(lista?: ProspeccionLista | null): FormState {
     nombre: lista?.nombre ?? "",
     descripcion: lista?.descripcion ?? "",
     fuente: typeof filtros.fuente === "string" ? filtros.fuente : "",
+    order: filtros.order === "nombre" || filtros.order === "diverso" ? filtros.order : "creado",
     search: typeof filtros.search === "string" ? filtros.search : "",
     segmento: valuesToText(filtros.segmentos) || (typeof filtros.segmento === "string" ? filtros.segmento : ""),
     actividades: valuesToText(filtros.actividades),
@@ -266,6 +269,7 @@ function filtersFromForm(form: FormState): ProspectoFiltroInput {
   const filtros: ProspectoFiltroInput = {}
   const splitValues = (value: string) => value.split(",").map((item) => item.trim()).filter(Boolean)
   if (form.fuente) filtros.fuente = form.fuente as ProspectoFiltroInput["fuente"]
+  filtros.order = form.order
   if (form.search.trim()) filtros.search = form.search.trim()
   const segmentos = splitValues(form.segmento)
   if (segmentos.length === 1) filtros.segmento = segmentos[0]
@@ -771,6 +775,18 @@ export function ListasParaContactarClient() {
                   <p className="text-xs text-muted-foreground">Etiqueta comercial asignada a tus prospectos.</p>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="lista-orden">Ordenar por</Label>
+                  <Select value={form.order} onValueChange={(value) => setForm((prev) => ({ ...prev, order: value as FormState["order"] }))}>
+                    <SelectTrigger id="lista-orden"><SelectValue placeholder="Más recientes" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="creado">Más recientes</SelectItem>
+                      <SelectItem value="nombre">Nombre (A-Z)</SelectItem>
+                      <SelectItem value="diverso">Orden diverso</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Define el orden en que se mostrarán los prospectos de esta lista.</p>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="lista-campana">Campaña</Label>
                   <Select value={form.campanaId || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, campanaId: value === "any" ? "" : value, templateId: "" }))}>
                     <SelectTrigger id="lista-campana"><SelectValue placeholder="Cualquier campaña" /></SelectTrigger>
@@ -810,6 +826,18 @@ export function ListasParaContactarClient() {
                       onChange={(value) => setForm((prev) => ({ ...prev, tipoNegocio: value }))}
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lista-calificacion">Clasificación de Google</Label>
+                    <Select value={form.minRating || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, minRating: value === "any" ? "" : value }))}>
+                      <SelectTrigger id="lista-calificacion"><SelectValue placeholder="Cualquier clasificación" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Cualquier clasificación</SelectItem>
+                        <SelectItem value="3">3 o más</SelectItem>
+                        <SelectItem value="4">4 o más</SelectItem>
+                        <SelectItem value="4.5">4.5 o más</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </> : null}
                 {!form.fuente || form.fuente === "denue" ? <>
                   <div className="sm:col-span-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
@@ -826,6 +854,19 @@ export function ListasParaContactarClient() {
                       emptyMessage="No hay actividades disponibles"
                       onChange={(value) => setForm((prev) => ({ ...prev, actividades: value }))}
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lista-tamano">Tamaño de la empresa (GobMX)</Label>
+                    <Select value={form.estratoGroup || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, estratoGroup: value === "any" ? "" : value }))}>
+                      <SelectTrigger id="lista-tamano"><SelectValue placeholder="Cualquier tamaño" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Cualquier tamaño</SelectItem>
+                        <SelectItem value="micro">Micro</SelectItem>
+                        <SelectItem value="pequena">Pequeña</SelectItem>
+                        <SelectItem value="mediana">Mediana</SelectItem>
+                        <SelectItem value="grande">Grande</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </> : null}
                 {form.fuente === "usuario" ? <div className="sm:col-span-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
@@ -1118,31 +1159,6 @@ export function ListasParaContactarClient() {
                       </SelectContent>
                     </Select>
                   </div>
-                  {!form.fuente || form.fuente === "google_places" ? <div className="space-y-2">
-                    <Label htmlFor="lista-calificacion">Calificación de Google</Label>
-                    <Select value={form.minRating || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, minRating: value === "any" ? "" : value }))}>
-                      <SelectTrigger id="lista-calificacion"><SelectValue placeholder="Cualquiera" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="any">Cualquiera</SelectItem>
-                        <SelectItem value="3">3 o más</SelectItem>
-                        <SelectItem value="4">4 o más</SelectItem>
-                        <SelectItem value="4.5">4.5 o más</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div> : null}
-                  {!form.fuente || form.fuente === "denue" ? <div className="space-y-2">
-                    <Label htmlFor="lista-tamano">Tamaño de empresa</Label>
-                    <Select value={form.estratoGroup || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, estratoGroup: value === "any" ? "" : value }))}>
-                      <SelectTrigger id="lista-tamano"><SelectValue placeholder="Cualquiera" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="any">Cualquiera</SelectItem>
-                        <SelectItem value="micro">Micro</SelectItem>
-                        <SelectItem value="pequena">Pequeña</SelectItem>
-                        <SelectItem value="mediana">Mediana</SelectItem>
-                        <SelectItem value="grande">Grande</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div> : null}
                 </div>
               </div>
             </div> : <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Elige un canal para mostrar las reglas correspondientes.</div>}

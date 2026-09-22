@@ -305,6 +305,48 @@ F1 — Listas para contactar
 - TypeScript del panel (`tsc --noEmit`): correcto.
 - `git diff --check`: correcto.
 
+## 2026-09-22 — F1: orden persistente de las listas
+
+### Estado
+
+En validación
+
+### Cambios
+
+- Se agregó `Ordenar por` a la creación y edición de listas.
+- Las opciones son Más recientes, Nombre (A-Z) y Orden diverso.
+- El criterio se guarda dentro de los filtros existentes de la lista.
+- El backend reutiliza el orden existente de Prospectos al resolver una lista.
+
+### Validación
+
+- ESLint y TypeScript del panel: correctos.
+- `py_compile` de las rutas CRM: correcto.
+- `git diff --check`: correcto.
+
+## 2026-09-22 — F1: filtros clasificados por fuente
+
+### Estado
+
+En validación
+
+### Fase
+
+F1 — Listas para contactar
+
+### Cambios
+
+- `Clasificación de Google` quedó dentro del bloque de filtros de Google.
+- `Tamaño de la empresa (GobMX)` quedó dentro del bloque de filtros GobMX/DENUE.
+- Ambos filtros dejaron de aparecer en la sección de condiciones generales.
+- Al elegir una fuente, solo se muestran sus clasificadores correspondientes.
+
+### Validación
+
+- ESLint de la vista de listas: correcto.
+- TypeScript del panel con `npx tsc --noEmit`: correcto.
+- `git diff --check`: correcto.
+
 ### Pendientes o riesgos
 
 - Todavía faltan filtros temporales como “no contactado en los últimos N días”.

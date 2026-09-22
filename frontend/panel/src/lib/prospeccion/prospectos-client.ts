@@ -117,6 +117,7 @@ export type ProspectoFiltroInput = {
   metadata_queries?: string[] | null
   tipo_negocio?: string[] | null
   carrier_type?: "mobile" | "landline" | "voip" | ""
+  order?: "creado" | "nombre" | "diverso" | null
   stage?: "discover" | "enrich" | "prepare" | "launch" | "evaluate" | ""
   whatsapp_permitido?: boolean | null
   llamada_permitida?: boolean | null
