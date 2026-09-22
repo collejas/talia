@@ -24,8 +24,14 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   getProspeccionMetricas,
+  getContactoBatchResumen,
+  listContactoBatches,
+  listContactoEnvios,
   listContactoTemplates,
   downloadProspeccionMetricasXlsx,
+  type ContactoBatch,
+  type ContactoBatchResumen,
+  type ContactoEnvio,
   type ContactoTemplate,
   type ProspeccionMetricasResponse,
   type ProspeccionCampanaAtribucionItem,
@@ -44,6 +50,37 @@ function getTemplateText(template: ContactoTemplate) {
   if (!raw) return ""
   const normalized = stripHtmlToText(raw)
   return normalized.length > 600 ? `${normalized.slice(0, 600)}...` : normalized
+}
+
+function formatContactStatus(status: string | null | undefined) {
+  const normalized = (status || "").trim().toLowerCase()
+  const labels: Record<string, string> = {
+    pendiente: "Pendiente",
+    procesando: "Preparando",
+    en_proceso: "Preparando",
+    enviado: "Enviado",
+    entregado: "Entregado",
+    leido: "Leído",
+    respondido: "Respondió",
+    completado: "Completado",
+    fallido: "Fallido",
+    error: "Fallido",
+    omitido: "No contactado",
+    suprimido: "No contactado",
+    cancelado: "Cancelado",
+  }
+  return labels[normalized] || status || "Sin estado"
+}
+
+function getRecipientLabel(envio: ContactoEnvio, index: number) {
+  const detail = envio.detalle && typeof envio.detalle === "object" ? envio.detalle : null
+  if (detail) {
+    const candidate = ["display_name", "nombre", "nombre_comercial", "empresa", "email", "phone"]
+      .map((key) => detail[key])
+      .find((value) => typeof value === "string" && value.trim())
+    if (typeof candidate === "string") return candidate.trim()
+  }
+  return `Destinatario ${index + 1}`
 }
 
 function escapeCsvValue(value: string | number | null | undefined) {
@@ -99,7 +136,7 @@ function getPeriodDates(preset: Exclude<PeriodPreset, "personalizado">) {
 }
 
 export default function ProspeccionMetricasPageClient() {
-  const [activeTab, setActiveTab] = useState<"campanas" | "campanas_whatsapp" | "frases">("campanas")
+  const [activeTab, setActiveTab] = useState<"campanas" | "campanas_whatsapp" | "campanas_voz" | "frases">("campanas")
   const [isSummaryView, setIsSummaryView] = useState(true)
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("actual")
   const [hydrated, setHydrated] = useState(false)
@@ -118,6 +155,14 @@ export default function ProspeccionMetricasPageClient() {
     key: "envios_totales",
     dir: "desc",
   })
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
+  const [selectedCampaignName, setSelectedCampaignName] = useState<string | null>(null)
+  const [campaignBatches, setCampaignBatches] = useState<ContactoBatch[]>([])
+  const [campaignBatchesLoading, setCampaignBatchesLoading] = useState(false)
+  const [selectedBatch, setSelectedBatch] = useState<ContactoBatch | null>(null)
+  const [selectedBatchSummary, setSelectedBatchSummary] = useState<ContactoBatchResumen | null>(null)
+  const [batchEnvios, setBatchEnvios] = useState<ContactoEnvio[]>([])
+  const [batchEnviosLoading, setBatchEnviosLoading] = useState(false)
   useEffect(() => {
     setHydrated(true)
   }, [])
@@ -221,6 +266,22 @@ export default function ProspeccionMetricasPageClient() {
     () => data?.campanas_correo?.items ?? data?.campanas.items ?? [],
     [data?.campanas_correo?.items, data?.campanas.items],
   )
+  const voiceItems = useMemo(
+    () => (data?.campanas?.items ?? []).filter((item) => (item.canal || "").trim().toLowerCase() === "llamada"),
+    [data?.campanas?.items],
+  )
+  const voiceSummary = useMemo(
+    () => voiceItems.reduce(
+      (summary, item) => ({
+        intentados: summary.intentados + (item.envios_totales || 0),
+        realizadas: summary.realizadas + (item.envios_entregados || 0),
+        respondieron: summary.respondieron + (item.envios_respondidos || 0),
+        fallidos: summary.fallidos + (item.envios_fallidos || 0),
+      }),
+      { intentados: 0, realizadas: 0, respondieron: 0, fallidos: 0 },
+    ),
+    [voiceItems],
+  )
   const summaryCampaign = data?.campanas_correo?.summary ?? data?.campanas.summary
   const commercialSummary = data?.resultado_comercial_whatsapp?.summary
   const commercialOpportunityRate = commercialSummary?.conversaciones
@@ -274,7 +335,7 @@ export default function ProspeccionMetricasPageClient() {
   const phraseCpoValue = summaryPhrases?.cpo != null ? moneyPrecise.format(summaryPhrases.cpo) : "—"
   const phraseCacValue = summaryPhrases?.cac != null ? moneyPrecise.format(summaryPhrases.cac) : "—"
   const activeViewMeta: Record<
-    "campanas" | "campanas_whatsapp" | "frases",
+    "campanas" | "campanas_whatsapp" | "campanas_voz" | "frases",
     { title: string; description: string; badge: string }
   > = {
     campanas: {
@@ -286,6 +347,11 @@ export default function ProspeccionMetricasPageClient() {
       title: "Campañas WhatsApp",
       description: "Enviados, entregados, respuestas y resultados comerciales atribuidos a campañas WhatsApp.",
       badge: number.format(commercialSummary?.envios ?? 0),
+    },
+    campanas_voz: {
+      title: "Resultados de Voz",
+      description: "Llamadas realizadas, contestadas, no contestadas e interesados según los estados disponibles.",
+      badge: number.format(voiceSummary.realizadas),
     },
     frases: {
       title: "Frases WhatsApp",
@@ -304,8 +370,15 @@ export default function ProspeccionMetricasPageClient() {
   const topCards = useMemo(() => {
     const cards: Array<{ title: string; value: string; hint: string }> = []
     const isWhatsappFilter = canal === "whatsapp"
+    const isVoiceFilter = canal === "llamada"
     if (isWhatsappFilter) {
       return cards
+    } else if (isVoiceFilter) {
+      return [
+        { title: "Llamadas realizadas", value: number.format(voiceSummary.realizadas), hint: `${number.format(voiceSummary.intentados)} intentadas` },
+        { title: "Respondieron", value: number.format(voiceSummary.respondieron), hint: "Interacciones registradas" },
+        { title: "Fallidas", value: number.format(voiceSummary.fallidos), hint: "No completadas" },
+      ]
     } else if (canal === "todos") {
       const totalEnvios = (summaryCampaign?.envios_totales ?? 0) + (commercialSummary?.envios ?? 0)
       const totalRespondidos = (summaryCampaign?.envios_respondidos ?? 0) + (commercialSummary?.respondieron ?? 0)
@@ -399,7 +472,7 @@ export default function ProspeccionMetricasPageClient() {
       })
     }
     return cards
-  }, [summaryCampaign, commercialSummary, summaryPhrases, campaignItems, canal])
+  }, [summaryCampaign, commercialSummary, summaryPhrases, campaignItems, canal, voiceSummary])
 
   const channelSummary = useMemo(() => {
     const items = campaignItems
@@ -605,7 +678,8 @@ export default function ProspeccionMetricasPageClient() {
   const exportActiveCsv = useCallback(() => {
     if (!data) return
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
-    if (activeTab === "campanas") {
+    if (activeTab === "campanas" || activeTab === "campanas_voz") {
+      const exportItems = activeTab === "campanas_voz" ? voiceItems : campaignItems
       const csv = buildCsv(
         [
           "campana_id",
@@ -628,7 +702,7 @@ export default function ProspeccionMetricasPageClient() {
           "tasa_respuesta_pct",
           "click_to_session_pct",
         ],
-        campaignItems.map((item) => [
+        exportItems.map((item) => [
           item.campana_id,
           item.campana_nombre,
           item.canal,
@@ -650,7 +724,7 @@ export default function ProspeccionMetricasPageClient() {
           item.click_to_session_pct,
         ]),
       )
-      downloadCsv(`prospeccion_metricas_campanas_${timestamp}.csv`, csv)
+      downloadCsv(`prospeccion_metricas_${activeTab === "campanas_voz" ? "voz" : "campanas"}_${timestamp}.csv`, csv)
       return
     }
     if (activeTab === "campanas_whatsapp") {
@@ -704,7 +778,7 @@ export default function ProspeccionMetricasPageClient() {
       phraseRows,
     )
     downloadCsv(`prospeccion_metricas_frases_${timestamp}.csv`, csv)
-  }, [activeTab, data, campaignItems, commercialItems, phraseCampaignGroups])
+  }, [activeTab, data, campaignItems, voiceItems, commercialItems, phraseCampaignGroups])
 
   const exportXlsx = useCallback(async () => {
     try {
@@ -736,8 +810,69 @@ export default function ProspeccionMetricasPageClient() {
   const openChannel = (channel: "correo" | "whatsapp" | "llamada") => {
     setIsSummaryView(false)
     setCanal(channel)
-    setActiveTab(channel === "whatsapp" ? "campanas_whatsapp" : "campanas")
+    setSelectedCampaignId(null)
+    setSelectedCampaignName(null)
+    setSelectedBatch(null)
+    setActiveTab(channel === "whatsapp" ? "campanas_whatsapp" : channel === "llamada" ? "campanas_voz" : "campanas")
   }
+
+  const openCampaignDetails = useCallback(async (campaignId: string | null | undefined, campaignName?: string | null) => {
+    if (!campaignId) return
+    setSelectedCampaignId(campaignId)
+    setSelectedCampaignName(campaignName || "Campaña")
+    setSelectedBatch(null)
+    setSelectedBatchSummary(null)
+    setBatchEnvios([])
+    setCampaignBatchesLoading(true)
+    try {
+      const response = await listContactoBatches({
+        campana_id: campaignId,
+        limit: 100,
+        include_resumen: true,
+        include_total: false,
+        order: "reciente",
+      })
+      setCampaignBatches(Array.isArray(response.items) ? response.items : [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar los envíos de la campaña.")
+      setCampaignBatches([])
+    } finally {
+      setCampaignBatchesLoading(false)
+    }
+  }, [])
+
+  const openBatchDetails = useCallback(async (batch: ContactoBatch) => {
+    setSelectedBatch(batch)
+    setSelectedBatchSummary(null)
+    setBatchEnvios([])
+    setBatchEnviosLoading(true)
+    try {
+      const [summary, envios] = await Promise.all([
+        getContactoBatchResumen(batch.id),
+        listContactoEnvios({ batch_id: batch.id, limit: 500, include_total: false, order: "antiguo" }),
+      ])
+      setSelectedBatchSummary(summary)
+      setBatchEnvios(Array.isArray(envios.items) ? envios.items : [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar los destinatarios del envío.")
+    } finally {
+      setBatchEnviosLoading(false)
+    }
+  }, [])
+
+  const closeCampaignDetails = useCallback(() => {
+    setSelectedCampaignId(null)
+    setSelectedCampaignName(null)
+    setSelectedBatch(null)
+    setSelectedBatchSummary(null)
+    setBatchEnvios([])
+  }, [])
+
+  const closeBatchDetails = useCallback(() => {
+    setSelectedBatch(null)
+    setSelectedBatchSummary(null)
+    setBatchEnvios([])
+  }, [])
 
   const handlePeriodChange = (value: PeriodPreset) => {
     setPeriodPreset(value)
@@ -823,12 +958,13 @@ export default function ProspeccionMetricasPageClient() {
 
       {isSummaryView ? (
         <section className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {[
-              { label: "Actividad registrada", value: summaryChannelRows.reduce((sum, row) => sum + row.envios_totales, 0), hint: "Mensajes y envíos del periodo" },
-              { label: "Resultados efectivos", value: summaryChannelRows.reduce((sum, row) => sum + row.resultValue, 0), hint: "Entregas o conversaciones" },
+              { label: "Contactos realizados", value: summaryChannelRows.reduce((sum, row) => sum + row.envios_totales, 0), hint: "Correos, mensajes y llamadas" },
+              { label: "Contactos efectivos", value: summaryChannelRows.reduce((sum, row) => sum + row.resultValue, 0), hint: "Entregas o conversaciones" },
               { label: "Respuestas", value: summaryChannelRows.reduce((sum, row) => sum + row.envios_respondidos, 0), hint: "Interacciones atribuidas" },
               { label: "Oportunidades", value: commercialSummary?.oportunidades ?? summaryPhrases?.oportunidades_creadas ?? 0, hint: "Atribuidas a campañas" },
+              { label: "Ventas", value: commercialSummary?.clientes ?? summaryPhrases?.clientes ?? 0, hint: "Conversiones atribuidas" },
             ].map((item) => (
               <Card key={item.label} className="border-border shadow-none">
                 <CardContent className="p-5">
@@ -846,6 +982,14 @@ export default function ProspeccionMetricasPageClient() {
               <p className="text-sm text-muted-foreground">Selecciona un canal para consultar su detalle.</p>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="hidden grid-cols-[1.2fr_repeat(4,1fr)_auto] gap-3 border-b border-border/60 px-6 py-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground md:grid">
+                <span>Canal</span>
+                <span>Resultado</span>
+                <span>Respuestas</span>
+                <span>Entrega</span>
+                <span>Respuesta</span>
+                <span />
+              </div>
               <div className="divide-y divide-border/60">
                 {summaryChannelRows.map((row) => (
                   <button
@@ -875,6 +1019,8 @@ export default function ProspeccionMetricasPageClient() {
                 {
                   key: "correo",
                   title: "Salud del correo",
+                  total: data?.salud_canales?.correo.intentados ?? 0,
+                  tone: "bg-sky-500",
                   primary: [
                     ["Entregados", data?.salud_canales?.correo.entregados],
                     ["Abiertos", data?.salud_canales?.correo.abiertos],
@@ -895,6 +1041,8 @@ export default function ProspeccionMetricasPageClient() {
                 {
                   key: "whatsapp",
                   title: "Salud de WhatsApp",
+                  total: data?.salud_canales?.whatsapp.intentados ?? 0,
+                  tone: "bg-emerald-500",
                   primary: [
                     ["Entregados", data?.salud_canales?.whatsapp.entregados],
                     ["Leídos", data?.salud_canales?.whatsapp.leidos],
@@ -913,6 +1061,8 @@ export default function ProspeccionMetricasPageClient() {
                 {
                   key: "llamada",
                   title: "Resultados de Voz",
+                  total: data?.salud_canales?.llamada.intentados ?? 0,
+                  tone: "bg-violet-500",
                   primary: [
                     ["Llamadas realizadas", data?.salud_canales?.llamada.realizadas],
                     ["Respondieron", data?.salud_canales?.llamada.respondieron],
@@ -929,11 +1079,19 @@ export default function ProspeccionMetricasPageClient() {
                   <p className="text-xs text-muted-foreground">Resultados disponibles en el periodo seleccionado.</p>
                 </CardHeader>
                 <CardContent className="space-y-4 p-5">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-5">
                     {channel.primary.map(([label, value]) => (
                       <div key={label}>
-                        <p className="text-xs text-muted-foreground">{label}</p>
-                        <p className="text-xl font-semibold text-foreground">{value == null ? "—" : number.format(value)}</p>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className="text-xs text-muted-foreground">{label}</p>
+                          <p className="text-lg font-semibold text-foreground">{value == null ? "—" : number.format(value)}</p>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={`h-full rounded-full ${channel.tone}`}
+                            style={{ width: channel.total > 0 && value != null ? `${Math.min(100, Math.round((value / channel.total) * 100))}%` : "0%" }}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -944,7 +1102,7 @@ export default function ProspeccionMetricasPageClient() {
                         {channel.secondary.map(([label, value]) => (
                           <div key={label} className="flex items-center justify-between gap-2">
                             <span className="text-muted-foreground">{label}</span>
-                            <span className="font-medium text-foreground">{value == null ? "Pendiente" : number.format(value)}</span>
+                            <span className="font-medium text-foreground">{value == null ? "Sin datos" : number.format(value)}</span>
                           </div>
                         ))}
                       </div>
@@ -964,15 +1122,9 @@ export default function ProspeccionMetricasPageClient() {
         <CardHeader className="gap-1 py-1">
           <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1">
-              {activeTab === "campanas_whatsapp" ? (
-                <CardTitle className="text-base font-semibold">Detalle del canal</CardTitle>
-              ) : (
-                <>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Detalle del canal</p>
-                  <CardTitle className="text-lg">{activeViewMeta[activeTab].title}</CardTitle>
-                  <p className="max-w-2xl text-sm text-muted-foreground">{activeViewMeta[activeTab].description}</p>
-                </>
-              )}
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Detalle del canal</p>
+              <CardTitle className="text-lg">{activeViewMeta[activeTab].title}</CardTitle>
+              <p className="max-w-2xl text-sm text-muted-foreground">{activeViewMeta[activeTab].description}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:justify-end">
               {activeTab === "campanas_whatsapp" ? (
@@ -1050,7 +1202,115 @@ export default function ProspeccionMetricasPageClient() {
         </Card>
       ) : null}
 
-      {activeTab === "campanas" ? (
+      {selectedBatch ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <button type="button" onClick={closeBatchDetails} className="text-sm font-medium text-primary hover:underline">
+                ← Volver a los envíos de la campaña
+              </button>
+              <h2 className="mt-2 text-xl font-semibold">Destinatarios del envío</h2>
+              <p className="text-sm text-muted-foreground">
+                {selectedBatch.titulo || selectedCampaignName || "Envío"} · {selectedBatch.creado_en ? new Date(selectedBatch.creado_en).toLocaleString("es-MX") : "Fecha no disponible"}
+              </p>
+            </div>
+            <Badge variant="outline">{formatContactStatus(selectedBatch.estado)}</Badge>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["Personas en el envío", selectedBatchSummary?.total_envios ?? selectedBatch.total_prospectos ?? 0],
+              ["Entregados / realizados", (selectedBatchSummary?.totales?.entregado ?? 0) + (selectedBatchSummary?.totales?.completado ?? 0)],
+              ["Respondieron", selectedBatchSummary?.totales?.respondido ?? 0],
+              ["Fallidos", (selectedBatchSummary?.totales?.fallido ?? 0) + (selectedBatchSummary?.totales?.error ?? 0)],
+            ].map(([label, value]) => (
+              <Card key={label as string} className="border-border shadow-none">
+                <CardContent className="p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+                  <p className="mt-2 text-2xl font-semibold">{number.format(Number(value) || 0)}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card className="border-border shadow-none">
+            <CardHeader>
+              <CardTitle>Personas contactadas</CardTitle>
+              <p className="text-sm text-muted-foreground">Estado individual de cada persona en este envío.</p>
+            </CardHeader>
+            <CardContent>
+              {batchEnviosLoading ? (
+                <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><IconLoader className="h-4 w-4 animate-spin" /> Cargando destinatarios...</div>
+              ) : batchEnvios.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-2 py-2">Persona</th>
+                        <th className="px-2 py-2">Canal</th>
+                        <th className="px-2 py-2">Estado</th>
+                        <th className="px-2 py-2">Procesado</th>
+                        <th className="px-2 py-2">Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batchEnvios.map((envio, index) => {
+                        const detail = envio.detalle && typeof envio.detalle === "object" ? envio.detalle : null
+                        const detailText = detail
+                          ? [detail.error, detail.motivo, detail.message, detail.status].find((value) => typeof value === "string" && value.trim())
+                          : null
+                        return (
+                          <tr key={envio.id} className="border-b last:border-0">
+                            <td className="px-2 py-2 font-medium">{getRecipientLabel(envio, index)}</td>
+                            <td className="px-2 py-2">{envio.canal === "llamada" ? "Voz" : envio.canal === "whatsapp" ? "WhatsApp" : "Correo"}</td>
+                            <td className="px-2 py-2">{formatContactStatus(envio.estado)}</td>
+                            <td className="px-2 py-2 text-muted-foreground">{envio.procesado_en ? new Date(envio.procesado_en).toLocaleString("es-MX") : "Pendiente"}</td>
+                            <td className="max-w-[260px] truncate px-2 py-2 text-muted-foreground" title={typeof detailText === "string" ? detailText : undefined}>{typeof detailText === "string" ? detailText : "—"}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">Este envío todavía no tiene destinatarios registrados.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : selectedCampaignId ? (
+        <div className="space-y-4">
+          <div>
+            <button type="button" onClick={closeCampaignDetails} className="text-sm font-medium text-primary hover:underline">← Volver a campañas</button>
+            <h2 className="mt-2 text-xl font-semibold">Envíos de {selectedCampaignName || "la campaña"}</h2>
+            <p className="text-sm text-muted-foreground">Selecciona un envío para consultar sus destinatarios y estados.</p>
+          </div>
+          <Card className="border-border shadow-none">
+            <CardContent className="p-0">
+              {campaignBatchesLoading ? (
+                <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><IconLoader className="h-4 w-4 animate-spin" /> Cargando envíos...</div>
+              ) : campaignBatches.length ? (
+                <div className="divide-y divide-border/60">
+                  {campaignBatches.map((batch) => {
+                    const total = batch.total_envios ?? batch.total_prospectos ?? 0
+                    const completed = Object.entries(batch.totales || {}).filter(([status]) => ["entregado", "completado", "respondido", "enviado"].includes(status)).reduce((sum, [, value]) => sum + Number(value || 0), 0)
+                    return (
+                      <button key={batch.id} type="button" onClick={() => void openBatchDetails(batch)} className="grid w-full gap-3 px-5 py-4 text-left transition hover:bg-muted/50 md:grid-cols-[1.4fr_1fr_0.8fr_0.8fr_auto] md:items-center">
+                        <span><span className="block font-medium">{batch.titulo || "Envío sin título"}</span><span className="text-xs text-muted-foreground">{batch.creado_en ? new Date(batch.creado_en).toLocaleString("es-MX") : "Fecha no disponible"}</span></span>
+                        <span className="text-sm text-muted-foreground">{(batch.canales || []).map((value) => value === "llamada" ? "Voz" : value === "whatsapp" ? "WhatsApp" : "Correo").join(", ") || "—"}</span>
+                        <span><span className="block text-xs text-muted-foreground">Personas</span><span className="font-semibold">{number.format(total)}</span></span>
+                        <span><span className="block text-xs text-muted-foreground">Procesadas</span><span className="font-semibold">{number.format(completed)}</span></span>
+                        <span className="text-sm font-medium text-primary">Ver detalle →</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="p-6 text-center text-sm text-muted-foreground">No hay envíos registrados para esta campaña.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+      activeTab === "campanas" ? (
         <div className="space-y-4">
           <Card>
             <CardHeader>
@@ -1100,16 +1360,10 @@ export default function ProspeccionMetricasPageClient() {
                         <button type="button" title="Nombre de la campaña de prospección." onClick={() => toggleSort("campana_nombre")}>Campaña</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" title="Canal del envío: correo, WhatsApp o voz." onClick={() => toggleSort("canal")}>Canal</button>
-                      </th>
-                      <th className="px-2 py-2">
                         <button type="button" title="Plantilla o contenido usado en el envío." onClick={() => toggleSort("template_nombre")}>Plantilla</button>
                       </th>
                       <th className="px-2 py-2">
                         <button type="button" title="Total de envíos generados para esa fila." onClick={() => toggleSort("envios_totales")}>Totales</button>
-                      </th>
-                      <th className="px-2 py-2">
-                        <button type="button" title="Envíos omitidos/suprimidos antes de salir." onClick={() => toggleSort("envios_omitidos")}>Omitidos</button>
                       </th>
                       <th className="px-2 py-2">
                         <button type="button" title="Envíos con confirmación de entrega." onClick={() => toggleSort("envios_entregados")}>Entregados</button>
@@ -1118,19 +1372,10 @@ export default function ProspeccionMetricasPageClient() {
                         <button type="button" title="Envíos que recibieron respuesta del prospecto." onClick={() => toggleSort("envios_respondidos")}>Respondidos</button>
                       </th>
                       <th className="px-2 py-2">
-                        <button type="button" title="Entregados sin respuesta (Entregados - Respondidos)." onClick={() => toggleSort("entregados_sin_resp")}>Sin respuesta</button>
-                      </th>
-                      <th className="px-2 py-2">
                         <button type="button" title="Porcentaje de entrega sobre envíos totales." onClick={() => toggleSort("tasa_entrega_pct")}>% Entrega</button>
                       </th>
                       <th className="px-2 py-2">
                         <button type="button" title="% Respuesta = Respondidos / Entregados." onClick={() => toggleSort("tasa_respuesta_pct")}>% Respuesta</button>
-                      </th>
-                      <th className="px-2 py-2">
-                        <button type="button" title="Tasa resp. total = Respondidos / Totales." onClick={() => toggleSort("tasa_respuesta_total_pct")}>Tasa resp. total</button>
-                      </th>
-                      <th className="px-2 py-2">
-                        <button type="button" title="% Sin respuesta = (Entregados - Respondidos) / Entregados." onClick={() => toggleSort("tasa_sin_respuesta_pct")}>% Sin resp</button>
                       </th>
                       <th className="px-2 py-2">
                         <button type="button" title="Aperturas registradas (solo correo)." onClick={() => toggleSort("brevo_aperturas")}>Aperturas</button>
@@ -1144,19 +1389,17 @@ export default function ProspeccionMetricasPageClient() {
                       <th className="px-2 py-2">
                         <button type="button" title="% Click = Clics / Entregados (solo correo)." onClick={() => toggleSort("click_rate")}>% Click</button>
                       </th>
-                      <th className="px-2 py-2">
-                        <button type="button" title="Sesiones web atribuidas por UTM." onClick={() => toggleSort("sesiones_utm")}>Sesiones</button>
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {sortedCampaignItems.map((item, idx) => (
                       <tr
                         key={`${item.campana_id ?? "camp"}-${item.template_id ?? item.template_slug ?? item.twilio_content_sid ?? "tpl"}-${idx}`}
-                        className="border-b"
+                        className={`${item.campana_id ? "cursor-pointer transition hover:bg-muted/50" : ""} border-b`}
+                        onClick={() => void openCampaignDetails(item.campana_id, item.campana_nombre)}
+                        title={item.campana_id ? "Ver los envíos de esta campaña" : undefined}
                       >
                         <td className="px-2 py-2">{item.campana_nombre ?? "-"}</td>
-                        <td className="px-2 py-2"><Badge variant="secondary">{item.canal ?? "-"}</Badge></td>
                         <td className="max-w-[320px] truncate px-2 py-2" title={resolveTemplateTooltip(item)}>
                           {item.template_nombre ?? item.template_slug ?? "-"}
                         </td>
@@ -1165,13 +1408,11 @@ export default function ProspeccionMetricasPageClient() {
                           return (
                             <>
                               <td className="px-2 py-2">{number.format(effectiveTotal)}</td>
-                              <td className="px-2 py-2">{number.format(item.envios_omitidos || 0)}</td>
                             </>
                           )
                         })()}
                         <td className="px-2 py-2">{number.format(item.envios_entregados)}</td>
                         <td className="px-2 py-2">{number.format(item.envios_respondidos)}</td>
-                        <td className="px-2 py-2">{number.format(Math.max(0, item.envios_entregados - item.envios_respondidos))}</td>
                         <td className="px-2 py-2">
                           {(() => {
                             const total = item.envios_totales || 0
@@ -1183,16 +1424,6 @@ export default function ProspeccionMetricasPageClient() {
                         <td className="px-2 py-2">
                           {item.envios_entregados > 0
                             ? `${Math.round((item.envios_respondidos / item.envios_entregados) * 100)}%`
-                            : "—"}
-                        </td>
-                        <td className="px-2 py-2">
-                          {item.envios_totales > 0
-                            ? `${Math.round((item.envios_respondidos / item.envios_totales) * 100)}%`
-                            : "—"}
-                        </td>
-                        <td className="px-2 py-2">
-                          {item.envios_entregados > 0
-                            ? `${Math.round(((item.envios_entregados - item.envios_respondidos) / item.envios_entregados) * 100)}%`
                             : "—"}
                         </td>
                         <td className="px-2 py-2">{number.format(item.brevo_aperturas)}</td>
@@ -1207,18 +1438,13 @@ export default function ProspeccionMetricasPageClient() {
                             ? `${Math.round((item.brevo_clicks / item.envios_entregados) * 100)}%`
                             : "—"}
                         </td>
-                        <td className="px-2 py-2">{number.format(item.sesiones_utm)}</td>
                       </tr>
                     ))}
                     <tr className="border-t bg-muted/30 font-semibold">
-                      <td className="px-2 py-2" colSpan={3}>Totales</td>
+                      <td className="px-2 py-2" colSpan={2}>Totales</td>
                       <td className="px-2 py-2">{number.format(campaignTotals.envios_totales)}</td>
-                      <td className="px-2 py-2">{number.format(campaignTotals.envios_omitidos)}</td>
                       <td className="px-2 py-2">{number.format(campaignTotals.envios_entregados)}</td>
                       <td className="px-2 py-2">{number.format(campaignTotals.envios_respondidos)}</td>
-                      <td className="px-2 py-2">
-                        {number.format(Math.max(0, campaignTotals.envios_entregados - campaignTotals.envios_respondidos))}
-                      </td>
                       <td className="px-2 py-2">
                         {campaignTotals.envios_totales > 0
                           ? `${Math.round((campaignTotals.envios_entregados / campaignTotals.envios_totales) * 100)}%`
@@ -1227,16 +1453,6 @@ export default function ProspeccionMetricasPageClient() {
                       <td className="px-2 py-2">
                         {campaignTotals.envios_entregados > 0
                           ? `${Math.round((campaignTotals.envios_respondidos / campaignTotals.envios_entregados) * 100)}%`
-                          : "—"}
-                      </td>
-                      <td className="px-2 py-2">
-                        {campaignTotals.envios_totales > 0
-                          ? `${Math.round((campaignTotals.envios_respondidos / campaignTotals.envios_totales) * 100)}%`
-                          : "—"}
-                      </td>
-                      <td className="px-2 py-2">
-                        {campaignTotals.envios_entregados > 0
-                          ? `${Math.round(((campaignTotals.envios_entregados - campaignTotals.envios_respondidos) / campaignTotals.envios_entregados) * 100)}%`
                           : "—"}
                       </td>
                       <td className="px-2 py-2">{number.format(campaignTotals.brevo_aperturas)}</td>
@@ -1251,7 +1467,6 @@ export default function ProspeccionMetricasPageClient() {
                           ? `${Math.round((campaignTotals.brevo_clicks / campaignTotals.envios_entregados) * 100)}%`
                           : "—"}
                       </td>
-                      <td className="px-2 py-2">{number.format(campaignTotals.sesiones_utm)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1351,7 +1566,12 @@ export default function ProspeccionMetricasPageClient() {
                       {commercialItems.map((item) => {
                         const costsPending = (item.pendientes_cobro ?? 0) > 0
                         return (
-                          <tr key={item.campana_id ?? item.campana_nombre ?? "sin-campana"} className="border-b last:border-0">
+                          <tr
+                            key={item.campana_id ?? item.campana_nombre ?? "sin-campana"}
+                            className={`${item.campana_id ? "cursor-pointer transition hover:bg-muted/50" : ""} border-b last:border-0`}
+                            onClick={() => void openCampaignDetails(item.campana_id, item.campana_nombre)}
+                            title={item.campana_id ? "Ver los envíos de esta campaña" : undefined}
+                          >
                             <td className="px-2 py-2 font-medium">{item.campana_nombre ?? "Sin campaña"}</td>
                             <td className="px-2 py-2">{number.format(item.envios)}</td>
                             <td className="px-2 py-2">{number.format(item.entregados)}</td>
@@ -1372,6 +1592,72 @@ export default function ProspeccionMetricasPageClient() {
             </CardContent>
           </Card>
 
+        </div>
+      ) : activeTab === "campanas_voz" ? (
+        <div className="space-y-4">
+          <Card className="border-violet-500/20 bg-violet-500/5 shadow-none">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Resultado de llamadas</CardTitle>
+              <p className="text-xs text-muted-foreground">Estados disponibles para las llamadas del periodo seleccionado.</p>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ["Intentadas", voiceSummary.intentados],
+                ["Realizadas", voiceSummary.realizadas],
+                ["Respondieron", voiceSummary.respondieron],
+                ["Fallidas", voiceSummary.fallidos],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl border border-border bg-background/80 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-foreground">{number.format(Number(value) || 0)}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border shadow-none">
+            <CardHeader>
+              <CardTitle>Campañas de Voz</CardTitle>
+              <p className="text-sm text-muted-foreground">Guiones y resultados de llamadas por campaña.</p>
+            </CardHeader>
+            <CardContent>
+              {voiceItems.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-2 py-2">Campaña</th>
+                        <th className="px-2 py-2">Guion</th>
+                        <th className="px-2 py-2">Intentadas</th>
+                        <th className="px-2 py-2">Realizadas</th>
+                        <th className="px-2 py-2">Respondieron</th>
+                        <th className="px-2 py-2">Fallidas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {voiceItems.map((item, index) => (
+                        <tr
+                          key={`${item.campana_id ?? "campana"}-${item.template_id ?? item.template_slug ?? index}`}
+                          className={`${item.campana_id ? "cursor-pointer transition hover:bg-muted/50" : ""} border-b last:border-0`}
+                          onClick={() => void openCampaignDetails(item.campana_id, item.campana_nombre)}
+                          title={item.campana_id ? "Ver los envíos de esta campaña" : undefined}
+                        >
+                          <td className="px-2 py-2 font-medium">{item.campana_nombre ?? "Sin campaña"}</td>
+                          <td className="px-2 py-2">{item.template_nombre ?? item.template_slug ?? "Sin guion"}</td>
+                          <td className="px-2 py-2">{number.format(item.envios_totales || 0)}</td>
+                          <td className="px-2 py-2">{number.format(item.envios_entregados || 0)}</td>
+                          <td className="px-2 py-2">{number.format(item.envios_respondidos || 0)}</td>
+                          <td className="px-2 py-2">{number.format(item.envios_fallidos || 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">No hay llamadas registradas para este periodo.</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       ) : (
         <div className="space-y-4">
@@ -1472,7 +1758,7 @@ export default function ProspeccionMetricasPageClient() {
             </CardContent>
           </Card>
         </div>
-      )}
+      ))}
       </>
       ) : null}
     </div>

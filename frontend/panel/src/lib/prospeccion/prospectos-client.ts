@@ -1673,6 +1673,7 @@ export async function listContactoBatches(params: {
   limit?: number
   offset?: number
   estado?: string
+  campana_id?: string
   order?: "reciente" | "antiguo"
   include_resumen?: boolean
   include_total?: boolean
@@ -1681,6 +1682,7 @@ export async function listContactoBatches(params: {
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
   if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
   if (params.estado?.trim()) url.searchParams.set("estado", params.estado.trim())
+  if (params.campana_id?.trim()) url.searchParams.set("campana_id", params.campana_id.trim())
   if (params.order) url.searchParams.set("order", params.order)
   if (params.include_resumen) url.searchParams.set("include_resumen", "true")
   if (params.include_total === false) url.searchParams.set("include_total", "false")

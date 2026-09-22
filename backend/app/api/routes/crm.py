@@ -5334,6 +5334,7 @@ class ContactBatchQuery(BaseModel):
     limit: int = Field(default=25, ge=1, le=200)
     offset: int = Field(default=0, ge=0, le=10_000)
     estado: str | None = Field(default=None, max_length=40)
+    campana_id: UUID | None = Field(default=None)
     order: Literal["reciente", "antiguo"] = Field(default="reciente")
     include_resumen: bool = Field(default=False)
     include_total: bool = Field(default=True)
@@ -35619,6 +35620,7 @@ async def listar_batches_prospeccion_contacto_legacy(
             limit=params.limit,
             offset=params.offset,
             estado=params.estado,
+            campana_id=params.campana_id,
             order=order,
             count_exact=params.include_total,
         )

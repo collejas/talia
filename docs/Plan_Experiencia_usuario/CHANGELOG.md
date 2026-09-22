@@ -61,6 +61,38 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - Las exclusiones se presentan como estado de elegibilidad, no como una etapa del embudo comercial.
 - No se modificaron los métodos, workers, límites ni proveedor actuales de WhatsApp.
 
+### Mejora visual F5 — jerarquía del Resumen
+
+- Los indicadores superiores ahora priorizan contactos realizados, contactos efectivos, respuestas, oportunidades y ventas.
+- La comparación por canal incorpora encabezados claros y conserva la navegación hacia el detalle.
+- Las tarjetas de salud separan resultados de incidencias y permisos.
+- Las métricas principales muestran barras proporcionales para facilitar la lectura rápida.
+- Se usan colores semánticos por canal sin depender de nombres técnicos de proveedores.
+- Los datos ausentes se muestran como `Sin datos` y no como una cifra cero.
+
+### Mejora visual F5 — detalle por canal
+
+- Voz dejó de reutilizar accidentalmente la vista de Correo y ahora tiene resultados propios.
+- Voz muestra llamadas intentadas, realizadas, respondidas y fallidas, además de campañas y guiones.
+- Correo redujo la tabla inicial a las métricas principales; los datos secundarios quedan para el detalle posterior.
+- WhatsApp conserva separado el resultado comercial de la atribución de conversaciones.
+- Los encabezados y descripciones del detalle ahora identifican claramente el canal activo.
+
+### F5 — Drill-down de campañas, envíos y destinatarios
+
+**Estado:** En validación
+
+- Las filas de campañas de Correo, WhatsApp y Voz ahora son seleccionables cuando tienen una campaña asociada.
+- Al seleccionar una campaña se muestran sus envíos ordenados del más reciente al más antiguo.
+- Al seleccionar un envío se muestran sus destinatarios, canal, estado, fecha de procesamiento y detalle disponible.
+- Los estados técnicos se traducen a lenguaje visible: Pendiente, Preparando, Enviado, Entregado, Respondió, Fallido, etc.
+- Se agregó el filtro `campana_id` al listado existente de envíos para reutilizar el contrato actual sin crear endpoints ni tablas nuevas.
+- La navegación implementada es: `Canal → Campaña → Envío → Destinatarios`.
+
+**Validación realizada:** ESLint, TypeScript, `py_compile` y `git diff --check` sin errores.
+
+**Pendiente:** validar en navegador con campañas reales de los tres canales y confirmar que los detalles persistidos permitan mostrar un nombre o medio de contacto legible para cada destinatario.
+
 ## 2026-09-22 — F5: Resumen general y salud de canales documentados
 
 ### Estado
