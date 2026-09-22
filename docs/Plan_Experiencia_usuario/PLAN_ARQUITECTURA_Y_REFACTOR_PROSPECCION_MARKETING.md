@@ -1682,6 +1682,186 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 
 **Salida:** la UI representa etapas del trabajo y no implementaciones técnicas.
 
+#### Desglose obligatorio de F6
+
+F6 es el bloque más grande del refactor porque toca simultáneamente Prospectos, Búsqueda, Google, GobMX, filtros, resultados, mapa, paginación y rendimiento. No debe implementarse como una reescritura única.
+
+```text
+F6.0  Inventario y contratos actuales
+  ↓
+F6.1  Separar Prospectos en componentes
+  ↓
+F6.2  Ordenar y consolidar filtros
+  ↓
+F6.3  Workspace común Google/GobMX
+  ↓
+F6.4  Resultados, tabla y mapa
+  ↓
+F6.5  Paginación y rendimiento
+  ↓
+F6.6  Validación completa
+```
+
+##### F6.0 — Inventario y contratos actuales
+
+Antes de modificar la pantalla se debe documentar:
+
+- Componentes actuales de `prospeccion/prospectos`.
+- Vistas y componentes de `prospeccion/google-busqueda`.
+- Vistas y componentes de `prospeccion/denue-busqueda`.
+- Endpoints, schemas, filtros y respuestas existentes.
+- Consultas, RPCs, índices y paginación actuales.
+- Diferencias entre los clasificadores de Google y GobMX.
+- Relaciones de `Segmento guardado`, `Actividad económica`, `Tipo de negocio` y `Búsqueda de origen`.
+- Dependencias con Listas para contactar, Completar datos y Marketing.
+
+**Salida:** matriz de componentes, contratos API, campos, filtros, relaciones y riesgos. No se cambia código en esta subfase salvo correcciones bloqueantes.
+
+##### F6.1 — Separar Prospectos en componentes
+
+Extraer responsabilidades del componente monolítico sin cambiar todavía el comportamiento visible:
+
+- Barra de búsqueda.
+- Filtros.
+- Tabla de prospectos.
+- Selección y acciones masivas.
+- Paginación.
+- Estado de carga, vacío y error.
+- Detalle contextual del prospecto.
+- Historial del prospecto.
+- Mapa y resultados geográficos.
+
+**Salida:** componentes pequeños y reutilizables con el mismo contrato funcional actual.
+
+##### F6.2 — Ordenar y consolidar filtros
+
+Los filtros deben agruparse según la intención del usuario:
+
+```text
+Filtros generales del prospecto
+Datos de contacto de correo
+Datos del teléfono
+WhatsApp
+Voz
+Ubicación
+Fuente y clasificación
+Actividad y enriquecimiento
+Historial de contacto
+CRM
+```
+
+Reglas:
+
+- `Segmento guardado` pertenece a Filtros generales del prospecto.
+- `Actividad económica` representa la clasificación empresarial de GobMX/DENUE.
+- `Tipo de negocio` representa la clasificación de Google u otra fuente compatible.
+- `Búsqueda de origen` representa la consulta que originó el prospecto.
+- `Tamaño de empresa` solo aparece para fuentes que lo soportan, principalmente GobMX/DENUE.
+- `Clasificación de Google` solo aparece para Google.
+- Los filtros propios de cada fuente no deben mezclarse.
+- Los campos visibles deben ser selects, autocompletados o controles explícitos; no depender de doble clic para revelar valores.
+- Si el usuario no selecciona un valor, el backend debe recibir una ausencia clara y no interpretar silenciosamente un filtro distinto.
+
+**Salida:** filtros completos, ordenados, sin duplicados y con relaciones de datos visibles para el usuario.
+
+##### F6.3 — Workspace común Google/GobMX
+
+Crear una experiencia común para iniciar y revisar búsquedas, manteniendo adaptadores específicos por fuente:
+
+```text
+Búsqueda común
+  ├── Google
+  │     ├── Texto de búsqueda
+  │     ├── Ubicación
+  │     ├── Clasificación Google
+  │     └── Nombre y datos del negocio
+  └── GobMX/DENUE
+        ├── Actividad económica
+        ├── Estado y municipio
+        ├── Tamaño de empresa
+        ├── SCIAN y clasificadores disponibles
+        └── Datos empresariales de la fuente
+```
+
+La interfaz debe mostrar inicialmente la fuente y sus filtros propios, sin obligar a seleccionar una fuente para descubrir que existen filtros. Al elegir una fuente, se ocultan las opciones incompatibles y se conservan solo los campos aplicables.
+
+**Salida:** Google y GobMX comparten flujo, estados y resultados, pero no mezclan clasificadores ni reglas de fuente.
+
+##### F6.4 — Resultados, tabla y mapa
+
+Separar claramente:
+
+```text
+Buscar empresas
+      ↓
+Resultados de búsqueda
+      ↓
+Agregar a mis prospectos
+      ↓
+Prospectos
+```
+
+La vista de resultados debe permitir:
+
+- Ver tabla y mapa cuando la fuente lo soporte.
+- Seleccionar resultados.
+- Consultar datos de la fuente.
+- Agregar resultados a mis prospectos.
+- Evitar mostrar un resultado de fuente como si ya fuera un prospecto.
+- Mantener estados vacíos, errores parciales y resultados incompletos.
+
+**Salida:** el usuario distingue empresa encontrada, prospecto guardado y persona elegible para contactar.
+
+##### F6.5 — Paginación y rendimiento
+
+Revisar y optimizar:
+
+- Paginación server-side de resultados y prospectos.
+- Historial server-side de búsquedas.
+- Conteos separados de resultados y prospectos.
+- Consultas de filtros frecuentes.
+- Índices y ordenamientos reales.
+- Carga diferida de mapa y datos secundarios.
+- Debounce de búsquedas de texto.
+- Límites máximos de resultados.
+- Evitar cargar miles de filas en el navegador.
+
+No se debe resolver rendimiento ocultando filtros ni reduciendo silenciosamente la cantidad solicitada por el usuario.
+
+**Salida:** la vista responde de forma predecible con bases pequeñas y grandes.
+
+##### F6.6 — Validación completa
+
+Validar con datos reales y tenant autenticado:
+
+- Búsqueda Google.
+- Búsqueda GobMX/DENUE.
+- Cambio de fuente.
+- Filtros específicos de cada fuente.
+- Filtros generales.
+- Filtros de contacto y validación.
+- Historial de envíos.
+- Listas dinámicas creadas desde Prospectos.
+- Selección y guardado de resultados.
+- Tabla, mapa y paginación.
+- Estados vacío, carga, error y éxito.
+- Aislamiento entre organizaciones.
+- Rendimiento con conjuntos grandes.
+
+**Salida:** F6 cumple el flujo `Buscar → Resultados → Agregar a mis prospectos → Prospectos → Lista para contactar` sin regresiones.
+
+#### Regla de avance de F6
+
+No se inicia una subfase si la anterior no tiene:
+
+- Contrato documentado.
+- Validación técnica.
+- Validación visual.
+- Revisión de tenant y permisos.
+- Evidencia de no regresión.
+
+No se deben hacer simultáneamente cambios estructurales de filtros, búsqueda, mapa y paginación sin una subfase identificable.
+
 ## 13. Seguridad y aislamiento
 
 Todo endpoint de audiencias, campañas, plantillas, lotes y métricas debe validar:

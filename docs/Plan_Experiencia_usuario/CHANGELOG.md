@@ -110,6 +110,22 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - La automatización queda separada del envío manual actual y no modifica proveedores, workers, cuotas ni métodos de Correo, WhatsApp o Voz.
 - La capacidad queda pendiente de implementación posterior a la estabilización de F4/F5.
 
+### F6 — Desglose de Prospectos y Búsqueda
+
+**Estado:** Planificado; pendiente de implementación
+
+- F6 se dividió en seis subfases para evitar una reescritura monolítica:
+  - F6.0 Inventario y contratos actuales.
+  - F6.1 Separar Prospectos en componentes.
+  - F6.2 Ordenar y consolidar filtros.
+  - F6.3 Workspace común Google/GobMX.
+  - F6.4 Resultados, tabla y mapa.
+  - F6.5 Paginación y rendimiento.
+  - F6.6 Validación completa.
+- Se documentaron las diferencias entre clasificadores Google y GobMX/DENUE.
+- Se estableció que Segmento guardado, Actividad económica, Tipo de negocio y Búsqueda de origen deben conservar relaciones semánticas distintas.
+- Se estableció que cada subfase debe tener contrato, validación técnica, validación visual, revisión de tenant y evidencia de no regresión.
+
 ### F5 — Drill-down de contenido y lista
 
 **Estado:** En validación
