@@ -305,6 +305,33 @@ F1 — Listas para contactar
 - TypeScript del panel (`tsc --noEmit`): correcto.
 - `git diff --check`: correcto.
 
+## 2026-09-22 — Regla operativa de Correo y separación de WhatsApp
+
+### Estado
+
+Aprobado para el plan; pendiente de implementación en el wizard
+
+### Fase
+
+F4 — Envíos
+
+### Referencia
+
+`docs/Plan_Postmark/README.md`, `docs/Plan_Postmark/CHANGELOG.md` y la sección 2.8 del plan de experiencia.
+
+### Cambios
+
+- Se documentó que Correo conserva íntegramente la operación definida para Postmark y Brevo.
+- El wizard no debe controlar separación entre correos ni tamaño técnico de bloques para Correo.
+- Postmark mantiene bloques de hasta 500 mediante `/email/batch` y su pausa operativa entre bloques.
+- Brevo conserva sus propios workers, cuotas y límites.
+- La configuración operativa de WhatsApp quedó explícitamente pendiente y no heredará reglas de Correo.
+
+### Pendientes
+
+- Ajustar el wizard para ocultar controles de separación y lote cuando el canal sea Correo.
+- Definir posteriormente la operación específica de WhatsApp.
+
 ## 2026-09-22 — F1: compatibilidad con plantillas WhatsApp históricas
 
 ### Estado

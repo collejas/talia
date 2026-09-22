@@ -214,6 +214,47 @@ No se deben crear migraciones de renombrado, tablas paralelas ni cambios masivos
 
 Si un nombre interno es ambiguo, primero se debe documentar su semántica o crear una regla/campo adicional explícito. No se debe reutilizar una columna para representar dos conceptos diferentes.
 
+### 2.8 Regla operativa por canal: Correo
+
+La operación de Correo ya está definida y no forma parte de este refactor de UX.
+
+El frontend debe respetar la arquitectura documentada en `docs/Plan_Postmark` y no debe modificar, duplicar ni sustituir la lógica de Postmark o Brevo.
+
+Reglas cerradas para Correo:
+
+- El usuario selecciona la lista, campaña, correo y momento de envío.
+- La cantidad lógica del envío corresponde a las personas elegibles que resulten de la lista y la revalidación final.
+- El panel no solicita ni controla la separación entre correos individuales.
+- El panel no solicita ni controla el tamaño técnico de los bloques del proveedor.
+- Postmark procesa bloques de hasta 500 correos mediante `/email/batch`.
+- La separación operativa de Postmark se aplica entre bloques cuando corresponde, nunca entre correos individuales.
+- Brevo conserva sus límites, worker, cuotas y reglas operativas actuales.
+- Postmark y Brevo mantienen rutas, proveedores y workers independientes.
+- El request del panel crea o programa la intención del envío; la preparación y entrega ocurren en los workers existentes.
+- El wizard no debe enviar valores genéricos de `separacion_segundos`, `envios_por_lote` o equivalentes que alteren la operación definida para Correo.
+
+En la interfaz de Correo, el paso `¿Cuándo?` solo debe mostrar:
+
+```text
+Ahora
+Más tarde: fecha y hora
+```
+
+No debe mostrar `Tiempo entre mensajes`, `Tamaño de lote`, `Pausa entre correos` ni límites internos de Postmark/Brevo.
+
+Esta regla no autoriza cambios en proveedores, workers, cuotas, colas, contratos ni migraciones de Postmark o Brevo.
+
+### 2.9 WhatsApp: decisión operativa pendiente
+
+La operación específica de WhatsApp queda pendiente de definición del producto.
+
+No se debe asumir que WhatsApp utiliza la misma separación, tamaño de bloque, cuota o programación de Correo. Hasta que esa decisión sea aprobada:
+
+- No copiar los valores de Postmark/Brevo al flujo de WhatsApp.
+- No presentar una pausa o un máximo como regla definitiva del canal.
+- Mantener la selección de lista, campaña, plantilla y revalidación de elegibilidad.
+- Documentar la regla final de cantidad, ritmo, programación, límites y ejecución antes de cerrar la implementación de WhatsApp.
+
 ## 3. Estado actual que condiciona el refactor
 
 La auditoría existente identificó estas condiciones:
@@ -895,17 +936,19 @@ Opciones mínimas:
 Dentro de `Más opciones`:
 
 ```text
-Máximo de personas
-[ 500 ]
+Correo:
+  No mostrar controles de separación o tamaño de bloque.
+  Postmark/Brevo aplican sus reglas operativas existentes.
 
-Correo/WhatsApp: Tiempo entre mensajes
-[ 8 segundos ]
+WhatsApp:
+  Pendiente de definición operativa del producto.
 
-Voz: Tiempo entre llamadas
-[ 8 segundos ]
+Voz:
+  Tiempo entre llamadas
+  [ 8 segundos ]
 ```
 
-Los límites, ritmo y configuraciones avanzadas no deben ocupar la pantalla principal del asistente.
+Los límites, ritmo y configuraciones avanzadas no deben ocupar la pantalla principal del asistente. Ningún control genérico de Correo debe reutilizarse automáticamente para WhatsApp.
 
 ### Paso 4: Revisar antes de enviar o llamar
 
@@ -1440,6 +1483,9 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 ### F4 — Envíos
 
 - Asistente de cuatro pasos.
+- Aplicar configuración específica por canal; Correo respeta Postmark/Brevo y no expone controles internos del proveedor.
+- No modificar la separación, lotes, cuotas ni workers de Correo como parte del refactor UX.
+- Mantener WhatsApp pendiente de la decisión operativa específica del producto.
 - Revisión previa con razones de exclusión.
 - Revalidación en confirmación.
 - Creación de versión histórica de las reglas de la lista, únicamente si la capacidad no existe.
@@ -1526,6 +1572,9 @@ Controles específicos:
 - El envío conserva la versión histórica de las reglas utilizadas para seleccionar a los prospectos.
 - No se duplican envíos por doble clic o reintento HTTP.
 - El lote y sus destinatarios tienen estados independientes.
+- Correo no recibe desde el wizard una separación o tamaño de bloque que altere Postmark/Brevo.
+- La preparación, pausa, agrupación y entrega de Correo continúan bajo los workers y reglas ya definidos.
+- La configuración operativa de WhatsApp permanece pendiente hasta contar con una decisión específica del producto.
 
 ### Historial y resultados
 
@@ -1549,6 +1598,9 @@ Controles específicos:
 4. **Voz:** confirmar proveedor, estados, métricas y configuración específica antes de compartir completamente el contrato con WhatsApp y Correo.
 5. **Métricas de oportunidad y venta:** confirmar la fuente canónica de atribución CRM antes de presentar tasas comerciales.
 6. **Documentación contradictoria:** cerrar el estado real de migraciones y publicación de Google/GobMX antes de ejecutar cambios estructurales.
+7. **WhatsApp:** definir por separado cantidad, ritmo, separación, límites, programación y ejecución. No heredar la operación de Correo.
+
+La operación de Correo no es una decisión pendiente de este plan: queda regida por `docs/Plan_Postmark` y sus reglas actuales de Postmark/Brevo.
 
 ## 17. Primer entregable de implementación recomendado
 
