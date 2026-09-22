@@ -436,6 +436,49 @@ export function ProspectosCampaignFilters({
   )
 }
 
+type ContactChannel = "correo" | "whatsapp" | "voz"
+type ProspectosContactCountsProps = {
+  counts: Record<ContactChannel, { min: string; max: string }>
+  carrierType: "" | "mobile" | "landline" | "voip"
+  channelLabels: Record<ContactChannel, string>
+  onCountChange: (channel: ContactChannel, bound: "min" | "max", value: string) => void
+  onCarrierChange: (value: string) => void
+}
+
+export function ProspectosContactCounts({
+  counts,
+  carrierType,
+  channelLabels,
+  onCountChange,
+  onCarrierChange,
+}: ProspectosContactCountsProps) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {(["correo", "whatsapp", "voz"] as const).map((channel) => (
+        <div key={channel} className="space-y-1">
+          <Label>{channelLabels[channel]}</Label>
+          <div className="flex items-center gap-2">
+            <Input type="number" min={0} step={1} inputMode="numeric" placeholder="Mín" value={counts[channel].min} onChange={(event) => onCountChange(channel, "min", event.target.value)} />
+            <Input type="number" min={0} step={1} inputMode="numeric" placeholder="Máx" value={counts[channel].max} onChange={(event) => onCountChange(channel, "max", event.target.value)} />
+          </div>
+        </div>
+      ))}
+      <div className="space-y-1">
+        <Label>Tipo de línea</Label>
+        <Select value={carrierType || "all"} onValueChange={onCarrierChange}>
+          <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="mobile">Móvil</SelectItem>
+            <SelectItem value="landline">Línea fija</SelectItem>
+            <SelectItem value="voip">VoIP</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
+}
+
 function formatBatchDate(value?: string | null) {
   if (!value) return "—"
   const date = new Date(value)

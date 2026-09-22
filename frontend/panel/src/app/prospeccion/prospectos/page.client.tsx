@@ -32,6 +32,7 @@ import {
   ProspectosSavedViews,
   ProspectosSourceVerification,
   ProspectosCampaignFilters,
+  ProspectosContactCounts,
   type ProspectosFlowStep,
 } from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
@@ -3873,70 +3874,20 @@ function ProspectosView() {
               onEnvioCanalesChange={(canales) => setFilters((prev) => ({ ...prev, conEnvioCanales: canales, conEnvioModo: canales.length && prev.conEnvioModo === "" ? "si" : prev.conEnvioModo }))}
               onScraperChange={(value) => setFilters((prev) => ({ ...prev, conScraper: value === "all" ? "" : value as ConScraperFilter }))}
             />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {(["correo", "whatsapp", "voz"] as const).map((channel) => {
-              const config = ENVIO_COUNT_FILTER_FIELDS[channel]
-              const minValue = filters[config.min] as string
-              const maxValue = filters[config.max] as string
-              return (
-                <div key={channel} className="space-y-1">
-                  <Label>{envioCountChannelLabel[channel]}</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      step={1}
-                      inputMode="numeric"
-                      placeholder="Mín"
-                      value={minValue}
-                      onChange={(event) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          [config.min]: event.target.value,
-                        }))
-                      }
-                    />
-                    <Input
-                      type="number"
-                      min={0}
-                      step={1}
-                      inputMode="numeric"
-                      placeholder="Máx"
-                      value={maxValue}
-                      onChange={(event) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          [config.max]: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-              )
-            })}
-            <div className="space-y-1">
-              <Label>Tipo de línea</Label>
-              <Select
-                value={filters.carrierType || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    carrierType: value === "all" ? "" : (value as "mobile" | "landline" | "voip"),
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="mobile">Móvil</SelectItem>
-                  <SelectItem value="landline">Línea fija</SelectItem>
-                  <SelectItem value="voip">VoIP</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            </div>
+            <ProspectosContactCounts
+              counts={{
+                correo: { min: filters.enviosCorreoMin, max: filters.enviosCorreoMax },
+                whatsapp: { min: filters.enviosWhatsappMin, max: filters.enviosWhatsappMax },
+                voz: { min: filters.enviosVozMin, max: filters.enviosVozMax },
+              }}
+              carrierType={filters.carrierType}
+              channelLabels={envioCountChannelLabel}
+              onCountChange={(channel, bound, value) => {
+                const config = ENVIO_COUNT_FILTER_FIELDS[channel]
+                setFilters((prev) => ({ ...prev, [config[bound]]: value }))
+              }}
+              onCarrierChange={(value) => setFilters((prev) => ({ ...prev, carrierType: value === "all" ? "" : value as "mobile" | "landline" | "voip" }))}
+            />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
               <Label>Dominio correo/sitio</Label>

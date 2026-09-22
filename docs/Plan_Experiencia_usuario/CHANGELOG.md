@@ -166,10 +166,12 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - Se extrajo el bloque de vistas guardadas a `ProspectosSavedViews` dentro del panel de filtros.
 - Se extrajo el primer grupo del panel de filtros a `ProspectosSourceVerification`, conservando fuente y estados de verificación.
 - Se extrajo el grupo operativo de campaña, plantilla, envíos y scraper a `ProspectosCampaignFilters`.
+- Se extrajo el grupo de contadores de contacto por canal y tipo de línea a `ProspectosContactCounts`.
 - La página principal conserva los callbacks, datos, rutas y estados existentes.
 - Se movieron a componentes visuales las tarjetas de flujo, estados de carga, errores, vacío, resumen de envíos y vistas guardadas.
 - El grupo extraído continúa usando los mismos valores y filtros server-side: `fuente`, `lookup_status`, `email_lookup_status` y `website_lookup_status`.
 - El grupo de campañas conserva la dependencia campaña → plantilla y la selección de canales con/sin envío.
+- Los rangos mínimo/máximo de envíos para Correo, WhatsApp y Voz siguen escribiéndose en los mismos campos de filtros server-side.
 - No se modificaron endpoints, contratos, filtros, consultas, base de datos ni métodos de envío.
 
 #### Validación realizada
