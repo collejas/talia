@@ -1828,9 +1828,26 @@ export async function listContactoTemplates(params: {
       merged.push(item)
     })
   })
+
+  const selectable = merged.filter(
+    (item) => item.activo !== false && item.template_status !== "archived",
+  )
+  const metaWhatsAppNames = new Set(
+    selectable
+      .filter((item) => item.canal === "whatsapp" && item.provider === "meta" && item.usage_scope === "whats_prosp")
+      .map((item) => item.nombre.trim().normalize("NFKC").toLocaleLowerCase()),
+  )
+  const withoutLegacyWhatsAppDuplicates = selectable.filter((item) => {
+    if (item.canal !== "whatsapp" || (item.provider === "meta" && item.usage_scope === "whats_prosp")) {
+      return true
+    }
+    const name = item.nombre.trim().normalize("NFKC").toLocaleLowerCase()
+    return !metaWhatsAppNames.has(name)
+  })
+
   if (params.campana_id?.trim()) {
     const campaignId = params.campana_id.trim()
-    const campaignItems = merged.filter((item) => {
+    const campaignItems = withoutLegacyWhatsAppDuplicates.filter((item) => {
       const metadataCampaignId = item.metadata && typeof item.metadata.campana_id === "string" ? item.metadata.campana_id : ""
       return item.campana_id === campaignId || metadataCampaignId === campaignId
     })
@@ -1838,7 +1855,7 @@ export async function listContactoTemplates(params: {
     // mientras no exista ninguna plantilla asociada que permita filtrar con seguridad.
     if (campaignItems.length) return { ok: true, items: campaignItems }
   }
-  return { ok: true, items: merged }
+  return { ok: true, items: withoutLegacyWhatsAppDuplicates }
 }
 
 export async function createContactoTemplate(payload: {
