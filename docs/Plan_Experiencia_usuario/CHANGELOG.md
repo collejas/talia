@@ -4,6 +4,38 @@ Este archivo registra decisiones, avances, validaciones, pendientes y bloqueos d
 
 Plan principal: [PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md](./PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md)
 
+## 2026-09-22 — Cantidad máxima por envío
+
+### Estado
+
+En desarrollo.
+
+### Fase
+
+F4 — Envíos.
+
+### Cambios
+
+- Se corrigió el `500` del endpoint de contacto causado por enviar dos veces el parámetro interno `order` al consultar prospectos con filtros.
+- La consulta conserva el orden solicitado por la lista y usa la fecha de creación descendente únicamente como valor predeterminado.
+- El paso `¿Cuándo?` permite elegir todas las personas elegibles o una cantidad máxima específica para la ejecución actual.
+- La cantidad se aplica por prospecto y no modifica las reglas de la Lista para contactar.
+- El backend vuelve a resolver la lista y filtra la elegibilidad antes de limitar los destinatarios.
+- La cantidad máxima no se mezcla con la separación entre mensajes ni con los bloques técnicos de Postmark, Brevo, WhatsApp o Voz.
+- El botón final adapta el verbo al canal: `Enviar correo`, `Enviar mensaje` o `Llamar`.
+
+### Archivos o superficies afectadas
+
+- `frontend/panel/src/components/prospeccion/prospeccion-campaign-wizard.tsx`
+- `frontend/panel/src/lib/prospeccion/prospectos-client.ts`
+- `backend/app/api/routes/crm.py`
+- `PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md`
+
+### Pendientes de validación
+
+- Probar manualmente un envío con todas las personas elegibles y otro con cantidad específica en cada canal.
+- Confirmar que la cantidad solicitada no cambia el procesamiento existente de cada proveedor.
+
 ## Estados de seguimiento
 
 - **Propuesto:** identificado, pendiente de aprobación.

@@ -410,6 +410,7 @@ export type ContactarProspectosPayload = {
   canales?: ProspeccionCanalConfigInput[]
   campana_id?: string
   batch_titulo?: string
+  cantidad_maxima?: number
   separacion_segundos?: number
   envios_por_lote?: number
   intervalo_entre_lotes_segundos?: number

@@ -223,7 +223,9 @@ El frontend debe respetar la arquitectura documentada en `docs/Plan_Postmark` y 
 Reglas cerradas para Correo:
 
 - El usuario selecciona la lista, campaña, correo y momento de envío.
-- La cantidad lógica del envío corresponde a las personas elegibles que resulten de la lista y la revalidación final.
+- El usuario puede elegir `Todas las personas elegibles` o una `Cantidad específica` para ese envío.
+- La cantidad específica es un máximo de prospectos para la ejecución actual; no modifica la lista dinámica.
+- El backend vuelve a resolver y validar la lista antes de tomar los prospectos, por lo que la cantidad final nunca supera el máximo solicitado ni incluye contactos no elegibles.
 - El panel no solicita ni controla la separación entre correos individuales.
 - El panel no solicita ni controla el tamaño técnico de los bloques del proveedor.
 - Postmark procesa bloques de hasta 500 correos mediante `/email/batch`.
@@ -241,6 +243,16 @@ Más tarde: fecha y hora
 ```
 
 No debe mostrar `Tiempo entre mensajes`, `Tamaño de lote`, `Pausa entre correos` ni límites internos de Postmark/Brevo.
+
+La cantidad se solicita en el paso `¿Cuándo?`, con el mismo significado para los tres canales:
+
+```text
+¿Cuántas personas quieres contactar en este envío?
+○ Todas las personas elegibles
+○ Una cantidad específica: [500]
+```
+
+Este control significa cuántas personas se intentarán contactar en esta ejecución. No representa el tamaño técnico de los bloques de Postmark/Brevo ni cambia los métodos de procesamiento de ningún proveedor.
 
 Esta regla no autoriza cambios en proveedores, workers, cuotas, colas, contratos ni migraciones de Postmark o Brevo.
 
@@ -957,6 +969,7 @@ Opciones mínimas:
 - Ahora.
 - Más tarde, con fecha y hora.
 - `Más opciones`, para configuraciones avanzadas del canal.
+- Cantidad: todas las personas elegibles o un máximo específico para este envío.
 
 Dentro de `Más opciones`:
 
@@ -1509,6 +1522,9 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 ### F4 — Envíos
 
 - Asistente de cuatro pasos.
+- Selección de cantidad por ejecución: todas las personas elegibles o un máximo específico.
+- La cantidad se aplica después de la revalidación server-side y antes de crear los destinatarios reales.
+- La cantidad de personas del envío no se confunde con `envios_por_lote`, `total_lotes` ni cualquier otro control técnico del proveedor.
 - Aplicar configuración específica por canal; Correo respeta Postmark/Brevo y no expone controles internos del proveedor.
 - No modificar la separación, lotes, cuotas ni workers de Correo como parte del refactor UX.
 - Mantener WhatsApp sobre sus métodos actuales de envío y procesamiento.

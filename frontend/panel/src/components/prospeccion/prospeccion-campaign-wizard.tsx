@@ -187,6 +187,8 @@ export function ProspeccionCampaignWizard({
   const [newCampaignOpen, setNewCampaignOpen] = useState(false)
   const [newCampaignName, setNewCampaignName] = useState("")
   const [newCampaignSaving, setNewCampaignSaving] = useState(false)
+  const [cantidadModo, setCantidadModo] = useState<"todas" | "cantidad">("todas")
+  const [cantidadMaxima, setCantidadMaxima] = useState("")
   const [separacionSegundos, setSeparacionSegundos] = useState<string>("5")
   const [titulo, setTitulo] = useState("")
   const [channelState, setChannelState] = useState<ChannelState>(() => buildChannelState())
@@ -217,6 +219,8 @@ export function ProspeccionCampaignWizard({
     )
     setNewCampaignOpen(false)
     setNewCampaignName("")
+    setCantidadModo("todas")
+    setCantidadMaxima("")
     setSeparacionSegundos("5")
     setError(null)
     setPresetApplied(false)
@@ -455,6 +459,15 @@ export function ProspeccionCampaignWizard({
       setStep(1)
       return
     }
+    let cantidadMaximaParsed: number | undefined
+    if (cantidadModo === "cantidad") {
+      cantidadMaximaParsed = Number.parseInt(cantidadMaxima, 10)
+      if (Number.isNaN(cantidadMaximaParsed) || cantidadMaximaParsed < 1 || cantidadMaximaParsed > 10000) {
+        setError("Indica una cantidad entre 1 y 10,000 personas.")
+        setStep(3)
+        return
+      }
+    }
     const separacionParsed = Number.parseInt(separacionSegundos || "5", 10)
     if (Number.isNaN(separacionParsed) || separacionParsed < 5 || separacionParsed > 3600) {
       setError("La separación entre envíos debe estar entre 5 y 3600 segundos.")
@@ -477,6 +490,7 @@ export function ProspeccionCampaignWizard({
       }),
       campana_id: campanaId,
       batch_titulo: titulo.trim() || undefined,
+      cantidad_maxima: cantidadMaximaParsed,
       separacion_segundos: separacionParsed,
     }
     if (source === "selected") {
@@ -851,6 +865,52 @@ export function ProspeccionCampaignWizard({
 
   const renderStepSchedule = () => (
     <div className="space-y-4">
+      <div className="space-y-3 rounded-lg border p-4">
+        <div>
+          <Label>¿Cuántas personas quieres contactar en este envío?</Label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            La lista se volverá a revisar antes de contactar. Esta cantidad solo aplica a este envío.
+          </p>
+        </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
+          <input
+            type="radio"
+            name="cantidad-contactar"
+            className="mt-1"
+            checked={cantidadModo === "todas"}
+            onChange={() => setCantidadModo("todas")}
+          />
+          <span>
+            <span className="block text-sm font-medium">Todas las personas elegibles</span>
+            <span className="block text-xs text-muted-foreground">Se contactará a quienes puedan recibir este canal ahora.</span>
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
+          <input
+            type="radio"
+            name="cantidad-contactar"
+            className="mt-1"
+            checked={cantidadModo === "cantidad"}
+            onChange={() => setCantidadModo("cantidad")}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">Una cantidad específica</span>
+            <Input
+              type="number"
+              min={1}
+              max={10000}
+              step={1}
+              value={cantidadMaxima}
+              onChange={(event) => {
+                setCantidadModo("cantidad")
+                setCantidadMaxima(event.target.value)
+              }}
+              placeholder="Ej. 500"
+              className="mt-2 max-w-[180px]"
+            />
+          </span>
+        </label>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         {editCampanaId ? (
           <div className="space-y-1">
@@ -905,6 +965,9 @@ export function ProspeccionCampaignWizard({
             {campanaOptions.find((option) => option.value === campanaId)?.label ?? "No seleccionada"}
           </li>
           <li>Separación: {Math.max(5, Number.parseInt(separacionSegundos || "5", 10) || 5)} segundos</li>
+          <li>
+            Cantidad: {cantidadModo === "todas" ? "Todas las personas elegibles" : `${cantidadMaxima || "0"} personas como máximo`}
+          </li>
         </ul>
       </div>
     </div>
@@ -1022,7 +1085,21 @@ export function ProspeccionCampaignWizard({
                 </Button>
               ) : (
                 <Button onClick={() => void handleSubmit()} disabled={submitting}>
-                {submitting ? (editCampanaId ? "Guardando..." : "Creando...") : (editCampanaId ? "Guardar cambios" : "Lanzar campaña")}
+                {submitting
+                  ? (editCampanaId ? "Guardando..." : "Creando...")
+                  : editCampanaId
+                    ? "Guardar cambios"
+                    : cantidadModo === "cantidad" && cantidadMaxima
+                      ? activeChannels[0]?.key === "llamada"
+                        ? `Llamar a ${cantidadMaxima} personas`
+                        : activeChannels[0]?.key === "whatsapp"
+                          ? `Enviar mensaje a ${cantidadMaxima} personas`
+                          : `Enviar correo a ${cantidadMaxima} personas`
+                      : activeChannels[0]?.key === "llamada"
+                        ? "Llamar a todas las personas elegibles"
+                        : activeChannels[0]?.key === "whatsapp"
+                          ? "Enviar mensaje a todas las personas elegibles"
+                          : "Enviar correo a todas las personas elegibles"}
               </Button>
             )}
           </div>

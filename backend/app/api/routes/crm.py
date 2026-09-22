@@ -5027,6 +5027,7 @@ class ProspectoContactarPayload(BaseModel):
     canales: list[ProspeccionCanalConfig] | None = None
     campana_id: UUID | None = None
     batch_titulo: str | None = Field(default=None, max_length=160)
+    cantidad_maxima: int | None = Field(default=None, ge=1, le=MAX_PROSPECCION_BATCH)
     separacion_segundos: int | None = Field(default=None, ge=MIN_PROSPECCION_SEPARACION_SEGUNDOS, le=3600)
     envios_por_lote: int | None = Field(default=None, ge=1, le=500)
     intervalo_entre_lotes_segundos: int | None = Field(default=None, ge=0, le=604800)
@@ -38949,12 +38950,12 @@ async def prospeccion_campana_update(
         filtros_data = _ensure_dict(lista_row.get("filtros"), default={})
         filtros_fuente = ProspectoFiltroPayload.model_validate(filtros_data)
         repo_kwargs = _prospecto_filters_to_kwargs(filtros_fuente)
+        repo_kwargs["order"] = repo_kwargs.get("order") or "creado_en.desc"
         prospectos, total = await repo.list_prospectos(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
             limit=MAX_PROSPECCION_BATCH,
             offset=0,
-            order="creado_en.desc",
             **repo_kwargs,
         )
         if total > MAX_PROSPECCION_BATCH:
@@ -38962,12 +38963,12 @@ async def prospeccion_campana_update(
         selector_filtros = filtros_data
     elif payload.filtros:
         repo_kwargs = _prospecto_filters_to_kwargs(payload.filtros)
+        repo_kwargs["order"] = repo_kwargs.get("order") or "creado_en.desc"
         prospectos, total = await repo.list_prospectos(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
             limit=MAX_PROSPECCION_BATCH,
             offset=0,
-            order="creado_en.desc",
             **repo_kwargs,
         )
         if total > MAX_PROSPECCION_BATCH:
@@ -40499,6 +40500,7 @@ async def contactar_prospectos_legacy(
             raise HTTPException(status_code=400, detail="prospecto_selector_required")
         try:
             repo_kwargs = _prospecto_filters_to_kwargs(filtros_fuente)
+            repo_kwargs["order"] = repo_kwargs.get("order") or "creado_en.desc"
             prospectos, total = await _retry_transient_repo_error(
                 operation="list_prospectos_for_contactar",
                 func=lambda: repo.list_prospectos(
@@ -40506,7 +40508,6 @@ async def contactar_prospectos_legacy(
                     organizacion_id=organizacion_id,
                     limit=MAX_PROSPECCION_BATCH,
                     offset=0,
-                    order="creado_en.desc",
                     **repo_kwargs,
                 ),
                 retries=1,
@@ -40515,7 +40516,7 @@ async def contactar_prospectos_legacy(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         if not prospectos:
             raise HTTPException(status_code=404, detail="prospectos_not_found")
-        if total > MAX_PROSPECCION_BATCH:
+        if total > MAX_PROSPECCION_BATCH and payload.cantidad_maxima is None:
             raise HTTPException(status_code=400, detail="prospecto_batch_limit_exceeded")
         total_prospectos = total
         selector_filtros = selector_filtros or filtros_fuente.model_dump(exclude_none=True)
@@ -40571,6 +40572,26 @@ async def contactar_prospectos_legacy(
                 "prospeccion.contactar.postmark_provider_check_failed",
                 extra={"error": str(exc)},
             )
+
+    # Este límite aplica únicamente al envío actual. No modifica la lista ni
+    # cambia la forma en que los proveedores procesan sus propios bloques.
+    if payload.cantidad_maxima is not None:
+        canales_limitados = set(canales_config.keys())
+
+        def _can_contact_prospecto(item: dict[str, Any]) -> bool:
+            metadata = _ensure_dict(item.get("metadata"), default={})
+            blocked_channels = metadata.get("prospeccion_suppressions")
+            if not isinstance(blocked_channels, dict):
+                return True
+            return not any(
+                blocked_channels.get("all") or blocked_channels.get(canal)
+                for canal in canales_limitados
+            )
+
+        prospectos = [item for item in prospectos if _can_contact_prospecto(item)][: payload.cantidad_maxima]
+        if not prospectos:
+            raise HTTPException(status_code=400, detail="prospectos_sin_contactos_elegibles")
+        total_prospectos = len(prospectos)
 
     preview_entries, _preview_suppressed = _build_contact_envios_entries(
         batch_id="preview",
