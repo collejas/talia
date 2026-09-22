@@ -23733,6 +23733,41 @@ class CRMRepository:
             "quejas": len(complaints),
         }
 
+    async def get_channel_suppression_health(
+        self,
+        *,
+        organizacion_id: UUID,
+        canal: str,
+    ) -> dict[str, int]:
+        """Cuenta exclusiones activas del canal sin exponer datos de contacto."""
+
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/prospeccion_contacto_suppressions",
+            params={
+                "select": "motivo",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": f"eq.{canal}",
+                "activo": "eq.true",
+                "limit": "20000",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_suppression_health_invalid:{data!r}")
+        bajas = 0
+        bloqueados = 0
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            motivo = str(row.get("motivo") or "").strip().casefold()
+            if motivo in {"baja", "unsubscribe", "opt_out", "optout"}:
+                bajas += 1
+            else:
+                bloqueados += 1
+        return {"bajas": bajas, "bloqueados": bloqueados}
+
     async def get_prospeccion_envio_sesiones_utm(
         self,
         *,

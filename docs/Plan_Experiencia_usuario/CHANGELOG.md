@@ -53,6 +53,14 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - No se creó una tabla nueva ni se modificó el procesamiento de los envíos.
 - WhatsApp y Voz conservan el comportamiento de la primera entrega; sus eventos detallados quedan para el siguiente bloque.
 
+### Tercera implementación F5 — salud de WhatsApp
+
+- Se conectaron los estados operativos actuales de WhatsApp al resumen del canal.
+- La vista muestra entregados, leídos, respondidos, fallidos y no entregados.
+- Se conectaron las exclusiones activas de WhatsApp para mostrar bajas y bloqueos cuando existen.
+- Las exclusiones se presentan como estado de elegibilidad, no como una etapa del embudo comercial.
+- No se modificaron los métodos, workers, límites ni proveedor actuales de WhatsApp.
+
 ## 2026-09-22 — F5: Resumen general y salud de canales documentados
 
 ### Estado

@@ -38307,6 +38307,16 @@ async def prospeccion_metricas_dashboard(
         except CRMRepositoryError as exc:
             logger.warning("prospeccion.metricas.email_health_failed", extra={"error": str(exc)})
 
+    whatsapp_suppression_health: dict[str, int] | None = None
+    if params.canal in ("todos", "whatsapp"):
+        try:
+            whatsapp_suppression_health = await repo.get_channel_suppression_health(
+                organizacion_id=organizacion_id,
+                canal="whatsapp",
+            )
+        except CRMRepositoryError as exc:
+            logger.warning("prospeccion.metricas.whatsapp_suppression_health_failed", extra={"error": str(exc)})
+
     campaign_call_items = [
         item for item in campaign_items if _clean_text(item.get("canal")) == "llamada"
     ]
@@ -38334,9 +38344,9 @@ async def prospeccion_metricas_dashboard(
             "respondieron": int(whatsapp_campaign_summary.get("conversaciones_respondidas") or 0),
             "fallidos": int(whatsapp_campaign_summary.get("mensajes_fallidos") or 0),
             "no_entregados": int(whatsapp_campaign_summary.get("mensajes_sin_evento_entrega") or 0),
-            "bajas": None,
-            "bloqueados": None,
-            "datos_pendientes": ["bajas", "bloqueados"],
+            "bajas": whatsapp_suppression_health.get("bajas") if whatsapp_suppression_health else None,
+            "bloqueados": whatsapp_suppression_health.get("bloqueados") if whatsapp_suppression_health else None,
+            "datos_pendientes": [] if whatsapp_suppression_health else ["bajas", "bloqueados"],
         },
         "llamada": {
             "intentados": int(call_summary.get("envios_totales") or 0),

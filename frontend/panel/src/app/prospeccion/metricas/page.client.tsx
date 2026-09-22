@@ -903,10 +903,12 @@ export default function ProspeccionMetricasPageClient() {
                   ],
                   secondary: [
                     ["No entregados", data?.salud_canales?.whatsapp.no_entregados],
-                    ["Bajas", null],
-                    ["Bloqueados", null],
+                    ["Bajas activas", data?.salud_canales?.whatsapp.bajas],
+                    ["Bloqueados activos", data?.salud_canales?.whatsapp.bloqueados],
                   ],
-                  pending: "Bajas y bloqueos se mostrarán cuando estén disponibles en los eventos del canal.",
+                  pending: data?.salud_canales?.whatsapp.datos_pendientes.length
+                    ? "Las exclusiones activas del canal todavía no están disponibles."
+                    : null,
                 },
                 {
                   key: "llamada",
