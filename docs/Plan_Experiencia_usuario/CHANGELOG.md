@@ -44,6 +44,15 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - Los nombres de proveedores no se muestran en la interfaz.
 - Rebotes temporales, rebotes permanentes, bajas, quejas y bloqueos quedan pendientes de conectar al contrato de eventos correspondiente.
 
+### Segunda implementación F5 — eventos de correo
+
+- Se conectó la agregación de eventos de correo ya persistidos al contrato `salud_canales.correo`.
+- La vista puede mostrar rebote temporal, rebote permanente, bajas y quejas sin exponer nombres de proveedores.
+- Los eventos se agrupan por mensaje único para evitar duplicidades al relacionar envíos, mensajes y eventos.
+- La consulta se limita a los batches de la organización, campaña y periodo seleccionados.
+- No se creó una tabla nueva ni se modificó el procesamiento de los envíos.
+- WhatsApp y Voz conservan el comportamiento de la primera entrega; sus eventos detallados quedan para el siguiente bloque.
+
 ## 2026-09-22 — F5: Resumen general y salud de canales documentados
 
 ### Estado

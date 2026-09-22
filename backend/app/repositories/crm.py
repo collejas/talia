@@ -22694,6 +22694,8 @@ class CRMRepository:
         offset: int = 0,
         estado: str | None = None,
         campana_id: UUID | None = None,
+        creado_desde_iso: str | None = None,
+        creado_hasta_iso: str | None = None,
         order: str | None = None,
         count_exact: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -22709,6 +22711,12 @@ class CRMRepository:
             params["estado"] = f"eq.{estado}"
         if campana_id:
             params["campana_id"] = f"eq.{campana_id}"
+        if creado_desde_iso and creado_hasta_iso:
+            params["and"] = f"(creado_en.gte.{creado_desde_iso},creado_en.lte.{creado_hasta_iso})"
+        elif creado_desde_iso:
+            params["creado_en"] = f"gte.{creado_desde_iso}"
+        elif creado_hasta_iso:
+            params["creado_en"] = f"lte.{creado_hasta_iso}"
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/prospeccion_contacto_batch",
@@ -23637,6 +23645,93 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"contact_envio_batches_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
+
+    async def get_email_health_for_batches(
+        self,
+        *,
+        organizacion_id: UUID,
+        batch_ids: Sequence[UUID],
+    ) -> dict[str, int | None]:
+        """Agrega eventos de correo ya persistidos para los batches indicados."""
+
+        if not batch_ids:
+            return {
+                "rebotes_temporales": 0,
+                "rebotes_permanentes": 0,
+                "bajas": 0,
+                "quejas": 0,
+            }
+
+        message_id_values: list[str] = []
+        unique_batch_ids = sorted({str(value) for value in batch_ids})
+        for start in range(0, len(unique_batch_ids), 100):
+            chunk = unique_batch_ids[start : start + 100]
+            resp = await self._request_service_role(
+                "GET",
+                "/rest/v1/tenant_email_messages",
+                params={
+                    "select": "id,source_batch_id",
+                    "source_batch_id": _postgrest_in_clause(chunk),
+                    "limit": "20000",
+                },
+                organizacion_id=organizacion_id,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"tenant_email_messages_health_invalid:{data!r}")
+            for row in data:
+                if not isinstance(row, dict) or not row.get("id"):
+                    continue
+                message_id_values.append(str(row["id"]))
+
+        if not message_id_values:
+            return {
+                "rebotes_temporales": 0,
+                "rebotes_permanentes": 0,
+                "bajas": 0,
+                "quejas": 0,
+            }
+
+        hard_bounces: set[str] = set()
+        soft_bounces: set[str] = set()
+        unsubscribes: set[str] = set()
+        complaints: set[str] = set()
+        for start in range(0, len(message_id_values), 200):
+            chunk = message_id_values[start : start + 200]
+            resp = await self._request_service_role(
+                "GET",
+                "/rest/v1/tenant_email_events",
+                params={
+                    "select": "message_id,event_type,bounce_type",
+                    "message_id": _postgrest_in_clause(chunk),
+                    "limit": "20000",
+                },
+                organizacion_id=organizacion_id,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"tenant_email_events_health_invalid:{data!r}")
+            for row in data:
+                if not isinstance(row, dict) or not row.get("message_id"):
+                    continue
+                message_id = str(row["message_id"])
+                event_type = str(row.get("event_type") or "").strip().casefold()
+                bounce_type = str(row.get("bounce_type") or "").strip().casefold()
+                if event_type == "bounce" and bounce_type == "hardbounce":
+                    hard_bounces.add(message_id)
+                elif event_type == "bounce" and bounce_type == "softbounce":
+                    soft_bounces.add(message_id)
+                elif event_type == "spamcomplaint":
+                    complaints.add(message_id)
+                elif event_type == "subscriptionchange":
+                    unsubscribes.add(message_id)
+
+        return {
+            "rebotes_temporales": len(soft_bounces),
+            "rebotes_permanentes": len(hard_bounces),
+            "bajas": len(unsubscribes),
+            "quejas": len(complaints),
+        }
 
     async def get_prospeccion_envio_sesiones_utm(
         self,

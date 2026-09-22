@@ -38270,6 +38270,43 @@ async def prospeccion_metricas_dashboard(
             for day, values in sorted(frases_timeseries_raw.items(), key=lambda item: item[0])
         ]
 
+    email_health: dict[str, int | None] | None = None
+    if params.canal in ("todos", "correo"):
+        health_batches: list[dict[str, Any]] = []
+        try:
+            health_page_size = 500
+            health_offset = 0
+            while True:
+                batch_page, batch_total = await repo.list_contact_batches(
+                    usuario_token=user_token,
+                    limit=health_page_size,
+                    offset=health_offset,
+                    campana_id=params.campana_id,
+                    creado_desde_iso=date_from_dt.isoformat() if date_from_dt else None,
+                    creado_hasta_iso=date_to_dt.isoformat() if date_to_dt else None,
+                    order="creado_en.asc",
+                )
+                if not batch_page:
+                    break
+                health_batches.extend(batch_page)
+                health_offset += len(batch_page)
+                if len(batch_page) < health_page_size or health_offset >= batch_total:
+                    break
+            health_batch_ids: list[UUID] = []
+            for batch in health_batches:
+                raw_batch_id = batch.get("id")
+                try:
+                    if raw_batch_id:
+                        health_batch_ids.append(UUID(str(raw_batch_id)))
+                except (TypeError, ValueError):
+                    continue
+            email_health = await repo.get_email_health_for_batches(
+                organizacion_id=organizacion_id,
+                batch_ids=health_batch_ids,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning("prospeccion.metricas.email_health_failed", extra={"error": str(exc)})
+
     campaign_call_items = [
         item for item in campaign_items if _clean_text(item.get("canal")) == "llamada"
     ]
@@ -38283,11 +38320,11 @@ async def prospeccion_metricas_dashboard(
             "clics": int(campaign_email_summary.get("brevo_clicks") or 0),
             "respondieron": int(campaign_email_summary.get("envios_respondidos") or 0),
             "fallidos": int(sum(int(item.get("envios_fallidos") or 0) for item in campaign_email_items)),
-            "rebotes_temporales": None,
-            "rebotes_permanentes": None,
-            "bajas": None,
-            "quejas": None,
-            "datos_pendientes": ["rebotes_temporales", "rebotes_permanentes", "bajas", "quejas"],
+            "rebotes_temporales": email_health.get("rebotes_temporales") if email_health else None,
+            "rebotes_permanentes": email_health.get("rebotes_permanentes") if email_health else None,
+            "bajas": email_health.get("bajas") if email_health else None,
+            "quejas": email_health.get("quejas") if email_health else None,
+            "datos_pendientes": [] if email_health else ["rebotes_temporales", "rebotes_permanentes", "bajas", "quejas"],
         },
         "whatsapp": {
             "intentados": int(whatsapp_campaign_summary.get("mensajes_salientes") or 0),

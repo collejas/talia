@@ -883,11 +883,14 @@ export default function ProspeccionMetricasPageClient() {
                   ],
                   secondary: [
                     ["Fallidos", data?.salud_canales?.correo.fallidos],
-                    ["Rebotes", null],
-                    ["Bajas", null],
-                    ["Quejas", null],
+                    ["Rebote temporal", data?.salud_canales?.correo.rebotes_temporales],
+                    ["Rebote permanente", data?.salud_canales?.correo.rebotes_permanentes],
+                    ["Bajas", data?.salud_canales?.correo.bajas],
+                    ["Quejas", data?.salud_canales?.correo.quejas],
                   ],
-                  pending: "Rebotes, bajas y quejas se mostrarán cuando estén disponibles en los eventos de correo.",
+                  pending: data?.salud_canales?.correo.datos_pendientes.length
+                    ? "Algunos eventos de correo todavía no están disponibles en el periodo seleccionado."
+                    : null,
                 },
                 {
                   key: "whatsapp",
