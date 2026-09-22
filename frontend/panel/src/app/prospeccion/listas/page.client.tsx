@@ -250,7 +250,7 @@ function formFromLista(lista?: ProspeccionLista | null): FormState {
     estratoGroup: typeof filtros.estrato_group === "string" ? filtros.estrato_group : "",
     stage: typeof filtros.stage === "string" ? filtros.stage : "",
     conEnvio: typeof filtros.con_envio === "boolean" ? String(filtros.con_envio) : "",
-    conEnvioCanales: parseListValues(filtros.con_envio_canales),
+    conEnvioCanales: parseListValues(filtros.con_envio_canales).filter((channel) => channel !== canal),
     optOutCanal: typeof filtros.opt_out_canal === "string" ? filtros.opt_out_canal : canal,
     optOutWhatsapp: typeof filtros.opt_out_whatsapp === "boolean" ? String(filtros.opt_out_whatsapp) : "",
     conScraper: typeof filtros.con_scraper === "boolean" ? String(filtros.con_scraper) : "",
@@ -704,6 +704,7 @@ export function ListasParaContactarClient() {
                     enviosPreset: "never",
                     enviosMin: "0",
                     enviosMax: "0",
+                    conEnvioCanales: prev.conEnvioCanales.filter((channel) => channel !== value),
                   }))
                 }
               >
@@ -808,7 +809,7 @@ export function ListasParaContactarClient() {
                 </div>
                 {!form.fuente || form.fuente === "google_places" ? <>
                   <div className="sm:col-span-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
-                    <p className="font-medium">Clasificación de Google</p>
+                    <p className="font-medium">Filtros de Google</p>
                     <p className="mt-1">Google clasifica por tipo de negocio, nombre o texto y calificación.</p>
                   </div>
                   <div className="space-y-2">
@@ -841,7 +842,7 @@ export function ListasParaContactarClient() {
                 </> : null}
                 {!form.fuente || form.fuente === "denue" ? <>
                   <div className="sm:col-span-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                    <p className="font-medium">Clasificación de GobMX / DENUE</p>
+                    <p className="font-medium">Filtros de GobMX / DENUE</p>
                     <p className="mt-1">DENUE clasifica por actividad económica y tamaño de empresa.</p>
                   </div>
                   <div className="space-y-2">
@@ -959,12 +960,15 @@ export function ListasParaContactarClient() {
                 <p className="mb-3 text-sm font-medium">Datos de contacto del canal</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {form.canal === "correo" ? <div className="space-y-2">
-                    <Label htmlFor="lista-correo-valido">Correo electrónico</Label>
+                    <Label htmlFor="lista-correo-valido">Estado del correo</Label>
                     <Select value={form.emailLookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, emailLookupStatus: value === "any" ? "" : value }))}>
                       <SelectTrigger id="lista-correo-valido"><SelectValue placeholder="Cualquier correo" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="any">Cualquier correo</SelectItem>
                         <SelectItem value="valido">Correo válido</SelectItem>
+                        <SelectItem value="invalido">Correo inválido</SelectItem>
+                        <SelectItem value="dudoso">Correo dudoso</SelectItem>
+                        <SelectItem value="sin_email">Sin correo</SelectItem>
                       </SelectContent>
                     </Select>
                   </div> : null}
@@ -1036,19 +1040,6 @@ export function ListasParaContactarClient() {
                 <p className="mb-3 text-sm font-medium">Validación, historial y CRM</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="lista-correo-estado">Estado del correo</Label>
-                    <Select value={form.emailLookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, emailLookupStatus: value === "any" ? "" : value }))}>
-                      <SelectTrigger id="lista-correo-estado"><SelectValue placeholder="Cualquier estado" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="any">Cualquier estado</SelectItem>
-                        <SelectItem value="valido">Correo válido</SelectItem>
-                        <SelectItem value="invalido">Correo inválido</SelectItem>
-                        <SelectItem value="dudoso">Correo dudoso</SelectItem>
-                        <SelectItem value="sin_email">Sin correo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
                     <Label htmlFor="lista-sitio-estado">Estado del sitio web</Label>
                     <Select value={form.websiteLookupStatus || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, websiteLookupStatus: value === "any" ? "" : value }))}>
                       <SelectTrigger id="lista-sitio-estado"><SelectValue placeholder="Cualquier estado" /></SelectTrigger>
@@ -1075,9 +1066,9 @@ export function ListasParaContactarClient() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Canales con historial</Label>
+                    <Label>También contactados por otros canales</Label>
                     <div className="flex flex-wrap gap-3 rounded-md border p-3 text-sm">
-                      {(["correo", "whatsapp", "llamada"] as const).map((channel) => (
+                      {(["correo", "whatsapp", "llamada"] as const).filter((channel) => channel !== form.canal).map((channel) => (
                         <label key={channel} className="flex items-center gap-2">
                           <input
                             type="checkbox"
