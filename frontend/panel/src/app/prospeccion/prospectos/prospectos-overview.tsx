@@ -4,6 +4,15 @@ import { IconAlertTriangle, IconLoader, IconRefresh } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -312,6 +321,117 @@ function FilterSelect({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  )
+}
+
+type ProspectosCampaignFiltersProps = {
+  campaignId: string
+  templateId: string
+  campaignOptions: Array<{ id: string; nombre: string }>
+  templateOptions: Array<{ id: string; nombre: string }>
+  campaignLoading: boolean
+  templateLoading: boolean
+  envioModo: "" | "si" | "no"
+  envioCanales: Array<"correo" | "whatsapp" | "llamada">
+  scraper: "" | "si" | "no"
+  onCampaignChange: (value: string) => void
+  onTemplateChange: (value: string) => void
+  onEnvioModoChange: (value: string) => void
+  onEnvioCanalesChange: (canales: Array<"correo" | "whatsapp" | "llamada">) => void
+  onScraperChange: (value: string) => void
+}
+
+export function ProspectosCampaignFilters({
+  campaignId,
+  templateId,
+  campaignOptions,
+  templateOptions,
+  campaignLoading,
+  templateLoading,
+  envioModo,
+  envioCanales,
+  scraper,
+  onCampaignChange,
+  onTemplateChange,
+  onEnvioModoChange,
+  onEnvioCanalesChange,
+  onScraperChange,
+}: ProspectosCampaignFiltersProps) {
+  const channelLabels = { correo: "Correo", whatsapp: "WhatsApp", llamada: "Voz" }
+  const envioLabel = envioModo === "no"
+    ? `Sin envío${envioCanales.length ? ` · ${envioCanales.length} canal${envioCanales.length > 1 ? "es" : ""}` : ""}`
+    : envioCanales.length === 0
+      ? envioModo === "si" ? "Con envío" : "Todos"
+      : `Con envío · ${envioCanales.length} canal${envioCanales.length > 1 ? "es" : ""}`
+
+  const toggleChannel = (canal: "correo" | "whatsapp" | "llamada", checked: boolean) => {
+    const next = new Set(envioCanales)
+    if (checked) next.add(canal)
+    else next.delete(canal)
+    onEnvioCanalesChange(Array.from(next))
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-1">
+        <Label>Campaña</Label>
+        <Select value={campaignId || "all"} onValueChange={onCampaignChange}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder={campaignLoading ? "Cargando..." : "Todas las campañas"} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            {campaignOptions.map((option) => <SelectItem key={option.id} value={option.id}>{option.nombre}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label>Plantilla</Label>
+        <Select value={templateId || "all"} onValueChange={onTemplateChange} disabled={!campaignId || templateLoading || !templateOptions.length}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder={!campaignId ? "Selecciona campaña" : templateLoading ? "Cargando..." : "Todas las plantillas"} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            {templateOptions.map((template) => <SelectItem key={template.id} value={template.id}>{template.nombre}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label>Con envío</Label>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-[170px] justify-between">
+              {envioLabel}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuRadioGroup value={envioModo || "all"} onValueChange={onEnvioModoChange}>
+              <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="si">Con envío</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="no">Sin envío</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+            <DropdownMenuItem onSelect={() => onEnvioCanalesChange([])}>Limpiar canales</DropdownMenuItem>
+            {(["correo", "whatsapp", "llamada"] as const).map((canal) => (
+              <DropdownMenuCheckboxItem key={canal} checked={envioCanales.includes(canal)} onCheckedChange={(value) => toggleChannel(canal, Boolean(value))}>
+                {channelLabels[canal]}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="space-y-1">
+        <Label>Con scraper</Label>
+        <Select value={scraper || "all"} onValueChange={onScraperChange}>
+          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Todos" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="si">Sí</SelectItem>
+            <SelectItem value="no">No</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   )
 }

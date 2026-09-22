@@ -31,6 +31,7 @@ import {
   ProspectosRecentBatches,
   ProspectosSavedViews,
   ProspectosSourceVerification,
+  ProspectosCampaignFilters,
   type ProspectosFlowStep,
 } from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
@@ -42,8 +43,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuCheckboxItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -3858,155 +3857,22 @@ function ProspectosView() {
               onEmailLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, emailLookupStatus: value === "all" ? "" : value as EmailLookupFilter }))}
               onWebsiteLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, websiteLookupStatus: value === "all" ? "" : value as WebsiteLookupFilter }))}
             />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1">
-              <Label>Campaña</Label>
-              <Select
-                value={filters.campanaId || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    campanaId: value === "all" ? "" : value,
-                    plantillaId: "",
-                  }))
-                }
-              >
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue
-                    placeholder={campaignFilterLoading ? "Cargando..." : "Todas las campañas"}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {campaignFilterOptions.map((option) => (
-                    <SelectItem key={option.id} value={option.id}>
-                      {option.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Plantilla</Label>
-              <Select
-                value={filters.plantillaId || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    plantillaId: value === "all" ? "" : value,
-                  }))
-                }
-                disabled={!filters.campanaId || templateFilterLoading || !templateFilterOptions.length}
-              >
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue
-                    placeholder={
-                      !filters.campanaId
-                        ? "Selecciona campaña"
-                        : templateFilterLoading
-                          ? "Cargando..."
-                          : "Todas las plantillas"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {templateFilterOptions.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Con envío</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-[170px] justify-between">
-                    {filters.conEnvioModo === "no"
-                      ? `Sin envío${filters.conEnvioCanales.length ? ` · ${filters.conEnvioCanales.length} canal${filters.conEnvioCanales.length > 1 ? "es" : ""}` : ""}`
-                      : filters.conEnvioCanales.length === 0
-                        ? filters.conEnvioModo === "si"
-                          ? "Con envío"
-                          : "Todos"
-                        : `Con envío · ${filters.conEnvioCanales.length} canal${filters.conEnvioCanales.length > 1 ? "es" : ""}`}
-                    <IconChevronDown className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuRadioGroup
-                    value={filters.conEnvioModo || "all"}
-                    onValueChange={(value) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        conEnvioModo: value === "si" || value === "no" ? value : "",
-                      }))
-                    }
-                  >
-                    <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="si">Con envío</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="no">Sin envío</DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                  <DropdownMenuItem
-                    onSelect={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        conEnvioCanales: [],
-                      }))
-                    }
-                  >
-                    Limpiar canales
-                  </DropdownMenuItem>
-                  {(["correo", "whatsapp", "llamada"] as const).map((canal) => {
-                    const checked = filters.conEnvioCanales.includes(canal)
-                    return (
-                      <DropdownMenuCheckboxItem
-                        key={canal}
-                        checked={checked}
-                        onCheckedChange={(value) =>
-                          setFilters((prev) => {
-                            const next = new Set(prev.conEnvioCanales)
-                            if (value) next.add(canal)
-                            else next.delete(canal)
-                            const nextCanales = Array.from(next) as ConEnvioCanalFilter[]
-                            return {
-                              ...prev,
-                              conEnvioCanales: nextCanales,
-                              conEnvioModo: value && prev.conEnvioModo === "" ? "si" : prev.conEnvioModo,
-                            }
-                          })
-                        }
-                      >
-                        {envioCanalLabel[canal]}
-                      </DropdownMenuCheckboxItem>
-                    )
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            <div className="space-y-1">
-              <Label>Con scraper</Label>
-              <Select
-                value={filters.conScraper || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    conScraper: value === "all" ? "" : (value as ConScraperFilter),
-                  }))
-                }
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="si">Sí</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            </div>
+            <ProspectosCampaignFilters
+              campaignId={filters.campanaId}
+              templateId={filters.plantillaId}
+              campaignOptions={campaignFilterOptions}
+              templateOptions={templateFilterOptions}
+              campaignLoading={campaignFilterLoading}
+              templateLoading={templateFilterLoading}
+              envioModo={filters.conEnvioModo}
+              envioCanales={filters.conEnvioCanales}
+              scraper={filters.conScraper}
+              onCampaignChange={(value) => setFilters((prev) => ({ ...prev, campanaId: value === "all" ? "" : value, plantillaId: "" }))}
+              onTemplateChange={(value) => setFilters((prev) => ({ ...prev, plantillaId: value === "all" ? "" : value }))}
+              onEnvioModoChange={(value) => setFilters((prev) => ({ ...prev, conEnvioModo: value === "si" || value === "no" ? value : "" }))}
+              onEnvioCanalesChange={(canales) => setFilters((prev) => ({ ...prev, conEnvioCanales: canales, conEnvioModo: canales.length && prev.conEnvioModo === "" ? "si" : prev.conEnvioModo }))}
+              onScraperChange={(value) => setFilters((prev) => ({ ...prev, conScraper: value === "all" ? "" : value as ConScraperFilter }))}
+            />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {(["correo", "whatsapp", "voz"] as const).map((channel) => {
               const config = ENVIO_COUNT_FILTER_FIELDS[channel]
