@@ -163,15 +163,16 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 
 - Se extrajo el bloque visual del flujo de Prospectos a `ProspectosFlow`.
 - Se extrajo el bloque de envíos recientes a `ProspectosRecentBatches`.
+- Se extrajo el bloque de vistas guardadas a `ProspectosSavedViews` dentro del panel de filtros.
 - La página principal conserva los callbacks, datos, rutas y estados existentes.
-- Se movieron al componente visual las tarjetas de flujo, estados de carga, errores, vacío y resumen de envíos.
+- Se movieron a componentes visuales las tarjetas de flujo, estados de carga, errores, vacío, resumen de envíos y vistas guardadas.
 - No se modificaron endpoints, contratos, filtros, consultas, base de datos ni métodos de envío.
 
 #### Validación realizada
 
 - ESLint sobre la página y los componentes extraídos: sin errores.
 - TypeScript (`tsc --noEmit`): sin errores.
-- React Doctor: 92/100; solo reporta una duplicación JSX preexistente en otra sección de la página, fuera de esta extracción.
+- React Doctor: 92/100 en la primera extracción; solo reporta una duplicación JSX preexistente en otra sección de la página, fuera de esta extracción.
 - `git diff --check`: sin errores de formato.
 
 #### Siguiente extracción

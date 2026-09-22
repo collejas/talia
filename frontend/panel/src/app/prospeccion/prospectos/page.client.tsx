@@ -26,7 +26,7 @@ import {
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
 import { ProspectosImportador } from "@/components/prospeccion/prospectos-importador"
-import { ProspectosFlow, ProspectosRecentBatches, type ProspectosFlowStep } from "./prospectos-overview"
+import { ProspectosFlow, ProspectosRecentBatches, ProspectosSavedViews, type ProspectosFlowStep } from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -3830,56 +3830,17 @@ function ProspectosView() {
       <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-6">
         <h2 className="mb-4 text-base font-semibold">Filtros</h2>
         <form onSubmit={handleSearchSubmit} className="space-y-4">
-          <div className="grid gap-2 lg:grid-cols-[minmax(240px,320px)_minmax(220px,1fr)_auto_auto]">
-            <div className="space-y-1">
-              <Label>Vistas guardadas</Label>
-              <Select value={savedViewId || "none"} onValueChange={handleSelectSavedView}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sin vista seleccionada" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin vista seleccionada</SelectItem>
-                  {savedViews.map((view) => (
-                    <SelectItem key={view.id} value={view.id}>
-                      {view.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Nombre de la vista</Label>
-              <Input
-                value={savedViewName}
-                onChange={(event) => setSavedViewName(event.target.value)}
-                placeholder="Ej. Prospectos GobMX Norte"
-                maxLength={120}
-              />
-            </div>
-            <div className="flex items-end">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => void handleSaveCurrentView()}
-                disabled={savedViewsSaving}
-              >
-                Guardar vista
-              </Button>
-            </div>
-            <div className="flex items-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void handleDeleteSavedView()}
-                disabled={!savedViewId || savedViewId === "none" || savedViewsSaving}
-              >
-                Eliminar vista
-              </Button>
-            </div>
-          </div>
-          {savedViewsLoading ? <p className="text-xs text-muted-foreground">Cargando vistas guardadas...</p> : null}
+          <ProspectosSavedViews
+            views={savedViews}
+            selectedId={savedViewId}
+            name={savedViewName}
+            loading={savedViewsLoading}
+            saving={savedViewsSaving}
+            onSelect={handleSelectSavedView}
+            onNameChange={setSavedViewName}
+            onSave={() => void handleSaveCurrentView()}
+            onDelete={() => void handleDeleteSavedView()}
+          />
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">

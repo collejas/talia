@@ -4,8 +4,11 @@ import { IconAlertTriangle, IconLoader, IconRefresh } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import type { ContactoBatch } from "@/lib/prospeccion/prospectos-client"
+import type { ContactoBatch, ProspectosSavedView } from "@/lib/prospeccion/prospectos-client"
 
 export type ProspectosFlowStep = {
   key: string
@@ -166,6 +169,68 @@ export function ProspectosRecentBatches({ batches, loading, error, onRefresh }: 
         )}
       </div>
     </section>
+  )
+}
+
+type ProspectosSavedViewsProps = {
+  views: ProspectosSavedView[]
+  selectedId: string
+  name: string
+  loading: boolean
+  saving: boolean
+  onSelect: (value: string) => void
+  onNameChange: (value: string) => void
+  onSave: () => void
+  onDelete: () => void
+}
+
+export function ProspectosSavedViews({
+  views,
+  selectedId,
+  name,
+  loading,
+  saving,
+  onSelect,
+  onNameChange,
+  onSave,
+  onDelete,
+}: ProspectosSavedViewsProps) {
+  return (
+    <>
+      <div className="grid gap-2 lg:grid-cols-[minmax(240px,320px)_minmax(220px,1fr)_auto_auto]">
+        <div className="space-y-1">
+          <Label>Vistas guardadas</Label>
+          <Select value={selectedId || "none"} onValueChange={onSelect}>
+            <SelectTrigger>
+              <SelectValue placeholder="Sin vista seleccionada" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin vista seleccionada</SelectItem>
+              {views.map((view) => (
+                <SelectItem key={view.id} value={view.id}>
+                  {view.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label>Nombre de la vista</Label>
+          <Input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder="Ej. Prospectos GobMX Norte" maxLength={120} />
+        </div>
+        <div className="flex items-end">
+          <Button type="button" variant="secondary" size="sm" onClick={onSave} disabled={saving}>
+            Guardar vista
+          </Button>
+        </div>
+        <div className="flex items-end">
+          <Button type="button" variant="outline" size="sm" onClick={onDelete} disabled={!selectedId || selectedId === "none" || saving}>
+            Eliminar vista
+          </Button>
+        </div>
+      </div>
+      {loading ? <p className="text-xs text-muted-foreground">Cargando vistas guardadas...</p> : null}
+    </>
   )
 }
 
