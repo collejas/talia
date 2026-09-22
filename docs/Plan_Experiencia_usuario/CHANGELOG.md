@@ -153,6 +153,32 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 - Revisión visual de las tres vistas en navegador.
 - Inicio de F6.1 para separar Prospectos en componentes pequeños conservando el comportamiento actual.
 
+### F6.1 — Primera extracción estructural de Prospectos
+
+**Estado:** En validación
+**Fase:** F6.1 — Separar Prospectos en componentes
+**Referencia:** `frontend/panel/src/app/prospeccion/prospectos/prospectos-overview.tsx`
+
+#### Cambios realizados
+
+- Se extrajo el bloque visual del flujo de Prospectos a `ProspectosFlow`.
+- Se extrajo el bloque de envíos recientes a `ProspectosRecentBatches`.
+- La página principal conserva los callbacks, datos, rutas y estados existentes.
+- Se movieron al componente visual las tarjetas de flujo, estados de carga, errores, vacío y resumen de envíos.
+- No se modificaron endpoints, contratos, filtros, consultas, base de datos ni métodos de envío.
+
+#### Validación realizada
+
+- ESLint sobre la página y los componentes extraídos: sin errores.
+- TypeScript (`tsc --noEmit`): sin errores.
+- React Doctor: 92/100; solo reporta una duplicación JSX preexistente en otra sección de la página, fuera de esta extracción.
+- `git diff --check`: sin errores de formato.
+
+#### Siguiente extracción
+
+- Separar el panel de filtros como componente controlado, manteniendo `Filters` y sus handlers actuales.
+- Después separar tabla/selección y detalle contextual.
+
 ### F5 — Drill-down de contenido y lista
 
 **Estado:** En validación

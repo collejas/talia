@@ -23,11 +23,10 @@ import {
   IconWorldSearch,
 } from "@tabler/icons-react"
 
-import Link from "next/link"
-
 import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-layout"
 import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
 import { ProspectosImportador } from "@/components/prospeccion/prospectos-importador"
+import { ProspectosFlow, ProspectosRecentBatches, type ProspectosFlowStep } from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -402,12 +401,6 @@ const CANAL_LABELS: Record<ProspeccionCanal, string> = {
   whatsapp: "WhatsApp",
   llamada: "Llamada/voz",
   otro: "Otro",
-}
-
-const CANAL_BADGE_CLASS: Record<"correo" | "whatsapp" | "llamada", string> = {
-  correo: "border-sky-200 bg-sky-50 text-sky-700",
-  whatsapp: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  llamada: "border-amber-200 bg-amber-50 text-amber-700",
 }
 
 const LOOKUP_STATUS_LABELS: Record<string, string> = {
@@ -2575,7 +2568,7 @@ function ProspectosView() {
   useEffect(() => {
     setLimitInput(String(limit))
   }, [limit])
-  const flowSteps = useMemo(() => {
+  const flowSteps = useMemo<ProspectosFlowStep[]>(() => {
     const steps = PROSPECCION_FLOW_DEFINITIONS.map((step) => {
       let meta = ""
       if (step.key === "discover") {
@@ -3826,155 +3819,13 @@ function ProspectosView() {
         </div>
       ) : null}
 
-      <section className="rounded-2xl border bg-card/80 p-4 shadow-sm" aria-label="Flujo de envíos">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase text-muted-foreground">Flujo de envíos</p>
-            <p className="text-base text-muted-foreground">
-              Selecciona prospectos, configura el canal y monitorea el resultado de cada envío.
-            </p>
-          </div>
-          <Button size="sm" onClick={handlePlannerOpen}>
-            <IconSparkles className="mr-1.5 size-4" />
-            Preparar envíos
-          </Button>
-        </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {flowSteps.map((step) => {
-            const Icon = step.icon
-            return (
-              <div
-                key={step.key}
-                className={cn(
-                  "flex min-h-0 flex-col rounded-xl border bg-background/70 p-3 text-sm transition",
-                  step.isCurrent ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
-                )}
-              >
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
-                  <span
-                    className={cn(
-                      "inline-flex items-center justify-center rounded-full p-1",
-                      step.isCurrent ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    <Icon className="size-3.5" />
-                  </span>
-                  <span>{step.title}</span>
-                  {step.isCurrent ? <Badge variant="secondary" className="ml-auto text-[10px]">Actual</Badge> : null}
-                </div>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">{step.description}</p>
-                <span className="mt-2 text-[11px] font-medium text-foreground/70">
-                  {stageSummaryLoading && (step.key === "launch" || step.key === "evaluate") ? "Actualizando…" : step.meta}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border bg-card/80 p-4 shadow-sm" aria-label="Últimos envíos">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold">Últimos lotes programados</p>
-            <p className="text-xs text-muted-foreground">
-              Consulta rápidamente cómo van las campañas más recientes y abre el monitor detallado si necesitas más
-              contexto.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void fetchRecentBatches()}
-              disabled={recentBatchLoading}
-            >
-              <IconRefresh className={cn("mr-1.5 size-4", recentBatchLoading && "animate-spin")} />
-              Actualizar
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/prospeccion/metricas">Ver resultados</Link>
-            </Button>
-          </div>
-        </div>
-        {recentBatchError ? (
-          <div className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            <IconAlertTriangle className="size-4" />
-            <span className="flex-1">{recentBatchError}</span>
-          </div>
-        ) : null}
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {recentBatchLoading && !recentBatches.length ? (
-            Array.from({ length: 3 }).map((_, index) => (
-              <div
-                key={`batch-skeleton-${index}`}
-                className="rounded-xl border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground"
-              >
-                <IconLoader className="mb-1 size-4 animate-spin" />
-                Cargando lote...
-              </div>
-            ))
-          ) : recentBatches.length ? (
-            recentBatches.map((batch) => {
-              const metrics = batchDeliveryMetrics(batch.totales, batch.total_envios)
-              return (
-              <div key={batch.id} className="flex h-full max-w-[280px] flex-col rounded-lg border bg-background/80 p-2.5 shadow-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold">
-                      {batch.titulo?.trim() || "Lote"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(batch.programado_en ?? batch.creado_en)}
-                    </p>
-                  </div>
-                  <Badge
-                    variant="secondary"
-                    className="text-[11px]"
-                    title="Enviados positivos / total de envíos procesados en el lote."
-                  >
-                    {metrics.positives.toLocaleString("es-MX")}/{metrics.total.toLocaleString("es-MX")} (
-                    {metrics.percent.toFixed(1)}%)
-                  </Badge>
-                </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  {(batch.total_prospectos ?? 0).toLocaleString("es-MX")} prospectos ·{" "}
-                  {(batch.canales ?? []).map((canal) => CANAL_LABELS[canal as keyof typeof CANAL_LABELS] ?? canal).join(", ") ||
-                    "Sin canales"}
-                </p>
-                {batch.metadata && typeof batch.metadata["campana_nombre"] === "string" ? (
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Campaña: {String(batch.metadata["campana_nombre"])}
-                  </p>
-                ) : null}
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {(batch.canales ?? []).map((canal) => (
-                    <Badge
-                      key={`${batch.id}-${canal}`}
-                      variant="outline"
-                      className={cn(
-                        "px-1.5 py-0 text-[10px]",
-                        CANAL_BADGE_CLASS[canal as keyof typeof CANAL_BADGE_CLASS] ?? "border-muted text-muted-foreground"
-                      )}
-                    >
-                      {CANAL_LABELS[canal as keyof typeof CANAL_LABELS] ?? canal}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="mt-2 flex flex-1 items-end justify-end text-[11px] text-muted-foreground">
-                  <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-[11px]">
-                    <Link href="/prospeccion/metricas">Ver resultados</Link>
-                  </Button>
-                </div>
-              </div>
-              )
-            })
-          ) : (
-            <div className="rounded-xl border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-              No hay envíos recientes. Crea una campaña desde “Preparar envíos” para verla aquí.
-            </div>
-          )}
-        </div>
-      </section>
+      <ProspectosFlow steps={flowSteps} loading={stageSummaryLoading} onPrepare={handlePlannerOpen} />
+      <ProspectosRecentBatches
+        batches={recentBatches}
+        loading={recentBatchLoading}
+        error={recentBatchError}
+        onRefresh={() => void fetchRecentBatches()}
+      />
 
       <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-6">
         <h2 className="mb-4 text-base font-semibold">Filtros</h2>
@@ -6580,34 +6431,6 @@ function formatContactLogDetail(entry: ContactoLog) {
     parts.push("Envío registrado")
   }
   return parts.length ? parts.join(" · ") : "—"
-}
-
-function batchDeliveryMetrics(
-  totals?: Record<string, number> | null,
-  totalEnvios?: number | null
-): { positives: number; total: number; percent: number } {
-  const source = totals ?? {}
-  const positives = Object.entries(source).reduce((acc, [rawState, rawCount]) => {
-    const state = String(rawState || "").toLowerCase()
-    const count = Number(rawCount) || 0
-    if (count <= 0) return acc
-    if (
-      state === "enviada" ||
-      state === "enviado" ||
-      state === "entregada" ||
-      state === "entregado" ||
-      state === "leida" ||
-      state === "leido" ||
-      state === "respondido"
-    ) {
-      return acc + count
-    }
-    return acc
-  }, 0)
-  const computedTotal = Object.values(source).reduce((acc, rawCount) => acc + (Number(rawCount) || 0), 0)
-  const total = Math.max(positives, Number(totalEnvios) || computedTotal || 0)
-  const percent = total > 0 ? (positives / total) * 100 : 0
-  return { positives, total, percent }
 }
 
 function carrierLabel(value: string | null | undefined) {
