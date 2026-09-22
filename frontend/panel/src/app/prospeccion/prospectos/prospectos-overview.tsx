@@ -1,6 +1,6 @@
 import type { ComponentType } from "react"
 import Link from "next/link"
-import { IconAlertTriangle, IconCalendar, IconLoader, IconRefresh } from "@tabler/icons-react"
+import { IconAlertTriangle, IconCalendar, IconChevronDown, IconLoader, IconRefresh } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -385,6 +385,128 @@ export function ProspectosClassificationFilters({
             </div>
           ) : null}
         </div>
+      </div>
+    </div>
+  )
+}
+
+type OperationalQueryOption = { value: string; label: string; values: string[]; count?: number }
+type ProspectosOperationalFiltersProps = {
+  queryOptions: OperationalQueryOption[]
+  queryValues: string[]
+  queryLoading: boolean
+  querySearch: string
+  openedQueryScope: boolean
+  activityOptions: string[]
+  activityValues: string[]
+  activityLoading: boolean
+  activitySearch: string
+  contactOptions: Array<{ value: string; label: string }>
+  contactValues: string[]
+  whatsappOptOut: "" | "si" | "no"
+  segmentOptions: string[]
+  segmentValues: string[]
+  segmentSearch: string
+  onQuerySearchChange: (value: string) => void
+  onQueryToggle: (values: string[], checked: boolean) => void
+  onActivitySearchChange: (value: string) => void
+  onActivityToggle: (value: string, checked: boolean) => void
+  onContactToggle: (value: string, checked: boolean) => void
+  onWhatsappChange: (value: string) => void
+  onSegmentSearchChange: (value: string) => void
+  onSegmentToggle: (value: string, checked: boolean) => void
+  onClearSegments: () => void
+}
+
+export function ProspectosOperationalFilters({
+  queryOptions,
+  queryValues,
+  queryLoading,
+  querySearch,
+  openedQueryScope,
+  activityOptions,
+  activityValues,
+  activityLoading,
+  activitySearch,
+  contactOptions,
+  contactValues,
+  whatsappOptOut,
+  segmentOptions,
+  segmentValues,
+  segmentSearch,
+  onQuerySearchChange,
+  onQueryToggle,
+  onActivitySearchChange,
+  onActivityToggle,
+  onContactToggle,
+  onWhatsappChange,
+  onSegmentSearchChange,
+  onSegmentToggle,
+  onClearSegments,
+}: ProspectosOperationalFiltersProps) {
+  const multiSelect = (label: string, value: string, placeholder: string, search: string, onSearchChange: (value: string) => void, options: string[], selected: string[], loading: boolean, onToggle: (value: string, checked: boolean) => void) => (
+    <div className="space-y-1">
+      <Label>{label}</Label>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="min-w-[220px] justify-between text-sm normal-case">
+            <span className="max-w-[160px] truncate text-left text-sm">{selected.length ? selected.join(", ") : placeholder}</span>
+            <IconChevronDown className="size-4 opacity-70" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[280px]">
+          <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
+            <Input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder={`Buscar ${label.toLowerCase()}…`} className="h-8 text-xs" />
+          </div>
+          {loading ? <div className="px-3 py-2 text-xs text-muted-foreground">Cargando…</div> : options.length ? options.map((option) => (
+            <DropdownMenuCheckboxItem key={option} checked={selected.includes(option)} onCheckedChange={(checked) => onToggle(option, Boolean(checked))} onSelect={(event) => event.preventDefault()}>{option}</DropdownMenuCheckboxItem>
+          )) : <div className="px-3 py-2 text-xs text-muted-foreground">No hay opciones registradas.</div>}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-1">
+        <Label>Consulta</Label>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="min-w-[220px] justify-between text-sm normal-case" disabled={openedQueryScope}>
+              <span className="max-w-[160px] truncate text-left text-sm">{queryValues.length ? queryValues.join(", ") : "Todas las consultas"}</span>
+              <IconChevronDown className="size-4 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[280px]">
+            <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}><Input value={querySearch} onChange={(event) => onQuerySearchChange(event.target.value)} placeholder="Buscar consulta…" className="h-8 text-xs" /></div>
+            {queryLoading ? <div className="px-3 py-2 text-xs text-muted-foreground">Cargando consultas…</div> : queryOptions.length ? queryOptions.map((option) => (
+              <DropdownMenuCheckboxItem key={option.value} checked={option.values.length > 0 && option.values.every((value) => queryValues.includes(value))} onCheckedChange={(checked) => onQueryToggle(option.values, Boolean(checked))} onSelect={(event) => event.preventDefault()}>{option.label}{typeof option.count === "number" ? ` (${option.count})` : ""}</DropdownMenuCheckboxItem>
+            )) : <div className="px-3 py-2 text-xs text-muted-foreground">No hay consultas registradas.</div>}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      {multiSelect("Actividad", activityValues.join(", "), "Todas las actividades", activitySearch, onActivitySearchChange, activityOptions, activityValues, activityLoading, onActivityToggle)}
+      <div className="space-y-1">
+        <Label>Datos de contacto</Label>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="min-w-[220px] justify-between text-sm normal-case"><span className="max-w-[160px] truncate text-left text-sm">{contactValues.length ? contactValues.map((value) => contactOptions.find((option) => option.value === value)?.label ?? value).join(", ") : "Teléfono, correo o sitio web"}</span><IconChevronDown className="size-4 opacity-70" /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[220px]">{contactOptions.map((option) => <DropdownMenuCheckboxItem key={option.value} checked={contactValues.includes(option.value)} onCheckedChange={(checked) => onContactToggle(option.value, Boolean(checked))}>{option.label}</DropdownMenuCheckboxItem>)}</DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div className="space-y-1">
+        <Label>Estado WhatsApp</Label>
+        <Select value={whatsappOptOut || "todos"} onValueChange={onWhatsappChange}><SelectTrigger className="min-w-[220px] text-sm"><SelectValue placeholder="Estado WhatsApp" /></SelectTrigger><SelectContent><SelectItem value="todos">Todos los estados</SelectItem><SelectItem value="no">Disponibles para WhatsApp</SelectItem><SelectItem value="si">Solicitaron no recibir</SelectItem></SelectContent></Select>
+      </div>
+      <div className="space-y-1">
+        <Label>Segmento guardado</Label>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="min-w-[220px] justify-between text-sm normal-case"><span className="max-w-[180px] truncate text-left">{segmentValues.length ? segmentValues.join(", ") : "Todos los segmentos"}</span><IconChevronDown className="size-4 opacity-70" /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[280px]">
+            <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}><Input value={segmentSearch} onChange={(event) => onSegmentSearchChange(event.target.value)} placeholder="Buscar segmento…" className="h-8 text-xs" /></div>
+            <DropdownMenuCheckboxItem checked={!segmentValues.length} onCheckedChange={(checked) => { if (checked) onClearSegments() }} onSelect={(event) => event.preventDefault()}>Todos</DropdownMenuCheckboxItem>
+            {segmentOptions.map((segment) => <DropdownMenuCheckboxItem key={segment} checked={segmentValues.includes(segment)} onCheckedChange={(checked) => onSegmentToggle(segment, Boolean(checked))} onSelect={(event) => event.preventDefault()}>{segment}</DropdownMenuCheckboxItem>)}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )

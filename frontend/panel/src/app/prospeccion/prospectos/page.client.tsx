@@ -5,7 +5,6 @@ import {
   IconAlertTriangle,
   IconCircleCheck,
   IconDotsVertical,
-  IconChevronDown,
   IconCalendar,
   IconHistory,
   IconLoader,
@@ -34,6 +33,7 @@ import {
   ProspectosCampaignFilters,
   ProspectosContactCounts,
   ProspectosClassificationFilters,
+  ProspectosOperationalFilters,
   type ProspectosFlowStep,
 } from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
@@ -537,10 +537,6 @@ const CONTACT_FILTER_OPPOSITES: Partial<Record<ContactPresenceFilter, ContactPre
   website_has: "website_missing",
   website_missing: "website_has",
 }
-const CONTACT_FILTER_PLACEHOLDER = "Teléfono, correo o sitio web"
-const QUERY_FILTER_PLACEHOLDER = "Todas las consultas"
-const ACTIVITY_FILTER_PLACEHOLDER = "Todas las actividades"
-
 function normalizeContactFiltersSelection(filters: Iterable<ContactPresenceFilter>): ContactPresenceFilter[] {
   const next = new Set<ContactPresenceFilter>()
   for (const value of filters) {
@@ -3905,212 +3901,37 @@ function ProspectosView() {
               })}
               onCustomDateChange={(bound, value) => setFilters((prev) => ({ ...prev, [bound === "from" ? "customDateFrom" : "customDateTo"]: value }))}
             />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1">
-              <Label>Consulta</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="min-w-[220px] justify-between text-sm normal-case"
-                    disabled={Boolean(openedQueryScope)}
-                    title={
-                      openedQueryScope
-                        ? "Lote abierto: la consulta se mantiene fija hasta volver a Grupos."
-                        : undefined
-                    }
-                  >
-                    <span className="max-w-[160px] truncate text-left text-sm">
-                      {(effectiveMetadataQueries?.length ?? 0) > 0
-                        ? Array.from(
-                            new Set(
-                              (effectiveMetadataQueries ?? []).map((value) => queryLabelMap.get(value) ?? value)
-                            )
-                          ).join(", ")
-                        : QUERY_FILTER_PLACEHOLDER}
-                    </span>
-                    <IconChevronDown className="size-4 opacity-70" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-[280px]">
-                  <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
-                    <Input
-                      value={queryFilterSearch}
-                      onChange={(event) => setQueryFilterSearch(event.target.value)}
-                      placeholder="Buscar consulta…"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                {queryOptionsLoading ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">Cargando consultas …</div>
-                ) : filteredQueryOptions.length ? (
-                  filteredQueryOptions.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      key={option.value}
-                      checked={
-                        option.values.length > 0 &&
-                        option.values.every((value) => filters.queryFilters.includes(value))
-                      }
-                      onCheckedChange={(checked) => handleQueryFilterToggle(option.values, Boolean(checked))}
-                      onSelect={(event) => event.preventDefault()}
-                    >
-                      {option.label}
-                      {typeof option.count === "number" ? ` (${option.count})` : ""}
-                    </DropdownMenuCheckboxItem>
-                  ))
-                ) : (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">No hay consultas registradas.</div>
-                )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            <div className="space-y-1">
-              <Label>Actividad</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="min-w-[220px] justify-between text-sm normal-case"
-                  >
-                    <span className="max-w-[160px] truncate text-left text-sm">
-                      {filters.actividadFilters.length ? filters.actividadFilters.join(", ") : ACTIVITY_FILTER_PLACEHOLDER}
-                    </span>
-                    <IconChevronDown className="size-4 opacity-70" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-[280px]">
-                  <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
-                    <Input
-                      value={activityFilterSearch}
-                      onChange={(event) => setActivityFilterSearch(event.target.value)}
-                      placeholder="Buscar actividad…"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  {activityOptionsLoading ? (
-                    <div className="px-3 py-2 text-xs text-muted-foreground">Cargando actividades …</div>
-                  ) : filteredActivityOptions.length ? (
-                    filteredActivityOptions.map((option) => (
-                      <DropdownMenuCheckboxItem
-                        key={option}
-                        checked={filters.actividadFilters.includes(option)}
-                        onCheckedChange={(checked) => handleActividadFilterToggle(option, Boolean(checked))}
-                        onSelect={(event) => event.preventDefault()}
-                      >
-                        {option}
-                      </DropdownMenuCheckboxItem>
-                    ))
-                  ) : (
-                    <div className="px-3 py-2 text-xs text-muted-foreground">
-                      No hay actividades registradas.
-                    </div>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            <div className="space-y-1">
-              <Label>Datos de contacto</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="min-w-[220px] justify-between text-sm normal-case"
-                  >
-                    <span className="max-w-[160px] truncate text-left text-sm">
-                      {filters.contactFilters.length
-                        ? filters.contactFilters.map((filterKey) => CONTACT_FILTER_LABELS[filterKey]).join(", ")
-                        : CONTACT_FILTER_PLACEHOLDER}
-                    </span>
-                    <IconChevronDown className="size-4 opacity-70" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-[220px]">
-                  {CONTACT_FILTER_OPTIONS.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      key={option.value}
-                      checked={filters.contactFilters.includes(option.value)}
-                      onCheckedChange={(checked) => handleContactFilterToggle(option.value, Boolean(checked))}
-                    >
-                      {option.label}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            <div className="space-y-1">
-              <Label>Estado WhatsApp</Label>
-              <Select
-                value={filters.whatsappOptOut || "todos"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    whatsappOptOut: value === "si" || value === "no" ? value : "",
-                  }))
-                }
-              >
-                <SelectTrigger className="min-w-[220px] text-sm">
-                  <SelectValue placeholder="Estado WhatsApp" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos los estados</SelectItem>
-                  <SelectItem value="no">Disponibles para WhatsApp</SelectItem>
-                  <SelectItem value="si">Solicitaron no recibir</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Segmento</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="min-w-[220px] justify-between text-sm normal-case">
-                    <span className="max-w-[180px] truncate text-left">
-                      {filters.segmentoFilters.length ? filters.segmentoFilters.join(", ") : "Todos los segmentos"}
-                    </span>
-                    <IconChevronDown className="size-4 opacity-70" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-[280px]">
-                  <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
-                    <Input
-                      value={segmentoFilterSearch}
-                      onChange={(event) => setSegmentoFilterSearch(event.target.value)}
-                      placeholder="Buscar segmento…"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <DropdownMenuCheckboxItem
-                    checked={!filters.segmentoFilters.length}
-                    onCheckedChange={(checked) => {
-                      if (checked) setFilters((prev) => ({ ...prev, segmento: "", segmentoFilters: [] }))
-                    }}
-                    onSelect={(event) => event.preventDefault()}
-                  >
-                    Todos
-                  </DropdownMenuCheckboxItem>
-                  {filteredSegmentoOptions.map((segmento) => (
-                    <DropdownMenuCheckboxItem
-                      key={segmento}
-                      checked={filters.segmentoFilters.includes(segmento)}
-                      onCheckedChange={(checked) => {
-                        setFilters((prev) => {
-                          const next = new Set(prev.segmentoFilters)
-                          if (checked) next.add(segmento)
-                          else next.delete(segmento)
-                          return { ...prev, segmento: next.size === 1 ? Array.from(next)[0] : "", segmentoFilters: Array.from(next) }
-                        })
-                      }}
-                      onSelect={(event) => event.preventDefault()}
-                    >
-                      {segmento}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            </div>
+            <ProspectosOperationalFilters
+              queryOptions={filteredQueryOptions}
+              queryValues={effectiveMetadataQueries ?? []}
+              queryLoading={queryOptionsLoading}
+              querySearch={queryFilterSearch}
+              openedQueryScope={Boolean(openedQueryScope)}
+              activityOptions={filteredActivityOptions}
+              activityValues={filters.actividadFilters}
+              activityLoading={activityOptionsLoading}
+              activitySearch={activityFilterSearch}
+              contactOptions={CONTACT_FILTER_OPTIONS}
+              contactValues={filters.contactFilters}
+              whatsappOptOut={filters.whatsappOptOut}
+              segmentOptions={filteredSegmentoOptions}
+              segmentValues={filters.segmentoFilters}
+              segmentSearch={segmentoFilterSearch}
+              onQuerySearchChange={setQueryFilterSearch}
+              onQueryToggle={handleQueryFilterToggle}
+              onActivitySearchChange={setActivityFilterSearch}
+              onActivityToggle={handleActividadFilterToggle}
+              onContactToggle={(value, checked) => handleContactFilterToggle(value as ContactPresenceFilter, checked)}
+              onWhatsappChange={(value) => setFilters((prev) => ({ ...prev, whatsappOptOut: value === "si" || value === "no" ? value : "" }))}
+              onSegmentSearchChange={setSegmentoFilterSearch}
+              onSegmentToggle={(segmento, checked) => setFilters((prev) => {
+                const next = new Set(prev.segmentoFilters)
+                if (checked) next.add(segmento)
+                else next.delete(segmento)
+                return { ...prev, segmento: next.size === 1 ? Array.from(next)[0] : "", segmentoFilters: Array.from(next) }
+              })}
+              onClearSegments={() => setFilters((prev) => ({ ...prev, segmento: "", segmentoFilters: [] }))}
+            />
             <div className="grid gap-3 lg:grid-cols-[minmax(160px,260px)_180px_180px_160px_auto] lg:items-end">
             <div className="space-y-1">
               <Label>Buscar</Label>
