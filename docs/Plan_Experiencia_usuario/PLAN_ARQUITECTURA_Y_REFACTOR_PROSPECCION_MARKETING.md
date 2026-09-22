@@ -971,6 +971,33 @@ Las bajas y bloqueos deben afectar la elegibilidad futura del prospecto para ese
 
 No se deben mostrar métricas que el proveedor no soporte realmente. La normalización de estados sirve para la experiencia de usuario y los reportes; no autoriza cambiar los métodos actuales de envío, workers, proveedores, cuotas, reintentos o webhooks. La interfaz normal no muestra nombres de proveedores, IDs de proveedor ni detalles técnicos de integración.
 
+#### 4.10.2 Ver el correo enviado — pendiente de implementación
+
+F5 deberá contemplar posteriormente una vista para consultar el correo exacto enviado a una persona, similar a la experiencia de historial de los servicios de correo masivo, pero sin mostrar nombres de proveedores ni identificadores técnicos al usuario.
+
+Desde `Canal → Campaña → Envío → Destinatarios`, al seleccionar un destinatario de Correo se podrá mostrar:
+
+- Destinatario.
+- Remitente.
+- Asunto final enviado.
+- Fecha y hora.
+- Estado actual y línea de tiempo de eventos.
+- Vista HTML del correo renderizado.
+- Versión de texto sin formato.
+- Detalles de entrega, apertura, clic, rebote o baja cuando existan.
+
+La vista debe mostrar el contenido final ya renderizado, no volver a construirlo desde la plantilla actual. Esto es necesario porque el correo puede contener variables personalizadas, imágenes, enlaces de seguimiento y enlaces de baja diferentes por destinatario.
+
+Esta capacidad queda pendiente y no forma parte del refactor actual. Antes de implementarla se debe definir una política de almacenamiento:
+
+1. Mantener en base de datos únicamente los metadatos necesarios para consultar el mensaje: asunto, estado, destinatario, fechas, referencia del contenido y hash.
+2. Conservar el HTML y texto final en almacenamiento privado, protegido y con retención definida, preferentemente comprimido.
+3. No usar `metadata` o `jsonb` como sustituto de columnas o almacenamiento estructurado para esta capacidad.
+4. Definir una retención inicial —por ejemplo 90 o 180 días— sin eliminar los eventos, estados y métricas históricas.
+5. Aplicar controles de tenant y acceso, porque el contenido puede contener datos personales y enlaces personalizados.
+
+La implementación deberá reutilizar los métodos actuales de envío de Correo y no cambiar los proveedores, workers, cuotas, separación operativa ni webhooks. Solo agregará la conservación y consulta segura del contenido histórico si se aprueba este pendiente.
+
 ### 4.11 Crear envío
 
 Existen dos entradas al mismo asistente:
@@ -1639,6 +1666,7 @@ No crear ni renombrar una tabla, campo o endpoint únicamente porque el plan uti
 - Estados de Voz limitados a los eventos realmente soportados por su proveedor.
 - Diferenciación entre personas únicas contactadas y cantidad total de contactos realizados.
 - Atribución hacia CRM.
+- Dejar documentada como pendiente la consulta del correo HTML/texto exacto enviado por destinatario, con almacenamiento privado y retención controlada.
 
 **Salida:** el usuario puede explicar qué se envió, a quién, con qué mensaje y qué ocurrió.
 
@@ -1744,6 +1772,7 @@ Controles específicos:
 5. **Métricas de oportunidad y venta:** confirmar la fuente canónica de atribución CRM antes de presentar tasas comerciales.
 6. **Documentación contradictoria:** cerrar el estado real de migraciones y publicación de Google/GobMX antes de ejecutar cambios estructurales.
 7. **WhatsApp:** conservar sus métodos actuales de envío y procesamiento. Cualquier cambio operativo posterior debe tratarse como un proyecto backend independiente.
+8. **Contenido histórico de Correo:** actualmente se consulta el estado y los eventos del envío, pero no se garantiza conservar el HTML final personalizado por destinatario. La vista `Ver correo enviado` queda pendiente hasta definir almacenamiento privado, retención, protección de datos y capacidad disponible.
 
 La operación de Correo queda regida por `docs/Plan_Postmark` y sus reglas actuales de Postmark/Brevo. La operación de WhatsApp queda regida por sus contratos, workers y proveedores actuales.
 

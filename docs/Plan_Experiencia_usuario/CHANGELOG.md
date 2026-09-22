@@ -93,6 +93,14 @@ Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no cont
 
 **Pendiente:** validar en navegador con campañas reales de los tres canales y confirmar que los detalles persistidos permitan mostrar un nombre o medio de contacto legible para cada destinatario.
 
+### F5 — Pendiente: ver el correo exacto enviado
+
+- Se documentó como pendiente una vista `Canal → Campaña → Envío → Destinatarios → Ver correo enviado`.
+- La vista deberá mostrar asunto, destinatario, estado, eventos, HTML final y texto sin formato.
+- Se dejó establecido que debe conservarse el contenido renderizado real, no reconstruirse desde la plantilla vigente.
+- La solución recomendada es guardar metadatos en la base de datos y el HTML/texto en almacenamiento privado con retención definida.
+- No se modifican por ahora los métodos, proveedores, workers ni contratos actuales de envío de Correo.
+
 ## 2026-09-22 — F5: Resumen general y salud de canales documentados
 
 ### Estado
