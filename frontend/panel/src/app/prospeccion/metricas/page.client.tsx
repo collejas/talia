@@ -868,6 +868,88 @@ export default function ProspeccionMetricasPageClient() {
               </div>
             </CardContent>
           </Card>
+
+          <div className="grid gap-4 xl:grid-cols-3">
+            {(
+              [
+                {
+                  key: "correo",
+                  title: "Salud del correo",
+                  primary: [
+                    ["Entregados", data?.salud_canales?.correo.entregados],
+                    ["Abiertos", data?.salud_canales?.correo.abiertos],
+                    ["Clics", data?.salud_canales?.correo.clics],
+                    ["Respondieron", data?.salud_canales?.correo.respondieron],
+                  ],
+                  secondary: [
+                    ["Fallidos", data?.salud_canales?.correo.fallidos],
+                    ["Rebotes", null],
+                    ["Bajas", null],
+                    ["Quejas", null],
+                  ],
+                  pending: "Rebotes, bajas y quejas se mostrarán cuando estén disponibles en los eventos de correo.",
+                },
+                {
+                  key: "whatsapp",
+                  title: "Salud de WhatsApp",
+                  primary: [
+                    ["Entregados", data?.salud_canales?.whatsapp.entregados],
+                    ["Leídos", data?.salud_canales?.whatsapp.leidos],
+                    ["Respondieron", data?.salud_canales?.whatsapp.respondieron],
+                    ["Fallidos", data?.salud_canales?.whatsapp.fallidos],
+                  ],
+                  secondary: [
+                    ["No entregados", data?.salud_canales?.whatsapp.no_entregados],
+                    ["Bajas", null],
+                    ["Bloqueados", null],
+                  ],
+                  pending: "Bajas y bloqueos se mostrarán cuando estén disponibles en los eventos del canal.",
+                },
+                {
+                  key: "llamada",
+                  title: "Resultados de Voz",
+                  primary: [
+                    ["Llamadas realizadas", data?.salud_canales?.llamada.realizadas],
+                    ["Respondieron", data?.salud_canales?.llamada.respondieron],
+                    ["Fallidos", data?.salud_canales?.llamada.fallidos],
+                  ],
+                  secondary: [],
+                  pending: "Se mostrarán más estados cuando estén disponibles en el proveedor de llamadas.",
+                },
+              ] as const
+            ).map((channel) => (
+              <Card key={channel.key} className="border-border shadow-none">
+                <CardHeader className="border-b border-border/60 pb-3">
+                  <CardTitle className="text-base">{channel.title}</CardTitle>
+                  <p className="text-xs text-muted-foreground">Resultados disponibles en el periodo seleccionado.</p>
+                </CardHeader>
+                <CardContent className="space-y-4 p-5">
+                  <div className="grid grid-cols-2 gap-3">
+                    {channel.primary.map(([label, value]) => (
+                      <div key={label}>
+                        <p className="text-xs text-muted-foreground">{label}</p>
+                        <p className="text-xl font-semibold text-foreground">{value == null ? "—" : number.format(value)}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {channel.secondary.length > 0 ? (
+                    <div className="border-t border-border/60 pt-3">
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Incidencias y permisos</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {channel.secondary.map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2">
+                            <span className="text-muted-foreground">{label}</span>
+                            <span className="font-medium text-foreground">{value == null ? "Pendiente" : number.format(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {channel.pending ? <p className="text-xs leading-5 text-muted-foreground">{channel.pending}</p> : null}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </section>
       ) : null}
 

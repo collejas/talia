@@ -38270,6 +38270,47 @@ async def prospeccion_metricas_dashboard(
             for day, values in sorted(frases_timeseries_raw.items(), key=lambda item: item[0])
         ]
 
+    campaign_call_items = [
+        item for item in campaign_items if _clean_text(item.get("canal")) == "llamada"
+    ]
+    call_summary = summarize_campaign_items(campaign_call_items)
+    salud_canales = {
+        "correo": {
+            "intentados": int(campaign_email_summary.get("envios_totales") or 0),
+            "aceptados": int(campaign_email_summary.get("envios_enviados") or 0),
+            "entregados": int(campaign_email_summary.get("envios_entregados") or 0),
+            "abiertos": int(campaign_email_summary.get("brevo_aperturas") or 0),
+            "clics": int(campaign_email_summary.get("brevo_clicks") or 0),
+            "respondieron": int(campaign_email_summary.get("envios_respondidos") or 0),
+            "fallidos": int(sum(int(item.get("envios_fallidos") or 0) for item in campaign_email_items)),
+            "rebotes_temporales": None,
+            "rebotes_permanentes": None,
+            "bajas": None,
+            "quejas": None,
+            "datos_pendientes": ["rebotes_temporales", "rebotes_permanentes", "bajas", "quejas"],
+        },
+        "whatsapp": {
+            "intentados": int(whatsapp_campaign_summary.get("mensajes_salientes") or 0),
+            "aceptados": int(whatsapp_campaign_summary.get("mensajes_salientes") or 0),
+            "entregados": int(whatsapp_campaign_summary.get("mensajes_entregados") or 0),
+            "leidos": int(whatsapp_campaign_summary.get("mensajes_leidos") or 0),
+            "respondieron": int(whatsapp_campaign_summary.get("conversaciones_respondidas") or 0),
+            "fallidos": int(whatsapp_campaign_summary.get("mensajes_fallidos") or 0),
+            "no_entregados": int(whatsapp_campaign_summary.get("mensajes_sin_evento_entrega") or 0),
+            "bajas": None,
+            "bloqueados": None,
+            "datos_pendientes": ["bajas", "bloqueados"],
+        },
+        "llamada": {
+            "intentados": int(call_summary.get("envios_totales") or 0),
+            "aceptados": int(call_summary.get("envios_enviados") or 0),
+            "realizadas": int(call_summary.get("envios_entregados") or 0),
+            "respondieron": int(call_summary.get("envios_respondidos") or 0),
+            "fallidos": int(sum(int(item.get("envios_fallidos") or 0) for item in campaign_call_items)),
+            "datos_pendientes": [],
+        },
+    }
+
     return {
         "ok": True,
         "filters": {
@@ -38301,6 +38342,7 @@ async def prospeccion_metricas_dashboard(
             "items": commercial_items,
             "timeseries": [],
         },
+        "salud_canales": salud_canales,
         "frases_whatsapp": {
             "summary": {
                 "conversaciones_atribuidas": total_conversations,

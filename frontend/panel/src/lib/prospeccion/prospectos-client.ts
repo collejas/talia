@@ -2218,6 +2218,43 @@ export type ProspeccionMetricasFrasesTimeseriesItem = {
   monto_estimado_total: number
 }
 
+export type ProspeccionSaludCanales = {
+  correo: {
+    intentados: number
+    aceptados: number
+    entregados: number
+    abiertos: number
+    clics: number
+    respondieron: number
+    fallidos: number
+    rebotes_temporales: number | null
+    rebotes_permanentes: number | null
+    bajas: number | null
+    quejas: number | null
+    datos_pendientes: string[]
+  }
+  whatsapp: {
+    intentados: number
+    aceptados: number
+    entregados: number
+    leidos: number
+    respondieron: number
+    fallidos: number
+    no_entregados: number
+    bajas: number | null
+    bloqueados: number | null
+    datos_pendientes: string[]
+  }
+  llamada: {
+    intentados: number
+    aceptados: number
+    realizadas: number
+    respondieron: number
+    fallidos: number
+    datos_pendientes: string[]
+  }
+}
+
 export type ProspeccionMetricasResponse = {
   ok: boolean
   filters: {
@@ -2253,6 +2290,7 @@ export type ProspeccionMetricasResponse = {
     items: ProspeccionResultadoComercialWhatsAppItem[]
     timeseries: Array<Record<string, unknown>>
   }
+  salud_canales?: ProspeccionSaludCanales
 }
 
 export type LandingCtaVariantSummary = {

@@ -35,6 +35,15 @@ Resultados → Canal → Campaña → Contenido → Lista → Envío → Destina
 
 Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no contacto y navegación al envío concreto. La implementación debe comenzar por el contrato backend y después adaptar la UI.
 
+### Primera implementación F5
+
+- El endpoint de métricas ahora devuelve `salud_canales` para Correo, WhatsApp y Voz.
+- Se reutilizan las métricas ya disponibles de aceptación, entrega, lectura, respuesta y fallos.
+- La vista `Resultados` muestra tarjetas separadas para resultados de Correo, WhatsApp y Voz.
+- Las métricas aún no disponibles se muestran como pendientes; no se sustituyen con estimaciones.
+- Los nombres de proveedores no se muestran en la interfaz.
+- Rebotes temporales, rebotes permanentes, bajas, quejas y bloqueos quedan pendientes de conectar al contrato de eventos correspondiente.
+
 ## 2026-09-22 — F5: Resumen general y salud de canales documentados
 
 ### Estado
