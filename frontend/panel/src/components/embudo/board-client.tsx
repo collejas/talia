@@ -1973,7 +1973,7 @@ export function EmbudoBoardClient({
             <SheetTitle>Agendar cita</SheetTitle>
             <SheetDescription>
               {scheduleContext
-                ? `La cita es opcional. Si no habrá demo, puedes avanzar “${scheduleContext.card.titulo}” a “${scheduleContext.destinationStage.nombre}” sin llenar fecha.`
+                ? `La cita es opcional. Si no habrá cita, puedes avanzar “${scheduleContext.card.titulo}” a “${scheduleContext.destinationStage.nombre}” sin llenar fecha.`
                 : "La cita es opcional."}
             </SheetDescription>
         </SheetHeader>

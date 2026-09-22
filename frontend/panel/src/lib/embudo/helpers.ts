@@ -381,7 +381,11 @@ export function adaptStage(stage: PipelineBoardStage, metadatos: Record<string, 
       Array.isArray(stage.filter_etapa_ids) && stage.filter_etapa_ids.length
         ? Array.from(new Set(stage.filter_etapa_ids.filter((value) => typeof value === "string" && value.trim())))
         : [stage.id],
-    nombre: stage.codigo === "demo" ? "Cita agendada" : stage.nombre,
+    nombre:
+      typeof stage.codigo === "string" &&
+      (stage.codigo.trim().toLowerCase() === "demo" || stage.codigo.trim().toLowerCase().endsWith("_demo"))
+        ? "Cita agendada"
+        : stage.nombre,
     codigo: stage.codigo,
     categoria: stage.categoria,
     orden: typeof stage.orden === "number" ? stage.orden : Number.MAX_SAFE_INTEGER,

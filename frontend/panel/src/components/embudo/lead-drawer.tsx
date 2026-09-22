@@ -3324,8 +3324,20 @@ export function LeadDrawer({
       }
       default: {
         const value = typeof rawValue === "string" ? rawValue : "";
+        if (field.type === "datetime") {
+          return (
+            <DateTimeCalendarPicker
+              id={baseId}
+              label={`${field.label}${field.required ? " *" : ""}`}
+              value={toDateTimeLocalInput(value)}
+              onChange={(nextValue) => handleStageFieldChange(stageCode, field, nextValue)}
+              disabled={disabled}
+              description={field.description}
+            />
+          );
+        }
         const inputType = resolveInputType(field.type);
-        const displayValue = field.type === "datetime" ? toDateTimeLocalInput(value) : value;
+        const displayValue = value;
         return (
           <div className="grid gap-2">
             <label className="text-xs font-medium text-muted-foreground" htmlFor={baseId}>
@@ -3342,8 +3354,7 @@ export function LeadDrawer({
               placeholder={field.placeholder}
               disabled={disabled}
               onChange={(event) => {
-                const nextValue = field.type === "datetime" ? event.target.value : event.target.value;
-                handleStageFieldChange(stageCode, field, nextValue);
+                handleStageFieldChange(stageCode, field, event.target.value);
               }}
             />
             {field.description ? (
