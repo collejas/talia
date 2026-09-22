@@ -1075,17 +1075,6 @@ export function ListasParaContactarClient() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lista-envios-generales">Contactos anteriores</Label>
-                    <Select value={form.conEnvio || "any"} onValueChange={(value) => setForm((prev) => ({ ...prev, conEnvio: value === "any" ? "" : value }))}>
-                      <SelectTrigger id="lista-envios-generales"><SelectValue placeholder="Cualquier historial" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="any">Cualquier historial</SelectItem>
-                        <SelectItem value="true">Ya fueron contactados</SelectItem>
-                        <SelectItem value="false">Nunca fueron contactados</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
                     <Label>Canales con historial</Label>
                     <div className="flex flex-wrap gap-3 rounded-md border p-3 text-sm">
                       {(["correo", "whatsapp", "llamada"] as const).map((channel) => (
