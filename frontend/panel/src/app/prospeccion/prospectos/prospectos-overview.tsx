@@ -1,6 +1,6 @@
 import type { ComponentType } from "react"
 import Link from "next/link"
-import { IconAlertTriangle, IconLoader, IconRefresh } from "@tabler/icons-react"
+import { IconAlertTriangle, IconCalendar, IconLoader, IconRefresh } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -301,11 +301,13 @@ function FilterSelect({
   value,
   onChange,
   options,
+  allLabel = "Todos",
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   options: Array<[string, string]>
+  allLabel?: string
 }) {
   return (
     <div className="space-y-1">
@@ -315,12 +317,75 @@ function FilterSelect({
           <SelectValue placeholder="Todos los estados" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="all">{allLabel}</SelectItem>
           {options.map(([optionValue, optionLabel]) => (
             <SelectItem key={optionValue} value={optionValue}>{optionLabel}</SelectItem>
           ))}
         </SelectContent>
       </Select>
+    </div>
+  )
+}
+
+type ProspectosClassificationFiltersProps = {
+  emailDomainRelation: string
+  minRating: string
+  estratoGroup: string
+  dateOption: string
+  customDateFrom: string
+  customDateTo: string
+  onEmailDomainRelationChange: (value: string) => void
+  onMinRatingChange: (value: string) => void
+  onEstratoGroupChange: (value: string) => void
+  onDateOptionChange: (value: string) => void
+  onCustomDateChange: (bound: "from" | "to", value: string) => void
+}
+
+export function ProspectosClassificationFilters({
+  emailDomainRelation,
+  minRating,
+  estratoGroup,
+  dateOption,
+  customDateFrom,
+  customDateTo,
+  onEmailDomainRelationChange,
+  onMinRatingChange,
+  onEstratoGroupChange,
+  onDateOptionChange,
+  onCustomDateChange,
+}: ProspectosClassificationFiltersProps) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <FilterSelect label="Dominio correo/sitio" value={emailDomainRelation} onChange={onEmailDomainRelationChange} options={[
+        ["same_as_website", "Igual al sitio web"], ["different_from_website", "Diferente al sitio web"],
+        ["no_website", "Sin sitio web"], ["no_email", "Sin correo"],
+      ]} />
+      <FilterSelect label="Calificación de Google" value={minRating} onChange={onMinRatingChange} options={[["3", "3+"], ["4", "4+"], ["4.5", "4.5+"]]} />
+      <FilterSelect label="Tamaño de empresa" value={estratoGroup} onChange={onEstratoGroupChange} options={[
+        ["micro", "Micro (0-10)"], ["pequena", "Pequeña (11-50)"], ["mediana", "Mediana (51-250)"], ["grande", "Grande (250+)"],
+      ]} allLabel="Todos los tamaños" />
+      <div className="space-y-1">
+        <Label className="flex items-center gap-1"><IconCalendar className="size-3" />Fecha</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={dateOption || "all"} onValueChange={onDateOptionChange}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Todas" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="today">Hoy</SelectItem>
+              <SelectItem value="week">Esta semana</SelectItem>
+              <SelectItem value="month">Este mes</SelectItem>
+              <SelectItem value="last_30">Últimos 30 días</SelectItem>
+              <SelectItem value="custom">Personalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          {dateOption === "custom" ? (
+            <div className="flex flex-wrap gap-2">
+              <Input type="date" value={customDateFrom} onChange={(event) => onCustomDateChange("from", event.target.value)} className="w-[150px]" placeholder="Desde" />
+              <Input type="date" value={customDateTo} onChange={(event) => onCustomDateChange("to", event.target.value)} className="w-[150px]" placeholder="Hasta" />
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }

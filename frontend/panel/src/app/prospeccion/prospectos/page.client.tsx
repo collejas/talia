@@ -33,6 +33,7 @@ import {
   ProspectosSourceVerification,
   ProspectosCampaignFilters,
   ProspectosContactCounts,
+  ProspectosClassificationFilters,
   type ProspectosFlowStep,
 } from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
@@ -3888,132 +3889,22 @@ function ProspectosView() {
               }}
               onCarrierChange={(value) => setFilters((prev) => ({ ...prev, carrierType: value === "all" ? "" : value as "mobile" | "landline" | "voip" }))}
             />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1">
-              <Label>Dominio correo/sitio</Label>
-              <Select
-                value={filters.emailDomainRelation || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    emailDomainRelation: value === "all" ? "" : (value as EmailDomainRelationFilter),
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="same_as_website">Igual al sitio web</SelectItem>
-                  <SelectItem value="different_from_website">Diferente al sitio web</SelectItem>
-                  <SelectItem value="no_website">Sin sitio web</SelectItem>
-                  <SelectItem value="no_email">Sin correo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Rating</Label>
-              <Select
-                value={filters.minRating || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    minRating: value === "all" ? "" : (value as MinRatingFilter),
-                  }))
-                }
-              >
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="3">3+</SelectItem>
-                  <SelectItem value="4">4+</SelectItem>
-                  <SelectItem value="4.5">4.5+</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Tamaño</Label>
-              <Select
-                value={filters.estratoGroup || "all"}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    estratoGroup: value === "all" ? "" : (value as EstratoGroupFilter),
-                  }))
-                }
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Todos los tamaños" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los tamaños</SelectItem>
-                  <SelectItem value="micro">Micro (0-10)</SelectItem>
-                  <SelectItem value="pequena">Pequeña (11-50)</SelectItem>
-                  <SelectItem value="mediana">Mediana (51-250)</SelectItem>
-                  <SelectItem value="grande">Grande (250+)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="flex items-center gap-1">
-                <IconCalendar className="size-3" />
-                Fecha
-              </Label>
-              <div className="flex flex-wrap items-center gap-2">
-                <Select
-                  value={filters.dateOption || "all"}
-                  onValueChange={(value) =>
-                    setFilters((prev) => {
-                      const nextOption = value === "all" ? "" : (value as DateRangeOption)
-                      return {
-                        ...prev,
-                        dateOption: nextOption,
-                        customDateFrom: nextOption === "custom" ? prev.customDateFrom : "",
-                        customDateTo: nextOption === "custom" ? prev.customDateTo : "",
-                      }
-                    })
-                  }
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Todas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {DATE_RANGE_SELECT_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {filters.dateOption === "custom" && (
-                  <div className="flex flex-wrap gap-2">
-                    <Input
-                      type="date"
-                      value={filters.customDateFrom}
-                      onChange={(event) =>
-                        setFilters((prev) => ({ ...prev, customDateFrom: event.target.value }))
-                      }
-                      className="w-[150px]"
-                      placeholder="Desde"
-                    />
-                    <Input
-                      type="date"
-                      value={filters.customDateTo}
-                      onChange={(event) =>
-                        setFilters((prev) => ({ ...prev, customDateTo: event.target.value }))
-                      }
-                      className="w-[150px]"
-                      placeholder="Hasta"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-            </div>
+            <ProspectosClassificationFilters
+              emailDomainRelation={filters.emailDomainRelation}
+              minRating={filters.minRating}
+              estratoGroup={filters.estratoGroup}
+              dateOption={filters.dateOption}
+              customDateFrom={filters.customDateFrom}
+              customDateTo={filters.customDateTo}
+              onEmailDomainRelationChange={(value) => setFilters((prev) => ({ ...prev, emailDomainRelation: value === "all" ? "" : value as EmailDomainRelationFilter }))}
+              onMinRatingChange={(value) => setFilters((prev) => ({ ...prev, minRating: value === "all" ? "" : value as MinRatingFilter }))}
+              onEstratoGroupChange={(value) => setFilters((prev) => ({ ...prev, estratoGroup: value === "all" ? "" : value as EstratoGroupFilter }))}
+              onDateOptionChange={(value) => setFilters((prev) => {
+                const nextOption = value === "all" ? "" : value as DateRangeOption
+                return { ...prev, dateOption: nextOption, customDateFrom: nextOption === "custom" ? prev.customDateFrom : "", customDateTo: nextOption === "custom" ? prev.customDateTo : "" }
+              })}
+              onCustomDateChange={(bound, value) => setFilters((prev) => ({ ...prev, [bound === "from" ? "customDateFrom" : "customDateTo"]: value }))}
+            />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
               <Label>Consulta</Label>
