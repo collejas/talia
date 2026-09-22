@@ -4,6 +4,37 @@ Este archivo registra decisiones, avances, validaciones, pendientes y bloqueos d
 
 Plan principal: [PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md](./PLAN_ARQUITECTURA_Y_REFACTOR_PROSPECCION_MARKETING.md)
 
+## 2026-09-22 — F5: auditoría del estado actual de resultados
+
+### Estado
+
+Baseline técnico completado. Pendiente implementar el contrato completo de Resultados.
+
+### Hallazgos
+
+- `/prospeccion/metricas` ya presenta un Resumen general, filtros por periodo, comparación por canal, campañas y exportaciones.
+- `prospeccion_contacto_envio` ya conserva estados por destinatario y fechas de aceptación, entrega y lectura.
+- `prospeccion_contacto_batch` ya conserva campaña, lista, cantidad, programación, estado y filtros utilizados.
+- El subsistema actual de correo ya conserva entregas, aperturas, clics, rebotes, quejas y errores en sus estructuras de entrega y eventos.
+- Las métricas existentes todavía no exponen todo ese detalle en la experiencia visible de Resultados.
+- La relación del envío de prospección con el registro de correo se puede resolver mediante el batch de origen; debe agregarse al servicio de métricas sin duplicar destinatarios.
+- La consulta de métricas debe usar conteos distintos por destinatario/mensaje para evitar multiplicaciones al unir envíos con eventos.
+
+### Decisión de implementación
+
+- No crear una tabla nueva ni modificar los workers de envío para esta parte de F5.
+- Construir una agregación de resultados que reutilice las tablas, eventos y contratos existentes.
+- Mantener nombres de proveedores únicamente en backend, soporte y auditoría; la UI mostrará Correo, WhatsApp y Voz con etiquetas humanas.
+- Presentar primero los resultados comerciales y después la salud/entregabilidad del canal.
+
+### Siguiente entrega F5
+
+```text
+Resultados → Canal → Campaña → Contenido → Lista → Envío → Destinatarios
+```
+
+Debe incluir tarjetas de entregabilidad por canal, detalle de motivos de no contacto y navegación al envío concreto. La implementación debe comenzar por el contrato backend y después adaptar la UI.
+
 ## 2026-09-22 — F5: Resumen general y salud de canales documentados
 
 ### Estado
