@@ -472,10 +472,8 @@ ON CONFLICT (codigo) DO UPDATE SET
 INSERT INTO public.tenant_default_role_permissions (rol_codigo, permiso_codigo)
 VALUES
     ('owner', 'sales.manage'), ('owner', 'sales.manage_all'),
-    ('admin', 'sales.manage'), ('admin', 'sales.manage_all'),
     ('admin_operativo', 'sales.manage'), ('admin_operativo', 'sales.manage_all'),
     ('gerente_comercial', 'sales.manage'), ('gerente_comercial', 'sales.manage_team'),
-    ('supervisor', 'sales.manage'), ('supervisor', 'sales.manage_team'),
     ('coordinador', 'sales.manage'), ('coordinador', 'sales.manage_team'),
     ('agente', 'sales.manage'),
     ('finanzas', 'sales.manage'), ('finanzas', 'sales.manage_all')
@@ -491,7 +489,7 @@ ON CONFLICT (organizacion_id, codigo) DO NOTHING;
 WITH role_scope AS (
     SELECT 'sales.manage'::text AS codigo, unnest(ARRAY['owner','admin','admin_operativo','gerente_comercial','supervisor','coordinador','agente','finanzas']) AS role_name
     UNION ALL SELECT 'sales.manage_team', unnest(ARRAY['gerente_comercial','supervisor','coordinador'])
-    UNION ALL SELECT 'sales.manage_all', unnest(ARRAY['owner','admin','admin_operativo','finanzas'])
+    UNION ALL SELECT 'sales.manage_all', unnest(ARRAY['owner','admin_operativo','finanzas'])
 )
 INSERT INTO public.roles_permisos (organizacion_id, rol_id, permiso_id)
 SELECT r.organizacion_id, r.id, p.id

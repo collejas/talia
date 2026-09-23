@@ -25,7 +25,9 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 - El atajo existente ahora crea cliente, venta, partidas y cuenta por cobrar antes de guardar el pago, dentro de la misma operación SQL.
 - `/ventas` conserva compatibilidad con `ventas.estatus`; la migración a estados separados en la presentación y el detalle de cliente queda pendiente junto con documentos de cobro.
 - **Validación local:** compilación Python y `git diff --check` pasaron. No se ejecutaron pruebas.
-- **Pendiente de activación:** aplicar la migración al Supabase de destino y desplegar backend/panel. El MCP de Supabase requiere reconexión, así que no fue posible inspeccionar ni modificar la base remota.
+- **Supabase remoto (2026-09-23):** migración aplicada como `20260923151522_sales_formalization_accounts_receivable`. El primer intento fue revertido por códigos de roles inexistentes (`admin`, `supervisor`); se ajustó el catálogo predeterminado a los roles disponibles antes de reintentar.
+- **Verificación remota:** existe `cuentas_por_cobrar`, `pagos.cuenta_por_cobrar_id` quedó obligatorio, se generaron 4 cuentas para las ventas existentes y los 3 RPC quedaron ejecutables por `service_role` pero no por `authenticated`.
+- **Pendiente de activación:** desplegar backend y panel. Aplicar la migración por sí sola no activa aún el flujo para los usuarios.
 
 ### Sección de Ventas y reporte comercial — implementado en el repositorio
 
