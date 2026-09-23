@@ -1109,6 +1109,16 @@ export function LeadDrawer({
     permissionContext.es_owner ||
     normalizedPerms.includes("pipeline.reassign.team");
   const canReassign = canReassignAny || canReassignTeam;
+  const isAdminOrOwner =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedRoles.some((role) => role === "admin" || role === "owner");
+  const canDeleteOpportunity =
+    isAdminOrOwner ||
+    (normalizedPerms.includes("pipeline.opportunities.delete") &&
+      Boolean(permissionContext.usuario_id) &&
+      (card?.propietarioId === permissionContext.usuario_id ||
+        card?.asignadoId === permissionContext.usuario_id));
   const canCreateSupervisorNotes =
     permissionContext.es_admin ||
     permissionContext.es_owner ||
@@ -4216,7 +4226,7 @@ export function LeadDrawer({
                 >
                   Cancelar
                 </Button>
-                {!isCreateMode && card && onDelete ? (
+                {!isCreateMode && card && onDelete && canDeleteOpportunity ? (
                   <Button
                     type="button"
                     variant="destructive"

@@ -6421,21 +6421,25 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         oportunidad_id: UUID,
-    ) -> None:
-        params = {
-            "id": f"eq.{oportunidad_id}",
-            "organizacion_id": f"eq.{organizacion_id}",
-        }
-        resp = await self._request(
-            "DELETE",
-            "/rest/v1/oportunidades",
-            params=params,
-            prefer="return=representation",
+    ) -> list[dict[str, Any]]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_delete_opportunity_with_notes",
+            organizacion_id=organizacion_id,
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_oportunidad_id": str(oportunidad_id),
+            },
         )
         if resp.status_code >= 400:
-            raise CRMRepositoryError(
-                f"Supabase respondió error {resp.status_code} al eliminar oportunidad: {resp.text}"
-            )
+            raise CRMRepositoryError("crm_delete_opportunity_failed")
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise CRMRepositoryError("crm_delete_opportunity_invalid_response") from exc
+        if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
+            raise CRMRepositoryError("crm_delete_opportunity_invalid_response")
+        return data
 
     async def register_webchat_message(
         self,

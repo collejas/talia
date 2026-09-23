@@ -6912,6 +6912,42 @@ async def _require_delete_scope(
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="owner_scope_violation")
 
 
+async def _require_opportunity_delete_scope(
+    *,
+    repo: CRMRepository,
+    opportunity: Mapping[str, Any],
+) -> None:
+    permission_context = await _get_permission_context_or_raise(repo)
+    roles = permission_context.get("roles")
+    normalized_roles = (
+        {str(role or "").strip().lower() for role in roles}
+        if isinstance(roles, list)
+        else set()
+    )
+    if (
+        _coerce_bool(permission_context.get("es_admin")) is True
+        or _coerce_bool(permission_context.get("es_owner")) is True
+        or bool(normalized_roles & {"admin", "owner"})
+    ):
+        return
+
+    permission_codes = _permission_context_permission_codes(permission_context)
+    if "pipeline.opportunities.delete" not in permission_codes:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+    current_user_id = _safe_uuid(permission_context.get("usuario_id"))
+    opportunity_user_ids = {
+        user_id
+        for user_id in (
+            _safe_uuid(opportunity.get("propietario_usuario_id")),
+            _safe_uuid(opportunity.get("asignado_a_usuario_id")),
+        )
+        if user_id is not None
+    }
+    if current_user_id is None or current_user_id not in opportunity_user_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="opportunity_delete_scope_violation")
+
+
 async def require_organizacion_id(
     x_organizacion_id: Annotated[str, Header(alias="X-Organizacion-Id")],
     request: Request,
@@ -18353,6 +18389,7 @@ class CRMPipelineBoardCard(BaseModel):
     probabilidad: float | None = None
     proyecto_nombre: str | None = None
     proyecto_necesidades: str | None = None
+    propietario_id: UUID | None = None
     asignado_id: UUID | None = None
     asignado_nombre: str | None = None
     prioridad: float | None = None
@@ -20345,10 +20382,19 @@ async def pipeline_delete_opportunity(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("pipeline.view")),
+    _: str = Depends(require_permission("pipeline.opportunities.delete")),
     oportunidad_id: UUID,
 ) -> Response:
-    await _require_delete_scope(repo=repo, owner_user_id=None)
+    try:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="opportunity_lookup_failed") from exc
+    if not opportunity:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="oportunidad_not_found")
+    await _require_opportunity_delete_scope(repo=repo, opportunity=opportunity)
 
     try:
         bookings = await repo.list_calendar_bookings_by_opportunity(
@@ -20375,12 +20421,34 @@ async def pipeline_delete_opportunity(
             ) from exc
 
     try:
-        await repo.delete_opportunity(
+        note_attachments = await repo.delete_opportunity(
             organizacion_id=organizacion_id,
             oportunidad_id=oportunidad_id,
         )
     except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail="opportunity_delete_failed") from exc
+
+    attachment_cleanup_failures = 0
+    attachments_to_clean = note_attachments if isinstance(note_attachments, list) else []
+    for attachment in attachments_to_clean:
+        bucket = str(attachment.get("storage_bucket") or "").strip()
+        object_path = str(attachment.get("storage_path") or "").strip()
+        if not bucket or not object_path:
+            attachment_cleanup_failures += 1
+            continue
+        try:
+            await repo.delete_storage_object(bucket=bucket, object_path=object_path)
+        except CRMRepositoryError:
+            attachment_cleanup_failures += 1
+    if attachment_cleanup_failures:
+        logger.warning(
+            "crm.opportunity_note_attachment_cleanup_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "oportunidad_id": str(oportunidad_id),
+                "failed_count": attachment_cleanup_failures,
+            },
+        )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -53196,6 +53264,7 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         probabilidad=row.get("probabilidad"),
         proyecto_nombre=proyecto_nombre,
         proyecto_necesidades=proyecto_necesidades,
+        propietario_id=_safe_uuid(row.get("propietario_usuario_id")),
         asignado_id=_safe_uuid(row.get("asignado_a_usuario_id")),
         asignado_nombre=asignado_nombre,
         prioridad=float(prioridad) if isinstance(prioridad, (int, float)) else None,

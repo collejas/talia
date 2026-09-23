@@ -187,6 +187,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     probabilidad: card.probabilidad,
     proyectoNombre: card.proyecto_nombre ?? resolvedTitulo ?? null,
     proyectoNecesidades: card.proyecto_necesidades ?? null,
+    propietarioId: card.propietario_id ?? null,
     asignadoId: card.asignado_id,
     asignadoNombre: card.asignado_nombre,
     prioridad: card.prioridad ?? 0,

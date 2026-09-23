@@ -5,11 +5,9 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Iterable
 from uuid import UUID
 
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 
@@ -21,18 +19,6 @@ MATRIX_SECTION_PREFIX = "## permisos por rol"
 class RolePermissionPlan:
     role_name: str
     permissions: tuple[str, ...]
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
-def _resolve_path(value: str) -> Path:
-    path = Path(value)
-    if path.is_absolute():
-        return path
-    root = _repo_root()
-    return (root / path).resolve()
 
 
 def _normalize_permission(raw: str) -> str | None:
@@ -182,53 +168,3 @@ async def sync_role_permissions(
             removed += 1
 
     return {"added": added, "removed": removed}
-
-
-async def maybe_sync_role_permissions_on_start() -> None:
-    log = get_logger("app.role_permissions_sync")
-    if not settings.role_permissions_sync_on_start:
-        return
-    if not settings.supabase_url or not settings.supabase_service_role:
-        log.warning("role_perms.sync_skipped", extra={"reason": "supabase_not_configured"})
-        return
-
-    matrix_path = _resolve_path(settings.role_permissions_matrix_path)
-    if not matrix_path.exists():
-        log.warning("role_perms.sync_skipped", extra={"reason": "matrix_missing", "path": str(matrix_path)})
-        return
-
-    state_path = _resolve_path(settings.role_permissions_sync_state_path)
-    content = matrix_path.read_text(encoding="utf-8")
-    matrix_hash = compute_matrix_hash(content)
-    if state_path.exists():
-        stored = state_path.read_text(encoding="utf-8").strip()
-        if stored == matrix_hash:
-            log.info("role_perms.sync_skipped", extra={"reason": "hash_unchanged"})
-            return
-
-    try:
-        plans = parse_role_permissions_matrix(content)
-    except ValueError as exc:
-        log.warning("role_perms.sync_failed", extra={"error": str(exc)})
-        return
-
-    org_id = settings.webchat_default_organizacion_id or settings.whatsapp_default_organizacion_id
-    if not org_id:
-        log.warning("role_perms.sync_skipped", extra={"reason": "organizacion_id_missing"})
-        return
-    try:
-        summary = await sync_role_permissions(
-            organizacion_id=UUID(str(org_id)),
-            plans=plans,
-            prune=settings.role_permissions_sync_prune,
-            dry_run=False,
-        )
-    except PlatformRepositoryError as exc:
-        log.warning("role_perms.sync_failed", extra={"error": str(exc)})
-        return
-
-    state_path.write_text(matrix_hash, encoding="utf-8")
-    log.info(
-        "role_perms.sync_completed",
-        extra={"added": summary["added"], "removed": summary["removed"]},
-    )

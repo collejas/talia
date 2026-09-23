@@ -9,7 +9,26 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 - `Completado`: implementado y verificado según la evidencia registrada.
 - `Por validar`: el plan documenta la implementación, pero falta confirmar el flujo de extremo a extremo.
 
+## 2026-09-23
+
+### Sección independiente de Ventas — decisión de diseño
+
+- Se propone agregar una sección de navegación `Ventas`, separada de `Clientes`.
+- `Clientes` conserva su función actual como maestro de clientes y su detalle comercial.
+- `Ventas` concentra el seguimiento financiero y comercial: ventas formalizadas, pagos confirmados, pagos parciales, saldo pendiente y ventas liquidadas.
+- La vista de Ventas debe incluir indicadores, tendencias por periodo, tabla de operaciones y filtros por fechas, vendedor, estado de venta, estado de pago y moneda.
+- Cada venta debe permitir consultar sus pagos y abrir el cliente relacionado.
+- El alcance de datos será jerárquico: vendedor ve sus ventas; supervisor consulta a su equipo; nivel superior puede consultar la organización, sujeto a permisos del backend.
+- Para preservar la atribución histórica, se propone guardar en `ventas` el vendedor responsable al formalizar la venta, en una columna explícita con relación a `usuarios`. La vista de clientes puede seguir mostrando el propietario actual.
+- Estado: **decisión de producto documentada; implementación pendiente**.
+
 ## 2026-09-22
+
+### Flujo de pago parcial y alta de cliente — validado por el usuario
+
+- El usuario confirmó que probó el flujo y que funciona: el pago parcial confirmado crea o activa al cliente.
+- Se puede cerrar la validación del caso de primera compra con pago parcial.
+- Pendiente de confirmar por separado: liquidación del saldo y compra recurrente conservando el historial del cliente.
 
 ### Revisión del estado del plan — documentado
 

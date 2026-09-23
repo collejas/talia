@@ -45,7 +45,6 @@ from app.services.opportunity_followup_jobs import opportunity_followup_state_ru
 from app.services.sales_notification_jobs import sales_notification_jobs_runner
 from app.services.meta_delivery_reconciliation_jobs import meta_delivery_reconciliation_runner
 from app.services.message_billing_alert_jobs import message_billing_alert_runner
-from app.services.role_permissions_sync import maybe_sync_role_permissions_on_start
 from app.services.webchat_followups import (
     closure_rescue_runner as webchat_closure_rescue_runner,
 )
@@ -75,7 +74,6 @@ async def _shutdown_with_timeout(
 async def app_lifespan(_: FastAPI):
     """Administra recursos de inicio/cierre sin usar on_event."""
 
-    await maybe_sync_role_permissions_on_start()
     if settings.contact_sender_in_api:
         await contact_sender.start()
     if settings.postmark_worker_enabled and settings.postmark_worker_in_api:

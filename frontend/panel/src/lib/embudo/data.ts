@@ -67,6 +67,7 @@ export type EmbudoCard = {
   probabilidad: number | null;
   proyectoNombre: string | null;
   proyectoNecesidades: string | null;
+  propietarioId?: string | null;
   asignadoId: string | null;
   asignadoNombre: string | null;
   prioridad: number;
@@ -157,6 +158,7 @@ export type PipelineBoardCard = {
   probabilidad: number | null;
   proyecto_nombre: string | null;
   proyecto_necesidades: string | null;
+  propietario_id?: string | null;
   asignado_id: string | null;
   asignado_nombre: string | null;
   prioridad: number | null;

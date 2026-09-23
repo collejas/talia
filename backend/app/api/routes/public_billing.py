@@ -21,11 +21,8 @@ from app.services.stripe_billing import (
 from app.services.supabase_admin import SupabaseAdminError, is_email_registered
 
 from .admin import (
-    _bootstrap_default_org_structure,
-    _bootstrap_tenant_access_structure,
     _delete_created_tenant_best_effort,
     _ensure_tenant_calendar_bootstrap,
-    _ensure_tenant_pipeline_bootstrap,
     _ensure_webchat_alias_is_available,
     get_platform_repo,
 )
@@ -317,8 +314,6 @@ async def create_public_billing_checkout(
                 current_config=current_config or {},
             )
             await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
-            await _ensure_tenant_pipeline_bootstrap(repo=repo, organizacion_id=tenant_id)
-            await _bootstrap_tenant_access_structure(repo=repo, organizacion_id=tenant_id)
             await repo.create_tenant_billing_account(
                 payload={
                     "tenant_id": str(tenant_id),
@@ -344,7 +339,6 @@ async def create_public_billing_checkout(
                         "activo": True,
                     }
                 )
-            await _bootstrap_default_org_structure(repo=repo, organizacion_id=tenant_id)
             customer = await create_stripe_customer(
                 name=payload.nombre,
                 email=payload.correo_contacto_principal,

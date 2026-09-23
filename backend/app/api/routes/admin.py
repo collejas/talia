@@ -18,7 +18,6 @@ from app.repositories.crm import CRMRepository, CRMRepositoryError
 from app.repositories.platform_admin import PlatformRepository, PlatformRepositoryError
 from app.services import channel_routing, tenant_runtime
 from app.services.role_permissions_sync import (
-    RolePermissionPlan,
     compute_matrix_hash,
     parse_role_permissions_matrix,
     sync_role_permissions,
@@ -1811,303 +1810,6 @@ async def _resolve_active_stripe_price_for_plan(
     return stripe_prices[0]
 
 
-CRITICAL_OWNER_PERMISSION_CODES = (
-    "ver_panel",
-    "settings.view",
-    "settings.manage",
-    "user.manage",
-    "role.manage",
-)
-
-
-TENANT_BASE_PERMISSION_CODES = (
-    "ver_panel",
-    "ver_inbox",
-    "conv.read",
-    "conv.write",
-    "conv.assign",
-    "contacts.read",
-    "contacts.write",
-    "contacts.delete",
-    "contacts.view_sensitive_unowned",
-    "accounts.view_sensitive_unowned",
-    "contacts.export_csv",
-    "messages.read",
-    "messages.write",
-    "calls.read",
-    "calls.write",
-    "reports.view",
-    "role.manage",
-    "user.manage",
-    "roles.write",
-    "usuarios.write",
-    "settings.view",
-    "settings.manage",
-    "leads.view",
-    "pipeline.view",
-    "agenda.view",
-    "agenda.manage",
-    "propuesta.view",
-    "clientes.view",
-    "propiedades.view",
-    "activities.view",
-    "tickets.view",
-    "campaigns.view",
-    "notes.view",
-    "files.view",
-    "audit.view",
-    "busquedas.view",
-    "busquedas.run",
-    "busquedas.delete",
-    "prospectos.create",
-    # Compatibilidad con rutas legacy en middleware.
-    "ver_busquedas_google",
-    "ver_busquedas_inegi",
-    "ejecutar_busquedas",
-)
-
-FALLBACK_TENANT_DEPARTMENT_NAMES = (
-    "Administración",
-    "Comercial",
-    "Marketing",
-    "Operaciones",
-    "Soporte",
-    "Finanzas",
-)
-
-FALLBACK_TENANT_POSITION_NAMES = (
-    "Administrador General",
-    "Gerente Comercial",
-    "Supervisor Comercial",
-    "Ejecutivo de Ventas",
-    "Analista de Marketing",
-    "Especialista de Soporte",
-    "Coordinador Operativo",
-    "Auxiliar Administrativo",
-)
-
-PIPELINE_STAGE_SEED: tuple[dict[str, Any], ...] = (
-    {
-        "codigo": "captado",
-        "nombre": "Captado",
-        "orden": 10,
-        "probabilidad": 10.0,
-        "categoria": "abierta",
-        "metadata": {"seed": "default_stage", "color": "slate", "legacy_codigo": "captado"},
-    },
-    {
-        "codigo": "precalificado",
-        "nombre": "Precalificado",
-        "orden": 20,
-        "probabilidad": 25.0,
-        "categoria": "abierta",
-        "metadata": {
-            "seed": "default_stage",
-            "color": "sky",
-            "legacy_codigo": "precalificado",
-        },
-    },
-    {
-        "codigo": "demo",
-        "nombre": "Cita agendada",
-        "orden": 30,
-        "probabilidad": 45.0,
-        "categoria": "abierta",
-        "metadata": {"seed": "default_stage", "color": "violet", "legacy_codigo": "demo"},
-    },
-    {
-        "codigo": "propuesta",
-        "nombre": "Propuesta",
-        "orden": 40,
-        "probabilidad": 65.0,
-        "categoria": "abierta",
-        "metadata": {"seed": "default_stage", "color": "amber", "legacy_codigo": "propuesta"},
-    },
-    {
-        "codigo": "negociacion",
-        "nombre": "Negociación",
-        "orden": 50,
-        "probabilidad": 80.0,
-        "categoria": "abierta",
-        "metadata": {"seed": "default_stage", "color": "orange", "legacy_codigo": "negociacion"},
-    },
-    {
-        "codigo": "cerrado_ganado",
-        "nombre": "Cerrado · Ganado",
-        "orden": 60,
-        "probabilidad": 100.0,
-        "categoria": "ganada",
-        "metadata": {
-            "seed": "default_stage",
-            "color": "emerald",
-            "legacy_codigo": "cerrado_ganado",
-        },
-    },
-    {
-        "codigo": "cerrado_perdido",
-        "nombre": "Cerrado · Perdido",
-        "orden": 70,
-        "probabilidad": 0.0,
-        "categoria": "perdida",
-        "metadata": {
-            "seed": "default_stage",
-            "color": "rose",
-            "legacy_codigo": "cerrado_perdido",
-        },
-    },
-)
-
-
-def _normalize_role_name(raw: str) -> str:
-    return raw.split("(", 1)[0].strip()
-
-
-def _default_tenant_role_plans() -> list[RolePermissionPlan]:
-    owner_perms = tuple(dict.fromkeys(TENANT_BASE_PERMISSION_CODES))
-    return [
-        RolePermissionPlan(role_name="owner", permissions=owner_perms),
-        RolePermissionPlan(role_name="admin_operativo", permissions=owner_perms),
-        RolePermissionPlan(
-            role_name="supervisor",
-            permissions=(
-                "ver_panel",
-                "ver_inbox",
-                "conv.read",
-                "conv.write",
-                "conv.assign",
-                "contacts.read",
-                "contacts.write",
-                "contacts.delete",
-                "messages.read",
-                "messages.write",
-                "reports.view",
-                "leads.view",
-                "pipeline.view",
-                "agenda.view",
-                "agenda.manage",
-                "propuesta.view",
-                "clientes.view",
-                "propiedades.view",
-                "campaigns.view",
-                "activities.view",
-                "notes.view",
-                "tickets.view",
-                "busquedas.view",
-                "busquedas.run",
-                "prospectos.create",
-                "ver_busquedas_google",
-                "ver_busquedas_inegi",
-                "ejecutar_busquedas",
-                "settings.view",
-            ),
-        ),
-        RolePermissionPlan(
-            role_name="agente",
-            permissions=(
-                "ver_panel",
-                "ver_inbox",
-                "conv.read",
-                "conv.write",
-                "contacts.read",
-                "contacts.write",
-                "messages.read",
-                "messages.write",
-                "leads.view",
-                "pipeline.view",
-                "agenda.view",
-                "agenda.manage",
-                "propuesta.view",
-                "clientes.view",
-                "propiedades.view",
-            ),
-        ),
-        RolePermissionPlan(
-            role_name="capturista",
-            permissions=(
-                "ver_panel",
-                "contacts.read",
-                "contacts.write",
-                "clientes.view",
-                "agenda.view",
-                "agenda.manage",
-                "pipeline.view",
-            ),
-        ),
-        RolePermissionPlan(
-            role_name="marketing",
-            permissions=(
-                "ver_panel",
-                "busquedas.view",
-                "busquedas.run",
-                "busquedas.delete",
-                "prospectos.create",
-                "campaigns.view",
-                "contacts.read",
-                "messages.read",
-                "reports.view",
-                "ver_busquedas_google",
-                "ver_busquedas_inegi",
-                "ejecutar_busquedas",
-            ),
-        ),
-        RolePermissionPlan(
-            role_name="soporte",
-            permissions=(
-                "ver_panel",
-                "ver_inbox",
-                "conv.read",
-                "conv.write",
-                "messages.read",
-                "messages.write",
-                "tickets.view",
-            ),
-        ),
-        RolePermissionPlan(
-            role_name="auditor",
-            permissions=(
-                "ver_panel",
-                "reports.view",
-                "audit.view",
-                "pipeline.view",
-                "contacts.read",
-                "clientes.view",
-                "conv.read",
-                "messages.read",
-                "files.view",
-            ),
-        ),
-        RolePermissionPlan(
-            role_name="invitado",
-            permissions=("ver_panel", "conv.read", "contacts.read", "messages.read", "clientes.view"),
-        ),
-    ]
-
-
-def _load_tenant_role_plans() -> list[RolePermissionPlan]:
-    blocked = {"super_admin", "platform_admin"}
-    candidates = ["docs/Roles de acceso/Matriz-permisos-v2.md", settings.role_permissions_matrix_path]
-    for candidate in candidates:
-        try:
-            matrix_path = _resolve_matrix_path(candidate)
-            if not matrix_path.exists():
-                continue
-            content = matrix_path.read_text(encoding="utf-8")
-            parsed = parse_role_permissions_matrix(content)
-        except Exception:
-            continue
-        cleaned: list[RolePermissionPlan] = []
-        seen_roles: set[str] = set()
-        for row in parsed:
-            role_name = _normalize_role_name(row.role_name).lower()
-            if not role_name or role_name in blocked or role_name in seen_roles:
-                continue
-            seen_roles.add(role_name)
-            cleaned.append(RolePermissionPlan(role_name=role_name, permissions=row.permissions))
-        if cleaned:
-            return cleaned
-    return _default_tenant_role_plans()
-
-
 async def _ensure_tenant_calendar_bootstrap(
     *,
     repo: PlatformRepository,
@@ -2139,70 +1841,6 @@ async def _ensure_tenant_calendar_bootstrap(
     return merged
 
 
-async def _ensure_tenant_pipeline_bootstrap(
-    *,
-    repo: PlatformRepository,
-    organizacion_id: UUID,
-) -> None:
-    try:
-        stages = await repo.list_pipeline_stages(organizacion_id=organizacion_id)
-    except PlatformRepositoryError as exc:
-        logger.warning(
-            "tenant_bootstrap.pipeline_catalog_fetch_failed",
-            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
-        )
-        stages = []
-
-    existing_codes = {
-        str(row.get("codigo") or "").strip().lower()
-        for row in stages
-        if isinstance(row, dict) and row.get("codigo")
-    }
-    for stage in PIPELINE_STAGE_SEED:
-        code = str(stage["codigo"]).strip().lower()
-        if not code or code in existing_codes:
-            continue
-        try:
-            await repo.create_pipeline_stage(
-                organizacion_id=organizacion_id,
-                codigo=code,
-                nombre=str(stage["nombre"]),
-                orden=int(stage["orden"]),
-                probabilidad=float(stage["probabilidad"]),
-                categoria=str(stage["categoria"]),
-                metadata=dict(stage["metadata"]),
-            )
-            existing_codes.add(code)
-        except PlatformRepositoryError as exc:
-            logger.warning(
-                "tenant_bootstrap.pipeline_seed_failed",
-                extra={
-                    "organizacion_id": str(organizacion_id),
-                    "codigo": code,
-                    "error": str(exc),
-                },
-            )
-
-
-async def _ensure_permissions_exist(
-    *,
-    repo: PlatformRepository,
-    organizacion_id: UUID,
-    permission_codes: tuple[str, ...],
-) -> None:
-    existing = await repo.list_permissions(organizacion_id=organizacion_id)
-    existing_codes = {
-        str(row.get("codigo") or "").strip()
-        for row in existing
-        if isinstance(row, dict) and row.get("codigo")
-    }
-    missing = [code for code in permission_codes if code not in existing_codes]
-    if not missing:
-        return
-    payload = [{"codigo": code, "descripcion": code} for code in missing]
-    await repo.create_permissions(organizacion_id=organizacion_id, permisos=payload)
-
-
 async def _resolve_owner_role_id(
     *,
     repo: PlatformRepository,
@@ -2223,6 +1861,34 @@ async def _resolve_owner_role_id(
         except (TypeError, ValueError):
             continue
     return None
+
+
+async def _ensure_department_exists(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+    nombre: str,
+) -> dict[str, Any]:
+    normalized = nombre.strip().casefold()
+    departments = await repo.list_departments(organizacion_id=organizacion_id)
+    for department in departments:
+        if str(department.get("nombre") or "").strip().casefold() == normalized:
+            return department
+    return await repo.create_department(organizacion_id=organizacion_id, nombre=nombre.strip())
+
+
+async def _ensure_position_exists(
+    *,
+    repo: PlatformRepository,
+    organizacion_id: UUID,
+    nombre: str,
+) -> dict[str, Any]:
+    normalized = nombre.strip().casefold()
+    positions = await repo.list_positions(organizacion_id=organizacion_id)
+    for position in positions:
+        if str(position.get("nombre") or "").strip().casefold() == normalized:
+            return position
+    return await repo.create_position(organizacion_id=organizacion_id, nombre=nombre.strip())
 
 
 async def _ensure_role_exists(
@@ -2275,192 +1941,6 @@ async def _grant_permissions_to_role(
             rol_id=rol_id,
             permiso_id=permiso_id,
         )
-
-
-async def _grant_all_permissions_to_role(
-    *,
-    repo: PlatformRepository,
-    organizacion_id: UUID,
-    rol_id: UUID,
-) -> None:
-    permissions = await repo.list_permissions(organizacion_id=organizacion_id)
-    current = await repo.list_role_permissions(organizacion_id=organizacion_id, rol_id=rol_id)
-    current_perm_ids = {
-        UUID(str(row["permiso_id"]))
-        for row in current
-        if isinstance(row, dict) and row.get("permiso_id")
-    }
-    for row in permissions:
-        if not isinstance(row, dict) or not row.get("id"):
-            continue
-        permiso_id = UUID(str(row["id"]))
-        if permiso_id in current_perm_ids:
-            continue
-        await repo.create_role_permission(
-            organizacion_id=organizacion_id,
-            rol_id=rol_id,
-            permiso_id=permiso_id,
-        )
-
-
-async def _bootstrap_default_org_structure(
-    *,
-    repo: PlatformRepository,
-    organizacion_id: UUID,
-    primary_department_name: str | None = None,
-    primary_position_name: str | None = None,
-) -> None:
-    try:
-        department_names = await repo.list_tenant_bootstrap_catalog(tipo="departamento")
-    except PlatformRepositoryError as exc:
-        logger.warning(
-            "tenant_bootstrap.department_catalog_fallback",
-            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
-        )
-        department_names = list(FALLBACK_TENANT_DEPARTMENT_NAMES)
-    if not department_names:
-        department_names = list(FALLBACK_TENANT_DEPARTMENT_NAMES)
-
-    try:
-        position_names = await repo.list_tenant_bootstrap_catalog(tipo="puesto")
-    except PlatformRepositoryError as exc:
-        logger.warning(
-            "tenant_bootstrap.position_catalog_fallback",
-            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
-        )
-        position_names = list(FALLBACK_TENANT_POSITION_NAMES)
-    if not position_names:
-        position_names = list(FALLBACK_TENANT_POSITION_NAMES)
-
-    try:
-        existing_departments = await repo.list_departments(organizacion_id=organizacion_id)
-    except PlatformRepositoryError as exc:
-        logger.warning(
-            "tenant_bootstrap.department_list_failed",
-            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
-        )
-        existing_departments = []
-    try:
-        existing_positions = await repo.list_positions(organizacion_id=organizacion_id)
-    except PlatformRepositoryError as exc:
-        logger.warning(
-            "tenant_bootstrap.position_list_failed",
-            extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
-        )
-        existing_positions = []
-
-    existing_department_names = {
-        str(row.get("nombre") or "").strip().lower()
-        for row in existing_departments
-        if isinstance(row, dict) and str(row.get("nombre") or "").strip()
-    }
-    existing_position_names = {
-        str(row.get("nombre") or "").strip().lower()
-        for row in existing_positions
-        if isinstance(row, dict) and str(row.get("nombre") or "").strip()
-    }
-
-    if primary_department_name and primary_department_name.strip():
-        existing_department_names.add(primary_department_name.strip().lower())
-    if primary_position_name and primary_position_name.strip():
-        existing_position_names.add(primary_position_name.strip().lower())
-
-    for name in department_names:
-        normalized = name.strip().lower()
-        if not normalized or normalized in existing_department_names:
-            continue
-        try:
-            await repo.create_department(organizacion_id=organizacion_id, nombre=name)
-            existing_department_names.add(normalized)
-        except PlatformRepositoryError as exc:
-            logger.warning(
-                "tenant_bootstrap.department_seed_failed",
-                extra={
-                    "organizacion_id": str(organizacion_id),
-                    "departamento": name,
-                    "error": str(exc),
-                },
-            )
-
-    for name in position_names:
-        normalized = name.strip().lower()
-        if not normalized or normalized in existing_position_names:
-            continue
-        try:
-            await repo.create_position(organizacion_id=organizacion_id, nombre=name)
-            existing_position_names.add(normalized)
-        except PlatformRepositoryError as exc:
-            logger.warning(
-                "tenant_bootstrap.position_seed_failed",
-                extra={
-                    "organizacion_id": str(organizacion_id),
-                    "puesto": name,
-                    "error": str(exc),
-                },
-            )
-
-
-async def _bootstrap_tenant_access_structure(
-    *,
-    repo: PlatformRepository,
-    organizacion_id: UUID,
-) -> None:
-    """Crea de forma idempotente la matriz operativa de una organización."""
-    tenant_role_plans = _load_tenant_role_plans()
-    role_descriptions = {
-        "owner": "Propietario de la organización",
-        "admin_operativo": "Administrador operativo",
-        "supervisor": "Supervisor comercial",
-        "agente": "Agente comercial",
-        "capturista": "Captura y apoyo operativo",
-        "marketing": "Prospección y campañas",
-        "soporte": "Atención e inbox",
-        "auditor": "Lectura y auditoría",
-        "invitado": "Lectura básica",
-    }
-    role_ids_by_name: dict[str, UUID] = {}
-    desired_permission_codes = set(TENANT_BASE_PERMISSION_CODES)
-    desired_permission_codes.update(CRITICAL_OWNER_PERMISSION_CODES)
-    for plan in tenant_role_plans:
-        role_name = _normalize_role_name(plan.role_name).lower()
-        if not role_name:
-            continue
-        role_ids_by_name[role_name] = await _ensure_role_exists(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            nombre=role_name,
-            descripcion=role_descriptions.get(role_name),
-        )
-        desired_permission_codes.update(plan.permissions)
-
-    await _ensure_permissions_exist(
-        repo=repo,
-        organizacion_id=organizacion_id,
-        permission_codes=tuple(sorted(desired_permission_codes)),
-    )
-    permissions = await repo.list_permissions(organizacion_id=organizacion_id)
-    permission_by_code = {
-        str(row.get("codigo") or "").strip(): UUID(str(row["id"]))
-        for row in permissions
-        if isinstance(row, dict) and row.get("codigo") and row.get("id")
-    }
-    for plan in tenant_role_plans:
-        role_name = _normalize_role_name(plan.role_name).lower()
-        role_id = role_ids_by_name.get(role_name)
-        if not role_id:
-            continue
-        await _grant_permissions_to_role(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            rol_id=role_id,
-            permiso_ids={
-                permission_by_code[code]
-                for code in plan.permissions
-                if code in permission_by_code
-            },
-        )
-
-    await _bootstrap_default_org_structure(repo=repo, organizacion_id=organizacion_id)
 
 
 @router.get("/tenants", response_model=TenantsResponse)
@@ -3180,8 +2660,6 @@ async def create_tenant(
             current_config=current_config or {},
         )
         await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
-        await _ensure_tenant_pipeline_bootstrap(repo=repo, organizacion_id=tenant_id)
-        await _bootstrap_tenant_access_structure(repo=repo, organizacion_id=tenant_id)
         await _create_internal_billing_account_for_tenant(
             repo=repo,
             tenant_id=tenant_id,
@@ -3209,8 +2687,6 @@ async def create_tenant(
         except PlatformRepositoryError as exc:
             await _delete_created_tenant_best_effort(repo=repo, tenant_id=tenant_id)
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    await _bootstrap_tenant_access_structure(repo=repo, organizacion_id=tenant_id)
 
     try:
         billing_account = await repo.get_tenant_billing_account(tenant_id=tenant_id)
@@ -3327,7 +2803,6 @@ async def create_tenant_with_admin(
                 current_config=current_config or {},
             )
             await repo.set_organizacion_config(organizacion_id=tenant_id, config=merged_config)
-            await _ensure_tenant_pipeline_bootstrap(repo=repo, organizacion_id=tenant_id)
             await _create_internal_billing_account_for_tenant(
                 repo=repo,
                 tenant_id=tenant_id,
@@ -3350,31 +2825,7 @@ async def create_tenant_with_admin(
                 except PlatformRepositoryError as exc:
                     raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-            tenant_role_plans = _load_tenant_role_plans()
-            role_descriptions = {
-                "owner": "Propietario del tenant",
-                "admin_operativo": "Administrador operativo",
-                "supervisor": "Supervisor comercial",
-                "agente": "Agente comercial",
-                "capturista": "Captura y apoyo operativo",
-                "marketing": "Prospección y campañas",
-                "soporte": "Atención e inbox",
-                "auditor": "Lectura y auditoría",
-                "invitado": "Lectura básica",
-            }
-            role_ids_by_name: dict[str, UUID] = {}
-            for plan in tenant_role_plans:
-                role_name = _normalize_role_name(plan.role_name).lower()
-                if not role_name:
-                    continue
-                role_ids_by_name[role_name] = await _ensure_role_exists(
-                    repo=repo,
-                    organizacion_id=tenant_id,
-                    nombre=role_name,
-                    descripcion=role_descriptions.get(role_name),
-                )
-
-            admin_seed_role_name = _normalize_role_name(payload.seed.rol_nombre).lower() or "admin_operativo"
+            admin_seed_role_name = payload.seed.rol_nombre.strip().lower() or "admin_operativo"
             role_id = await _ensure_role_exists(
                 repo=repo,
                 organizacion_id=tenant_id,
@@ -3385,38 +2836,17 @@ async def create_tenant_with_admin(
             seed_permission_codes = {
                 permiso.codigo.strip() for permiso in payload.seed.permisos if permiso.codigo.strip()
             }
-            desired_permission_codes = set(TENANT_BASE_PERMISSION_CODES)
-            desired_permission_codes.update(CRITICAL_OWNER_PERMISSION_CODES)
-            desired_permission_codes.update(seed_permission_codes)
-            for plan in tenant_role_plans:
-                desired_permission_codes.update(plan.permissions)
-            await _ensure_permissions_exist(
-                repo=repo,
-                organizacion_id=tenant_id,
-                permission_codes=tuple(sorted(desired_permission_codes)),
-            )
-
             permissions = await repo.list_permissions(organizacion_id=tenant_id)
             permission_by_code = {
                 str(row.get("codigo") or "").strip(): UUID(str(row["id"]))
                 for row in permissions
                 if isinstance(row, dict) and row.get("codigo") and row.get("id")
             }
-            for plan in tenant_role_plans:
-                role_name = _normalize_role_name(plan.role_name).lower()
-                role_plan_id = role_ids_by_name.get(role_name)
-                if not role_plan_id:
-                    continue
-                perm_ids_for_role = {
-                    permission_by_code[code]
-                    for code in plan.permissions
-                    if code in permission_by_code
-                }
-                await _grant_permissions_to_role(
-                    repo=repo,
-                    organizacion_id=tenant_id,
-                    rol_id=role_plan_id,
-                    permiso_ids=perm_ids_for_role,
+            unknown_permission_codes = seed_permission_codes - permission_by_code.keys()
+            if unknown_permission_codes:
+                raise HTTPException(
+                    status_code=422,
+                    detail="seed_permission_not_in_shared_catalog",
                 )
             permiso_ids = [
                 permission_by_code[code]
@@ -3429,26 +2859,19 @@ async def create_tenant_with_admin(
                 rol_id=role_id,
                 permiso_ids=set(permiso_ids),
             )
-            # El rol administrativo de seed (normalmente "admin") también debe quedar operativo completo.
-            await _grant_all_permissions_to_role(
+
+            departamento = await _ensure_department_exists(
                 repo=repo,
                 organizacion_id=tenant_id,
-                rol_id=role_id,
-            )
-
-            departamento = await repo.create_department(
-                organizacion_id=tenant_id, nombre=payload.seed.departamento
+                nombre=payload.seed.departamento,
             )
             departamento_id = UUID(str(departamento["id"]))
-            puesto = await repo.create_position(organizacion_id=tenant_id, nombre=payload.seed.puesto)
-            puesto_id = UUID(str(puesto["id"]))
-
-            await _bootstrap_default_org_structure(
+            puesto = await _ensure_position_exists(
                 repo=repo,
                 organizacion_id=tenant_id,
-                primary_department_name=payload.seed.departamento,
-                primary_position_name=payload.seed.puesto,
+                nombre=payload.seed.puesto,
             )
+            puesto_id = UUID(str(puesto["id"]))
 
             usuario_id_str, telefono_value = await create_supabase_user(
                 email=admin_email,
@@ -3471,11 +2894,6 @@ async def create_tenant_with_admin(
 
             owner_role_id = await _resolve_owner_role_id(repo=repo, organizacion_id=tenant_id)
             admin_role_id = owner_role_id or role_id
-            await _grant_all_permissions_to_role(
-                repo=repo,
-                organizacion_id=tenant_id,
-                rol_id=admin_role_id,
-            )
             await repo.assign_user_role(
                 usuario_id=usuario_id, rol_id=admin_role_id, organizacion_id=tenant_id
             )

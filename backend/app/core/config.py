@@ -437,13 +437,8 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str | None = None
     role_permissions_matrix_path: str = Field(
         default="docs/Roles de acceso/Matriz-permisos.md",
-        description="Ruta al archivo de matriz rol-permisos que sirve como fuente de verdad.",
+        description="Ruta de la matriz usada por la sincronización manual de roles legacy.",
         validation_alias=AliasChoices("TALIA_ROLE_PERMS_MATRIX_PATH", "ROLE_PERMS_MATRIX_PATH"),
-    )
-    role_permissions_sync_on_start: bool = Field(
-        default=False,
-        description="Si es true, verifica y sincroniza permisos al iniciar la app cuando cambia la matriz.",
-        validation_alias=AliasChoices("TALIA_ROLE_PERMS_SYNC_ON_START", "ROLE_PERMS_SYNC_ON_START"),
     )
     role_permissions_sync_prune: bool = Field(
         default=True,
