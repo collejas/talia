@@ -103,6 +103,7 @@ const NAVIGATION: {
         { title: "Empresas", url: "/empresas", icon: IconBuilding, permission: "clientes.view" },
         { title: "Oportunidades", url: "/oportunidades", icon: IconLayoutKanban, permission: "pipeline.view" },
         { title: "Clientes", url: "/clientes", icon: IconUsersGroup, permission: "clientes.view" },
+        { title: "Ventas", url: "/ventas", icon: IconCoin, permission: "sales.view" },
         { title: "Catálogo de precios", url: "/crm/catalogo-precios", icon: IconCoin, permission: ["propuesta.view", "propiedades.view"] },
         { title: "Actividades", url: "/crm/actividades", icon: IconActivity, permission: "activities.view" },
         { title: "Informes", url: "/crm/informes", icon: IconReport, permission: ["reports.view", "pipeline.view"] },

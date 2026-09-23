@@ -11,16 +11,18 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 
 ## 2026-09-23
 
-### Sección independiente de Ventas — decisión de diseño
+### Sección de Ventas y reporte comercial — implementado en el repositorio
 
-- Se propone agregar una sección de navegación `Ventas`, separada de `Clientes`.
-- `Clientes` conserva su función actual como maestro de clientes y su detalle comercial.
-- `Ventas` concentra el seguimiento financiero y comercial: ventas formalizadas, pagos confirmados, pagos parciales, saldo pendiente y ventas liquidadas.
-- La vista de Ventas debe incluir indicadores, tendencias por periodo, tabla de operaciones y filtros por fechas, vendedor, estado de venta, estado de pago y moneda.
-- Cada venta debe permitir consultar sus pagos y abrir el cliente relacionado.
-- El alcance de datos será jerárquico: vendedor ve sus ventas; supervisor consulta a su equipo; nivel superior puede consultar la organización, sujeto a permisos del backend.
-- Para preservar la atribución histórica, se propone guardar en `ventas` el vendedor responsable al formalizar la venta, en una columna explícita con relación a `usuarios`. La vista de clientes puede seguir mostrando el propietario actual.
-- Estado: **decisión de producto documentada; implementación pendiente**.
+- Se agregó `/ventas` como sección independiente dentro de CRM; `/clientes` y su función de maestro se conservaron.
+- La pantalla ofrece indicadores, gráfica mensual, filtros por periodo, vendedor, estado y moneda, y tabla paginada con acceso al historial del cliente.
+- Las ventas se agrupan por fecha de venta; el cobrado del periodo y su serie se agrupan por fecha de confirmación de pagos, usando la zona horaria efectiva.
+- Se agregó `GET /crm/ventas/reporte`; el backend aplica tenant y alcance antes de invocar la agregación SQL.
+- Se añadieron `sales.view`, `sales.view_team` y `sales.view_all` a permisos predeterminados y roles actuales: vendedor, equipo supervisado y organización.
+- La migración agrega `ventas.vendedor_usuario_id`, lo rellena desde el asignado actual de la oportunidad y captura el asignado al formalizar nuevas ventas.
+- Verificación local: `py_compile` pasó para las rutas y el repositorio; TypeScript, ESLint, React Doctor (100/100) y `git diff --check` pasaron.
+- Pendiente: aplicar la migración en Supabase y validar el flujo con usuarios autenticados de cada alcance. El acceso MCP de Supabase requiere reconexión, por lo que no se pudo verificar ni aplicar el SQL remoto.
+- Límite histórico: la atribución de ventas anteriores al cambio se infiere de la asignación actual de la oportunidad; reasignaciones históricas no pueden reconstruirse desde el esquema revisado.
+- Límite de reembolsos: el modelo conserva estado `reembolsado`, pero no un evento de reembolso separado con su fecha. El reporte considera pagos actualmente `confirmado` y no grafica movimientos de reembolso.
 
 ## 2026-09-22
 

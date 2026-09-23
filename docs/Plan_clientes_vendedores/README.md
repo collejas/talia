@@ -378,3 +378,51 @@ La operación formaliza, en una sola transacción, el cliente, la venta, sus
 partidas y el pago. La conversión manual de una oportunidad ganada queda
 rechazada por diseño; ganar la oportunidad y aceptar la cotización no implica
 por sí solo que exista una venta cobrada.
+
+## 14) Reportes de ventas
+
+La sección `/ventas` es independiente de `/clientes`: Clientes conserva el
+maestro y el historial del cliente; Ventas concentra el desempeño comercial y
+la cobranza.
+
+### Contenido y filtros
+
+- Indicadores de ventas formalizadas, importe vendido, cobros confirmados en el
+  periodo, saldo pendiente, pagos parciales, ventas pendientes y ventas pagadas.
+- Gráfica mensual que agrupa las ventas por `ventas.fecha_venta` y los cobros
+  por `pagos.fecha_confirmacion`.
+- Tabla paginada con cliente, oportunidad, vendedor, estado, total, cobrado y
+  saldo; el cliente enlaza a su detalle comercial.
+- Filtros por fechas, vendedor, estado de venta y moneda. Los montos se filtran
+  por una sola moneda para no sumar cantidades de monedas distintas.
+- El periodo usa la zona horaria efectiva del usuario/organización.
+
+### Atribución y permisos
+
+- `ventas.vendedor_usuario_id` conserva el vendedor asignado a la oportunidad
+  cuando se formaliza la venta. Un cambio posterior del propietario actual del
+  contacto, la cuenta o la oportunidad no reescribe la atribución histórica.
+- `sales.view` permite consultar las ventas propias; `sales.view_team` permite
+  consultar al equipo supervisado; `sales.view_all` permite consultar toda la
+  organización. El backend calcula y aplica el alcance antes de consultar el
+  reporte; el filtro de vendedor del panel nunca amplía los permisos.
+- `GET /crm/ventas/reporte` recibe `desde`, `hasta`, `estatus`,
+  `vendedor_usuario_id`, `moneda`, `limit` y `offset`. La organización se toma
+  del contexto autenticado, no del query del cliente.
+- La agregación usa la función privada `crm_reporte_ventas`, ejecutable solo
+  por `service_role`; la API valida autenticación, permiso, tenant y scope de
+  vendedores antes de invocarla.
+
+### Estado del desarrollo
+
+La implementación inicial está en el repositorio en la migración
+`20260923134157_sales_reports_and_vendor_attribution.sql`, la API CRM y la
+pantalla `/ventas`. La migración aún debe aplicarse al Supabase del entorno de
+destino y probarse con usuarios vendedor, supervisor y administrador.
+
+El backfill inicial asigna las ventas históricas al vendedor que tiene ahora
+asignada su oportunidad; el modelo previo no guardaba una atribución de venta
+inmutable, por lo que una reasignación pasada podría no ser reconstruible.
+Además, `pagos.estatus = 'reembolsado'` no conserva una fila/evento de reembolso
+separada con su propia fecha. El reporte cuenta pagos que mantienen estado
+`confirmado`; no presenta reembolsos como movimientos mensuales.

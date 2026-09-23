@@ -9961,6 +9961,117 @@ class CRMRepository:
                 results.append(entry)
         return results
 
+    async def list_sales_reps_for_report(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Read report filter options with a tenant filter, independent of employee RLS."""
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/empleados",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "es_vendedor": "is.true",
+                "select": "usuario:usuarios!empleados_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
+                "limit": str(limit),
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError("sales_report_vendors_invalid")
+        rows: list[dict[str, Any]] = []
+        for entry in data:
+            user = entry.get("usuario") if isinstance(entry, dict) else None
+            if isinstance(user, dict) and user.get("id"):
+                rows.append({
+                    "id": user["id"],
+                    "nombre_completo": user.get("nombre_completo"),
+                    "correo": user.get("correo"),
+                    "telefono_e164": user.get("telefono_e164"),
+                })
+        return rows
+
+    async def list_supervised_sales_reps_for_report(
+        self,
+        *,
+        organizacion_id: UUID,
+        supervisor_id: UUID,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Resolve the supervisor's direct vendor scope using tenant-scoped service reads."""
+        assignments = await self._request_service_role(
+            "GET",
+            "/rest/v1/empleados_supervisores",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "supervisor_id": f"eq.{supervisor_id}",
+                "select": "empleado_id",
+                "limit": str(limit),
+            },
+            organizacion_id=organizacion_id,
+        )
+        assignment_rows = assignments.json() or []
+        if not isinstance(assignment_rows, list):
+            raise CRMRepositoryError("sales_report_team_invalid")
+        employee_ids = [
+            str(row["empleado_id"])
+            for row in assignment_rows
+            if isinstance(row, dict) and row.get("empleado_id")
+        ]
+        if not employee_ids:
+            return []
+        employees = await self._request_service_role(
+            "GET",
+            "/rest/v1/empleados",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "usuario_id": _postgrest_in_clause(employee_ids),
+                "es_vendedor": "is.true",
+                "select": "usuario:usuarios!empleados_usuario_org_fkey(id,nombre_completo,correo,telefono_e164)",
+                "limit": str(limit),
+            },
+            organizacion_id=organizacion_id,
+        )
+        employee_rows = employees.json() or []
+        if not isinstance(employee_rows, list):
+            raise CRMRepositoryError("sales_report_team_invalid")
+        rows: list[dict[str, Any]] = []
+        for entry in employee_rows:
+            user = entry.get("usuario") if isinstance(entry, dict) else None
+            if isinstance(user, dict) and user.get("id"):
+                rows.append({
+                    "id": user["id"],
+                    "nombre_completo": user.get("nombre_completo"),
+                    "correo": user.get("correo"),
+                    "telefono_e164": user.get("telefono_e164"),
+                })
+        return rows
+
+    async def get_employee_vendor_for_report(
+        self,
+        *,
+        organizacion_id: UUID,
+        usuario_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/empleados",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "usuario_id": f"eq.{usuario_id}",
+                "select": "usuario_id,es_vendedor",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        return data[0]
+
     async def get_employee_vendor(
         self,
         *,
@@ -18460,6 +18571,46 @@ class CRMRepository:
                 rows=rows,
             )
         return rows
+
+    async def get_sales_report(
+        self,
+        *,
+        organizacion_id: UUID,
+        desde: date,
+        hasta: date,
+        timezone_name: str,
+        estatus: str | None,
+        vendedor_usuario_id: UUID | None,
+        vendedor_usuario_ids: list[UUID] | None,
+        moneda: str | None,
+        limit: int,
+        offset: int,
+    ) -> dict[str, Any]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_reporte_ventas",
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_desde": desde.isoformat(),
+                "p_hasta": hasta.isoformat(),
+                "p_timezone": timezone_name,
+                "p_estatus": estatus,
+                "p_vendedor_usuario_id": str(vendedor_usuario_id) if vendedor_usuario_id else None,
+                "p_vendedor_usuario_ids": (
+                    [str(user_id) for user_id in vendedor_usuario_ids]
+                    if vendedor_usuario_ids is not None
+                    else None
+                ),
+                "p_moneda": moneda,
+                "p_limit": limit,
+                "p_offset": offset,
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, dict):
+            raise CRMRepositoryError("sales_report_response_invalid")
+        return data
 
     async def _attach_cliente_sales_summary(
         self,

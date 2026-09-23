@@ -4136,6 +4136,54 @@ class ClienteHistorialResponse(BaseModel):
     pagos: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class CRMVentasReporteResumen(BaseModel):
+    numero_ventas: int = 0
+    total_vendido: Decimal = Decimal("0")
+    total_cobrado_periodo: Decimal = Decimal("0")
+    saldo_pendiente: Decimal = Decimal("0")
+    numero_pagos_parciales: int = 0
+    numero_pendientes_pago: int = 0
+    numero_pagadas: int = 0
+
+
+class CRMVentasReportePunto(BaseModel):
+    mes: str
+    total_vendido: Decimal = Decimal("0")
+    total_cobrado: Decimal = Decimal("0")
+
+
+class CRMVentasReporteItem(BaseModel):
+    id: UUID
+    cliente_id: UUID
+    cliente_nombre: str
+    oportunidad_id: UUID
+    codigo_oportunidad: str | None = None
+    oportunidad_titulo: str | None = None
+    vendedor_usuario_id: UUID | None = None
+    vendedor_nombre: str
+    fecha_venta: datetime
+    total: Decimal
+    total_cobrado: Decimal
+    saldo_pendiente: Decimal
+    estatus: Literal["pendiente_pago", "pago_parcial", "pagada", "cancelada", "reembolsada"]
+    moneda: str
+
+
+class CRMVentasReporteVendedor(BaseModel):
+    id: UUID
+    nombre_completo: str | None = None
+    correo: str | None = None
+
+
+class CRMVentasReporteResponse(BaseModel):
+    resumen: CRMVentasReporteResumen
+    serie: list[CRMVentasReportePunto] = Field(default_factory=list)
+    items: list[CRMVentasReporteItem] = Field(default_factory=list)
+    total: int = 0
+    monedas: list[str] = Field(default_factory=list)
+    vendedores: list[CRMVentasReporteVendedor] = Field(default_factory=list)
+
+
 class ConfirmedPaymentPayload(BaseModel):
     monto: Decimal = Field(..., gt=0, max_digits=14, decimal_places=2)
     tipo_pago: Literal["anticipo", "parcial", "liquidacion", "otro"] = "parcial"
@@ -19676,6 +19724,108 @@ async def list_clientes(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     items = [ClienteRecord.model_validate(row) for row in rows]
     return ClienteListResponse(items=items, limit=limit, offset=offset)
+
+
+@router.get("/ventas/reporte", response_model=CRMVentasReporteResponse)
+async def get_sales_report(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    user_token: str = Depends(require_user_token),  # noqa: ARG001
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.view")),
+    desde: date,
+    hasta: date,
+    estatus: Literal["pendiente_pago", "pago_parcial", "pagada", "cancelada", "reembolsada"] | None = None,
+    vendedor_usuario_id: UUID | None = None,
+    moneda: str | None = Query(default=None, min_length=3, max_length=3),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CRMVentasReporteResponse:
+    if usuario_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    if desde > hasta:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid_date_range")
+    if (hasta - desde).days > 3660:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="date_range_too_large")
+
+    try:
+        can_view_all = await repo.current_user_has_perm(codigo="sales.view_all")
+        can_view_team = await repo.current_user_has_perm(codigo="sales.view_team")
+        seller_rows = await repo.list_sales_reps_for_report(organizacion_id=organizacion_id, limit=500)
+        sellers_by_id = {
+            str(row.get("id")): row
+            for row in seller_rows
+            if isinstance(row, dict) and row.get("id")
+        }
+
+        allowed_seller_ids: list[UUID] | None
+        if can_view_all:
+            allowed_seller_ids = None
+            visible_sellers = list(sellers_by_id.values())
+        elif can_view_team:
+            team_rows = await repo.list_supervised_sales_reps_for_report(
+                organizacion_id=organizacion_id,
+                supervisor_id=usuario_id,
+                limit=500,
+            )
+            visible_ids = {str(row.get("id")) for row in team_rows if isinstance(row, dict) and row.get("id")}
+            own_employee = await repo.get_employee_vendor_for_report(
+                organizacion_id=organizacion_id,
+                usuario_id=usuario_id,
+            )
+            if isinstance(own_employee, dict) and own_employee.get("es_vendedor"):
+                visible_ids.add(str(usuario_id))
+            allowed_seller_ids = [UUID(value) for value in visible_ids]
+            visible_sellers = [sellers_by_id[value] for value in visible_ids if value in sellers_by_id]
+        else:
+            own_employee = await repo.get_employee_vendor_for_report(
+                organizacion_id=organizacion_id,
+                usuario_id=usuario_id,
+            )
+            is_seller = isinstance(own_employee, dict) and bool(own_employee.get("es_vendedor"))
+            allowed_seller_ids = [usuario_id] if is_seller else []
+            visible_sellers = [sellers_by_id[str(usuario_id)]] if is_seller and str(usuario_id) in sellers_by_id else []
+
+        if vendedor_usuario_id is not None:
+            if not can_view_all and str(vendedor_usuario_id) not in {str(value) for value in (allowed_seller_ids or [])}:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_outside_scope")
+            if can_view_all and str(vendedor_usuario_id) not in sellers_by_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
+
+        timezone_name, _timezone_source = await _resolve_effective_timezone_name(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+        )
+        report = await repo.get_sales_report(
+            organizacion_id=organizacion_id,
+            desde=desde,
+            hasta=hasta,
+            timezone_name=timezone_name,
+            estatus=estatus,
+            vendedor_usuario_id=vendedor_usuario_id,
+            vendedor_usuario_ids=allowed_seller_ids,
+            moneda=moneda.upper() if moneda else None,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="sales_report_unavailable") from exc
+
+    report["vendedores"] = [
+        {
+            "id": row.get("id"),
+            "nombre_completo": row.get("nombre_completo"),
+            "correo": row.get("correo"),
+        }
+        for row in visible_sellers
+        if isinstance(row, dict) and row.get("id")
+    ]
+    try:
+        return CRMVentasReporteResponse.model_validate(report)
+    except ValidationError as exc:
+        raise HTTPException(status_code=502, detail="sales_report_invalid") from exc
 
 
 @router.get("/clientes/{cliente_id}/historial", response_model=ClienteHistorialResponse)
