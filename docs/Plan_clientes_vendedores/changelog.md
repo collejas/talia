@@ -11,6 +11,22 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 
 ## 2026-09-23
 
+### Separación entre venta formalizada, cuenta por cobrar y pago — código en repositorio; activación pendiente
+
+- Se ajustó el modelo objetivo: ganar una oportunidad cierra el proceso comercial, pero no crea automáticamente una venta ni registra ingresos.
+- Se definió **Formalizar venta** como la acción que crea o activa el cliente y crea venta, partidas y cuenta por cobrar con saldo inicial igual al total.
+- Los documentos de venta/cobro acompañan la operación; emitirlos no crea la venta ni registra un pago. Se distinguen solicitud de pago/proforma/orden, factura fiscal y recibo posterior al pago.
+- Se añadió `cuentas_por_cobrar` al modelo objetivo y se separaron los estados de oportunidad, venta y cobranza.
+- Se conserva un flujo rápido para formalizar y registrar un pago en el mismo recorrido, coordinando ambas operaciones.
+- Para inmobiliarias se propone reutilizar el núcleo financiero, definiendo aparte los eventos y documentos propios del flujo inmobiliario.
+- Se agregó la migración `20260923145927_sales_formalization_accounts_receivable.sql`, con `cuentas_por_cobrar`, saldo calculado, relación 1:1 por venta, migración de datos existentes y vínculo de pagos con la cuenta.
+- Se agregaron los RPC de formalización sin pago, registro de pago sobre venta existente y el atajo transaccional de formalizar + pagar.
+- Se agregaron endpoints separados, permisos de gestión de ventas con alcance propio/equipo/organización y acciones en la ficha del embudo.
+- El atajo existente ahora crea cliente, venta, partidas y cuenta por cobrar antes de guardar el pago, dentro de la misma operación SQL.
+- `/ventas` conserva compatibilidad con `ventas.estatus`; la migración a estados separados en la presentación y el detalle de cliente queda pendiente junto con documentos de cobro.
+- **Validación local:** compilación Python y `git diff --check` pasaron. No se ejecutaron pruebas.
+- **Pendiente de activación:** aplicar la migración al Supabase de destino y desplegar backend/panel. El MCP de Supabase requiere reconexión, así que no fue posible inspeccionar ni modificar la base remota.
+
 ### Sección de Ventas y reporte comercial — implementado en el repositorio
 
 - Se agregó `/ventas` como sección independiente dentro de CRM; `/clientes` y su función de maestro se conservaron.

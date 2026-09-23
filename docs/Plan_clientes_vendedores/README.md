@@ -228,23 +228,35 @@ La migración histórica
 idempotente de oportunidades ya ganadas. Ese flujo quedó cerrado: el trigger
 histórico fue eliminado y no debe reactivarse.
 
-## 13) Modelo comercial: venta y pago antes de crear cliente
+## 13) Modelo comercial: formalizar venta antes de cobrar
 
 ### Regla de negocio
 
-Una cotización aceptada representa un compromiso comercial y mueve la
-oportunidad a ganada, pero todavía no confirma una venta cobrada. El cliente
-se crea o activa únicamente cuando existe un pago confirmado asociado a la
-venta.
+Una cotización aceptada representa un compromiso comercial y puede mover la
+oportunidad a ganada. Ganar la oportunidad no registra dinero ni debe obligar
+a emitir una factura. La acción explícita **Formalizar venta** es la frontera
+entre CRM y administración: crea o activa el cliente, formaliza la venta y
+abre su cuenta por cobrar con el total pendiente. Puede existir una venta y un
+cliente aunque todavía no haya pagos confirmados.
+
+Los documentos acompañan la venta y la cobranza; no son el evento que crea la
+venta. Su emisión puede ser opcional y configurable por organización. Un recibo
+de pago se registra como evidencia posterior al pago; una solicitud de pago,
+proforma, nota u orden de venta puede servir para solicitarlo antes. La factura
+fiscal es una clase de documento separada de los documentos internos y su
+emisión depende del flujo fiscal que use cada organización.
 
 ```text
 contacto / empresa
 └── una o muchas oportunidades
     └── una cotización aceptada por oportunidad
         └── oportunidad ganada
-            └── venta formal
-                └── uno o varios pagos
-                    └── cliente creado o actualizado
+            └── formalizar venta
+                ├── cliente creado o actualizado
+                ├── venta + partidas
+                ├── cuenta por cobrar
+                ├── documentos de venta/cobro (según el flujo)
+                └── uno o varios pagos confirmados
 ```
 
 Una vez que el contacto o empresa ya es cliente, cada nueva oportunidad
@@ -262,6 +274,18 @@ incorporar:
   oportunidad y cotización.
 - `public.venta_items`: productos o servicios vendidos, con cantidad, precio,
   descuentos, impuestos y subtotal.
+- `public.cuentas_por_cobrar`: obligación pendiente de una venta, con importe
+  original, importe pagado, saldo, moneda, fechas de emisión y vencimiento, y
+  estado de cobranza. Debe relacionarse mediante claves foráneas reales con la
+  organización, cliente y venta. Para el alcance inicial se busca una cuenta
+  por cobrar por venta; parcialidades se representan mediante pagos asociados.
+- `public.documentos_cobro` (nombre objetivo): documentos asociados a la venta
+  y, cuando aplique, a la cuenta por cobrar. Debe tener columnas explícitas
+  para tipo, folio, fechas, importes, moneda, estado y referencia al archivo o
+  proveedor documental. Tipos previstos: solicitud de pago, proforma, nota de
+  venta, orden de venta, factura y recibo de pago. El detalle del CFDI/PAC se
+  definirá en una fase fiscal separada; no se guardarán relaciones o estados
+  centrales únicamente en JSON/metadata.
 - `public.pagos`: pagos, anticipos, pagos parciales, liquidaciones,
   devoluciones y cancelaciones.
 
@@ -288,7 +312,10 @@ clientes 1 ─── N oportunidades
 oportunidades 1 ─── N cotizaciones
 oportunidades 1 ─── 1 venta
 ventas 1 ─── N venta_items
+ventas 1 ─── 1 cuenta_por_cobrar
+ventas 1 ─── N documentos_cobro
 ventas 1 ─── N pagos
+cuentas_por_cobrar 1 ─── N documentos_cobro
 ```
 
 La relación histórica debe usar columnas y foreign keys reales. No se debe
@@ -300,9 +327,18 @@ de `metadata`.
 - Sólo puede existir una cotización aceptada activa por oportunidad.
 - Una oportunidad ganada debe conservar su cotización aceptada.
 - Una venta debe referenciar la oportunidad y cotización que la originaron.
-- El primer pago confirmado crea o activa el cliente.
-- La venta puede distinguir entre `pendiente_pago`, `pago_parcial`,
-  `pagada`, `cancelada` y `reembolsada`.
+- Formalizar una venta crea o activa el cliente, la venta, sus partidas y la
+  cuenta por cobrar en una operación transaccional e idempotente.
+- Registrar un documento de cobro no equivale a registrar un pago. Un pago
+  confirmado no requiere que exista un documento, salvo que la organización
+  configure esa regla.
+- Mantener estados separados: oportunidad (`abierta`, `ganada`, `perdida`),
+  venta (`borrador`, `formalizada`, `cancelada`) y cobranza (`pendiente`,
+  `parcial`, `pagada`, `vencida`, `cancelada`, `reembolsada`). Los nombres
+  definitivos se alinearán con los estados existentes y sus restricciones.
+- El saldo de la cuenta por cobrar se deriva de su importe original menos los
+  pagos confirmados y ajustes/reembolsos válidos; no se debe contar una factura
+  o solicitud emitida como dinero cobrado.
 - `clientes.oportunidad_id` no debe seguir siendo la única relación. Se debe
   migrar a una referencia de origen histórica o retirarse después de validar
   `oportunidades.cliente_id`.
@@ -326,24 +362,38 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
 ### Fases de implementación
 
 1. Modificar el flujo actual para que la aceptación de cotización marque la
-   oportunidad como ganada, sin crear todavía el cliente.
+   oportunidad como ganada, sin formalizar automáticamente una venta.
 2. Crear `oportunidades.cliente_id` y conservar todas las oportunidades del
    mismo cliente.
 3. Crear `ventas` y `venta_items` con restricciones, índices y RLS por tenant.
-4. Crear `pagos` para soportar anticipos, parcialidades, liquidaciones,
-   devoluciones y cancelaciones.
-5. Crear o activar el cliente al registrar el primer pago confirmado.
-6. Reconciliar los clientes creados por el flujo anterior y conservar la
+4. Implementar **Formalizar venta** para crear/activar cliente, venta y
+   partidas de forma atómica e idempotente.
+5. Crear `cuentas_por_cobrar`, con cálculo consistente de saldo y estados de
+   cobranza; no confundir importe vendido con importe cobrado.
+6. Crear `documentos_cobro` y sus operaciones (emitir, consultar, descargar,
+   enviar y cancelar según tipo). La emisión de estos documentos será
+   configurable y no una condición universal para crear la venta.
+7. Separar el registro de pago confirmado del alta/formalización. Conservar un
+   flujo rápido opcional de formalizar venta y registrar pago en una sola
+   operación coordinada.
+8. Reconciliar los clientes creados por el flujo anterior y conservar la
    trazabilidad de su origen.
-7. Actualizar APIs, panel de clientes, detalle de oportunidad, ventas y
-   reportes.
-8. Validar el flujo de primera compra y compra recurrente por contacto,
+9. Actualizar APIs, panel de clientes, detalle de oportunidad, ventas,
+   cobranza y reportes.
+10. Validar el flujo de primera compra y compra recurrente por contacto,
    empresa y cliente.
+11. Incorporar flujos de propiedades sobre el mismo núcleo financiero cuando
+   las entidades y eventos inmobiliarios (por ejemplo, apartado, contrato y
+   parcialidades) estén definidos; no asumir que el ciclo documental es igual
+   al de otros giros.
 
-### Estado de implementación al 2026-09-12
+### Estado de implementación base al 2026-09-12, actualizado al 2026-09-23
 
-Ya están aplicados en Supabase los puntos estructurales 2, 3, 4 y parte del
-5:
+La relación con clientes, las tablas de ventas, partidas y pagos, y los
+reportes ya existen. En esta revisión se agregó al repositorio el código para
+formalización independiente y cuentas por cobrar; falta aplicar la nueva
+migración al Supabase del entorno y desplegar backend/panel para activar el
+flujo.
 
 - `oportunidades.cliente_id` vincula las 42 oportunidades ganadas existentes
   con su cliente, sin asociar oportunidades abiertas o perdidas.
@@ -351,9 +401,11 @@ Ya están aplicados en Supabase los puntos estructurales 2, 3, 4 y parte del
   oportunidad.
 - Existen `ventas`, `venta_items` y `pagos`, con foreign keys tenant-safe,
   índices, constraints monetarios y RLS.
-- La función protegida `crm_registrar_pago_confirmado` formaliza cliente,
-  venta, partidas y pago en una sola transacción, usando la referencia de
-  pago como clave de idempotencia.
+- En la base de datos del entorno, hasta aplicar la nueva migración,
+  `crm_registrar_pago_confirmado` todavía crea cliente, venta, partidas y pago
+  en una sola transacción. El repositorio ahora prepara su reemplazo para que
+  registre pagos sobre ventas existentes; `crm_formalizar_venta` crea la venta
+  sin pago.
 - La API expone
   `POST /crm/cotizaciones/{cotizacion_id}/pago-confirmado`.
 - La vista de clientes ya tiene preparada la ruta de detalle
@@ -367,17 +419,46 @@ Ya están aplicados en Supabase los puntos estructurales 2, 3, 4 y parte del
 - El historial consulta `ventas`, `venta_items` y `pagos` mediante el backend
   autorizado, respetando el RLS de las tablas comerciales.
 
-El flujo legacy quedó retirado. Ya no existe el endpoint manual de conversión
-de oportunidad a cliente ni la acción equivalente en el panel. La única vía
-para crear o activar un cliente desde una oportunidad es registrar un pago
-confirmado mediante:
+El flujo legacy de conversión manual quedó retirado. El repositorio prepara
+dos vías para crear o activar el cliente desde una oportunidad: formalizar la
+venta sin pago, o usar el atajo de formalizar y cobrar inmediatamente. La ruta
+rápida crea en una transacción el cliente, la venta, sus partidas, la
+cuenta por cobrar y el pago inmediato. El flujo separado usa **Formalizar
+venta** para crear cliente, venta, partidas y cuenta; después registra cada
+pago sobre una venta existente. Ganar la oportunidad no crea por sí sola una
+venta ni registra dinero.
 
-`POST /crm/cotizaciones/{cotizacion_id}/pago-confirmado`
+### Formalización y cuentas por cobrar — código en repositorio al 2026-09-23
 
-La operación formaliza, en una sola transacción, el cliente, la venta, sus
-partidas y el pago. La conversión manual de una oportunidad ganada queda
-rechazada por diseño; ganar la oportunidad y aceptar la cotización no implica
-por sí solo que exista una venta cobrada.
+La migración `20260923145927_sales_formalization_accounts_receivable.sql`
+define `cuentas_por_cobrar` con relación única por venta, importes explícitos,
+saldo calculado, moneda, fechas, estado, foreign keys, índices y RLS para
+acceso interno. Migra las ventas y pagos existentes y enlaza cada pago con su
+cuenta por cobrar.
+
+El código agrega:
+
+- `POST /crm/cotizaciones/{cotizacion_id}/formalizar-venta`: crea o activa el
+  cliente, la venta, sus partidas y la cuenta por cobrar sin insertar un pago.
+- `POST /crm/ventas/{venta_id}/pagos-confirmados`: registra pagos solo para una
+  venta formalizada y actualiza el saldo asociado.
+- `POST /crm/cotizaciones/{cotizacion_id}/pago-confirmado`: conserva el atajo
+  para formalizar y registrar el pago inmediato dentro de una operación SQL.
+- La acción explícita **Formalizar venta** en la ficha del embudo; el flujo
+  rápido **Registrar pago inmediato** continúa disponible.
+- Permisos `sales.manage`, `sales.manage_team` y `sales.manage_all`, con
+  alcance de oportunidad validado en backend.
+
+Por compatibilidad, `ventas.estatus` conserva temporalmente los estados de
+cobranza que consume `/ventas`; el estado propio de cuenta por cobrar queda en
+`cuentas_por_cobrar.estatus`. La adaptación de reportes y vistas para exponer
+por separado venta formalizada, cobranza, cobrado y saldo queda pendiente.
+Tampoco se implementan aún `documentos_cobro`, facturación fiscal ni vencimiento
+automático materializado.
+
+Estado de aplicación: **pendiente**. El acceso MCP a Supabase requiere
+reconexión, así que esta revisión no pudo consultar ni aplicar la migración
+remota. No se desplegaron los servicios.
 
 ## 14) Reportes de ventas
 

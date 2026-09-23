@@ -4192,13 +4192,55 @@ class ConfirmedPaymentPayload(BaseModel):
     referencia_pago: str | None = Field(default=None, max_length=160)
 
 
+class FormalizeSalePayload(BaseModel):
+    fecha_vencimiento: date | None = None
+
+
 class ConfirmedPaymentResponse(BaseModel):
     venta_id: UUID
     cliente_id: UUID
-    pago_id: UUID
+    cuenta_por_cobrar_id: UUID | None = None
+    pago_id: UUID | None = None
     venta_estatus: str
     pago_acumulado: Decimal
     total: Decimal
+    saldo: Decimal | None = None
+
+
+async def _require_sales_write_scope(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    usuario_id: UUID | None,
+    oportunidad_id: UUID,
+) -> None:
+    if usuario_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    if await repo.current_user_has_perm(codigo="sales.manage_all"):
+        return
+
+    opportunity = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if opportunity is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="oportunidad_no_encontrada")
+
+    allowed_user_ids = {str(usuario_id)}
+    if await repo.current_user_has_perm(codigo="sales.manage_team"):
+        team_rows = await repo.list_supervised_sales_reps_for_report(
+            organizacion_id=organizacion_id,
+            supervisor_id=usuario_id,
+            limit=500,
+        )
+        allowed_user_ids.update(
+            str(row.get("id"))
+            for row in team_rows
+            if isinstance(row, dict) and row.get("id")
+        )
+    assigned_user_id = _safe_uuid(opportunity.get("asignado_a_usuario_id"))
+    if assigned_user_id is None or str(assigned_user_id) not in allowed_user_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="sale_outside_scope")
 
 
 PORTAL_DOCUMENT_REQUIREMENTS: list[dict[str, str]] = [
@@ -32327,6 +32369,119 @@ async def list_lead_quotes(
 
 
 @router.post(
+    "/cotizaciones/{cotizacion_id}/formalizar-venta",
+    response_model=ConfirmedPaymentResponse,
+)
+async def formalizar_venta_desde_cotizacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.manage")),
+    cotizacion_id: UUID,
+    payload: FormalizeSalePayload,
+) -> ConfirmedPaymentResponse:
+    try:
+        quote = await repo.get_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=cotizacion_id,
+        )
+        oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
+        if oportunidad_id is None:
+            raise HTTPException(status_code=409, detail="cotizacion_sin_oportunidad")
+        await _require_sales_write_scope(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            oportunidad_id=oportunidad_id,
+        )
+        result = await repo.formalizar_venta(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+            usuario_id=usuario_id,
+            fecha_vencimiento=payload.fecha_vencimiento,
+        )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "quote_not_found" in message:
+            raise HTTPException(status_code=404, detail="cotizacion_no_encontrada") from exc
+        if "accepted_won_quote_required" in message:
+            raise HTTPException(status_code=409, detail="cotizacion_no_aceptada_oportunidad_no_ganada") from exc
+        if "sale_account_missing" in message:
+            raise HTTPException(status_code=409, detail="venta_sin_cuenta") from exc
+        if "sale_persona_missing" in message:
+            raise HTTPException(status_code=409, detail="venta_sin_contacto") from exc
+        if "sale_total_must_be_positive" in message:
+            raise HTTPException(status_code=409, detail="cotizacion_sin_total") from exc
+        if "opportunity_already_formalized_from_another_quote" in message:
+            raise HTTPException(status_code=409, detail="oportunidad_ya_formalizada_con_otra_cotizacion") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_formalizar_venta") from exc
+    try:
+        return ConfirmedPaymentResponse.model_validate(result)
+    except ValidationError as exc:
+        raise HTTPException(status_code=502, detail="respuesta_venta_invalida") from exc
+
+
+@router.post(
+    "/ventas/{venta_id}/pagos-confirmados",
+    response_model=ConfirmedPaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def registrar_pago_de_venta(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.manage")),
+    venta_id: UUID,
+    payload: ConfirmedPaymentPayload,
+) -> ConfirmedPaymentResponse:
+    try:
+        sale = await repo.get_sale_entry(
+            organizacion_id=organizacion_id,
+            venta_id=venta_id,
+        )
+        oportunidad_id = _safe_uuid(sale.get("oportunidad_id"))
+        if oportunidad_id is None:
+            raise HTTPException(status_code=404, detail="venta_no_encontrada")
+        await _require_sales_write_scope(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            oportunidad_id=oportunidad_id,
+        )
+        result = await repo.registrar_pago_de_venta(
+            organizacion_id=organizacion_id,
+            venta_id=venta_id,
+            monto=payload.monto,
+            tipo_pago=payload.tipo_pago,
+            fecha_pago=payload.fecha_pago,
+            metodo_pago=payload.metodo_pago,
+            referencia_pago=payload.referencia_pago,
+            registrado_por_usuario_id=usuario_id,
+        )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "formalized_sale_not_found" in message or "sale_not_found" in message:
+            raise HTTPException(status_code=404, detail="venta_no_encontrada") from exc
+        if "payment_exceeds_receivable_balance" in message:
+            raise HTTPException(status_code=409, detail="pago_excede_saldo_pendiente") from exc
+        if "sale_not_payable" in message:
+            raise HTTPException(status_code=409, detail="venta_no_acepta_pagos") from exc
+        if "duplicate_payment_reference" in message:
+            raise HTTPException(status_code=409, detail="referencia_pago_ya_utilizada") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_registrar_pago") from exc
+    try:
+        return ConfirmedPaymentResponse.model_validate(result)
+    except ValidationError as exc:
+        raise HTTPException(status_code=502, detail="respuesta_pago_invalida") from exc
+
+
+@router.post(
     "/cotizaciones/{cotizacion_id}/pago-confirmado",
     response_model=ConfirmedPaymentResponse,
     status_code=status.HTTP_201_CREATED,
@@ -32336,12 +32491,25 @@ async def registrar_pago_confirmado(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
-    _: str = Depends(require_permission("clientes.view")),
+    _: str = Depends(require_permission("sales.manage")),
     cotizacion_id: UUID,
     payload: ConfirmedPaymentPayload,
 ) -> ConfirmedPaymentResponse:
-    """Formaliza una venta y cliente únicamente al confirmar un pago."""
+    """Atajo compatible: formaliza la venta y registra el pago inmediatamente."""
     try:
+        quote = await repo.get_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=cotizacion_id,
+        )
+        oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
+        if oportunidad_id is None:
+            raise HTTPException(status_code=409, detail="cotizacion_sin_oportunidad")
+        await _require_sales_write_scope(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            oportunidad_id=oportunidad_id,
+        )
         result = await repo.registrar_pago_confirmado(
             organizacion_id=organizacion_id,
             cotizacion_id=cotizacion_id,
@@ -32352,9 +32520,11 @@ async def registrar_pago_confirmado(
             referencia_pago=payload.referencia_pago,
             registrado_por_usuario_id=usuario_id,
         )
+    except HTTPException:
+        raise
     except CRMRepositoryError as exc:
         message = str(exc)
-        if "accepted_won_quote_not_found" in message:
+        if "accepted_won_quote_not_found" in message or "accepted_won_quote_required" in message:
             raise HTTPException(status_code=409, detail="cotizacion_no_aceptada_oportunidad_no_ganada") from exc
         if "sale_account_missing" in message:
             raise HTTPException(status_code=409, detail="venta_sin_cuenta") from exc
@@ -32362,6 +32532,8 @@ async def registrar_pago_confirmado(
             raise HTTPException(status_code=409, detail="venta_sin_contacto") from exc
         if "sale_total_must_be_positive" in message:
             raise HTTPException(status_code=409, detail="cotizacion_sin_total") from exc
+        if "payment_exceeds_receivable_balance" in message:
+            raise HTTPException(status_code=409, detail="pago_excede_saldo_pendiente") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_registrar_pago") from exc
     try:
         return ConfirmedPaymentResponse.model_validate(result)

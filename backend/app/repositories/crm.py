@@ -4380,7 +4380,7 @@ class CRMRepository:
         referencia_pago: str | None = None,
         registrado_por_usuario_id: UUID | None = None,
     ) -> dict[str, Any]:
-        """Registra pago, venta y cliente mediante la transacción protegida."""
+        """Formaliza una venta y registra el pago inmediato en una transacción."""
         payload = {
             "p_organizacion_id": str(organizacion_id),
             "p_cotizacion_id": str(cotizacion_id),
@@ -4395,6 +4395,68 @@ class CRMRepository:
         }
         resp = await self._request_service_role(
             "POST",
+            "/rest/v1/rpc/crm_formalizar_venta_con_pago",
+            json=payload,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() if resp.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict) and isinstance(data.get("crm_formalizar_venta_con_pago"), dict):
+            return data["crm_formalizar_venta_con_pago"]
+        raise CRMRepositoryError("payment_registration_response_invalid")
+
+    async def formalizar_venta(
+        self,
+        *,
+        organizacion_id: UUID,
+        cotizacion_id: UUID,
+        usuario_id: UUID | None = None,
+        fecha_vencimiento: date | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_cotizacion_id": str(cotizacion_id),
+            "p_usuario_id": str(usuario_id) if usuario_id else None,
+            "p_fecha_vencimiento": fecha_vencimiento.isoformat() if fecha_vencimiento else None,
+        }
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_formalizar_venta",
+            json=payload,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() if resp.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict) and isinstance(data.get("crm_formalizar_venta"), dict):
+            return data["crm_formalizar_venta"]
+        raise CRMRepositoryError("sale_formalization_response_invalid")
+
+    async def registrar_pago_de_venta(
+        self,
+        *,
+        organizacion_id: UUID,
+        venta_id: UUID,
+        monto: Decimal,
+        tipo_pago: str = "parcial",
+        fecha_pago: datetime | None = None,
+        metodo_pago: str | None = None,
+        referencia_pago: str | None = None,
+        registrado_por_usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        payload = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_venta_id": str(venta_id),
+            "p_monto": str(monto),
+            "p_tipo_pago": tipo_pago,
+            "p_fecha_pago": fecha_pago.isoformat() if fecha_pago else None,
+            "p_metodo_pago": metodo_pago,
+            "p_referencia_pago": referencia_pago,
+            "p_registrado_por_usuario_id": str(registrado_por_usuario_id) if registrado_por_usuario_id else None,
+        }
+        resp = await self._request_service_role(
+            "POST",
             "/rest/v1/rpc/crm_registrar_pago_confirmado",
             json=payload,
             organizacion_id=organizacion_id,
@@ -4405,6 +4467,28 @@ class CRMRepository:
         if isinstance(data, dict) and isinstance(data.get("crm_registrar_pago_confirmado"), dict):
             return data["crm_registrar_pago_confirmado"]
         raise CRMRepositoryError("payment_registration_response_invalid")
+
+    async def get_sale_entry(
+        self,
+        *,
+        organizacion_id: UUID,
+        venta_id: UUID,
+    ) -> dict[str, Any]:
+        response = await self._request_service_role(
+            "GET",
+            "/rest/v1/ventas",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{venta_id}",
+                "select": "id,organizacion_id,cliente_id,cuenta_id,oportunidad_id,cotizacion_id,estatus,total,moneda,vendedor_usuario_id",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError("sale_not_found")
 
     async def create_quote_entry(
         self,

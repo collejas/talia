@@ -249,6 +249,14 @@ type LeadQuoteEntry = {
   items: LeadQuoteItemEntry[] | null;
 };
 
+type FormalizedSale = {
+  venta_id: string;
+  cliente_id: string;
+  cuenta_por_cobrar_id: string;
+  total: number | string;
+  saldo: number | string;
+};
+
 function getLeadQuoteNetAmount(quote: LeadQuoteEntry | null | undefined): number | null {
   if (!quote) return null;
   if (quote.subtotal != null && Number.isFinite(quote.subtotal)) return Math.max(0, quote.subtotal);
@@ -1032,6 +1040,9 @@ export function LeadDrawer({
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentQuote, setPaymentQuote] = useState<LeadQuoteEntry | null>(null);
+  const [formalizedSalesByQuote, setFormalizedSalesByQuote] = useState<Record<string, FormalizedSale>>({});
+  const [formalizeQuote, setFormalizeQuote] = useState<LeadQuoteEntry | null>(null);
+  const [formalizeError, setFormalizeError] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentType, setPaymentType] = useState<"anticipo" | "parcial" | "liquidacion" | "otro">("parcial");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -1109,6 +1120,10 @@ export function LeadDrawer({
     permissionContext.es_owner ||
     normalizedPerms.includes("pipeline.reassign.team");
   const canReassign = canReassignAny || canReassignTeam;
+  const canManageSales =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("sales.manage");
   const isAdminOrOwner =
     permissionContext.es_admin ||
     permissionContext.es_owner ||
@@ -3183,15 +3198,46 @@ export function LeadDrawer({
   );
 
   const openPaymentDialog = useCallback((quote: LeadQuoteEntry) => {
+    const existingSale = formalizedSalesByQuote[quote.id];
     setPaymentQuote(quote);
-    setPaymentAmount(quote.total != null ? String(quote.total) : "");
+    setPaymentAmount(existingSale ? String(existingSale.saldo) : quote.total != null ? String(quote.total) : "");
     setPaymentType("parcial");
     setPaymentDate(new Date().toISOString().slice(0, 10));
     setPaymentMethod("");
     setPaymentReference("");
     setPaymentError(null);
     setPaymentDialogOpen(true);
-  }, []);
+  }, [formalizedSalesByQuote]);
+
+  const handleFormalizeSale = useCallback(() => {
+    if (!formalizeQuote) return;
+    setFormalizeError(null);
+    startQuoteAction(async () => {
+      try {
+        const response = await fetch(`/api/embudo/quotes/${formalizeQuote.id}/formalizar-venta`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setFormalizeError(typeof body?.error === "string" ? body.error : "No se pudo formalizar la venta.");
+          return;
+        }
+        const sale = body as FormalizedSale;
+        if (!sale.venta_id || !sale.cliente_id || !sale.cuenta_por_cobrar_id) {
+          setFormalizeError("La respuesta de formalización está incompleta.");
+          return;
+        }
+        setFormalizedSalesByQuote((current) => ({ ...current, [formalizeQuote.id]: sale }));
+        setQuoteSuccess("Venta formalizada. Cliente y cuenta por cobrar creados; no se registró ningún pago.");
+        setFormalizeQuote(null);
+        await fetchQuotes();
+      } catch (error) {
+        setFormalizeError(error instanceof Error ? error.message : "No se pudo formalizar la venta.");
+      }
+    });
+  }, [fetchQuotes, formalizeQuote]);
 
   const handleConfirmedPayment = useCallback(() => {
     if (!paymentQuote) return;
@@ -3207,7 +3253,11 @@ export function LeadDrawer({
     setPaymentError(null);
     startQuoteAction(async () => {
       try {
-        const response = await fetch(`/api/embudo/quotes/${paymentQuote.id}/pago-confirmado`, {
+        const formalizedSale = formalizedSalesByQuote[paymentQuote.id];
+        const paymentUrl = formalizedSale
+          ? `/api/embudo/sales/${formalizedSale.venta_id}/pago-confirmado`
+          : `/api/embudo/quotes/${paymentQuote.id}/pago-confirmado`;
+        const response = await fetch(paymentUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -3223,14 +3273,24 @@ export function LeadDrawer({
           setPaymentError(typeof body?.error === "string" ? body.error : "No se pudo registrar el pago.");
           return;
         }
+        if (!formalizedSale && body?.venta_id && body?.cliente_id && body?.cuenta_por_cobrar_id) {
+          setFormalizedSalesByQuote((current) => ({
+            ...current,
+            [paymentQuote.id]: body as FormalizedSale,
+          }));
+        }
         setPaymentDialogOpen(false);
-        setQuoteSuccess("Pago confirmado. Se formalizó la venta y el cliente.");
+        setQuoteSuccess(
+          formalizedSale
+            ? "Pago confirmado. Se actualizó el saldo de la cuenta por cobrar."
+            : "Pago confirmado. Se formalizó la venta y el cliente.",
+        );
         await fetchQuotes();
       } catch (error) {
         setPaymentError(error instanceof Error ? error.message : "No se pudo registrar el pago.");
       }
     });
-  }, [fetchQuotes, paymentAmount, paymentDate, paymentMethod, paymentQuote, paymentReference, paymentType]);
+  }, [fetchQuotes, formalizedSalesByQuote, paymentAmount, paymentDate, paymentMethod, paymentQuote, paymentReference, paymentType]);
 
   const renderStageField = (stageCode: string, field: DrawerPrepFieldDefinition, forceDisabled = false) => {
     const stageValues = stagePrep[stageCode] ?? {};
@@ -3958,17 +4018,35 @@ export function LeadDrawer({
                                 <IconTrophy className="size-4" />
                                 Marcar como aceptada
                               </Button>
-                              {quote.status === "aceptada" ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  className="gap-1"
-                                  onClick={() => openPaymentDialog(quote)}
-                                  disabled={quotePending}
-                                >
-                                  <IconCheck className="size-4" />
-                                  Registrar pago
-                                </Button>
+                              {quote.status === "aceptada" && canManageSales ? (
+                                <>
+                                  {formalizedSalesByQuote[quote.id] ? (
+                                    <Badge variant="secondary">Venta formalizada · saldo {formatQuoteCurrency(Number(formalizedSalesByQuote[quote.id].saldo), quote.currency)}</Badge>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setFormalizeError(null);
+                                        setFormalizeQuote(quote);
+                                      }}
+                                      disabled={quotePending}
+                                    >
+                                      Formalizar venta
+                                    </Button>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="gap-1"
+                                    onClick={() => openPaymentDialog(quote)}
+                                    disabled={quotePending}
+                                  >
+                                    <IconCheck className="size-4" />
+                                    {formalizedSalesByQuote[quote.id] ? "Registrar pago" : "Registrar pago inmediato"}
+                                  </Button>
+                                </>
                               ) : null}
                               <Button
                                 type="button"
@@ -5397,12 +5475,23 @@ export function LeadDrawer({
         <DialogContent className="max-w-md">
           <DialogTitle>Registrar pago de la venta</DialogTitle>
           <DialogDescription>
-            Confirma el pago de la cotización aceptada para formalizar la venta y crear o activar al cliente.
+            {formalizedSalesByQuote[paymentQuote?.id ?? ""]
+              ? "Registra un pago confirmado para reducir el saldo de la cuenta por cobrar."
+              : "Este atajo formaliza la venta y registra el pago en una sola operación."}
           </DialogDescription>
           <div className="space-y-4 py-2">
             <div className="rounded-md bg-muted/40 px-3 py-2 text-sm">
-              <span className="text-muted-foreground">Total de la cotización: </span>
-              <span className="font-semibold">{formatQuoteCurrency(paymentQuote?.total ?? null, paymentQuote?.currency ?? null)}</span>
+              <span className="text-muted-foreground">
+                {formalizedSalesByQuote[paymentQuote?.id ?? ""] ? "Saldo pendiente: " : "Total de la cotización: "}
+              </span>
+              <span className="font-semibold">
+                {formatQuoteCurrency(
+                  formalizedSalesByQuote[paymentQuote?.id ?? ""]
+                    ? Number(formalizedSalesByQuote[paymentQuote?.id ?? ""].saldo)
+                    : paymentQuote?.total ?? null,
+                  paymentQuote?.currency ?? null,
+                )}
+              </span>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="confirmed-payment-amount">Monto recibido</Label>
@@ -5454,6 +5543,39 @@ export function LeadDrawer({
             <Button type="button" variant="outline" onClick={() => setPaymentDialogOpen(false)} disabled={quotePending}>Cancelar</Button>
             <Button type="button" onClick={handleConfirmedPayment} disabled={quotePending || !paymentQuote}>
               {quotePending ? "Registrando..." : "Confirmar pago"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(formalizeQuote)}
+        onOpenChange={(open) => {
+          if (!open && !quotePending) {
+            setFormalizeQuote(null);
+            setFormalizeError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogTitle>Formalizar venta</DialogTitle>
+          <DialogDescription>
+            Se creará o activará el cliente, la venta y su cuenta por cobrar. Esta acción no registra ningún pago.
+          </DialogDescription>
+          <div className="rounded-md bg-muted/40 px-3 py-3 text-sm">
+            <p className="text-muted-foreground">Saldo inicial pendiente</p>
+            <p className="font-semibold">
+              {formatQuoteCurrency(formalizeQuote?.total ?? null, formalizeQuote?.currency ?? null)}
+            </p>
+          </div>
+          {formalizeError ? (
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{formalizeError}</p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setFormalizeQuote(null)} disabled={quotePending}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleFormalizeSale} disabled={quotePending || !formalizeQuote}>
+              {quotePending ? "Formalizando..." : "Confirmar formalización"}
             </Button>
           </div>
         </DialogContent>
