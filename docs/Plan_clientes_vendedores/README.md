@@ -357,9 +357,10 @@ Las partidas conservan relaciones explicitas y tenant-safe con
 `unidad_id`; la entidad, confirmacion comercial y aprobacion operativa del
 flujo anterior ya estan implementadas y desplegadas. La forma y evidencia
 con/sin OC tambien estan implementadas. La secuencia nueva de revision,
-aprobacion y reserva anticipada por OC ya tiene implementacion local en esta
-rama; su migracion aun no esta aplicada en Supabase y falta validar el flujo
-autenticado antes de considerarla desplegada.
+aprobacion y reserva anticipada por OC tiene una implementacion preliminar local
+en esta rama; no equivale a la revision completa de seis bloques descrita mas
+adelante. Su migracion aun no esta aplicada en Supabase y falta completar y
+validar el flujo autenticado antes de considerarla desplegada.
 
 La partida conserva el producto mediante `catalog_item_id` desde cotizacion,
 pedido y hasta `venta_items`. La reserva se traza hasta el pedido y su renglon;
@@ -481,27 +482,41 @@ La primera version del traspaso por areas se implemento y desplego el
 2026-09-24. El flujo objetivo aprobado para alinear es:
 
 1. **Comercial — Confirmar pedido:** registra forma de confirmacion, fecha,
-   referencia y evidencia (con OC o sin ella); no crea venta ni cuenta por
-   cobrar. Si adjunta una OC recibida y validada, reserva solo inventario fisico
-   stockable. Con otras evidencias no reserva todavia.
-2. **Operaciones — Revisar pedido:** valida cliente, evidencia y partidas; puede
-   **Regresar a Comercial** con motivo o **Aprobar y liberar a surtido**.
+   referencia, evidencia y condiciones acordadas (con OC o sin ella); no crea
+   venta ni cuenta por cobrar. Si valida una OC, reserva solo el stock fisico
+   disponible y deja registrado el faltante; con otras evidencias no reserva.
+2. **Operaciones — Revisar pedido:** valida los seis bloques (cliente,
+   aceptacion/evidencia, partidas, inventario, condiciones y riesgos); puede
+   **Regresar a Comercial** con causa/comentario o **Aprobar y liberar a surtido**.
 3. **Aprobacion operativa:** formaliza cliente/venta/partidas/cuenta por cobrar
    y garantiza la reserva de stock transaccionalmente si aun no existe. Es el
    unico punto que ejecuta los efectos financieros; no duplica una reserva
-   anterior hecha con OC.
+   anterior hecha con OC. Un faltante solo se acepta como alerta si el acuerdo
+   permite entrega parcial; de otro modo bloquea liberar.
 4. **Almacen — Surtidos:** recibe solo pedidos aprobados y liberados; registra
    entregas parciales o totales.
-5. **Pendiente — migracion, despliegue y validacion:** aplicar la migracion,
-   alinear la version desplegada con este flujo y recorrerlo con sesiones/roles autorizados, OC validada
-   (reserva antes de aprobar), evidencia sin OC (reserva al aprobar),
-   regreso/correccion, aprobacion, entregas, pagos y balances;
-   verificar tambien usuarios sin permiso y aislamiento por organizacion.
-6. **Posterior — documentos y reglas:** implementar `documentos_cobro`,
+5. **Siguiente — condiciones y evidencia:** agregar campos estructurados de
+   pago/credito/anticipo, entrega parcial, fecha/domicilio y envio a cotizacion;
+   copiarlos al pedido al confirmarlo. Admitir evidencia adjunta y referencias
+   para los medios de aceptacion distintos de OC.
+6. **Siguiente — reserva parcial:** reservar solo disponibilidad real; conservar
+   cantidades requeridas, reservadas, surtidas y pendientes. OC validada permite
+   reservar anticipadamente; sin OC se reserva al aprobar. Si hay faltante, solo
+   permitir liberar cuando el acuerdo acepte entrega parcial. Surtidos entrega
+   unicamente cantidades reservadas y debe exponer faltantes/reabastecimiento.
+7. **Siguiente — revision completa:** mostrar los seis bloques, reglas
+   bloqueantes/alertas, causa estructurada al devolver y comentario auditable.
+   Operaciones no edita partidas ni condiciones acordadas.
+8. **Migracion, despliegue y validacion:** aplicar migraciones despues de
+   revisar contratos; recorrer con sesiones/roles autorizados OC y sin OC,
+   reserva parcial y total, falta de stock, devolucion/reenvio, aprobacion,
+   surtidos, pagos y balances; probar tambien usuario sin permiso y aislamiento
+   por organizacion.
+9. **Posterior — documentos y reglas:** implementar `documentos_cobro`,
    politicas configurables de liberacion logistica y vencimiento de reservas
    cuando se definan sus requisitos. No bloquear entregas por cobranza como
    regla universal.
-7. **Posterior — propiedades:** definir el hito contractual que cambia una
+10. **Posterior — propiedades:** definir el hito contractual que cambia una
    unidad inmobiliaria de apartada a vendida y completar los reportes del ciclo
    inmobiliario sin movimientos de almacen.
 
@@ -541,6 +556,81 @@ Los traspasos deben registrar quien envio, reviso, confirmo, asigno y surtio,
 con fecha y evento auditable. La bandeja debe permitir trabajo propio/equipo
 segun el alcance que ya usa Tal-IA; no se confiaran permisos unicamente a
 botones ocultos en la interfaz.
+
+#### Revision de Operaciones antes de formalizar
+
+Operaciones no vuelve a vender ni modifica silenciosamente el acuerdo. Su
+responsabilidad es validar que el pedido aceptado este completo, ejecutable y
+administrativamente correcto antes de formalizar venta/cuenta por cobrar y
+comprometer inventario. La vista organiza la evidencia en seis bloques:
+
+1. **Cliente:** identidad de persona/empresa, vinculacion entre ambas, datos
+   fiscales o comerciales requeridos por el tenant y posibles duplicados.
+2. **Aceptacion:** forma/fecha de aceptacion, evidencia asociada, vigencia de la
+   OC cuando aplique y conciliacion del importe con la cotizacion aceptada.
+3. **Partidas:** catalogo, descripcion, cantidad, unidad, precio, descuento,
+   impuestos, moneda y totales comparados contra la cotizacion aceptada.
+4. **Inventario:** partidas controladas, existencia fisica, cantidad reservada
+   por este pedido, disponible y faltante/reposicion. Las unidades inmobiliarias
+   no se mezclan con stock de almacen.
+5. **Condiciones:** forma/terminos de pago, credito y anticipo, fecha/domicilio
+   de entrega, envio y autorizaciones especiales cuando correspondan.
+6. **Riesgos e inconsistencias:** discrepancias comerciales, cliente bloqueado,
+   producto inactivo, datos/documentos faltantes y alertas de inventario.
+
+La pantalla muestra lo capturado para compararlo; Operaciones no corrige datos
+comerciales. Una discrepancia de cliente, precio, cantidad, descuento o
+condiciones vuelve a Comercial. La devolucion guarda una causa estructurada
+(evidencia faltante, OC discrepante, precio/descuento, cliente, partidas,
+condiciones, inventario u otro), comentario, actor y fecha.
+
+Las reglas se clasifican como **bloqueantes** o **alertas**. Aceptacion ausente,
+cliente no identificable, partida invalida o total comercial discrepante
+bloquean la aprobacion. Falta de stock, entrega parcial o fecha cercana pueden
+ser alertas que Operaciones acepte segun las condiciones acordadas. Un bloqueo
+no puede omitirse marcando una casilla.
+
+#### Condiciones y evidencias como datos del acuerdo
+
+Comercial captura las condiciones en la cotizacion mientras acuerda la venta:
+forma/plazo de pago, credito, anticipo, si se permiten entregas parciales, fecha
+y domicilio de entrega, costo de envio y observaciones comerciales. Al aceptar
+el cliente, el pedido conserva una copia inmutable de esas condiciones para
+que Operaciones las compare; no vuelve a capturarlas ni puede editarlas.
+
+La evidencia del cliente admite OC, cotizacion firmada, contrato y adjuntos de
+correo u otros documentos. Para WhatsApp, correo o llamada se guarda el tipo y
+la referencia verificable disponible (por ejemplo fecha, asunto o registro de
+llamada), con archivo cuando exista. La OC es un tipo de evidencia y puede
+habilitar reserva anticipada; no es un requisito universal salvo politica
+explicita del tenant.
+
+#### Reserva parcial y faltante de inventario
+
+Una reserva no puede exceder el disponible fisico del almacen. Si un pedido
+requiere 10 unidades y solo hay 8 disponibles para reservar, se reserva 8 y se
+registra 2 como pendiente de inventario. Comercial puede crear esa reserva
+anticipada solo cuando valida una OC; no formaliza la venta ni libera a
+Almacen. Sin OC, Operaciones determina la reserva al aprobar.
+
+La cantidad pendiente solo permite aprobar/liberar cuando la condicion
+capturada en la cotizacion indica que se acepta entrega parcial. Si no se
+permiten parcialidades, el faltante bloquea la liberacion hasta reabastecer o
+corregir comercialmente el pedido. Almacen solo puede entregar cantidades
+reservadas. Surtidos muestra requerido, reservado, surtido y pendiente de
+inventario; al recibir reposicion, se reserva el remanente mediante una accion
+controlada y auditable. Una reserva previa por OC se conserva y nunca se duplica.
+
+La implementacion actual solo contiene un checklist preliminar de tres
+confirmaciones; no representa todavia esta revision de seis bloques. El
+snapshot de pedido tiene importes y partidas basicos, pero la bandeja debe
+exponer el detalle completo; la carga de evidencia actual se limita a OC; las
+condiciones de pago/entrega requieren columnas explicitas en cotizacion/pedido.
+La reserva vigente es de todo o nada y debe evolucionar a reserva parcial con
+faltante visible en Surtidos. Datos fiscales, deteccion de duplicados y
+requisitos documentales deben validarse contra las fuentes existentes y
+configuracion del tenant antes de definir bloqueos automaticos. Estas brechas
+no se consideran resueltas por el checklist preliminar.
 
 ### Autorizacion usando el RBAC existente
 

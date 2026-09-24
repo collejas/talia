@@ -1,9 +1,45 @@
 # Changelog — Clientes y vendedores
 
-## 2026-09-24 — Implementacion local de revision operativa y reserva por OC
+## 2026-09-24 — Secuencia para completar revision, condiciones y reserva parcial
 
-- La bandeja de Operaciones ahora requiere marcar revision de cliente,
-  evidencia y partidas antes de aprobar y liberar a surtido.
+- Comercial captura las condiciones acordadas en la cotizacion: pago/credito,
+  anticipo, permiso de entrega parcial, fecha/domicilio y envio. Al confirmar el
+  pedido se conserva un snapshot que Operaciones consulta sin editarlo.
+- Se amplian los medios de evidencia mas alla de OC: archivos asociados al
+  pedido y referencias verificables para correo, WhatsApp, llamada u otros.
+- Las reservas se limitan a existencias disponibles. El pedido conserva
+  requerido, reservado, surtido y pendiente de inventario. Una OC validada
+  permite reserva anticipada; sin OC, se reserva al aprobar Operaciones.
+- Un faltante solo permite aprobar/liberar si el acuerdo acepta entrega
+  parcial. Almacen entrega unicamente cantidades reservadas; al reabastecer se
+  puede reservar el saldo pendiente mediante accion auditable.
+- Orden acordado: estructurar condiciones; ampliar evidencia; implementar
+  reservas parciales y Surtidos con faltantes; crear revision de seis bloques,
+  bloqueantes/alertas y devolucion tipificada; despues consolidar migraciones,
+  desplegar y validar por rol/tenant.
+- La migracion preliminar `20260924213308_order_review_and_oc_reservation.sql`
+  no se aplica aun; debe ampliarse/consolidarse con estos cambios antes de
+  llevarla a Supabase.
+
+## 2026-09-24 — Alcance de la revision operativa en seis bloques
+
+- Se define que Operaciones valida el pedido, no vuelve a vender ni corrige en
+  silencio el acuerdo comercial.
+- La revision se organiza en cliente, aceptacion/evidencia, partidas,
+  inventario/disponibilidad, condiciones y riesgos/inconsistencias.
+- Se separan bloqueantes de alertas y se establece devolver a Comercial con
+  causa estructurada y comentario para discrepancias comerciales.
+- La reserva vigente es todo o nada. Permitir aprobar con faltantes requiere
+  primero soportar reserva parcial, cantidad pendiente y su manejo en Surtidos.
+- El checklist de tres casillas de la implementacion preliminar no representa
+  esta revision completa. Datos de entrega/pago, expediente de cliente y otros
+  tipos de evidencia requieren confirmar fuente y reglas por tenant.
+
+## 2026-09-24 — Implementacion preliminar local y brecha de revision completa
+
+- La bandeja de Operaciones requiere marcar revision de cliente, evidencia y
+  partidas antes de aprobar; es un checklist preliminar, no la revision de seis
+  bloques definida arriba.
 - Se creo una RPC transaccional para guardar la revision, formalizar venta y
   cuenta por cobrar y liberar el pedido. La ruta anterior de formalizacion
   directa devuelve conflicto para impedir que omita el checklist.
@@ -16,7 +52,8 @@
 - Se agrego la migracion local
   `20260924213308_order_review_and_oc_reservation.sql`. No esta aplicada a
   Supabase ni desplegada; falta validar sintaxis de migracion, flujo autenticado,
-  permisos y balances antes de despliegue.
+  permisos y balances antes de despliegue. Debe ampliarse para tipificar las
+  devoluciones y soportar reservas parciales antes de aplicarla.
 
 ## 2026-09-24 — Reserva anticipada cuando Comercial valida una OC
 

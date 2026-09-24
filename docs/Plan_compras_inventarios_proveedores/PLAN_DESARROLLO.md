@@ -610,6 +610,32 @@ Operaciones puede devolverlo o confirmarlo, y esa confirmacion crea los
 registros financieros y reservas. Almacen procesa entregas desde su cola. La
 accion de entrega se retiro del drawer comercial y no debe reintroducirse ahi.
 
+**Alcance de la revision operativa:** Operaciones no modifica el acuerdo
+comercial. La pantalla debe comparar seis bloques: cliente; aceptacion y
+evidencia; partidas e importes; inventario/disponibilidad; condiciones de pago y
+entrega; riesgos e inconsistencias. Precio, cantidad, descuento, cliente o
+condiciones discrepantes se regresan a Comercial con causa estructurada y
+comentario. Aceptacion/identificacion ausentes y partidas o totales invalidos
+son bloqueantes; falta de stock, surtido parcial y fecha cercana pueden ser
+alertas aceptables si la condicion comercial correspondiente lo permite.
+Liberar un faltante como alerta requiere reservas parciales y cantidad pendiente
+persistida que Almacen pueda surtir despues. El RPC de reserva actual es todo o
+nada, por lo que ese comportamiento no se debe habilitar hasta evolucionarlo.
+La evidencia cargable distinta de OC y los campos estructurados de condiciones
+de pago/entrega aun no existen en este flujo; se acuerda que nacen en la
+cotizacion comercial y se copian como snapshot al pedido.
+
+**Secuencia acordada para completar el flujo:** (1) estructurar condiciones
+comerciales en cotizacion y conservar snapshot en pedido; (2) admitir documentos
+y referencias verificables para los medios de aceptacion; (3) soportar reservas
+parciales y cantidades pendientes, con entrega limitada a lo reservado; (4)
+construir la revision de seis bloques con reglas bloqueantes/alertas y
+devolucion tipificada; (5) revisar/aplicar migraciones y validar el flujo por
+rol/tenant. Con OC validada se reserva antes de revision operativa; sin OC, al
+aprobar. Si hay faltante, solo se libera el pedido con parcialidades cuando el
+acuerdo comercial lo permita. Reabastecer debe habilitar la reserva posterior
+del saldo pendiente sin duplicar ni sobre-reservar.
+
 ## Estado actual
 
 - Fase 1 iniciada con migracion base en `supabase/migrations/20260521_120000_inventory_purchases_phase1.sql`.
@@ -629,4 +655,4 @@ accion de entrega se retiro del drawer comercial y no debe reintroducirse ahi.
 - El flujo anterior de reservar/liberar inventario al aceptar/cancelar cotizaciones queda supersedido por la politica acordada el 2026-09-24. La reserva por pedido confirmado, el motor de salida y la cola de surtidos de Almacen estan desplegados. La siguiente alineacion conserva el RBAC existente y mueve el punto de formalizacion/reserva a la aprobacion de Operaciones.
 - Migraciones `20260924015415_pedidos_venta_flujo_confirmacion.sql` y `20260924021025_pedidos_venta_fk_indexes.sql` aplicadas en Supabase; backend y panel desplegados en `20260924_021215`.
 - Las migraciones `20260924185828_sales_order_handoff_permissions.sql` y `20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y el release `20260924_191718` esta activo en produccion. El flujo actualmente desplegado es Comercial envia a revision; Operaciones confirma o devuelve con motivo; Almacen trabaja desde `Inventario > Surtidos`. Las pantallas y API responden correctamente sin sesion; falta recorrer el flujo con usuarios autenticados y verificar persistencia de reservas/entregas.
-- Siguiente: revisar y aplicar la migracion local del flujo objetivo; desplegar y validar por rol/tenant OC (reserva antes de aprobar), evidencia sin OC (reserva al aprobar), regreso/correccion, checklist y aprobacion, surtido parcial/total y balances. Politicas configurables por tenant, liberacion logistica por credito/anticipo, cancelacion logistica y el hito contractual inmobiliario se amplian despues.
+- Siguiente: no aplicar aun la migracion preliminar. Primero estructurar condiciones/evidencias, evolucionar reserva a parcial con faltantes visibles en Surtidos y construir la revision operativa completa; despues consolidar/aplicar migraciones, desplegar y validar por rol/tenant. Politicas configurables adicionales, cancelacion logistica y el hito contractual inmobiliario se amplian despues.

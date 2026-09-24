@@ -104,6 +104,26 @@ Las capacidades especificas de envio, revision y surtido ya estan en el
 catalogo RBAC; debe verificarse la autorizacion para la aprobacion que dispara
 la formalizacion.
 
+La revision completa debe cubrir cliente, aceptacion/evidencia, partidas,
+inventario, condiciones comerciales y riesgos. Operaciones devuelve
+discrepancias comerciales con causa y comentario, sin editar lo vendido. La
+reserva actual es todo o nada; faltantes de stock solo podran ser alertas que
+permitan liberar cuando exista soporte de reserva parcial y cantidades
+pendientes en la cola de Almacen. Se acuerda capturar condiciones de pago/entrega
+en la cotizacion, copiarlas como snapshot al pedido y permitir evidencia
+adjunta/referenciada para otros medios de aceptacion. Requisitos fiscales,
+duplicados y reglas tenant-specific deben revisarse contra sus fuentes antes de
+definir validaciones automaticas.
+
+El orden para completar el flujo es estructurar condiciones comerciales en la
+cotizacion y copiarlas al pedido; habilitar evidencia adjunta/referenciada para
+los medios de aceptacion; permitir reservas parciales y mostrar cantidades
+requeridas, reservadas, surtidas y pendientes; construir la revision completa
+con bloqueantes/alertas y devolucion tipificada; y finalmente aplicar
+migraciones, desplegar y validar por rol y tenant. Una reserva anticipada por OC
+se conserva; sin OC se realiza al aprobar. La entrega parcial solo se libera
+cuando el acuerdo la permite, y Almacen nunca entrega cantidad no reservada.
+
 ### Transicion desde el comportamiento anterior
 
 El flujo anterior podia crear una cotizacion aceptada y marcar la unidad como
