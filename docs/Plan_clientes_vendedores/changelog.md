@@ -2,6 +2,12 @@
 
 ## 2026-09-24
 
+### Priorizacion del siguiente bloque del refactor — documentado
+
+- Se actualizo la hoja de ruta para distinguir las capacidades ya desplegadas del trabajo operativo pendiente.
+- Orden acordado: envio Comercial a formalizacion; capacidades especificas en el RBAC existente; bandeja de revision/confirmacion de Operaciones; cola de surtidos en Inventario; validacion autenticada por rol y tenant.
+- Documentos de cobro, vencimiento de reservas, politicas de liberacion por anticipo/credito y el hito contractual inmobiliario quedan como etapas posteriores, no como bloqueadores del traspaso inicial.
+
 ### Separacion de responsabilidades y traspasos — documentado
 
 - Se define que Comercial trabaja la oportunidad/cotizacion y envia el pedido a formalizacion; Operaciones/Administracion revisa y confirma; Almacen atiende la cola de surtidos; Finanzas lleva cobranza y documentos.

@@ -453,44 +453,35 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
 
 ### Fases de implementación
 
-1. Modificar el flujo actual para que la aceptación de cotización marque la
-   oportunidad como ganada, sin formalizar automáticamente una venta.
-2. Crear `oportunidades.cliente_id` y conservar todas las oportunidades del
-   mismo cliente.
-3. Crear `ventas` y `venta_items` con restricciones, índices y RLS por tenant.
-4. Crear `pedidos_venta` y `pedido_venta_items`, enlazarlos con la cotizacion
-   aceptada y permitir confirmar explicitamente el compromiso del cliente,
-   con OC o sin OC. El formulario debe admitir forma de confirmacion,
-   referencia/numero de OC, carga del documento recibido del cliente,
-   observaciones y auditoria del usuario/vendedor.
-5. El vendedor enviara el pedido a formalizacion. Operaciones/administracion
-   revisara y confirmara el compromiso; esa confirmacion creara/activara el
-   cliente, venta, partidas y cuenta por cobrar y reservara stock disponible
-   para articulos stockables atomicamente e idempotentemente.
-6. Crear `cuentas_por_cobrar`, con cálculo consistente de saldo y estados de
-   cobranza; no confundir importe vendido con importe cobrado.
-7. Crear `documentos_cobro` y sus operaciones (emitir, consultar, descargar,
-   enviar y cancelar según tipo). La emisión de estos documentos será
-   configurable y no una condición universal para crear la venta.
-8. Separar el registro de pago confirmado del alta/formalización. Conservar un
-   flujo rápido opcional de formalizar venta y registrar pago en una sola
-   operación coordinada.
-9. Reconciliar los clientes creados por el flujo anterior y conservar la
-   trazabilidad de su origen.
-10. Actualizar APIs, panel de clientes, detalle de oportunidad, ventas,
-   cobranza y reportes.
-11. Propagar `catalog_item_id` desde `cotizacion_items` hasta partidas del
-    pedido y `venta_items`; mantener separados los estados comercial,
-    financiero y logistico.
-12. Mover la entrega/surtido parcial o total a una cola del area de inventario;
-    permitir solo al personal autorizado registrar la salida y liberar la
-    reserva correspondiente.
-13. Validar el flujo de primera compra, compra recurrente y ciclo de
-    inventario por contacto, empresa y cliente.
-14. Incorporar flujos de propiedades sobre el mismo nucleo financiero cuando
-    las entidades y eventos inmobiliarios (por ejemplo, apartado, contrato y
-    parcialidades) estén definidos; no asumir que el ciclo documental es igual
-    al de otros giros.
+El trabajo implementado y desplegado se resume en las secciones de estado que
+siguen. Las fases pendientes se ejecutaran en este orden:
+
+1. **En curso — traspaso comercial:** sustituir la confirmacion directa por
+   `Enviar a formalizacion`; conservar la evidencia con/sin OC y registrar el
+   evento de envio. Definir el estado compatible con pedidos existentes y la
+   accion para devolver a Comercial para correccion.
+2. **Pendiente — autorizacion:** agregar capacidades acotadas al RBAC actual
+   para enviar y confirmar pedidos y para ver/gestionar surtidos. Revisar las
+   asignaciones por defecto sin basarlas en nombres de puestos. Retirar la
+   autorizacion amplia `sales.manage` para registrar entregas.
+3. **Pendiente — Operaciones:** crear la bandeja de pedidos por revisar,
+   devueltos y confirmados. La confirmacion debe formalizar cliente, venta y
+   cuenta por cobrar, y reservar stock en la misma operacion idempotente.
+4. **Pendiente — Almacen:** mover el registro de entrega al area de Inventario
+   y crear la cola de surtidos. Mantener entregas parciales/totales y sus
+   movimientos transaccionales; la oportunidad solo muestra el progreso y
+   enlaza al pedido.
+5. **Pendiente — validacion:** recorrer con sesiones y roles autorizados el
+   envio con/sin OC, devolucion, confirmacion, reserva, entrega parcial y total,
+   pagos y balances. Verificar tambien usuarios sin permiso y aislamiento por
+   organizacion.
+6. **Posterior — documentos y reglas:** implementar `documentos_cobro`,
+   politicas configurables de liberacion logistica y vencimiento de reservas
+   cuando se definan sus requisitos. No bloquear entregas por cobranza como
+   regla universal.
+7. **Posterior — propiedades:** definir el hito contractual que cambia una
+   unidad inmobiliaria de apartada a vendida y completar los reportes del ciclo
+   inmobiliario sin movimientos de almacen.
 
 ### Traspaso entre areas y responsabilidades
 

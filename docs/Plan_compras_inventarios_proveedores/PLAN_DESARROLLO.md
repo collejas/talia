@@ -582,6 +582,11 @@ colas separadas:
 6. Completar el flujo inmobiliario con su hito contractual de venta, sin
    generar movimientos de almacen para propiedades.
 
+El orden visual acompana el proceso, pero la prioridad de entrega sera: primero
+RBAC y traspaso a Operaciones; despues la cola de Almacen. No se expondra una
+accion de entrega usando el permiso comercial actual mientras se construye la
+nueva cola.
+
 ## Estado actual
 
 - Fase 1 iniciada con migracion base en `supabase/migrations/20260521_120000_inventory_purchases_phase1.sql`.

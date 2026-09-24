@@ -88,12 +88,21 @@ hito aun no esta implementado.
 - El pedido conserva referencias consultables a `propiedad_id` y `unidad_id` en sus partidas. Los atributos visuales variables pueden seguir en `metadatos_extra`.
 
 ## Próximos pasos
-1. Adaptar `POST /crm/ventas/propiedades` para que registrar una cotizacion aceptada no marque por si sola la unidad como vendida ni omita el traspaso a formalizacion.
-2. Desde Comercial, enviar el pedido generado por la cotizacion aceptada a una bandeja de Operaciones; revisar evidencia con/sin OC y devolver expedientes incompletos.
-3. Al confirmar Operaciones el pedido inmobiliario, apartar/reservar la unidad actualizando `propiedad_unidades.status`; no crear movimientos de almacen.
-4. En el hito contractual definido por la organizacion, marcar la unidad como `vendido` y desactivar su oferta en el catalogo comercial; venta y cuenta por cobrar ya se habran creado al confirmar el pedido.
-5. Propagar identificadores explicitos de `catalog_item_id`, `propiedad_id` y `unidad_id` entre cotizacion, partida del pedido y venta.
-6. Extender reportes/vistas con progreso comercial, financiero y patrimonial sin mezclar sus estados.
+El flujo inmobiliario se apoyara en el traspaso general Comercial → Operaciones →
+Finanzas. La unidad no usa la cola de Almacen. Sus pendientes especificos son:
+
+1. Integrar el registro de venta de propiedades con `pedidos_venta` y el envio a
+   formalizacion, evitando que aceptar una cotizacion marque la unidad como
+   vendida o evite la revision operativa.
+2. Al confirmar Operaciones el pedido inmobiliario, apartar/reservar la unidad
+   actualizando `propiedad_unidades.status`; no crear movimientos de almacen.
+3. Definir el hito contractual que marca la unidad como `vendido` y desactiva
+   su oferta comercial; venta y cuenta por cobrar ya se habran creado al
+   confirmar el pedido.
+4. Verificar que `catalog_item_id`, `propiedad_id` y `unidad_id` se conserven
+   entre cotizacion, partida del pedido y venta.
+5. Extender reportes/vistas con progreso comercial, financiero y patrimonial
+   sin mezclar sus estados.
 
 ## Implementación actual
 - Ya existe `POST /crm/ventas/propiedades`: recibe `catalog_item_id`, `propiedad_id`, `unidad_id`, `precio_final` (y opcionalmente `oportunidad_id`, `cuenta_id`, `contacto_id` y metadata adicional).  
