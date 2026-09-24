@@ -11,7 +11,7 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 
 ## 2026-09-23
 
-### Separación entre venta formalizada, cuenta por cobrar y pago — código en repositorio; activación pendiente
+### Separación entre venta formalizada, cuenta por cobrar y pago — migración y despliegue realizados; validación pendiente
 
 - Se ajustó el modelo objetivo: ganar una oportunidad cierra el proceso comercial, pero no crea automáticamente una venta ni registra ingresos.
 - Se definió **Formalizar venta** como la acción que crea o activa el cliente y crea venta, partidas y cuenta por cobrar con saldo inicial igual al total.
@@ -27,7 +27,9 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 - **Validación local:** compilación Python y `git diff --check` pasaron. No se ejecutaron pruebas.
 - **Supabase remoto (2026-09-23):** migración aplicada como `20260923151522_sales_formalization_accounts_receivable`. El primer intento fue revertido por códigos de roles inexistentes (`admin`, `supervisor`); se ajustó el catálogo predeterminado a los roles disponibles antes de reintentar.
 - **Verificación remota:** existe `cuentas_por_cobrar`, `pagos.cuenta_por_cobrar_id` quedó obligatorio, se generaron 4 cuentas para las ventas existentes y los 3 RPC quedaron ejecutables por `service_role` pero no por `authenticated`.
-- **Pendiente de activación:** desplegar backend y panel. Aplicar la migración por sí sola no activa aún el flujo para los usuarios.
+- **Despliegue producción (2026-09-23):** panel publicado en el release `20260923_161750`; backend reiniciado desde el código actualizado.
+- **Validación del despliegue:** TypeScript, ESLint y build Next.js completaron; ESLint reportó dos warnings ajenos a esta vista. Panel y API quedaron activos, `/ventas` respondió HTTP 200, `/api/health` respondió `{"status":"ok"}` y el endpoint de formalización respondió 401 sin sesión.
+- **Pendiente:** validar con sesión autenticada formalización sin pago, pago parcial, liquidación y compra recurrente. La respuesta 401 confirma que el endpoint protege el acceso, pero no sustituye la prueba funcional autenticada.
 
 ### Sección de Ventas y reporte comercial — implementado en el repositorio
 

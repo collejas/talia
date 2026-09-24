@@ -391,9 +391,9 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
 
 La relación con clientes, las tablas de ventas, partidas y pagos, y los
 reportes ya existen. En esta revisión se agregó al repositorio el código para
-formalización independiente y cuentas por cobrar; falta aplicar la nueva
-migración al Supabase del entorno y desplegar backend/panel para activar el
-flujo.
+formalización independiente y cuentas por cobrar. La migración ya se aplicó al
+Supabase remoto y el código de backend/panel ya se desplegó en producción; queda
+validar el recorrido financiero con un usuario autenticado.
 
 - `oportunidades.cliente_id` vincula las 42 oportunidades ganadas existentes
   con su cliente, sin asociar oportunidades abiertas o perdidas.
@@ -401,11 +401,9 @@ flujo.
   oportunidad.
 - Existen `ventas`, `venta_items` y `pagos`, con foreign keys tenant-safe,
   índices, constraints monetarios y RLS.
-- En la base de datos del entorno, hasta aplicar la nueva migración,
-  `crm_registrar_pago_confirmado` todavía crea cliente, venta, partidas y pago
-  en una sola transacción. El repositorio ahora prepara su reemplazo para que
-  registre pagos sobre ventas existentes; `crm_formalizar_venta` crea la venta
-  sin pago.
+- La migración remota `20260923151522_sales_formalization_accounts_receivable`
+  creó las cuentas por cobrar para las cuatro ventas existentes y reemplazó
+  los RPC financieros. El backend se reinició para consumir las nuevas firmas.
 - La API expone
   `POST /crm/cotizaciones/{cotizacion_id}/pago-confirmado`.
 - La vista de clientes ya tiene preparada la ruta de detalle
@@ -456,9 +454,11 @@ por separado venta formalizada, cobranza, cobrado y saldo queda pendiente.
 Tampoco se implementan aún `documentos_cobro`, facturación fiscal ni vencimiento
 automático materializado.
 
-Estado de aplicación: **pendiente**. El acceso MCP a Supabase requiere
-reconexión, así que esta revisión no pudo consultar ni aplicar la migración
-remota. No se desplegaron los servicios.
+Estado de aplicación: **migración y despliegue realizados; validación funcional
+autenticada pendiente**. El panel quedó en el release `20260923_161750`;
+`/ventas` respondió HTTP 200, la API volvió a responder `/api/health` con
+`{"status":"ok"}` y la ruta de formalización respondió 401 sin sesión,
+confirmando que exige autenticación.
 
 ## 14) Reportes de ventas
 
