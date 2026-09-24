@@ -251,13 +251,71 @@ contacto / empresa
 └── una o muchas oportunidades
     └── una cotización aceptada por oportunidad
         └── oportunidad ganada
-            └── formalizar venta
-                ├── cliente creado o actualizado
-                ├── venta + partidas
-                ├── cuenta por cobrar
-                ├── documentos de venta/cobro (según el flujo)
-                └── uno o varios pagos confirmados
+            └── pedido del cliente confirmado
+                ├── formalizar venta
+                │   ├── cliente creado o actualizado
+                │   ├── venta + partidas
+                │   ├── cuenta por cobrar
+                │   └── documentos de venta/cobro (según el flujo)
+                └── reservar stock (solo articulos stockables)
+                    └── entrega: salida fisica y liberacion de reserva
 ```
+
+### Confirmacion del pedido e inventario
+
+Aceptar la cotizacion y ganar la oportunidad cierran el compromiso comercial,
+pero no reservan existencias. La cotizacion aceptada puede generar un pedido
+pendiente de confirmacion. La confirmacion del pedido del cliente —usualmente
+respaldada por su orden de compra recibida y validada— es la frontera para
+formalizar la venta y, para productos stockables, reservar inventario. En la
+primera version, esta es la politica B2B predeterminada. No se debe confundir
+la orden de compra del cliente con `ordenes_compra`, que en Tal-IA representa
+compras de la organizacion a sus proveedores.
+
+La reserva modifica `stock_reservado` y `stock_disponible`, no la existencia
+fisica. Facturar, emitir una proforma o recibir un pago tampoco descuenta stock.
+La salida fisica ocurre al surtir/entregar; cancelar un pedido no surtido libera
+la reserva. Servicios y articulos con `maneja_inventario = false` no crean
+reservas ni movimientos de almacen. Cobranza, venta y cumplimiento logistico
+conservan estados independientes.
+
+**Decision de arquitectura:** el pedido del cliente sera una entidad propia,
+`pedidos_venta`, con sus partidas `pedido_venta_items`. La cotizacion aceptada
+podra originar un pedido en espera de confirmacion; aceptar la cotizacion o
+ganar la oportunidad no reserva inventario ni formaliza la venta. La
+confirmacion explicita registra que el cliente comprometio la compra (por
+ejemplo, con una orden de compra recibida y validada) y, en una operacion
+transaccional e idempotente, formaliza cliente, venta, partidas y cuenta por
+cobrar, y reserva las cantidades disponibles de articulos stockables. La orden
+de compra del cliente es evidencia/referencia del pedido; no es
+`ordenes_compra`, que representa compras a proveedores.
+
+Para la primera version se establece una relacion uno a uno entre pedido
+confirmado y venta/cuenta por cobrar: cada pedido confirmado genera una venta y
+una cuenta por cobrar, y la venta conserva una referencia unica al pedido.
+Los estados del pedido/logistica se mantienen en el pedido y sus operaciones;
+los estados financieros permanecen en venta/cuenta por cobrar. En la primera
+version los estados del pedido seran `borrador`, `pendiente_confirmacion`,
+`confirmado` y `cancelado`; solo un pedido no confirmado o sin surtir puede
+cancelarse y liberar cualquier reserva asociada. La entrega parcial o total
+registrara salidas contra las partidas del pedido/venta y liberara la cantidad
+surtida. Cambios despues de confirmar requeriran una operacion controlada de
+ajuste o cancelacion, no editar silenciosamente las partidas confirmadas.
+
+Las partidas conservaran relaciones explicitas y tenant-safe con
+`cotizacion_items`, `catalog_items` y, cuando aplique, `propiedad_id` y
+`unidad_id`. Esta entidad y este flujo son una decision de diseno, no una
+funcionalidad implementada.
+
+La partida debe conservar el producto mediante una columna explicita
+`catalog_item_id` desde la cotizacion hasta `venta_items`; la relacion no debe
+depender de metadata. Actualmente `cotizacion_items` usa el legado
+`producto_id` y la RPC de formalizacion no copia el `catalog_item_id`
+disponible en `venta_items`; cerrar esta brecha requiere adaptar el esquema y
+la copia de renglones. La reserva debe poder trazarse hasta el pedido y su
+renglon, y la salida hasta la venta y el renglon surtido. La configuracion por
+tenant para reservar con anticipo/pago, al aceptar cotizacion, manualmente o no
+reservar queda para una fase posterior.
 
 Una vez que el contacto o empresa ya es cliente, cada nueva oportunidad
 ganada se conserva en su historial; no se sobrescribe la oportunidad
@@ -271,9 +329,17 @@ incorporar:
 - `public.oportunidades.cliente_id`: relación de muchas oportunidades con un
   cliente.
 - `public.ventas`: venta formal asociada a organización, cliente, cuenta,
-  oportunidad y cotización.
-- `public.venta_items`: productos o servicios vendidos, con cantidad, precio,
-  descuentos, impuestos y subtotal.
+  oportunidad, cotización y pedido confirmado (referencia unica al pedido en
+  el alcance inicial).
+- `public.pedidos_venta` y `public.pedido_venta_items`: pedido del cliente con
+  estado comercial/logistico propio; partidas ligadas a cotizacion,
+  `catalog_item_id` y, cuando aplique, `propiedad_id`/`unidad_id`. Cada pedido
+  confirmado genera una venta en v1.
+- `public.cotizacion_items`: debe conservar `catalog_item_id` como relacion
+  explicita del articulo cotizado, además de la compatibilidad temporal con
+  `producto_id` legado.
+- `public.venta_items`: productos o servicios vendidos, con `catalog_item_id`,
+  cantidad, precio, descuentos, impuestos y subtotal.
 - `public.cuentas_por_cobrar`: obligación pendiente de una venta, con importe
   original, importe pagado, saldo, moneda, fechas de emisión y vencimiento, y
   estado de cobranza. Debe relacionarse mediante claves foráneas reales con la
@@ -366,28 +432,36 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
 2. Crear `oportunidades.cliente_id` y conservar todas las oportunidades del
    mismo cliente.
 3. Crear `ventas` y `venta_items` con restricciones, índices y RLS por tenant.
-4. Implementar **Formalizar venta** para crear/activar cliente, venta y
-   partidas de forma atómica e idempotente.
-5. Crear `cuentas_por_cobrar`, con cálculo consistente de saldo y estados de
+4. Crear `pedidos_venta` y `pedido_venta_items`, enlazarlos con la cotizacion
+   aceptada y permitir confirmar explicitamente el compromiso del cliente.
+5. Al confirmar el pedido, ejecutar **Formalizar venta** y crear/activar
+   cliente, venta, partidas y cuenta por cobrar atomicamente e idempotentemente;
+   reservar stock disponible para articulos stockables en la misma operacion.
+6. Crear `cuentas_por_cobrar`, con cálculo consistente de saldo y estados de
    cobranza; no confundir importe vendido con importe cobrado.
-6. Crear `documentos_cobro` y sus operaciones (emitir, consultar, descargar,
+7. Crear `documentos_cobro` y sus operaciones (emitir, consultar, descargar,
    enviar y cancelar según tipo). La emisión de estos documentos será
    configurable y no una condición universal para crear la venta.
-7. Separar el registro de pago confirmado del alta/formalización. Conservar un
+8. Separar el registro de pago confirmado del alta/formalización. Conservar un
    flujo rápido opcional de formalizar venta y registrar pago en una sola
    operación coordinada.
-8. Reconciliar los clientes creados por el flujo anterior y conservar la
+9. Reconciliar los clientes creados por el flujo anterior y conservar la
    trazabilidad de su origen.
-9. Actualizar APIs, panel de clientes, detalle de oportunidad, ventas,
+10. Actualizar APIs, panel de clientes, detalle de oportunidad, ventas,
    cobranza y reportes.
-10. Validar el flujo de primera compra y compra recurrente por contacto,
-   empresa y cliente.
-11. Incorporar flujos de propiedades sobre el mismo núcleo financiero cuando
-   las entidades y eventos inmobiliarios (por ejemplo, apartado, contrato y
-   parcialidades) estén definidos; no asumir que el ciclo documental es igual
-   al de otros giros.
+11. Propagar `catalog_item_id` desde `cotizacion_items` hasta partidas del
+    pedido y `venta_items`; mantener separados los estados comercial,
+    financiero y logistico.
+12. Integrar la entrega/surtido parcial o total como salida de inventario y
+    liberacion de la reserva correspondiente.
+13. Validar el flujo de primera compra, compra recurrente y ciclo de
+    inventario por contacto, empresa y cliente.
+14. Incorporar flujos de propiedades sobre el mismo nucleo financiero cuando
+    las entidades y eventos inmobiliarios (por ejemplo, apartado, contrato y
+    parcialidades) estén definidos; no asumir que el ciclo documental es igual
+    al de otros giros.
 
-### Estado de implementación base al 2026-09-12, actualizado al 2026-09-23
+### Estado de implementación base al 2026-09-12, actualizado al 2026-09-24
 
 La relación con clientes, las tablas de ventas, partidas y pagos, y los
 reportes ya existen. En esta revisión se agregó al repositorio el código para
@@ -417,14 +491,13 @@ validar el recorrido financiero con un usuario autenticado.
 - El historial consulta `ventas`, `venta_items` y `pagos` mediante el backend
   autorizado, respetando el RLS de las tablas comerciales.
 
-El flujo legacy de conversión manual quedó retirado. El repositorio prepara
-dos vías para crear o activar el cliente desde una oportunidad: formalizar la
-venta sin pago, o usar el atajo de formalizar y cobrar inmediatamente. La ruta
-rápida crea en una transacción el cliente, la venta, sus partidas, la
-cuenta por cobrar y el pago inmediato. El flujo separado usa **Formalizar
-venta** para crear cliente, venta, partidas y cuenta; después registra cada
-pago sobre una venta existente. Ganar la oportunidad no crea por sí sola una
-venta ni registra dinero.
+El flujo legacy de conversión manual quedó retirado. El código desplegado
+permite formalizar sin pago o usar el atajo de formalizar y cobrar
+inmediatamente; ganar la oportunidad no crea por sí sola una venta ni registra
+dinero. La politica nueva ubica la formalizacion y la reserva de stock despues
+de confirmar el pedido del cliente. Ese requisito aun debe integrarse al flujo
+actual, que permite formalizar a partir de la cotizacion aceptada sin un evento
+separado de confirmacion del pedido.
 
 ### Formalización y cuentas por cobrar — código en repositorio al 2026-09-23
 

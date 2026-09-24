@@ -44,9 +44,62 @@ El modulo de compras e inventario solo aplica a articulos stockables. Las propie
 Reglas practicas:
 
 - si el item maneja inventario, puede entrar a compras e inventario;
-- si el item es una propiedad o unidad inmobiliaria, debe quedar fuera del flujo de compras;
-- los `catalog_items` generados desde propiedades deben guardarse como catalogo de venta, no como inventario operativo;
-- para unidades patrimoniales, no se debe crear `catalog_item` operativo y cualquier catalogo existente debe quedar inactivo y sin flags de inventario o compra.
+- si el item es una propiedad o unidad inmobiliaria, debe quedar fuera del flujo de compras, almacenes y existencias cuantitativas;
+- una unidad puede tener una representacion en `catalog_items` para cotizarla y venderla, pero esa fila es un articulo de catalogo comercial, no inventario operativo;
+- los `catalog_items` ligados a propiedades deben tener `maneja_inventario = false` y `activo_compra = false`; `activo` representa si se ofrece comercialmente y debe seguir la disponibilidad de la unidad;
+- la disponibilidad patrimonial se controla en `propiedad_unidades.status`, no mediante `inventario_existencias` ni movimientos de almacen.
+
+## Politica acordada para reservas de venta
+
+La aceptacion de una cotizacion y el cambio de una oportunidad a ganada no
+reservan existencias. La reserva nace cuando se confirma un pedido del cliente,
+normalmente respaldado por su orden de compra recibida y validada. Para el
+alcance inicial, esa confirmacion es la politica predeterminada B2B. La
+configuracion por tenant para reservar al recibir anticipo/pago, al aceptar la
+cotizacion, reservar manualmente o no reservar queda como evolucion posterior.
+
+El pedido puede formalizar la venta y su cuenta por cobrar, pero la reserva y
+la cobranza conservan estados propios. Un pago, una factura o una proforma no
+descuentan por si mismos las existencias fisicas. Los servicios y productos
+con `maneja_inventario = false` no generan reservas ni movimientos de almacen.
+
+| Evento | Stock fisico | Stock reservado | Stock disponible |
+| --- | --- | --- | --- |
+| Cotizacion creada/enviada/aceptada | Sin cambio | Sin cambio | Sin cambio |
+| Pedido del cliente confirmado | Sin cambio | Aumenta | Disminuye |
+| Pedido cancelado antes de surtir | Sin cambio | Se libera | Aumenta |
+| Entrega/embarque | Disminuye | Se libera la cantidad surtida | Se mantiene respecto a la cantidad surtida |
+
+`stock_disponible = stock_actual - stock_reservado`. Por ejemplo, con 100 en
+existencia y 30 reservadas quedan 70 disponibles; al entregar esas 30, la
+existencia pasa a 70 y la reserva a cero, por lo que siguen disponibles 70.
+
+La identidad comercial del producto debe mantenerse desde el renglon de
+cotizacion hasta el de venta mediante `catalog_item_id` explicito y tenant-safe.
+No se usara `metadata` para este vinculo. La reserva debe referenciar el pedido
+y sus renglones; la salida debe referenciar la venta y el renglon surtido.
+
+**Decision de arquitectura:** el pedido del cliente sera una entidad propia:
+`pedidos_venta` y `pedido_venta_items`. Una cotizacion aceptada puede crear un
+pedido `pendiente_confirmacion`; la confirmacion explicita del compromiso del
+cliente (por ejemplo, recibir y validar su orden de compra) formaliza la venta
+y la cuenta por cobrar y reserva stock dentro de una operacion coordinada. En
+v1 cada pedido confirmado genera una venta y una cuenta por cobrar. La venta
+referencia de forma unica al pedido. La orden de compra del cliente no se
+confunde con `ordenes_compra`, que registra compras de la organizacion a sus
+proveedores.
+
+Los estados iniciales del pedido son `borrador`, `pendiente_confirmacion`,
+`confirmado` y `cancelado`. No se mezclaran estados comerciales/logisticos con
+`ventas.estatus`, el estado de cobranza ni metadata. Solo un pedido no
+confirmado o no surtido puede cancelarse y liberar su reserva; los cambios a
+partidas confirmadas requieren una operacion controlada. Las partidas del
+pedido mantendran referencias explicitas a cotizacion, `catalog_item_id` y,
+cuando aplique, propiedad y unidad. Esta decision no significa que las tablas
+o el flujo ya esten implementados.
+Antes de implementar expiracion de reservas o surtidos parciales se definira si
+requieren una entidad `reservas_inventario` explicita; sus vencimientos y
+estados no deben esconderse en JSON.
 
 ## Tablas propuestas
 
@@ -405,13 +458,14 @@ Objetivo:
 
 Tareas:
 
-- reservas de stock al confirmar una venta,
-- liberacion de reservas por cancelacion,
+- reservar stock al confirmar el pedido del cliente, nunca por aceptar una cotizacion solamente,
+- liberar reservas cuando se cancele un pedido no surtido,
+- descontar existencia fisica al entregar/embarcar y liberar la reserva en la misma operacion,
 - ajuste de costo promedio,
 - validaciones de stock minimo,
 - reportes de rotacion, faltantes y compras sugeridas.
 - ajuste manual de inventario con movimiento auditado.
-- reserva y liberacion de stock al aceptar o cancelar cotizaciones.
+- reemplazar la reserva actual al aceptar cotizaciones por reserva al confirmar pedidos de cliente.
 
 ### Fase 5: edicion operativa de ordenes de compra
 
@@ -466,11 +520,13 @@ Tareas:
 
 ## Siguientes pasos tecnicos
 
-1. Definir si el modulo vivira en el schema actual o en un schema nuevo.
-2. Crear la migracion SQL de la Fase 1.
-3. Ajustar el frontend de catalogo para mostrar `maneja_inventario`, `activo_compra`, `stock_minimo`, `stock_objetivo` y un select de `unidad_inventario` alimentado por un maestro editable.
-4. Agregar vistas simples de almacenes y existencias.
-5. Implementar despues proveedores y ordenes de compra.
+1. Crear `pedidos_venta` y `pedido_venta_items`, con estados y relaciones tenant-safe a cotizacion, cliente, catalogo y venta.
+2. Reemplazar la reserva al aceptar cotizacion por la confirmacion explicita del pedido del cliente.
+3. Agregar `catalog_item_id` como relacion explicita de `cotizacion_items` y propagarlo a partidas del pedido y `venta_items` al formalizar.
+4. Confirmar pedido, formalizar venta/cuenta por cobrar y reservar cantidades disponibles de forma transaccional e idempotente por tenant y almacen.
+5. Registrar surtidos/entregas como movimientos de salida y liberar la reserva en la misma operacion; liberar tambien las cantidades no surtidas al cancelar.
+6. Integrar la venta inmobiliaria con el nucleo financiero y el pedido sin generar movimientos de almacen para propiedades.
+7. Validar el ciclo de pedido, reserva, cancelacion y entrega parcial/completa antes de ampliar reportes o reglas configurables por tenant.
 
 ## Estado actual
 
@@ -488,5 +544,5 @@ Tareas:
 - El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - Ya existe un maestro editable de unidades de medida en `settings/productos/unidades-medida` y el catálogo usa ese maestro para `unidad_inventario`.
 - Ya existe un ajuste manual de inventario en la vista de compras, con movimiento auditable.
-- Ya existe reserva y liberacion de inventario desde el flujo de cotizaciones aceptadas o canceladas.
-- La siguiente entrega debe enfocarse en validar el flujo end-to-end, luego reforzar el CRUD de órdenes, existencias y reportes operativos.
+- El flujo actualmente documentado reserva/libera inventario al aceptar/cancelar cotizaciones; esa conducta queda supersedida por la politica acordada el 2026-09-24. La reserva por pedido confirmado y la salida fisica por entrega estan pendientes de implementacion y validacion.
+- La siguiente entrega debe implementar y validar la reserva por pedido confirmado, el surtido/entrega con salida auditada y la liberacion de reservas pendientes; despues se ampliaran reportes y politicas por tenant.

@@ -9,6 +9,22 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 - `Completado`: implementado y verificado según la evidencia registrada.
 - `Por validar`: el plan documenta la implementación, pero falta confirmar el flujo de extremo a extremo.
 
+## 2026-09-24
+
+### Política de reserva de inventario y confirmación de pedidos — decisión documentada
+
+- Aceptar una cotización o ganar una oportunidad no reserva existencias.
+- Se decidió modelar el pedido del cliente con entidad propia: `pedidos_venta` y `pedido_venta_items`; no se agregará el ciclo de pedido dentro de `ventas.estatus`.
+- Una cotización aceptada puede crear un pedido pendiente de confirmación. La confirmación explícita del compromiso del cliente —normalmente respaldada por su orden de compra recibida y validada— formaliza venta y cuenta por cobrar y reserva productos stockables en una operación coordinada.
+- En v1, cada pedido confirmado genera una venta y una cuenta por cobrar; la venta tendrá referencia única al pedido. La orden de compra del cliente es evidencia del pedido y no debe confundirse con `ordenes_compra` a proveedores.
+- Estados iniciales del pedido: `borrador`, `pendiente_confirmacion`, `confirmado` y `cancelado`. Cambios a partidas confirmadas requieren una operación controlada.
+- Reservar aumenta el stock reservado y reduce el disponible; no reduce la existencia física. La salida ocurre al entregar/embarcar y libera la reserva.
+- Pagos, facturas y proformas pertenecen al estado financiero/documental y no descuentan existencias.
+- Las propiedades mantienen disponibilidad por unidad y no usan el inventario de almacén; pedido confirmado aparta/reserva y un hito contractual posterior marca vendido.
+- Las partidas del pedido conservarán relaciones explícitas y tenant-safe con cotización, `catalog_item_id` y, cuando aplique, `propiedad_id` y `unidad_id`; el vínculo debe propagarse hasta `venta_items`.
+- Las propiedades se apartan por estado de unidad, sin movimientos de almacén, y se marcan vendidas al cumplirse el hito contractual acordado.
+- **Pendiente de implementación:** crear las entidades y operaciones de pedido, reemplazar la reserva actual al aceptar cotizaciones, completar el vínculo del catálogo, integrar confirmación, entrega y el flujo inmobiliario. Políticas configurables por tenant y vencimientos de reserva quedan para fases posteriores.
+
 ## 2026-09-23
 
 ### Separación entre venta formalizada, cuenta por cobrar y pago — migración y despliegue realizados; validación pendiente
