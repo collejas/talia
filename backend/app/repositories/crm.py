@@ -15215,7 +15215,7 @@ class CRMRepository:
                 "id,organizacion_id,proveedor_id,persona_id,rol_en_proveedor,es_principal,"
                 "es_compras,es_facturacion,es_logistica,activo,fecha_inicio,fecha_fin,notas,"
                 "metadata,creado_en,actualizado_en,"
-                "persona:personas(id,organizacion_id,nombre_completo,correo,correo_principal,telefono_e164,telefono_principal_e164,puesto,area,rol_decision,company_name)"
+                "persona:personas(id,organizacion_id,nombre_completo,correo,correo_principal,telefono_e164:telefono_principal_e164,telefono_principal_e164,puesto,area,rol_decision,company_name)"
             ),
         }
         if proveedor_id is not None:
@@ -29021,6 +29021,14 @@ class CRMRepository:
         if not normalized_path:
             raise CRMRepositoryError("object_key_required")
 
+        # Some legacy assistant_documents rows stored the bucket name as the
+        # first path segment. Storage expects the object key relative to bucket.
+        bucket_prefix = f"{bucket_name}/"
+        while normalized_path.startswith(bucket_prefix):
+            normalized_path = normalized_path[len(bucket_prefix) :]
+        if not normalized_path:
+            raise CRMRepositoryError("object_key_required")
+
         candidate_paths: list[str] = []
 
         def add_candidate(value: str) -> None:
@@ -29030,12 +29038,7 @@ class CRMRepository:
 
         add_candidate(normalized_path)
 
-        stripped = normalized_path
         prefix = f"{bucket_name}/"
-        while stripped.startswith(prefix):
-            stripped = stripped[len(prefix) :]
-            add_candidate(stripped)
-
         if not normalized_path.startswith(prefix):
             add_candidate(f"{bucket_name}/{normalized_path}")
 
@@ -29073,6 +29076,11 @@ class CRMRepository:
         normalized_path = object_path.strip().lstrip("/")
         if not normalized_path:
             raise CRMRepositoryError("object_key_required")
+        bucket_prefix = f"{bucket_name}/"
+        while normalized_path.startswith(bucket_prefix):
+            normalized_path = normalized_path[len(bucket_prefix) :]
+        if not normalized_path:
+            raise CRMRepositoryError("object_key_required")
         candidate_paths: list[str] = []
 
         def add_candidate(value: str) -> None:
@@ -29081,15 +29089,6 @@ class CRMRepository:
                 candidate_paths.append(candidate)
 
         add_candidate(normalized_path)
-
-        stripped = normalized_path
-        prefix = f"{bucket_name}/"
-        while stripped.startswith(prefix):
-            stripped = stripped[len(prefix) :]
-            add_candidate(stripped)
-
-        if not normalized_path.startswith(prefix):
-            add_candidate(f"{bucket_name}/{normalized_path}")
 
         headers = {
             "apikey": self._service_role,
@@ -29134,6 +29133,11 @@ class CRMRepository:
         normalized_path = object_path.strip().lstrip("/")
         if not normalized_path:
             raise CRMRepositoryError("object_key_required")
+        bucket_prefix = f"{bucket_name}/"
+        while normalized_path.startswith(bucket_prefix):
+            normalized_path = normalized_path[len(bucket_prefix) :]
+        if not normalized_path:
+            raise CRMRepositoryError("object_key_required")
 
         candidate_paths: list[str] = []
 
@@ -29143,15 +29147,6 @@ class CRMRepository:
                 candidate_paths.append(candidate)
 
         add_candidate(normalized_path)
-
-        stripped = normalized_path
-        prefix = f"{bucket_name}/"
-        while stripped.startswith(prefix):
-            stripped = stripped[len(prefix) :]
-            add_candidate(stripped)
-
-        if not normalized_path.startswith(prefix):
-            add_candidate(f"{bucket_name}/{normalized_path}")
 
         last_error: CRMRepositoryError | None = None
         for candidate in candidate_paths:
