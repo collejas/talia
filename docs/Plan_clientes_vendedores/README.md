@@ -290,6 +290,32 @@ cobrar, y reserva las cantidades disponibles de articulos stockables. La orden
 de compra del cliente es evidencia/referencia del pedido; no es
 `ordenes_compra`, que representa compras a proveedores.
 
+#### Evidencia de confirmacion de compra
+
+El pedido debe permitir confirmar la compra tanto **con orden de compra (OC)**
+como **sin OC**. La OC del cliente es opcional y no sustituye al pedido de
+Tal-IA. Al confirmar, el vendedor seleccionara una forma de confirmacion:
+`orden_compra`, `cotizacion_firmada_aceptada`, `correo_electronico`,
+`whatsapp`, `contrato`, `confirmacion_verbal`, `anticipo_pago` u `otro`.
+
+El formulario contemplara fecha de confirmacion, numero/referencia de OC cuando
+aplique, observaciones y un archivo de evidencia que el usuario pueda subir
+desde el documento que le entregue el cliente. Para una confirmacion de tipo
+OC se debera capturar el numero de OC o adjuntar su documento. Para las otras
+formas, el adjunto sera opcional. `Confirmado por` se tomara del usuario en
+sesion y el vendedor se conservara desde la oportunidad/pedido; no seran campos
+de texto libre. El anticipo/pago solo podra usarse como evidencia si se vincula
+a un pago efectivamente registrado, no por seleccionar esa opcion.
+
+El archivo se asociara al pedido y quedara tenant-scoped, con permisos de
+lectura/escritura y trazabilidad de quien lo subio. Antes de implementar la
+carga se revisara el mecanismo existente de archivos/documentos para reutilizar
+su almacenamiento, validacion de tipo/tamano y autorizacion; no se guardara el
+archivo dentro de metadata ni como contenido binario en las tablas del pedido.
+El detalle del pedido mostrara la evidencia y permitira consultarla o
+descargarla a usuarios autorizados. La referencia de OC nunca se confundira con
+la orden de compra a proveedores.
+
 Para la primera version se establece una relacion uno a uno entre pedido
 confirmado y venta/cuenta por cobrar: cada pedido confirmado genera una venta y
 una cuenta por cobrar, y la venta conserva una referencia unica al pedido.
@@ -302,20 +328,17 @@ registrara salidas contra las partidas del pedido/venta y liberara la cantidad
 surtida. Cambios despues de confirmar requeriran una operacion controlada de
 ajuste o cancelacion, no editar silenciosamente las partidas confirmadas.
 
-Las partidas conservaran relaciones explicitas y tenant-safe con
+Las partidas conservan relaciones explicitas y tenant-safe con
 `cotizacion_items`, `catalog_items` y, cuando aplique, `propiedad_id` y
-`unidad_id`. Esta entidad y este flujo son una decision de diseno, no una
-funcionalidad implementada.
+`unidad_id`; la entidad y la confirmacion del pedido ya se implementaron y
+desplegaron. La carga de evidencia y la forma de confirmacion descritas arriba
+siguen pendientes.
 
-La partida debe conservar el producto mediante una columna explicita
-`catalog_item_id` desde la cotizacion hasta `venta_items`; la relacion no debe
-depender de metadata. Actualmente `cotizacion_items` usa el legado
-`producto_id` y la RPC de formalizacion no copia el `catalog_item_id`
-disponible en `venta_items`; cerrar esta brecha requiere adaptar el esquema y
-la copia de renglones. La reserva debe poder trazarse hasta el pedido y su
-renglon, y la salida hasta la venta y el renglon surtido. La configuracion por
-tenant para reservar con anticipo/pago, al aceptar cotizacion, manualmente o no
-reservar queda para una fase posterior.
+La partida conserva el producto mediante `catalog_item_id` desde cotizacion,
+pedido y hasta `venta_items`. La reserva se traza hasta el pedido y su renglon;
+la salida debe trazarse hasta la venta y el renglon surtido. La configuracion
+por tenant para reservar con anticipo/pago, al aceptar cotizacion, manualmente
+o no reservar queda para una fase posterior.
 
 Una vez que el contacto o empresa ya es cliente, cada nueva oportunidad
 ganada se conserva en su historial; no se sobrescribe la oportunidad
@@ -433,7 +456,10 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
    mismo cliente.
 3. Crear `ventas` y `venta_items` con restricciones, índices y RLS por tenant.
 4. Crear `pedidos_venta` y `pedido_venta_items`, enlazarlos con la cotizacion
-   aceptada y permitir confirmar explicitamente el compromiso del cliente.
+   aceptada y permitir confirmar explicitamente el compromiso del cliente,
+   con OC o sin OC. El formulario debe admitir forma de confirmacion,
+   referencia/numero de OC, carga del documento recibido del cliente,
+   observaciones y auditoria del usuario/vendedor.
 5. Al confirmar el pedido, ejecutar **Formalizar venta** y crear/activar
    cliente, venta, partidas y cuenta por cobrar atomicamente e idempotentemente;
    reservar stock disponible para articulos stockables en la misma operacion.
@@ -543,6 +569,9 @@ de la oportunidad y de la venta:
   existencias de almacén en la misma transacción.
 - Para una unidad inmobiliaria, la confirmación la aparta/reserva por estado,
   sin movimiento de almacén ni cambio a vendida.
+- La forma de confirmación (OC o sin OC), adjuntar el documento del cliente,
+  capturar observaciones y mostrar la evidencia siguen pendientes; el alcance
+  funcional y las reglas están definidos en “Evidencia de confirmacion de compra”.
 - El atajo de pago inmediato confirma el pedido y registra el pago en una
   operación coordinada.
 - La cancelación de una cotización libera únicamente pedidos no confirmados;

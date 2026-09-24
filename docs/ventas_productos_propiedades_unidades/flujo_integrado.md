@@ -28,9 +28,10 @@ se actualiza el estado de la unidad. Pago, factura y proforma son eventos
 financieros/documentales y no cambian por si mismos disponibilidad ni stock.
 
 La relacion del producto debe guardarse con `catalog_item_id` explicito en
-`cotizacion_items` y propagarse a `venta_items`. Para propiedades, la relacion
-a `propiedad_id` y `unidad_id` debe conservarse de forma consultable y trazable;
-no se debe depender exclusivamente de metadata para relaciones centrales.
+`cotizacion_items` y propagarse por `pedido_venta_items` hasta `venta_items`.
+Para propiedades, la relacion a `propiedad_id` y `unidad_id` debe conservarse
+de forma consultable y trazable; no se debe depender exclusivamente de
+metadata para relaciones centrales.
 
 La configuracion por tenant para reservar al recibir anticipo/pago, al aceptar
 cotizacion, reservar manualmente o no reservar queda como fase futura. La
@@ -46,22 +47,29 @@ cuenta por cobrar. En productos stockables reserva las cantidades; en
 propiedades actualiza la disponibilidad de la unidad a `apartado` o
 `reservado`, sin movimientos de almacen. En v1 cada pedido confirmado genera
 una venta y una cuenta por cobrar. Los documentos de cobro y pagos siguen
-siendo pasos separados. Esta es una decision documentada, aun pendiente de
-implementacion.
+siendo pasos separados. Este flujo y sus tablas se desplegaron el 2026-09-24;
+la validacion funcional autenticada sigue pendiente.
 
-### Transicion desde el comportamiento actual
+La confirmacion del cliente debe aceptar evidencia con OC o sin OC. Si el
+cliente entrega una OC, el usuario podra capturar su numero y subir el archivo
+al pedido; correo, WhatsApp, cotizacion aceptada, contrato, confirmacion verbal
+u otro tambien podran respaldar el compromiso. El archivo tendra acceso por
+organizacion y trazabilidad de carga. La especificacion completa de campos y
+reglas esta en `docs/Plan_clientes_vendedores/README.md`, seccion “Evidencia de
+confirmacion de compra”; su implementacion permanece pendiente.
 
-El endpoint inmobiliario actualmente crea una cotizacion aceptada y marca la
-unidad como vendida y el catalog_item como inactivo. Ese comportamiento se
-conserva como estado actual documentado, pero debe migrarse: crear/ganar la
-oportunidad no debe reservar ni vender la unidad; confirmar el pedido debe
-apartarla; formalizar el hito contractual debe marcarla vendida y crear la
-venta/cuenta por cobrar mediante el flujo financiero comun.
+### Transicion desde el comportamiento anterior
+
+El flujo anterior podia crear una cotizacion aceptada y marcar la unidad como
+vendida y el `catalog_item` como inactivo. Desde el despliegue del 2026-09-24,
+preparar/aceptar la cotizacion ya no vende ni aparta la unidad: confirmar el
+pedido la aparta, y un hito contractual posterior debera marcarla vendida. Ese
+hito aun no esta implementado.
 
 ## Importador y metadata
 - El CSV puede enviar columnas con prefijos `metadata_` o `metadata_unidad_` para poblar libremente `catalog_items.metadatos`; el backend ya absorbe esos campos y solo quita los atributos volumétricos/visuales (`height`, `min_height`, `levels`, `color`) antes de guardar.
 - Las columnas `height`, `min_height`, `levels`, `metadata_color` y los campos `metadata_unidad_*` se copian ahora a la columna adicional `catalog_items.metadatos_extra`, que es la que consume Mapbox (evita el error 428C9 de la columna generada `metadata`) y también se replica en el log `logs/mapbox-debug.log` bajo la etiqueta `catalog_item_sync` para verificar qué metadata extra se está sincronizando.
-- Actualmente `propiedad_id` y `unidad_id` se guardan en `metadatos`; al integrar el flujo financiero deben migrarse a relaciones explícitas y tenant-safe para que la venta se enlace de forma consultable con su geometría original. Los atributos visuales variables pueden seguir en `metadatos_extra`.
+- El pedido conserva referencias consultables a `propiedad_id` y `unidad_id` en sus partidas. Los atributos visuales variables pueden seguir en `metadatos_extra`.
 
 ## Próximos pasos
 1. Adaptar `POST /crm/ventas/propiedades` para que registrar una cotización aceptada no marque por sí solo la unidad como vendida.

@@ -63,6 +63,16 @@ la cobranza conservan estados propios. Un pago, una factura o una proforma no
 descuentan por si mismos las existencias fisicas. Los servicios y productos
 con `maneja_inventario = false` no generan reservas ni movimientos de almacen.
 
+La confirmacion debe admitir clientes **con OC y sin OC**. El vendedor elegira
+la evidencia (OC, cotizacion firmada/aceptada, correo, WhatsApp, contrato,
+confirmacion verbal, anticipo/pago u otro). Cuando sea OC podra capturar el
+numero y subir el documento entregado por el cliente; se asociara al pedido,
+con acceso limitado a la organizacion y registro de quien lo subio. Fecha,
+observaciones y referencia de OC son datos del pedido; confirmador y vendedor
+se toman de la sesion y la oportunidad. Una seleccion de anticipo/pago debera
+vincularse con un pago registrado. Requisitos de OC o anticipo por tenant se
+consideraran despues de la primera version.
+
 | Evento | Stock fisico | Stock reservado | Stock disponible |
 | --- | --- | --- | --- |
 | Cotizacion creada/enviada/aceptada | Sin cambio | Sin cambio | Sin cambio |
@@ -95,8 +105,9 @@ Los estados iniciales del pedido son `borrador`, `pendiente_confirmacion`,
 confirmado o no surtido puede cancelarse y liberar su reserva; los cambios a
 partidas confirmadas requieren una operacion controlada. Las partidas del
 pedido mantendran referencias explicitas a cotizacion, `catalog_item_id` y,
-cuando aplique, propiedad y unidad. Esta decision no significa que las tablas
-o el flujo ya esten implementados.
+cuando aplique, propiedad y unidad. Las tablas y el flujo de confirmar pedido
+estan implementados y desplegados; quedan pendientes la evidencia adjunta y la
+validacion autenticada de extremo a extremo.
 Antes de implementar expiracion de reservas o surtidos parciales se definira si
 requieren una entidad `reservas_inventario` explicita; sus vencimientos y
 estados no deben esconderse en JSON.
@@ -544,5 +555,6 @@ Tareas:
 - El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - Ya existe un maestro editable de unidades de medida en `settings/productos/unidades-medida` y el catálogo usa ese maestro para `unidad_inventario`.
 - Ya existe un ajuste manual de inventario en la vista de compras, con movimiento auditable.
-- El flujo actualmente documentado reserva/libera inventario al aceptar/cancelar cotizaciones; esa conducta queda supersedida por la politica acordada el 2026-09-24. La reserva por pedido confirmado y la salida fisica por entrega estan pendientes de implementacion y validacion.
-- La siguiente entrega debe implementar y validar la reserva por pedido confirmado, el surtido/entrega con salida auditada y la liberacion de reservas pendientes; despues se ampliaran reportes y politicas por tenant.
+- El flujo anterior de reservar/liberar inventario al aceptar/cancelar cotizaciones queda supersedido por la politica acordada el 2026-09-24. La reserva por pedido confirmado ya esta desplegada; la salida fisica por entrega sigue pendiente.
+- Migraciones `20260924015415_pedidos_venta_flujo_confirmacion.sql` y `20260924021025_pedidos_venta_fk_indexes.sql` aplicadas en Supabase; backend y panel desplegados en `20260924_021215`.
+- La siguiente entrega debe incorporar forma de confirmacion con/sin OC, carga tenant-scoped del documento de OC entregado por el cliente y observaciones; luego validar el flujo autenticado, implementar surtido/entrega con salida auditada y liberacion de reservas pendientes. Las politicas por tenant se ampliaran despues.

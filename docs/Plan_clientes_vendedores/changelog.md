@@ -18,6 +18,9 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 - Una cotización aceptada puede crear un pedido pendiente de confirmación. La confirmación explícita del compromiso del cliente —normalmente respaldada por su orden de compra recibida y validada— formaliza venta y cuenta por cobrar y reserva productos stockables en una operación coordinada.
 - En v1, cada pedido confirmado genera una venta y una cuenta por cobrar; la venta tendrá referencia única al pedido. La orden de compra del cliente es evidencia del pedido y no debe confundirse con `ordenes_compra` a proveedores.
 - Estados iniciales del pedido: `borrador`, `pendiente_confirmacion`, `confirmado` y `cancelado`. Cambios a partidas confirmadas requieren una operación controlada.
+- El formulario de confirmacion distinguira OC y confirmacion sin OC: OC, cotizacion firmada/aceptada, correo, WhatsApp, contrato, confirmacion verbal, anticipo/pago u otro. La OC del cliente sera opcional como tipo de evidencia y distinta de las ordenes de compra a proveedores.
+- Se decidio permitir cargar al pedido el documento de OC recibido del cliente. Se capturaran fecha, referencia/numero de OC y observaciones; usuario confirmador y vendedor se tomaran de la sesion y del pedido. Para el tipo OC se requerira numero o archivo. La evidencia debera almacenarse de forma tenant-scoped usando el servicio existente de archivos, tras revisar sus permisos y validaciones.
+- Si se selecciona anticipo/pago como forma de confirmacion, debera vincularse a un pago efectivamente registrado; la seleccion por si sola no registrara dinero.
 - Reservar aumenta el stock reservado y reduce el disponible; no reduce la existencia física. La salida ocurre al entregar/embarcar y libera la reserva.
 - Pagos, facturas y proformas pertenecen al estado financiero/documental y no descuentan existencias.
 - Las propiedades mantienen disponibilidad por unidad y no usan el inventario de almacén; pedido confirmado aparta/reserva y un hito contractual posterior marca vendido.
@@ -30,6 +33,7 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 - **Verificación local:** compilación Python, ESLint, TypeScript y `git diff --check` pasaron. ESLint conserva un warning preexistente en `property-map.jsx` por dependencias de `useCallback`.
 - **Despliegue (2026-09-24):** panel y backend activos en el release `20260924_021215`; el script atómico completó TypeScript, lint, build y reinicio de ambos servicios. `/api/health` y `/ventas` respondieron HTTP 200; la ruta de formalización devuelve 401 sin sesión.
 - **Pendiente:** validar con sesión autenticada cotización aceptada, pedido pendiente, confirmación con y sin pago, inventario insuficiente, cancelación y unidad inmobiliaria; diseñar después la entrega/salida física. El ciclo de contrato y el hito que marca propiedad como vendida permanecen por definir.
+- **Pendiente de producto:** ampliar el formulario de confirmacion con forma de confirmacion, carga/consulta del documento de OC, numero de OC, observaciones y trazabilidad. La capacidad de subir la OC se documenta ahora y no forma parte del release desplegado.
 - El asesor de rendimiento aún muestra avisos existentes en el esquema global; las claves foráneas nuevas detectadas sin índice quedaron cubiertas por la segunda migración. Los avisos de índices nuevos sin uso son esperables antes de tráfico representativo.
 - Políticas configurables por tenant y vencimientos de reserva quedan para fases posteriores.
 
