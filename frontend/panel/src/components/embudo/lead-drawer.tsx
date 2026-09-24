@@ -1043,6 +1043,8 @@ export function LeadDrawer({
   const [formalizedSalesByQuote, setFormalizedSalesByQuote] = useState<Record<string, FormalizedSale>>({});
   const [formalizeQuote, setFormalizeQuote] = useState<LeadQuoteEntry | null>(null);
   const [formalizeError, setFormalizeError] = useState<string | null>(null);
+  const [orderReference, setOrderReference] = useState("");
+  const [orderDate, setOrderDate] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentType, setPaymentType] = useState<"anticipo" | "parcial" | "liquidacion" | "otro">("parcial");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -3217,7 +3219,10 @@ export function LeadDrawer({
         const response = await fetch(`/api/embudo/quotes/${formalizeQuote.id}/formalizar-venta`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({
+            referencia_pedido_cliente: orderReference.trim() || null,
+            fecha_orden_cliente: orderDate || null,
+          }),
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -3230,14 +3235,14 @@ export function LeadDrawer({
           return;
         }
         setFormalizedSalesByQuote((current) => ({ ...current, [formalizeQuote.id]: sale }));
-        setQuoteSuccess("Venta formalizada. Cliente y cuenta por cobrar creados; no se registró ningún pago.");
+        setQuoteSuccess("Pedido confirmado. Venta y cuenta por cobrar creadas; no se registró ningún pago.");
         setFormalizeQuote(null);
         await fetchQuotes();
       } catch (error) {
         setFormalizeError(error instanceof Error ? error.message : "No se pudo formalizar la venta.");
       }
     });
-  }, [fetchQuotes, formalizeQuote]);
+  }, [fetchQuotes, formalizeQuote, orderDate, orderReference]);
 
   const handleConfirmedPayment = useCallback(() => {
     if (!paymentQuote) return;
@@ -4029,11 +4034,13 @@ export function LeadDrawer({
                                       variant="outline"
                                       onClick={() => {
                                         setFormalizeError(null);
+                                        setOrderReference("");
+                                        setOrderDate("");
                                         setFormalizeQuote(quote);
                                       }}
                                       disabled={quotePending}
                                     >
-                                      Formalizar venta
+                                      Confirmar pedido
                                     </Button>
                                   )}
                                   <Button
@@ -5477,7 +5484,7 @@ export function LeadDrawer({
           <DialogDescription>
             {formalizedSalesByQuote[paymentQuote?.id ?? ""]
               ? "Registra un pago confirmado para reducir el saldo de la cuenta por cobrar."
-              : "Este atajo formaliza la venta y registra el pago en una sola operación."}
+              : "Este atajo confirma el pedido, formaliza la venta y registra el pago en una sola operación."}
           </DialogDescription>
           <div className="space-y-4 py-2">
             <div className="rounded-md bg-muted/40 px-3 py-2 text-sm">
@@ -5557,15 +5564,36 @@ export function LeadDrawer({
         }}
       >
         <DialogContent className="max-w-md">
-          <DialogTitle>Formalizar venta</DialogTitle>
+          <DialogTitle>Confirmar pedido del cliente</DialogTitle>
           <DialogDescription>
-            Se creará o activará el cliente, la venta y su cuenta por cobrar. Esta acción no registra ningún pago.
+            Se confirma el compromiso del cliente. Tal-IA creará o activará el cliente, formalizará la venta y su cuenta por cobrar, y reservará los productos con control de inventario. No se registra ningún pago.
           </DialogDescription>
           <div className="rounded-md bg-muted/40 px-3 py-3 text-sm">
             <p className="text-muted-foreground">Saldo inicial pendiente</p>
             <p className="font-semibold">
               {formatQuoteCurrency(formalizeQuote?.total ?? null, formalizeQuote?.currency ?? null)}
             </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="customer-order-reference">Referencia de orden de compra</Label>
+              <Input
+                id="customer-order-reference"
+                value={orderReference}
+                onChange={(event) => setOrderReference(event.target.value)}
+                maxLength={160}
+                placeholder="Opcional"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="customer-order-date">Fecha de orden</Label>
+              <Input
+                id="customer-order-date"
+                type="date"
+                value={orderDate}
+                onChange={(event) => setOrderDate(event.target.value)}
+              />
+            </div>
           </div>
           {formalizeError ? (
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{formalizeError}</p>
@@ -5575,7 +5603,7 @@ export function LeadDrawer({
               Cancelar
             </Button>
             <Button type="button" onClick={handleFormalizeSale} disabled={quotePending || !formalizeQuote}>
-              {quotePending ? "Formalizando..." : "Confirmar formalización"}
+              {quotePending ? "Confirmando pedido..." : "Confirmar pedido y formalizar venta"}
             </Button>
           </div>
         </DialogContent>

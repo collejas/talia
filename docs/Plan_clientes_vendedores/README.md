@@ -491,13 +491,11 @@ validar el recorrido financiero con un usuario autenticado.
 - El historial consulta `ventas`, `venta_items` y `pagos` mediante el backend
   autorizado, respetando el RLS de las tablas comerciales.
 
-El flujo legacy de conversión manual quedó retirado. El código desplegado
+El flujo legacy de conversión manual quedó retirado. La versión desplegada
 permite formalizar sin pago o usar el atajo de formalizar y cobrar
 inmediatamente; ganar la oportunidad no crea por sí sola una venta ni registra
-dinero. La politica nueva ubica la formalizacion y la reserva de stock despues
-de confirmar el pedido del cliente. Ese requisito aun debe integrarse al flujo
-actual, que permite formalizar a partir de la cotizacion aceptada sin un evento
-separado de confirmacion del pedido.
+dinero. El refactor descrito abajo cambia esa versión para que la formalización
+y la reserva de stock ocurran al confirmar un pedido del cliente.
 
 ### Formalización y cuentas por cobrar — código en repositorio al 2026-09-23
 
@@ -532,6 +530,40 @@ autenticada pendiente**. El panel quedó en el release `20260923_161750`;
 `/ventas` respondió HTTP 200, la API volvió a responder `/api/health` con
 `{"status":"ok"}` y la ruta de formalización respondió 401 sin sesión,
 confirmando que exige autenticación.
+
+### Pedido confirmado e inventario — desplegado; validación autenticada pendiente
+
+El refactor añade una entidad propia para el compromiso del cliente, separada
+de la oportunidad y de la venta:
+
+- Una cotización aceptada y oportunidad ganada crea un pedido en
+  `pendiente_confirmacion`; no reserva inventario.
+- Confirmar el pedido crea o activa el cliente, formaliza venta y cuenta por
+  cobrar, preserva la relación explícita con catálogo y partidas, y reserva
+  existencias de almacén en la misma transacción.
+- Para una unidad inmobiliaria, la confirmación la aparta/reserva por estado,
+  sin movimiento de almacén ni cambio a vendida.
+- El atajo de pago inmediato confirma el pedido y registra el pago en una
+  operación coordinada.
+- La cancelación de una cotización libera únicamente pedidos no confirmados;
+  un pedido confirmado requiere un flujo posterior de cancelación de venta y
+  liberación logística.
+
+La migración `20260924015415_pedidos_venta_flujo_confirmacion.sql` creó
+`pedidos_venta` y `pedido_venta_items`, las relaciones con ventas y reservas,
+y las funciones transaccionales. La migración
+`20260924021025_pedidos_venta_fk_indexes.sql` añadió índices para cubrir claves
+foráneas detectadas por el asesor de rendimiento. Ambas están aplicadas en
+Supabase. Las tablas tienen RLS con acceso de servicio y los cuatro RPC niegan
+ejecución directa a `anon` y `authenticated`.
+
+El backend y el panel se desplegaron el 2026-09-24 en el release
+`20260924_021215`. La publicación atómica completó TypeScript, lint y build;
+API y panel están activos, `/api/health` y `/ventas` responden HTTP 200, y el
+endpoint de formalización devuelve 401 sin sesión. Falta el recorrido
+autenticado de punta a punta. También siguen pendientes la salida física por
+entrega/surtido, cancelación de pedidos confirmados y definir el hito
+contractual inmobiliario que marca una unidad como vendida.
 
 ## 14) Reportes de ventas
 

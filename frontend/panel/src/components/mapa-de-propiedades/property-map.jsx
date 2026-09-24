@@ -2164,7 +2164,7 @@ export function PropertyMap() {
       }
       const data = await response.json().catch(() => null);
       setSaleSuccess(
-        data?.id ? `Venta registrada (${data.id})` : "Venta registrada correctamente.",
+        data?.id ? `Cotización preparada (${data.id}). Confirma el pedido para apartar la unidad.` : "Cotización preparada. Confirma el pedido para apartar la unidad.",
       );
       refreshGeojson();
       setSaleModalOpen(false);
@@ -4357,7 +4357,7 @@ export function PropertyMap() {
                                 onClick={handleOpenSaleModal}
                                 disabled={saleLoading}
                               >
-                                {saleLoading ? "Registrando venta..." : "Vender"}
+                                {saleLoading ? "Preparando..." : "Preparar cierre"}
                               </button>
                             </div>
                             {statusMessage && (
@@ -4376,10 +4376,10 @@ export function PropertyMap() {
                           <Dialog open={isSaleModalOpen} onOpenChange={setSaleModalOpen}>
                             <DialogContent className="min-w-[320px] max-w-lg space-y-4">
                               <DialogHeader>
-                                <DialogTitle>Registrar venta vinculada a oportunidad</DialogTitle>
+                                <DialogTitle>Preparar cierre vinculado a oportunidad</DialogTitle>
                                 <DialogDescription>
-                                  Selecciona la oportunidad lista para cerrar esta unidad y confirma el precio
-                                  final antes de enviar la cotización.
+                                  Se generará una cotización aceptada y un pedido pendiente. Esta acción no aparta
+                                  ni marca vendida la unidad; eso ocurre al confirmar el pedido.
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
@@ -4405,7 +4405,7 @@ export function PropertyMap() {
                                   </div>
                                   <div className="space-y-2">
                                     <label className="text-[0.65rem] text-slate-400" htmlFor="opportunity-select">
-                                      Elige la oportunidad o cliente vinculado antes de confirmar la venta.
+                                      Elige la oportunidad vinculada antes de preparar el cierre.
                                     </label>
                                     <select
                                       id="opportunity-select"

@@ -3400,6 +3400,17 @@ async def _mark_quote_as_accepted_from_mapbox(
             oportunidad_id=UUID(str(quote.oportunidad_id)),
             quote=quote,
         )
+        try:
+            await repo.crear_pedido_venta(
+                organizacion_id=organizacion_id,
+                cotizacion_id=quote_id,
+                usuario_id=usuario_id,
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "property_quote_order_creation_failed",
+                extra={"organizacion_id": str(organizacion_id), "cotizacion_id": str(quote_id), "error": str(exc)},
+            )
 
 
 async def _ensure_product_for_catalog_item(
@@ -4194,6 +4205,8 @@ class ConfirmedPaymentPayload(BaseModel):
 
 class FormalizeSalePayload(BaseModel):
     fecha_vencimiento: date | None = None
+    referencia_pedido_cliente: str | None = Field(default=None, max_length=160)
+    fecha_orden_cliente: date | None = None
 
 
 class ConfirmedPaymentResponse(BaseModel):
@@ -9728,9 +9741,9 @@ def _parse_quote_items(value: Any) -> list[LeadQuoteItem]:
         metadata = entry.get("metadata")
         metadata_dict = metadata if isinstance(metadata, dict) else {}
         catalog_item_id = (
-            metadata_dict.get("catalog_item_id")
+            entry.get("catalog_item_id")
+            or metadata_dict.get("catalog_item_id")
             or entry.get("producto_id")
-            or entry.get("catalog_item_id")
         )
         items.append(
             LeadQuoteItem(
@@ -9873,6 +9886,7 @@ def _quote_items_to_repository_payload(
             metadata["catalog_item_id"] = catalog_item_id
         repository_items.append(
             {
+                "catalog_item_id": catalog_item_id,
                 "descripcion": item.get("titulo") or item.get("descripcion") or "Concepto",
                 "orden": int(item.get("orden") or index),
                 "cantidad": _as_number(item.get("cantidad")) or 1,
@@ -10230,14 +10244,15 @@ async def _reject_previous_quotes_for_opportunity(
             metadata_patch["rechazada_por"] = str(usuario_id)
         if current_status == "aceptada":
             try:
-                await repo.release_quote_inventory(
+                await repo.cancelar_pedido_venta_por_cotizacion(
                     organizacion_id=organizacion_id,
-                    quote_id=quote_row_id,
-                    liberado_por=usuario_id,
+                    cotizacion_id=quote_row_id,
+                    usuario_id=usuario_id,
+                    motivo="Cotizacion reemplazada por otra aceptada",
                 )
             except CRMRepositoryError as exc:
                 logger.warning(
-                    "quote_previous_inventory_release_failed",
+                    "quote_previous_order_cancellation_failed",
                     extra={
                         "organizacion_id": str(organizacion_id),
                         "oportunidad_id": str(oportunidad_id),
@@ -10246,6 +10261,7 @@ async def _reject_previous_quotes_for_opportunity(
                         "error": str(exc),
                     },
                 )
+                continue
         try:
             await repo.mark_quote_entry(
                 organizacion_id=organizacion_id,
@@ -18298,6 +18314,7 @@ class CRMQuoteItem(BaseModel):
     cotizacion_id: UUID
     orden: int = Field(..., ge=1)
     producto_id: UUID | None = None
+    catalog_item_id: UUID | None = None
     descripcion: str
     cantidad: float
     precio_unitario: float | None = None
@@ -18310,6 +18327,7 @@ class CRMQuoteItemCreate(BaseModel):
     cotizacion_id: UUID
     orden: int | None = Field(default=None, ge=1)
     producto_id: UUID | None = None
+    catalog_item_id: UUID | None = None
     descripcion: str = Field(..., max_length=500)
     cantidad: float = Field(default=1, gt=0)
     precio_unitario: float | None = Field(default=None, ge=0)
@@ -32400,6 +32418,8 @@ async def formalizar_venta_desde_cotizacion(
             cotizacion_id=cotizacion_id,
             usuario_id=usuario_id,
             fecha_vencimiento=payload.fecha_vencimiento,
+            referencia_pedido_cliente=payload.referencia_pedido_cliente,
+            fecha_orden_cliente=payload.fecha_orden_cliente,
         )
     except HTTPException:
         raise
@@ -32415,6 +32435,12 @@ async def formalizar_venta_desde_cotizacion(
             raise HTTPException(status_code=409, detail="venta_sin_contacto") from exc
         if "sale_total_must_be_positive" in message:
             raise HTTPException(status_code=409, detail="cotizacion_sin_total") from exc
+        if "inventory_warehouse_required" in message:
+            raise HTTPException(status_code=409, detail="no_hay_almacen_activo_para_reservas") from exc
+        if "Stock insuficiente" in message:
+            raise HTTPException(status_code=409, detail="inventario_insuficiente_para_confirmar_pedido") from exc
+        if "property_unit_not_available" in message or "property_unit_already_reserved" in message:
+            raise HTTPException(status_code=409, detail="unidad_inmobiliaria_no_disponible") from exc
         if "opportunity_already_formalized_from_another_quote" in message:
             raise HTTPException(status_code=409, detail="oportunidad_ya_formalizada_con_otra_cotizacion") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_formalizar_venta") from exc
@@ -32534,6 +32560,12 @@ async def registrar_pago_confirmado(
             raise HTTPException(status_code=409, detail="cotizacion_sin_total") from exc
         if "payment_exceeds_receivable_balance" in message:
             raise HTTPException(status_code=409, detail="pago_excede_saldo_pendiente") from exc
+        if "inventory_warehouse_required" in message:
+            raise HTTPException(status_code=409, detail="no_hay_almacen_activo_para_reservas") from exc
+        if "Stock insuficiente" in message:
+            raise HTTPException(status_code=409, detail="inventario_insuficiente_para_confirmar_pedido") from exc
+        if "property_unit_not_available" in message or "property_unit_already_reserved" in message:
+            raise HTTPException(status_code=409, detail="unidad_inmobiliaria_no_disponible") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_registrar_pago") from exc
     try:
         return ConfirmedPaymentResponse.model_validate(result)
@@ -33234,77 +33266,24 @@ async def mark_lead_quote(
     if usuario_id:
         extra["marcada_por"] = str(usuario_id)
 
-    should_reserve = current_quote.estado != "aceptada" and payload.estado == "aceptada"
     should_release = current_quote.estado == "aceptada" and payload.estado in {"rechazada", "cancelada"}
-    reservation_items = [
-        {
-            "quote_item_id": str(item.id),
-            "catalog_item_id": str(item.catalog_item_id),
-            "cantidad": float(item.cantidad or 0),
-        }
-        for item in current_quote.items
-        if item.catalog_item_id
-        and float(item.cantidad or 0) > 0
-        and item.catalog_item is not None
-        and bool(getattr(item.catalog_item, "maneja_inventario", False))
-    ]
-    warehouse_id: UUID | None = None
-    if should_reserve and reservation_items:
-        warehouses = await repo.list_almacenes(
+    try:
+        quote_row = await repo.mark_quote_entry(
             organizacion_id=organizacion_id,
-            include_inactive=False,
-            limit=1,
+            quote_id=cotizacion_id,
+            estatus=payload.estado,
+            metadata_patch=extra,
         )
-        if warehouses:
-            warehouse_row = warehouses[0]
-            warehouse_id_raw = warehouse_row.get("id")
-            if warehouse_id_raw:
-                warehouse_id = UUID(str(warehouse_id_raw))
-        if warehouse_id is None:
-            raise HTTPException(status_code=409, detail="no_hay_almacen_principal_para_reservas")
-
-    if should_reserve and reservation_items:
-        try:
-            await repo.reserve_quote_inventory(
-                organizacion_id=organizacion_id,
-                quote_id=cotizacion_id,
-                almacen_id=warehouse_id,
-                items=reservation_items,
-                creado_por=usuario_id,
-            )
-            quote_row = await repo.mark_quote_entry(
-                organizacion_id=organizacion_id,
-                quote_id=cotizacion_id,
-                estatus=payload.estado,
-                metadata_patch=extra,
-            )
-        except CRMRepositoryError as exc:
-            try:
-                await repo.release_quote_inventory(
-                    organizacion_id=organizacion_id,
-                    quote_id=cotizacion_id,
-                    liberado_por=usuario_id,
-                )
-            except CRMRepositoryError:
-                pass
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-    else:
-        try:
-            quote_row = await repo.mark_quote_entry(
-                organizacion_id=organizacion_id,
-                quote_id=cotizacion_id,
-                estatus=payload.estado,
-                metadata_patch=extra,
-            )
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if should_release:
         try:
-            await repo.release_quote_inventory(
+            await repo.cancelar_pedido_venta_por_cotizacion(
                 organizacion_id=organizacion_id,
-                quote_id=cotizacion_id,
-                liberado_por=usuario_id,
+                cotizacion_id=cotizacion_id,
+                usuario_id=usuario_id,
+                motivo=f"Cotizacion {payload.estado}",
             )
         except CRMRepositoryError as exc:
             await repo.mark_quote_entry(
@@ -33316,6 +33295,11 @@ async def mark_lead_quote(
                 organizacion_id=organizacion_id,
                 quote_id=cotizacion_id,
             )
+            if "confirmed_sales_order_cannot_be_cancelled_from_quote" in str(exc):
+                raise HTTPException(
+                    status_code=409,
+                    detail="pedido_confirmado_no_se_cancela_desde_cotizacion",
+                ) from exc
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     quote = _quote_from_row(quote_row)
@@ -33344,6 +33328,14 @@ async def mark_lead_quote(
                 oportunidad_id=UUID(str(oportunidad_id)),
                 quote=quote,
             )
+            try:
+                await repo.crear_pedido_venta(
+                    organizacion_id=organizacion_id,
+                    cotizacion_id=cotizacion_id,
+                    usuario_id=usuario_id,
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=409, detail="no_se_pudo_crear_pedido_venta") from exc
     return LeadQuoteResponse(quote=quote)
 
 
@@ -50446,7 +50438,7 @@ async def registrar_venta_propiedad(
     quote_has_item = False
     try:
         sale_logger.info(
-            "propiedad_sale_started",
+            "propiedad_quote_started",
             extra={
                 "organizacion_id": str(organizacion_id),
                 "catalog_item_id": str(payload.catalog_item_id),
@@ -50460,7 +50452,7 @@ async def registrar_venta_propiedad(
             },
         )
         _write_propiedad_sale_event(
-            "sale_started",
+            "quote_started",
             {
                 "organizacion_id": str(organizacion_id),
                 "catalog_item_id": str(payload.catalog_item_id),
@@ -50543,6 +50535,7 @@ async def registrar_venta_propiedad(
                 "cotizacion_id": str(quote["id"]),
                 "orden": 1,
                 "producto_id": str(product.get("id")),
+                "catalog_item_id": str(payload.catalog_item_id),
                 "descripcion": catalog_item.get("nombre") or "Unidad inmobiliaria",
                 "cantidad": 1,
                 "precio_unitario": price_value,
@@ -50593,118 +50586,24 @@ async def registrar_venta_propiedad(
                 organizacion_id=organizacion_id,
                 oportunidad_id=resolved_oportunidad_id,
             )
-        await repo.update_propiedad_unidad(
-            organizacion_id=organizacion_id,
-            unidad_id=payload.unidad_id,
-            payload={
-                "status": PropiedadStatus.vendido.value,
-                "oportunidad_id": str(resolved_oportunidad_id) if resolved_oportunidad_id else None,
-                "catalog_item_id": str(payload.catalog_item_id),
-            },
-        )
-        try:
-            await repo.create_propiedad_unidad_movimiento(
-                organizacion_id=organizacion_id,
-                payload={
-                    "organizacion_id": str(organizacion_id),
-                    "unidad_id": str(payload.unidad_id),
-                    "oportunidad_id": str(resolved_oportunidad_id) if resolved_oportunidad_id else None,
-                    "persona_id": str(resolved_persona_id) if resolved_persona_id else None,
-                    "cuenta_id": str(resolved_cuenta_id) if resolved_cuenta_id else None,
-                    "estado_anterior": str(current_unidad.get("status") if current_unidad and current_unidad.get("status") else PropiedadStatus.disponible.value),
-                    "estado_nuevo": PropiedadStatus.vendido.value,
-                    "precio": price_value,
-                    "moneda": payload.moneda,
-                    "motivo": "venta_registrada",
-                    "metadata": {
-                        "source": "venta_propiedades",
-                        "catalog_item_id": str(payload.catalog_item_id),
-                        "propiedad_id": str(payload.propiedad_id),
-                        "lead_id": str(payload.lead_id) if payload.lead_id else None,
-                        "quote_id": str(quote["id"]),
-                    },
-                    "creado_por": str(usuario_id) if usuario_id else None,
-                }
-            )
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
         sale_logger.info(
-            "propiedad_unidad_status_updated",
+            "propiedad_quote_ready_for_order_confirmation",
             extra={
                 "organizacion_id": str(organizacion_id),
+                "quote_id": str(quote["id"]),
                 "unidad_id": str(payload.unidad_id),
-                "status": PropiedadStatus.vendido.value,
+                "status": current_status,
             },
         )
         _write_propiedad_sale_event(
-            "unidad_status_updated",
+            "quote_ready_for_order_confirmation",
             {
                 "organizacion_id": str(organizacion_id),
+                "quote_id": str(quote["id"]),
                 "unidad_id": str(payload.unidad_id),
-                "status": PropiedadStatus.vendido.value,
+                "status": current_status,
             },
         )
-        catalog_metadata = dict(catalog_item.get("metadatos") or {})
-        catalog_metadata.update(
-            {
-                "venta_registrada_en": datetime.now(timezone.utc).isoformat(),
-                "venta_activa": False,
-            }
-        )
-        catalog_update: dict[str, Any] = {
-            "activo": False,
-            "propiedad_id": str(payload.propiedad_id),
-            "unidad_id": str(payload.unidad_id),
-            "metadatos": catalog_metadata,
-        }
-        if resolved_oportunidad_id:
-            catalog_update["oportunidad_id"] = str(resolved_oportunidad_id)
-        if resolved_persona_id:
-            catalog_update["persona_id"] = str(resolved_persona_id)
-        await repo.update_catalog_item(
-            item_id=payload.catalog_item_id,
-            payload=catalog_update,
-        )
-        sale_logger.info(
-            "propiedad_catalog_item_deactivated",
-            extra={
-                "organizacion_id": str(organizacion_id),
-                "catalog_item_id": str(payload.catalog_item_id),
-            },
-        )
-        _write_propiedad_sale_event(
-            "catalog_item_deactivated",
-            {
-                "organizacion_id": str(organizacion_id),
-                "catalog_item_id": str(payload.catalog_item_id),
-            },
-        )
-        sale_entry = {
-            "organizacion_id": str(organizacion_id),
-            "catalog_item_id": str(payload.catalog_item_id),
-            "propiedad_id": str(payload.propiedad_id),
-            "unidad_id": str(payload.unidad_id),
-            "lead_id": str(payload.lead_id) if payload.lead_id else None,
-            "precio_final": price_value,
-            "moneda": payload.moneda,
-            "cotizacion_id": str(quote["id"]),
-            "oportunidad_id": str(resolved_oportunidad_id) if resolved_oportunidad_id else None,
-            "cuenta_id": str(resolved_cuenta_id) if resolved_cuenta_id else None,
-            "contacto_id": str(payload.contacto_id) if payload.contacto_id else None,
-            "persona_id": str(resolved_persona_id) if resolved_persona_id else None,
-        }
-        sale_logger.info("propiedad_sale_registered", extra=sale_entry)
-        _write_propiedad_sale_log(sale_entry)
-        if payload.lead_id:
-            await _sync_lead_metrics_after_sale(repo, payload.lead_id)
-        if resolved_oportunidad_id:
-            await _advance_opportunity_to_won(
-                repo,
-                organizacion_id,
-                resolved_oportunidad_id,
-                _safe_uuid(opportunity.get("etapa_id")) if opportunity else None,
-                usuario_id,
-            )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMQuote.model_validate(quote)

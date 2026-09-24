@@ -11,7 +11,7 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 
 ## 2026-09-24
 
-### Política de reserva de inventario y confirmación de pedidos — decisión documentada
+### Pedido confirmado, reserva de inventario y propagación del catálogo — desplegado; validación funcional pendiente
 
 - Aceptar una cotización o ganar una oportunidad no reserva existencias.
 - Se decidió modelar el pedido del cliente con entidad propia: `pedidos_venta` y `pedido_venta_items`; no se agregará el ciclo de pedido dentro de `ventas.estatus`.
@@ -23,7 +23,15 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 - Las propiedades mantienen disponibilidad por unidad y no usan el inventario de almacén; pedido confirmado aparta/reserva y un hito contractual posterior marca vendido.
 - Las partidas del pedido conservarán relaciones explícitas y tenant-safe con cotización, `catalog_item_id` y, cuando aplique, `propiedad_id` y `unidad_id`; el vínculo debe propagarse hasta `venta_items`.
 - Las propiedades se apartan por estado de unidad, sin movimientos de almacén, y se marcan vendidas al cumplirse el hito contractual acordado.
-- **Pendiente de implementación:** crear las entidades y operaciones de pedido, reemplazar la reserva actual al aceptar cotizaciones, completar el vínculo del catálogo, integrar confirmación, entrega y el flujo inmobiliario. Políticas configurables por tenant y vencimientos de reserva quedan para fases posteriores.
+- **Implementado en la base de datos remota:** `pedidos_venta`, `pedido_venta_items`, relaciones explícitas con ventas/reservas y los RPC para crear, cancelar, confirmar pedido y confirmar pedido con pago inmediato.
+- **Implementado:** aceptar una cotización ya no intenta reservar existencias; genera un pedido pendiente. Confirmarlo formaliza venta y cuenta por cobrar, enlaza `catalog_item_id` a `venta_items`, reserva stock y aparta unidades de propiedad cuando aplica. La acción rápida con pago conserva una sola operación transaccional.
+- La migración `20260924015415_pedidos_venta_flujo_confirmacion.sql` se aplicó al Supabase remoto. La migración `20260924021025_pedidos_venta_fk_indexes.sql` agregó índices de cobertura para claves foráneas de las nuevas relaciones y también se aplicó.
+- **Verificación remota:** las tablas tienen RLS y política de acceso para `service_role`; los cuatro RPC niegan ejecución a `anon` y `authenticated` y la permiten a `service_role`.
+- **Verificación local:** compilación Python, ESLint, TypeScript y `git diff --check` pasaron. ESLint conserva un warning preexistente en `property-map.jsx` por dependencias de `useCallback`.
+- **Despliegue (2026-09-24):** panel y backend activos en el release `20260924_021215`; el script atómico completó TypeScript, lint, build y reinicio de ambos servicios. `/api/health` y `/ventas` respondieron HTTP 200; la ruta de formalización devuelve 401 sin sesión.
+- **Pendiente:** validar con sesión autenticada cotización aceptada, pedido pendiente, confirmación con y sin pago, inventario insuficiente, cancelación y unidad inmobiliaria; diseñar después la entrega/salida física. El ciclo de contrato y el hito que marca propiedad como vendida permanecen por definir.
+- El asesor de rendimiento aún muestra avisos existentes en el esquema global; las claves foráneas nuevas detectadas sin índice quedaron cubiertas por la segunda migración. Los avisos de índices nuevos sin uso son esperables antes de tráfico representativo.
+- Políticas configurables por tenant y vencimientos de reserva quedan para fases posteriores.
 
 ## 2026-09-23
 
