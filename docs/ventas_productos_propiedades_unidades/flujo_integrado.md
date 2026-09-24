@@ -50,13 +50,29 @@ una venta y una cuenta por cobrar. Los documentos de cobro y pagos siguen
 siendo pasos separados. Este flujo y sus tablas se desplegaron el 2026-09-24;
 la validacion funcional autenticada sigue pendiente.
 
-La confirmacion del cliente debe aceptar evidencia con OC o sin OC. Si el
-cliente entrega una OC, el usuario podra capturar su numero y subir el archivo
-al pedido; correo, WhatsApp, cotizacion aceptada, contrato, confirmacion verbal
-u otro tambien podran respaldar el compromiso. El archivo tendra acceso por
-organizacion y trazabilidad de carga. La especificacion completa de campos y
-reglas esta en `docs/Plan_clientes_vendedores/README.md`, seccion “Evidencia de
-confirmacion de compra”; su implementacion permanece pendiente.
+La confirmacion del cliente acepta evidencia con OC o sin OC. Si el cliente
+entrega una OC, el usuario puede capturar su numero y subir el archivo al
+pedido; correo, WhatsApp, cotizacion aceptada, contrato, confirmacion verbal u
+otro tambien pueden respaldar el compromiso. El archivo tiene acceso por
+organizacion y trazabilidad de carga; queda pendiente validar autenticadamente
+el flujo.
+
+## Responsabilidades y traspaso operativo
+
+El vendedor registra la aceptacion y evidencia y envia el pedido a
+formalizacion. Operaciones/Administracion revisa el expediente y confirma el
+pedido; ahi se formalizan venta/cuenta por cobrar y se reserva la unidad
+inmobiliaria en su estado patrimonial o el stock fisico para partidas
+stockables. La unidad inmobiliaria no entra a la cola de almacen.
+
+Almacen recibe solo productos fisicos reservados y registra surtidos parciales
+o totales desde su cola. Finanzas gestiona cobranza/documentos de forma
+independiente. La oportunidad muestra el avance de cada proceso y un enlace al
+pedido para consulta, pero no permite al vendedor registrar entregas. Las
+responsabilidades se autorizan mediante el RBAC existente configurable por
+tenant; no se codifican por nombre de puesto. El catalogo actual carece de
+permiso de surtido, por lo que debe añadirse una capacidad especifica al
+catalogo RBAC existente y asignarse a los roles elegidos por la organizacion.
 
 ### Transicion desde el comportamiento anterior
 
@@ -72,12 +88,12 @@ hito aun no esta implementado.
 - El pedido conserva referencias consultables a `propiedad_id` y `unidad_id` en sus partidas. Los atributos visuales variables pueden seguir en `metadatos_extra`.
 
 ## Próximos pasos
-1. Adaptar `POST /crm/ventas/propiedades` para que registrar una cotización aceptada no marque por sí solo la unidad como vendida.
-2. Crear el pedido de venta desde la cotización aceptada y permitir confirmar explícitamente el compromiso del cliente.
-3. Al confirmar el pedido inmobiliario, apartar/reservar la unidad actualizando `propiedad_unidades.status`; no crear movimientos de almacén.
-4. En el hito contractual definido por la organización, marcar la unidad como `vendido` y desactivar su oferta en el catálogo comercial; venta y cuenta por cobrar ya se habrán creado al confirmar el pedido.
-5. Propagar identificadores explícitos de `catalog_item_id`, `propiedad_id` y `unidad_id` entre cotización, partida del pedido y venta.
-6. Extender reportes/vistas de ventas con información geoespacial y excluir unidades apartadas/vendidas de nuevas ofertas.
+1. Adaptar `POST /crm/ventas/propiedades` para que registrar una cotizacion aceptada no marque por si sola la unidad como vendida ni omita el traspaso a formalizacion.
+2. Desde Comercial, enviar el pedido generado por la cotizacion aceptada a una bandeja de Operaciones; revisar evidencia con/sin OC y devolver expedientes incompletos.
+3. Al confirmar Operaciones el pedido inmobiliario, apartar/reservar la unidad actualizando `propiedad_unidades.status`; no crear movimientos de almacen.
+4. En el hito contractual definido por la organizacion, marcar la unidad como `vendido` y desactivar su oferta en el catalogo comercial; venta y cuenta por cobrar ya se habran creado al confirmar el pedido.
+5. Propagar identificadores explicitos de `catalog_item_id`, `propiedad_id` y `unidad_id` entre cotizacion, partida del pedido y venta.
+6. Extender reportes/vistas con progreso comercial, financiero y patrimonial sin mezclar sus estados.
 
 ## Implementación actual
 - Ya existe `POST /crm/ventas/propiedades`: recibe `catalog_item_id`, `propiedad_id`, `unidad_id`, `precio_final` (y opcionalmente `oportunidad_id`, `cuenta_id`, `contacto_id` y metadata adicional).  

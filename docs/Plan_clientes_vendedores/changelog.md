@@ -2,6 +2,16 @@
 
 ## 2026-09-24
 
+### Separacion de responsabilidades y traspasos — documentado
+
+- Se define que Comercial trabaja la oportunidad/cotizacion y envia el pedido a formalizacion; Operaciones/Administracion revisa y confirma; Almacen atiende la cola de surtidos; Finanzas lleva cobranza y documentos.
+- La confirmacion administrativa queda como frontera transaccional para crear/activar cliente, venta, cuenta por cobrar y reserva de productos stockables. El surtido fisico ocurre despues desde una vista de Inventario.
+- El drawer de oportunidad conserva consulta del progreso y enlace `Ver pedido`; no es el centro operativo de confirmacion ni de entregas. `/clientes` conserva su alcance.
+- Se reutilizara el RBAC existente por organizacion y roles configurables, sin permisos inferidos de nombres de puesto. El catalogo base no ofrece capacidad de surtido: `sales.manage` tambien se asigna a agentes/finanzas y `settings.manage` es demasiado amplio.
+- Se documenta agregar capacidades acotadas al catalogo RBAC actual para enviar/confirmar pedidos y ver/gestionar surtidos; sus asignaciones predeterminadas quedan por definir antes de la implementacion.
+- Hallazgo correctivo: la entrega desplegada quedo dentro del drawer de oportunidad y autorizada con `sales.manage`. No respeta la separacion acordada; retirar esa accion del alcance comercial y protegerla con la capacidad de inventario antes de considerar el surtido listo para uso.
+- Plan actualizado en clientes/vendedores, compras/inventarios y el flujo integrado de propiedades.
+
 ### Entrega parcial y salida de inventario — desplegada, validación autenticada pendiente
 
 - Se agregó la migración `20260924031112_sales_order_fulfillment.sql` y se aplicó en Supabase mediante MCP.
@@ -9,7 +19,7 @@
 - La función transaccional consume solo la cantidad surtida: descuenta existencia física y reserva, crea el movimiento `salida_venta` y mantiene trazabilidad hasta el renglón entregado.
 - Se agregó estado logístico separado de venta y cobranza; el pedido puede quedar pendiente, parcial o entregado. Servicios sin control de inventario quedan como `no_aplica`.
 - La liberación de inventario ahora opera sobre el remanente no surtido para preservar balances si una reserva tuvo entregas parciales.
-- Se conectaron endpoint, repositorio, proxy del panel y modal para registrar entrega parcial o total por renglón.
+- Se conectaron endpoint, repositorio, proxy del panel y modal para registrar entrega parcial o total por renglón; la ubicacion y el permiso del modal quedaron identificados como incorrectos para el modelo de responsabilidades y requieren correccion.
 - API y panel desplegados. `py_compile`, ESLint, TypeScript, build de producción y `git diff --check` pasaron; ESLint dejó dos advertencias existentes fuera de los archivos modificados.
 - `/api/health` y `/ventas` responden HTTP 200; el nuevo endpoint rechaza solicitudes sin sesión con 401. Pendiente el recorrido autenticado y revisar que una entrega parcial y una total persistan correctamente el balance de existencias/reservas.
 - Continúan pendientes la cancelación logística de pedidos ya confirmados y definir el evento contractual inmobiliario que cambia una unidad a vendida.

@@ -290,22 +290,24 @@ cobrar, y reserva las cantidades disponibles de articulos stockables. La orden
 de compra del cliente es evidencia/referencia del pedido; no es
 `ordenes_compra`, que representa compras a proveedores.
 
-#### Evidencia de confirmacion de compra
+#### Evidencia y envio a formalizacion
 
 El pedido debe permitir confirmar la compra tanto **con orden de compra (OC)**
 como **sin OC**. La OC del cliente es opcional y no sustituye al pedido de
-Tal-IA. Al confirmar, el vendedor seleccionara una forma de confirmacion:
+Tal-IA. Al enviar el pedido a formalizacion, Comercial registra la forma de
+confirmacion:
 `orden_compra`, `cotizacion_firmada_aceptada`, `correo_electronico`,
 `whatsapp`, `contrato`, `confirmacion_verbal`, `anticipo_pago` u `otro`.
 
-El formulario contemplara fecha de confirmacion, numero/referencia de OC cuando
-aplique, observaciones y un archivo de evidencia que el usuario pueda subir
-desde el documento que le entregue el cliente. Para una confirmacion de tipo
-OC se debera capturar el numero de OC o adjuntar su documento. Para las otras
-formas, el adjunto sera opcional. `Confirmado por` se tomara del usuario en
-sesion y el vendedor se conservara desde la oportunidad/pedido; no seran campos
-de texto libre. El anticipo/pago solo podra usarse como evidencia si se vincula
-a un pago efectivamente registrado, no por seleccionar esa opcion.
+El formulario registra fecha, numero/referencia de OC cuando aplique,
+observaciones y archivo de evidencia que el usuario puede subir desde el
+documento recibido del cliente. Para una confirmacion de tipo OC se debe
+capturar el numero o adjuntar el documento. Para las otras formas, el adjunto
+es opcional. Operaciones/Administracion revisa el expediente y es quien
+confirma el pedido; `Confirmado por` se toma de ese usuario en sesion. El
+vendedor se conserva desde la oportunidad/pedido; no son campos de texto libre.
+El anticipo/pago solo puede usarse como evidencia si se vincula a un pago
+efectivamente registrado, no por seleccionar esa opcion.
 
 El archivo se asociara al pedido y quedara tenant-scoped, con permisos de
 lectura/escritura y trazabilidad de quien lo subio. Antes de implementar la
@@ -331,8 +333,9 @@ ajuste o cancelacion, no editar silenciosamente las partidas confirmadas.
 Las partidas conservan relaciones explicitas y tenant-safe con
 `cotizacion_items`, `catalog_items` y, cuando aplique, `propiedad_id` y
 `unidad_id`; la entidad y la confirmacion del pedido ya se implementaron y
-desplegaron. La carga de evidencia y la forma de confirmacion descritas arriba
-siguen pendientes.
+desplegaron. La forma y evidencia con/sin OC tambien estan implementadas. El
+traspaso entre comercial y operaciones, la cola de surtidos y sus permisos
+especificos siguen pendientes.
 
 La partida conserva el producto mediante `catalog_item_id` desde cotizacion,
 pedido y hasta `venta_items`. La reserva se traza hasta el pedido y su renglon;
@@ -460,9 +463,10 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
    con OC o sin OC. El formulario debe admitir forma de confirmacion,
    referencia/numero de OC, carga del documento recibido del cliente,
    observaciones y auditoria del usuario/vendedor.
-5. Al confirmar el pedido, ejecutar **Formalizar venta** y crear/activar
-   cliente, venta, partidas y cuenta por cobrar atomicamente e idempotentemente;
-   reservar stock disponible para articulos stockables en la misma operacion.
+5. El vendedor enviara el pedido a formalizacion. Operaciones/administracion
+   revisara y confirmara el compromiso; esa confirmacion creara/activara el
+   cliente, venta, partidas y cuenta por cobrar y reservara stock disponible
+   para articulos stockables atomicamente e idempotentemente.
 6. Crear `cuentas_por_cobrar`, con cálculo consistente de saldo y estados de
    cobranza; no confundir importe vendido con importe cobrado.
 7. Crear `documentos_cobro` y sus operaciones (emitir, consultar, descargar,
@@ -478,14 +482,68 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
 11. Propagar `catalog_item_id` desde `cotizacion_items` hasta partidas del
     pedido y `venta_items`; mantener separados los estados comercial,
     financiero y logistico.
-12. Integrar la entrega/surtido parcial o total como salida de inventario y
-    liberacion de la reserva correspondiente.
+12. Mover la entrega/surtido parcial o total a una cola del area de inventario;
+    permitir solo al personal autorizado registrar la salida y liberar la
+    reserva correspondiente.
 13. Validar el flujo de primera compra, compra recurrente y ciclo de
     inventario por contacto, empresa y cliente.
 14. Incorporar flujos de propiedades sobre el mismo nucleo financiero cuando
     las entidades y eventos inmobiliarios (por ejemplo, apartado, contrato y
     parcialidades) estén definidos; no asumir que el ciclo documental es igual
     al de otros giros.
+
+### Traspaso entre areas y responsabilidades
+
+El flujo se separa por proceso, aunque una persona pueda recibir varios
+permisos en empresas pequeñas:
+
+1. **Comercial / vendedor — Embudo:** trabaja contacto, oportunidad y
+   cotizacion; registra la aceptacion y evidencia del cliente; usa **Enviar a
+   formalizacion**. Despues consulta el avance, pero no confirma inventario,
+   registra entregas, modifica existencias ni confirma pagos por defecto.
+2. **Operaciones comerciales / administracion — Ventas > Pedidos pendientes:**
+   revisa los datos y la evidencia; puede devolver el pedido para correccion o
+   confirmarlo. Confirmar crea cliente, venta y cuenta por cobrar y reserva los
+   articulos stockables. La reserva se realiza por la regla del sistema en esta
+   frontera; almacen recibe despues el trabajo por surtir.
+3. **Almacen / inventario — cola de Surtidos:** atiende pedidos confirmados,
+   prepara partidas y registra entregas parciales o totales. Cada entrega
+   reduce existencia fisica y reserva por la misma cantidad. Servicios y
+   unidades inmobiliarias no aparecen como surtido de almacen.
+4. **Finanzas / cobranza:** consulta cuentas por cobrar, emite o adjunta
+   documentos segun el flujo del tenant y registra pagos. La cobranza no
+   bloquea universalmente una entrega; cualquier politica de liberacion por
+   anticipo o credito se definira despues.
+
+El drawer de oportunidad conserva la cotizacion aceptada como antecedente de
+solo consulta y muestra un resumen de pedido, venta/cobranza y logistica con
+el acceso **Ver pedido**. No sera el centro operativo de confirmacion ni de
+surtido. Ventas incorpora una bandeja de pedidos para formalizacion y la vista
+de inventario una cola de surtidos; `/clientes` conserva su proposito actual.
+
+Los traspasos deben registrar quien envio, reviso, confirmo, asigno y surtio,
+con fecha y evento auditable. La bandeja debe permitir trabajo propio/equipo
+segun el alcance que ya usa Tal-IA; no se confiaran permisos unicamente a
+botones ocultos en la interfaz.
+
+### Autorizacion usando el RBAC existente
+
+Se reutilizaran el motor de permisos por organizacion y la administracion de
+roles existente; no se hardcodearan puestos ni se creara otro sistema de
+autorizacion. La revision del catalogo actual encontro que `sales.manage` esta
+asignado tambien a `agente` y `finanzas`, mientras que `settings.manage` es una
+capacidad amplia de configuracion. El catalogo base no contiene una capacidad
+especifica para enviar/confirmar pedidos o gestionar surtidos; por eso ninguno
+de esos permisos genericos se considera suficiente para autorizar una salida
+fisica de inventario.
+
+El refactor definira capacidades acotadas dentro del catalogo RBAC actual —por
+ejemplo, `sales.orders.submit`, `sales.orders.confirm`,
+`inventory.fulfillment.view` e `inventory.fulfillment.manage`— y las asignara
+mediante roles configurables por tenant. La matriz predeterminada se revisara
+antes de implementarla; los codigos de puesto no seran la fuente de
+autorizacion. A futuro se separaran igualmente los permisos de cuentas por
+cobrar, pagos y emision documental.
 
 ### Estado de implementación base al 2026-09-12, actualizado al 2026-09-24
 
@@ -557,7 +615,7 @@ autenticada pendiente**. El panel quedó en el release `20260923_161750`;
 `{"status":"ok"}` y la ruta de formalización respondió 401 sin sesión,
 confirmando que exige autenticación.
 
-### Pedido confirmado e inventario — entrega desplegada; validación autenticada pendiente
+### Pedido confirmado e inventario — motor base desplegado; traspaso operativo pendiente
 
 El refactor añade una entidad propia para el compromiso del cliente, separada
 de la oportunidad y de la venta:
@@ -569,22 +627,24 @@ de la oportunidad y de la venta:
   existencias de almacén en la misma transacción.
 - Para una unidad inmobiliaria, la confirmación la aparta/reserva por estado,
   sin movimiento de almacén ni cambio a vendida.
-- El formulario captura la forma y fecha de confirmación, la referencia de OC y
-  observaciones. Permite adjuntar una OC PDF privada de hasta 10 MB y abrirla con
-  una URL firmada temporal; la validación autenticada queda pendiente del
-  despliegue de esta iteración.
+- Comercial registra la forma y fecha de confirmacion, la referencia de OC y
+  observaciones al enviar a formalizacion. Puede adjuntar una OC PDF privada de
+  hasta 10 MB y abrirla con URL firmada temporal.
 - El atajo de pago inmediato confirma el pedido y registra el pago en una
   operación coordinada.
 - La cancelación de una cotización libera únicamente pedidos no confirmados;
   un pedido confirmado requiere un flujo posterior de cancelación de venta y
   liberación logística.
 
-La entrega parcial o total queda registrada en `pedido_venta_entregas` y sus
-renglones en `pedido_venta_entrega_items`. Por cada cantidad surtida se crea
-una salida de almacén ligada al renglón de entrega, se reduce la existencia
-física y se consume la misma parte de la reserva. El pedido mantiene un estado
-logístico (`pendiente`, `parcial`, `entregado` o `no_aplica`) independiente de
-la cobranza; servicios y unidades inmobiliarias no se surten por almacén.
+El motor para entrega parcial o total ya registra encabezados en
+`pedido_venta_entregas` y renglones en `pedido_venta_entrega_items`. Por cada
+cantidad surtida crea una salida de almacen ligada al renglon, reduce la
+existencia fisica y consume la misma parte de la reserva. El pedido mantiene
+un estado logistico (`pendiente`, `parcial`, `entregado` o `no_aplica`)
+independiente de cobranza. Sin embargo, la primera interfaz puso la accion en
+el drawer comercial y uso `sales.manage`; esa ubicacion y autorizacion no
+respetan la separacion de responsabilidades y deben retirarse/corregirse antes
+de tratar la entrega como flujo operativo disponible.
 
 La migración `20260924015415_pedidos_venta_flujo_confirmacion.sql` creó
 `pedidos_venta` y `pedido_venta_items`, las relaciones con ventas y reservas,
@@ -606,9 +666,11 @@ La migración `20260924031112_sales_order_fulfillment.sql` ya se aplicó en
 Supabase. El API y el panel se desplegaron el 2026-09-24; release del panel:
 `20260924_031802`. Pasaron `py_compile`, ESLint, TypeScript y `git diff
 --check`; el build de producción finalizó. `/api/health` y `/ventas` responden
-HTTP 200 y el endpoint de entrega requiere sesión (401 sin sesión). Falta
-validar el recorrido autenticado con un pedido real y revisar la existencia,
-reserva y estado logístico después de una entrega parcial y una total.
+HTTP 200. El endpoint exige autenticacion, pero su permiso vigente sigue siendo
+demasiado amplio. Pendiente: retirarlo del alcance comercial, validar un
+permiso RBAC acotado y crear las bandejas de formalizacion y surtidos antes de
+hacer el recorrido autenticado con pedidos reales. La migracion de tablas/RPC
+no equivale a tener el proceso operativo terminado.
 
 ## 14) Reportes de ventas
 
