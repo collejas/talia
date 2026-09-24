@@ -1029,6 +1029,53 @@ export function ComprasWorkspace({
   const [paises, setPaises] = useState<AnyRecord[]>(() => initialPaises)
   const [agentesAduanales, setAgentesAduanales] = useState<AnyRecord[]>(() => initialAgentesAduanales)
   const [pedimentosImportacion, setPedimentosImportacion] = useState<AnyRecord[]>(() => initialPedimentosImportacion)
+
+  useEffect(() => {
+    if (activeView === "almacenes") {
+      setAlmacenes(initialAlmacenes)
+      return
+    }
+
+    if (activeView === "proveedores") {
+      setAlmacenes(initialAlmacenes)
+      setProveedores(initialProveedores)
+      return
+    }
+
+    if (activeView === "ordenes") {
+      setOrdenes(initialOrdenes)
+      return
+    }
+
+    if (activeView === "agentes" || activeView === "pedimentos") {
+      setOrdenes(initialOrdenes)
+      setMonedas(initialMonedas)
+      setAgentesAduanales(initialAgentesAduanales)
+      setPedimentosImportacion(initialPedimentosImportacion)
+      return
+    }
+
+    if (activeView === "inventario") {
+      setAlmacenes(initialAlmacenes)
+      setCatalogItems(initialCatalogItems)
+      return
+    }
+
+    if (activeView === "recepciones") {
+      setAlmacenes(initialAlmacenes)
+      setOrdenes(initialOrdenes)
+    }
+  }, [
+    activeView,
+    initialAlmacenes,
+    initialAgentesAduanales,
+    initialCatalogItems,
+    initialMonedas,
+    initialOrdenes,
+    initialPedimentosImportacion,
+    initialProveedores,
+  ])
+
   const openOrders = useMemo(
     () =>
       ordenes.filter((orden) =>
