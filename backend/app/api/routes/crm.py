@@ -4232,6 +4232,18 @@ class PedidoVentaEntregaPayload(BaseModel):
     items: list[PedidoVentaEntregaItemPayload] = Field(..., min_length=1, max_length=100)
 
 
+class PedidoVentaDevolverPayload(BaseModel):
+    motivo: str = Field(..., min_length=1, max_length=2000)
+
+    @field_validator("motivo")
+    @classmethod
+    def validate_motivo(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("El motivo es obligatorio")
+        return normalized
+
+
 class PedidoVentaDocumentoResponse(BaseModel):
     id: UUID
     tipo_documento: str
@@ -9887,6 +9899,8 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         order = LeadQuoteSalesOrder(
             id=order_row.get("id"),
             estatus=order_row.get("estatus") or "pendiente_confirmacion",
+            estado_formalizacion=order_row.get("estado_formalizacion") or "sin_enviar",
+            motivo_devolucion_comercial=order_row.get("motivo_devolucion_comercial"),
             estatus_logistico=order_row.get("estatus_logistico") or "no_aplica",
             referencia_pedido_cliente=order_row.get("referencia_pedido_cliente"),
             fecha_orden_cliente=_parse_date(order_row.get("fecha_orden_cliente")),
@@ -17251,6 +17265,8 @@ class LeadQuoteSalesOrderItem(BaseModel):
 class LeadQuoteSalesOrder(BaseModel):
     id: UUID
     estatus: str
+    estado_formalizacion: str = "sin_enviar"
+    motivo_devolucion_comercial: str | None = None
     referencia_pedido_cliente: str | None = None
     fecha_orden_cliente: date | None = None
     forma_confirmacion: str | None = None
@@ -32548,7 +32564,7 @@ async def formalizar_venta_desde_cotizacion(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
-    _: str = Depends(require_permission("sales.manage")),
+    _: str = Depends(require_permission("sales.orders.confirm")),
     cotizacion_id: UUID,
     payload: FormalizeSalePayload,
 ) -> ConfirmedPaymentResponse:
@@ -32560,12 +32576,9 @@ async def formalizar_venta_desde_cotizacion(
         oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
         if oportunidad_id is None:
             raise HTTPException(status_code=409, detail="cotizacion_sin_oportunidad")
-        await _require_sales_write_scope(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            usuario_id=usuario_id,
-            oportunidad_id=oportunidad_id,
-        )
+        order = _single_related(quote.get("pedido"))
+        if not isinstance(order, dict) or order.get("estado_formalizacion") != "pendiente":
+            raise HTTPException(status_code=409, detail="pedido_no_enviado_a_formalizacion")
         result = await repo.confirmar_pedido_venta_con_evidencia(
             organizacion_id=organizacion_id,
             cotizacion_id=cotizacion_id,
@@ -32603,11 +32616,253 @@ async def formalizar_venta_desde_cotizacion(
             raise HTTPException(status_code=400, detail="forma_confirmacion_invalida") from exc
         if "opportunity_already_formalized_from_another_quote" in message:
             raise HTTPException(status_code=409, detail="oportunidad_ya_formalizada_con_otra_cotizacion") from exc
+        if "sales_order_not_submitted_for_review" in message:
+            raise HTTPException(status_code=409, detail="pedido_no_enviado_a_formalizacion") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_formalizar_venta") from exc
     try:
         return ConfirmedPaymentResponse.model_validate(result)
     except ValidationError as exc:
         raise HTTPException(status_code=502, detail="respuesta_venta_invalida") from exc
+
+
+@router.post("/cotizaciones/{cotizacion_id}/pedido/enviar-formalizacion")
+async def enviar_pedido_a_formalizacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+    cotizacion_id: UUID,
+    payload: FormalizeSalePayload,
+) -> dict[str, Any]:
+    if usuario_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    try:
+        quote = await repo.get_quote_entry(organizacion_id=organizacion_id, quote_id=cotizacion_id)
+        oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
+        if oportunidad_id is None:
+            raise HTTPException(status_code=409, detail="cotizacion_sin_oportunidad")
+        await _require_sales_write_scope(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            oportunidad_id=oportunidad_id,
+        )
+        result = await repo.enviar_pedido_venta_a_formalizacion(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+            usuario_id=usuario_id,
+            forma_confirmacion=payload.forma_confirmacion,
+            fecha_confirmacion_cliente=payload.fecha_confirmacion_cliente or date.today(),
+            referencia_pedido_cliente=payload.referencia_pedido_cliente,
+            fecha_orden_cliente=payload.fecha_orden_cliente,
+            observaciones_confirmacion=payload.observaciones_confirmacion,
+        )
+        return {"ok": True, **result}
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "quote_not_found" in message:
+            raise HTTPException(status_code=404, detail="cotizacion_no_encontrada") from exc
+        if "accepted_won_quote_required" in message:
+            raise HTTPException(status_code=409, detail="cotizacion_no_aceptada_oportunidad_no_ganada") from exc
+        if "order_purchase_order_evidence_required" in message:
+            raise HTTPException(status_code=409, detail="orden_compra_requiere_referencia_o_documento") from exc
+        if "invalid_order_confirmation_method" in message:
+            raise HTTPException(status_code=400, detail="forma_confirmacion_invalida") from exc
+        if "sales_order_not_submittable" in message:
+            raise HTTPException(status_code=409, detail="pedido_no_puede_enviarse_a_formalizacion") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_enviar_pedido_a_formalizacion") from exc
+
+
+@router.get("/pedidos-venta/cola-formalizacion")
+async def listar_pedidos_pendientes_formalizacion(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("sales.orders.confirm")),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    try:
+        rows = await repo.list_pedidos_venta_pendientes_formalizacion(
+            organizacion_id=organizacion_id,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudo_consultar_pedidos_pendientes") from exc
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        quote = _single_related(row.get("cotizacion")) or {}
+        contact = _single_related(quote.get("contacto"))
+        account = _single_related(quote.get("cuenta"))
+        opportunity = _single_related(quote.get("oportunidad"))
+        order_items = []
+        for item in row.get("items") if isinstance(row.get("items"), list) else []:
+            if not isinstance(item, dict):
+                continue
+            catalog_item = _single_related(item.get("catalog_item"))
+            order_items.append({
+                "id": item.get("id"),
+                "descripcion": item.get("descripcion") or "Artículo",
+                "cantidad": item.get("cantidad"),
+                "maneja_inventario": bool(catalog_item and catalog_item.get("maneja_inventario")),
+            })
+        documents = []
+        for document in row.get("documentos") if isinstance(row.get("documentos"), list) else []:
+            if not isinstance(document, dict):
+                continue
+            file_row = _single_related(document.get("archivo"))
+            if file_row:
+                documents.append({
+                    "id": document.get("id"),
+                    "tipo_documento": document.get("tipo_documento"),
+                    "nombre_original": file_row.get("nombre_original"),
+                })
+        items.append({
+            "id": row.get("id"),
+            "cotizacion_id": quote.get("id") or row.get("cotizacion_id"),
+            "folio": quote.get("folio"),
+            "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
+            "cliente": account.get("nombre") if account else None,
+            "contacto": contact.get("nombre_completo") if contact else None,
+            "total": quote.get("total"),
+            "moneda": quote.get("moneda"),
+            "enviado_en": row.get("enviado_formalizacion_en"),
+            "forma_confirmacion": row.get("forma_confirmacion"),
+            "fecha_confirmacion_cliente": row.get("fecha_confirmacion_cliente"),
+            "referencia_pedido_cliente": row.get("referencia_pedido_cliente"),
+            "fecha_orden_cliente": row.get("fecha_orden_cliente"),
+            "observaciones_confirmacion": row.get("observaciones_confirmacion"),
+            "items": order_items,
+            "documentos": documents,
+        })
+    return {"items": items, "limit": limit, "offset": offset, "has_more": len(items) == limit}
+
+
+@router.get("/pedidos-venta/cola-surtidos")
+async def listar_pedidos_pendientes_surtido(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.fulfillment.view")),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    try:
+        rows = await repo.list_pedidos_venta_pendientes_surtido(
+            organizacion_id=organizacion_id,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudo_consultar_pedidos_por_surtir") from exc
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        quote = _single_related(row.get("cotizacion")) or {}
+        contact = _single_related(quote.get("contacto"))
+        account = _single_related(quote.get("cuenta"))
+        opportunity = _single_related(quote.get("oportunidad"))
+        order_items = []
+        for order_item in row.get("items") if isinstance(row.get("items"), list) else []:
+            if not isinstance(order_item, dict):
+                continue
+            catalog_item = _single_related(order_item.get("catalog_item"))
+            if not catalog_item or not catalog_item.get("maneja_inventario"):
+                continue
+            raw_deliveries = order_item.get("entregas")
+            delivered = sum(
+                (Decimal(str(_as_number(line.get("cantidad")) or 0)) for line in raw_deliveries if isinstance(line, dict)),
+                Decimal("0"),
+            ) if isinstance(raw_deliveries, list) else Decimal("0")
+            quantity = Decimal(str(_as_number(order_item.get("cantidad")) or 0))
+            order_items.append({
+                "id": order_item.get("id"),
+                "descripcion": order_item.get("descripcion") or "Artículo",
+                "cantidad": quantity,
+                "cantidad_entregada": delivered,
+                "cantidad_pendiente": max(Decimal("0"), quantity - delivered),
+            })
+        if not order_items:
+            continue
+        items.append({
+            "id": row.get("id"),
+            "cotizacion_id": quote.get("id") or row.get("cotizacion_id"),
+            "folio": quote.get("folio"),
+            "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
+            "cliente": account.get("nombre") if account else None,
+            "contacto": contact.get("nombre_completo") if contact else None,
+            "total": quote.get("total"),
+            "moneda": quote.get("moneda"),
+            "estatus_logistico": row.get("estatus_logistico"),
+            "items": order_items,
+        })
+    return {"items": items, "limit": limit, "offset": offset, "has_more": len(items) == limit}
+
+
+@router.post("/pedidos-venta/{pedido_venta_id}/devolver")
+async def devolver_pedido_a_comercial(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.confirm")),
+    pedido_venta_id: UUID,
+    payload: PedidoVentaDevolverPayload,
+) -> dict[str, Any]:
+    if usuario_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    try:
+        result = await repo.devolver_pedido_venta_a_comercial(
+            organizacion_id=organizacion_id,
+            pedido_venta_id=pedido_venta_id,
+            usuario_id=usuario_id,
+            motivo=payload.motivo,
+        )
+        return {"ok": True, **result}
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "sales_order_not_found" in message:
+            raise HTTPException(status_code=404, detail="pedido_no_encontrado") from exc
+        if "sales_order_not_returnable" in message:
+            raise HTTPException(status_code=409, detail="pedido_no_puede_devolverse") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_devolver_pedido") from exc
+
+
+@router.post("/pedidos-venta/{pedido_venta_id}/entregas")
+async def registrar_entrega_pedido_por_inventario(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inventory.fulfillment.manage")),
+    pedido_venta_id: UUID,
+    payload: PedidoVentaEntregaPayload,
+) -> dict[str, Any]:
+    try:
+        result = await repo.registrar_entrega_pedido_venta(
+            organizacion_id=organizacion_id,
+            pedido_venta_id=pedido_venta_id,
+            items=[{"item_id": str(item.item_id), "cantidad": str(item.cantidad)} for item in payload.items],
+            fecha_entrega=payload.fecha_entrega,
+            referencia=payload.referencia,
+            observaciones=payload.observaciones,
+            usuario_id=usuario_id,
+        )
+        return {"ok": True, **result}
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "delivery_exceeds_reserved_or_ordered_quantity" in message:
+            raise HTTPException(status_code=409, detail="cantidad_supera_pendiente_o_reservada") from exc
+        if any(code in message for code in ("confirmed_order_required", "order_item_not_found", "inventory_item_required")):
+            raise HTTPException(status_code=409, detail="pedido_o_producto_no_disponible_para_entrega") from exc
+        if "delivery_items_required" in message or "invalid_delivery_item" in message or "duplicate_delivery_item" in message:
+            raise HTTPException(status_code=400, detail="renglones_entrega_invalidos") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_registrar_entrega") from exc
 
 
 @router.post("/cotizaciones/{cotizacion_id}/pedido/entregas")
@@ -32616,7 +32871,7 @@ async def registrar_entrega_pedido_venta(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
-    _: str = Depends(require_permission("sales.manage")),
+    _: str = Depends(require_permission("inventory.fulfillment.manage")),
     cotizacion_id: UUID,
     payload: PedidoVentaEntregaPayload,
 ) -> dict[str, Any]:
@@ -32624,17 +32879,10 @@ async def registrar_entrega_pedido_venta(
         quote = await repo.get_quote_entry(organizacion_id=organizacion_id, quote_id=cotizacion_id)
         order = _single_related(quote.get("pedido"))
         order_id = _safe_uuid(order.get("id")) if isinstance(order, dict) else None
-        oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
-        if order_id is None or oportunidad_id is None:
+        if order_id is None:
             raise HTTPException(status_code=409, detail="pedido_confirmado_requerido")
         if order.get("estatus") != "confirmado":
             raise HTTPException(status_code=409, detail="pedido_confirmado_requerido")
-        await _require_sales_write_scope(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            usuario_id=usuario_id,
-            oportunidad_id=oportunidad_id,
-        )
         result = await repo.registrar_entrega_pedido_venta(
             organizacion_id=organizacion_id,
             pedido_venta_id=order_id,
@@ -32671,7 +32919,7 @@ async def subir_documento_orden_compra_cliente(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
-    _: str = Depends(require_permission("sales.manage")),
+    _: str = Depends(require_permission("sales.orders.submit")),
     cotizacion_id: UUID,
     file: UploadFile = File(...),
 ) -> PedidoVentaDocumentoResponse:
@@ -32806,7 +33054,7 @@ async def obtener_url_documento_orden_compra_cliente(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
-    _: str = Depends(require_permission("sales.manage")),
+    _: str = Depends(require_any_permission(["sales.orders.submit", "sales.orders.confirm"])),
     cotizacion_id: UUID,
     documento_id: UUID,
 ) -> CRMDocumentSignedUrlResponse:
@@ -32815,12 +33063,13 @@ async def obtener_url_documento_orden_compra_cliente(
         oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
         if oportunidad_id is None:
             raise HTTPException(status_code=404, detail="cotizacion_no_encontrada")
-        await _require_sales_write_scope(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            usuario_id=usuario_id,
-            oportunidad_id=oportunidad_id,
-        )
+        if not await repo.current_user_has_perm(codigo="sales.orders.confirm"):
+            await _require_sales_write_scope(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                usuario_id=usuario_id,
+                oportunidad_id=oportunidad_id,
+            )
         order = await repo.obtener_pedido_venta_por_cotizacion(
             organizacion_id=organizacion_id,
             cotizacion_id=cotizacion_id,
@@ -32919,7 +33168,7 @@ async def registrar_pago_confirmado(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
-    _: str = Depends(require_permission("sales.manage")),
+    _: str = Depends(require_permission("sales.orders.confirm")),
     cotizacion_id: UUID,
     payload: ConfirmedPaymentPayload,
 ) -> ConfirmedPaymentResponse:
@@ -32932,6 +33181,8 @@ async def registrar_pago_confirmado(
         oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
         if oportunidad_id is None:
             raise HTTPException(status_code=409, detail="cotizacion_sin_oportunidad")
+        if not await repo.current_user_has_perm(codigo="sales.manage"):
+            raise HTTPException(status_code=403, detail="forbidden")
         await _require_sales_write_scope(
             repo=repo,
             organizacion_id=organizacion_id,
@@ -32968,6 +33219,8 @@ async def registrar_pago_confirmado(
             raise HTTPException(status_code=409, detail="inventario_insuficiente_para_confirmar_pedido") from exc
         if "property_unit_not_available" in message or "property_unit_already_reserved" in message:
             raise HTTPException(status_code=409, detail="unidad_inmobiliaria_no_disponible") from exc
+        if "sales_order_not_submitted_for_review" in message:
+            raise HTTPException(status_code=409, detail="pedido_no_enviado_a_formalizacion") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_registrar_pago") from exc
     try:
         return ConfirmedPaymentResponse.model_validate(result)

@@ -4370,7 +4370,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "cotizacion_id": f"in.({','.join(quote_ids)})",
-            "select": "id,cotizacion_id,estatus,estatus_logistico,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),items:pedido_venta_items(id,catalog_item_id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path))",
+            "select": "id,cotizacion_id,estatus,estado_formalizacion,motivo_devolucion_comercial,estatus_logistico,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),items:pedido_venta_items(id,catalog_item_id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path))",
         }
         response = await self._request_service_role(
             "GET",
@@ -4509,6 +4509,118 @@ class CRMRepository:
         if isinstance(data, dict) and data.get("pedido_venta_id"):
             return data
         raise CRMRepositoryError("sales_order_creation_response_invalid")
+
+    async def enviar_pedido_venta_a_formalizacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        cotizacion_id: UUID,
+        usuario_id: UUID,
+        forma_confirmacion: str,
+        fecha_confirmacion_cliente: date,
+        referencia_pedido_cliente: str | None = None,
+        fecha_orden_cliente: date | None = None,
+        observaciones_confirmacion: str | None = None,
+    ) -> dict[str, Any]:
+        response = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_enviar_pedido_a_formalizacion",
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_cotizacion_id": str(cotizacion_id),
+                "p_usuario_id": str(usuario_id),
+                "p_forma_confirmacion": forma_confirmacion,
+                "p_fecha_confirmacion_cliente": fecha_confirmacion_cliente.isoformat(),
+                "p_referencia_pedido_cliente": referencia_pedido_cliente,
+                "p_fecha_orden_cliente": fecha_orden_cliente.isoformat() if fecha_orden_cliente else None,
+                "p_observaciones_confirmacion": observaciones_confirmacion,
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json() if response.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict) and data.get("pedido_venta_id"):
+            return data
+        raise CRMRepositoryError("sales_order_submission_response_invalid")
+
+    async def list_pedidos_venta_pendientes_formalizacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        response = await self._request_service_role(
+            "GET",
+            "/rest/v1/pedidos_venta",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "estado_formalizacion": "eq.pendiente",
+                "estatus": "eq.pendiente_confirmacion",
+                "order": "enviado_formalizacion_en.asc,id.asc",
+                "limit": str(limit),
+                "offset": str(offset),
+                "select": "id,cotizacion_id,estado_formalizacion,enviado_formalizacion_en,forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,motivo_devolucion_comercial,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,subtotal,catalog_item:catalog_items(maneja_inventario)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type))",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not all(isinstance(row, dict) for row in data):
+            raise CRMRepositoryError("sales_order_formalization_queue_invalid_response")
+        return data
+
+    async def list_pedidos_venta_pendientes_surtido(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        response = await self._request_service_role(
+            "GET",
+            "/rest/v1/pedidos_venta",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "estatus": "eq.confirmado",
+                "estatus_logistico": "in.(pendiente,parcial)",
+                "order": "confirmado_en.asc,id.asc",
+                "limit": str(limit),
+                "offset": str(offset),
+                "select": "id,cotizacion_id,estatus_logistico,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad))",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not all(isinstance(row, dict) for row in data):
+            raise CRMRepositoryError("sales_order_fulfillment_queue_invalid_response")
+        return data
+
+    async def devolver_pedido_venta_a_comercial(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedido_venta_id: UUID,
+        usuario_id: UUID,
+        motivo: str,
+    ) -> dict[str, Any]:
+        response = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_devolver_pedido_a_comercial",
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_pedido_venta_id": str(pedido_venta_id),
+                "p_usuario_id": str(usuario_id),
+                "p_motivo": motivo,
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json() if response.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict) and data.get("pedido_venta_id"):
+            return data
+        raise CRMRepositoryError("sales_order_return_response_invalid")
 
     async def registrar_entrega_pedido_venta(
         self,

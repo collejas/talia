@@ -2,6 +2,17 @@
 
 ## 2026-09-24
 
+### Traspaso y colas operativas — desplegado; validacion autenticada pendiente
+
+- Comercial ahora envia el pedido con su evidencia a formalizacion; no confirma venta ni reserva desde la oportunidad.
+- La nueva bandeja de Operaciones permite revisar, devolver con motivo o confirmar; la confirmacion sigue usando la transaccion existente de cliente, venta, cuenta por cobrar y reserva.
+- Se agrego una cola de Surtidos en Inventario y se retiro la accion de entrega del drawer comercial. El endpoint requiere `inventory.fulfillment.manage` y la consulta requiere `inventory.fulfillment.view`.
+- La migracion `20260924185828_sales_order_handoff_permissions.sql` agrega estado de revision, historial auditable y capacidades al RBAC actual. Conserva `pendiente_confirmacion` para pedidos existentes.
+- Las migraciones `20260924185828_sales_order_handoff_permissions.sql` y `20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron mediante MCP Supabase. Se verificaron tabla de eventos, columnas del estado de formalizacion y los cuatro permisos del catalogo; la revision posterior de Supabase no muestra claves foraneas de este bloque sin indice de cobertura.
+- Despliegue de produccion completado con release atomico `20260924_191718`; API y panel activos. `/api/health`, `/ventas/pedidos` y `/inventario/surtidos` respondieron HTTP 200; OpenAPI publica las cinco rutas nuevas de pedidos. El API se reinicio correctamente.
+- TypeScript, ESLint y build de produccion pasaron; ESLint reporto dos advertencias en `tenant-email-service-panel.tsx` y `property-map.jsx`, ajenas a este cambio. React Doctor (100/100), `py_compile` y `git diff --check` tambien pasaron antes del despliegue.
+- Pendiente validar con usuarios autenticados de Comercial, Operaciones y Almacen el envio, devolucion, reenvio, confirmacion, permisos por tenant y entrega parcial/total. Las respuestas HTTP 200 comprueban el despliegue de paginas, no el flujo autenticado completo.
+
 ### Priorizacion del siguiente bloque del refactor — documentado
 
 - Se actualizo la hoja de ruta para distinguir las capacidades ya desplegadas del trabajo operativo pendiente.

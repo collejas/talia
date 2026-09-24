@@ -453,24 +453,17 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
 
 ### Fases de implementación
 
-El trabajo implementado y desplegado se resume en las secciones de estado que
-siguen. Las fases pendientes se ejecutaran en este orden:
+El traspaso por areas quedó implementado y desplegado el 2026-09-24:
 
-1. **En curso — traspaso comercial:** sustituir la confirmacion directa por
-   `Enviar a formalizacion`; conservar la evidencia con/sin OC y registrar el
-   evento de envio. Definir el estado compatible con pedidos existentes y la
-   accion para devolver a Comercial para correccion.
-2. **Pendiente — autorizacion:** agregar capacidades acotadas al RBAC actual
-   para enviar y confirmar pedidos y para ver/gestionar surtidos. Revisar las
-   asignaciones por defecto sin basarlas en nombres de puestos. Retirar la
-   autorizacion amplia `sales.manage` para registrar entregas.
-3. **Pendiente — Operaciones:** crear la bandeja de pedidos por revisar,
-   devueltos y confirmados. La confirmacion debe formalizar cliente, venta y
-   cuenta por cobrar, y reservar stock en la misma operacion idempotente.
-4. **Pendiente — Almacen:** mover el registro de entrega al area de Inventario
-   y crear la cola de surtidos. Mantener entregas parciales/totales y sus
-   movimientos transaccionales; la oportunidad solo muestra el progreso y
-   enlaza al pedido.
+1. **Desplegado — Comercial:** el drawer registra evidencia y envia el pedido
+   a `Enviar a formalizacion`; no confirma venta ni reserva desde la oportunidad.
+2. **Desplegado — autorizacion:** capacidades del RBAC existente controlan
+   envio/confirmacion de pedidos y consulta/gestion de surtidos.
+3. **Desplegado — Operaciones:** la bandeja permite revisar, devolver con
+   motivo o confirmar; confirmar formaliza cliente/venta/cuenta por cobrar y
+   reserva stock transaccionalmente.
+4. **Desplegado — Almacen:** la cola de Surtidos permite registrar entregas
+   parciales o totales; la accion se retiro del drawer de oportunidad.
 5. **Pendiente — validacion:** recorrer con sesiones y roles autorizados el
    envio con/sin OC, devolucion, confirmacion, reserva, entrega parcial y total,
    pagos y balances. Verificar tambien usuarios sin permiso y aislamiento por
@@ -662,6 +655,22 @@ demasiado amplio. Pendiente: retirarlo del alcance comercial, validar un
 permiso RBAC acotado y crear las bandejas de formalizacion y surtidos antes de
 hacer el recorrido autenticado con pedidos reales. La migracion de tablas/RPC
 no equivale a tener el proceso operativo terminado.
+
+### Refactor de traspaso y colas — desplegado el 2026-09-24; validacion autenticada pendiente
+
+La migracion `20260924185828_sales_order_handoff_permissions.sql` agrega estados
+de revision, asignacion de permisos del RBAC existente y eventos auditables de
+envio, devolucion, confirmacion y cancelacion. El codigo del panel/API agrega la
+bandeja **Pedidos por formalizar** y la cola **Surtidos**; la oportunidad solo
+permite enviar a revision y consultar el progreso.
+
+Las migraciones `20260924185828_sales_order_handoff_permissions.sql` y
+`20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y
+el release `20260924_191718` esta activo.
+API y panel quedaron saludables; `/ventas/pedidos` y `/inventario/surtidos`
+responden HTTP 200 y OpenAPI publica las rutas nuevas. Falta recorrer el flujo
+con sesiones de Comercial, Operaciones, Inventario y usuarios sin esos
+permisos; las respuestas HTTP no sustituyen esa validacion funcional.
 
 ## 14) Reportes de ventas
 

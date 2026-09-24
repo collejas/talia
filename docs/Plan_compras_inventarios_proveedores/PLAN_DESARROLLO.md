@@ -109,16 +109,18 @@ en una cola de surtidos y registra entregas parciales o totales. La persona
 vendedora consulta desde la oportunidad el resumen y el enlace al pedido, pero
 no ejecuta el surtido desde ahi.
 
-Los estados iniciales existentes del pedido son `borrador`,
-`pendiente_confirmacion`, `confirmado` y `cancelado`. No se mezclaran estados comerciales/logisticos con
+Los estados existentes del pedido son `borrador`,
+`pendiente_confirmacion`, `confirmado` y `cancelado`; el ciclo de revision agrega
+`estado_formalizacion` independiente (`sin_enviar`, `pendiente`, `devuelto`,
+`confirmado`). No se mezclaran estados comerciales/logisticos con
 `ventas.estatus`, el estado de cobranza ni metadata. Solo un pedido no
 confirmado o no surtido puede cancelarse y liberar su reserva; los cambios a
 partidas confirmadas requieren una operacion controlada. Las partidas del
 pedido mantendran referencias explicitas a cotizacion, `catalog_item_id` y,
 cuando aplique, propiedad y unidad. Las tablas y el flujo de confirmar pedido
 estan implementados y desplegados; la evidencia con/sin OC tambien se implemento.
-Quedan pendientes el traspaso administrativo, la cola de surtidos con
-autorizacion correcta y la validacion autenticada de extremo a extremo.
+El traspaso administrativo y la cola de surtidos con autorizacion RBAC tambien
+estan desplegados. Falta la validacion autenticada de extremo a extremo.
 
 ### Responsabilidades y permisos
 
@@ -127,23 +129,21 @@ y formaliza; Almacen prepara y entrega; Finanzas gestiona documentos/pagos.
 Una misma persona puede acumular funciones cuando el tenant asi lo decida,
 pero cada operacion debe validar permisos y conservar el usuario responsable.
 
-Se reutilizara el mecanismo RBAC existente por organizacion y sus roles
-configurables, sin codificar puestos en la autorizacion. La matriz actual no
-tiene permiso especifico de surtido: `sales.manage` tambien corresponde a
-agentes/finanzas y `settings.manage` permite cambios de configuracion amplios.
-Se agregaran capacidades granulares al catalogo RBAC existente para enviar y
-confirmar pedidos y para ver/gestionar surtidos; el tenant asignara estas
-capacidades a los roles adecuados. La lista y asignacion por defecto se
-cerraran antes de implementar el traspaso.
+Se reutiliza el mecanismo RBAC existente por organizacion y sus roles
+configurables, sin codificar puestos en la autorizacion. Las capacidades
+`sales.orders.submit`, `sales.orders.confirm`, `inventory.fulfillment.view` y
+`inventory.fulfillment.manage` ya se agregaron al catalogo RBAC; las
+asignaciones base se aplicaron para los roles definidos en la migracion y cada
+tenant puede gestionarlas mediante sus permisos configurables.
 
-La entrega parcial/total tiene ya un motor transaccional y trazabilidad en la
-base, pero la interfaz actual la expuso en el drawer de oportunidad con
-`sales.manage`. Esa accion debe retirarse de Comercial y exponerse desde la
-cola de Inventario con el permiso correcto antes del uso operativo.
+La entrega parcial/total tiene un motor transaccional y trazabilidad en la
+base. La accion se retiro del drawer de oportunidad y se expone desde la cola
+de Inventario mediante `inventory.fulfillment.manage`.
 La entrega parcial ya tiene encabezados, renglones y salida transaccional
 explícitos. La expiracion de reservas sigue pendiente; sus vencimientos y
 estados no deben esconderse en JSON. La cola de surtidos y su delegacion por
-RBAC tambien siguen pendientes.
+RBAC quedaron implementadas y desplegadas el 2026-09-24; falta validarlas con
+usuarios autenticados por rol y tenant.
 
 ## Tablas propuestas
 
@@ -564,28 +564,19 @@ Tareas:
 
 ## Siguientes pasos tecnicos
 
-Los primeros pasos de este plan ya se implementaron: pedido propio, propagacion
-de partidas, confirmacion transaccional, reserva y motor de entregas parciales.
-La siguiente etapa pendiente es el traspaso entre equipos y su operacion desde
-colas separadas:
-
-1. Reemplazar la confirmacion directa desde Comercial por `Enviar a formalizacion`
-   y una bandeja de Operaciones para revisar, devolver o confirmar pedidos.
-2. Definir la compatibilidad/migracion de estados existentes antes de agregar
-   `pendiente_formalizacion` u otro estado de revision.
-3. Extender el RBAC existente con capacidades acotadas para enviar/confirmar
-   pedidos y consultar/gestionar surtidos; definir sus asignaciones por defecto.
-4. Crear la cola de Surtidos en Inventario y mover ahi la interfaz de entrega,
-   eliminandola del drawer de oportunidad.
-5. Validar con sesion autenticada la evidencia con/sin OC, formalizacion,
-   permisos, entrega parcial/completa y balances de existencia/reserva.
+El pedido propio, la propagacion de partidas, la confirmacion transaccional,
+reserva, entregas parciales, traspaso por RBAC y las colas de Operaciones y
+Almacen estan implementados y desplegados. La migracion
+`20260924185828_sales_order_handoff_permissions.sql` se aplico y el release
+`20260924_191718` esta activo. Queda validar con sesion autenticada la evidencia
+con/sin OC, devolucion y reenvio, formalizacion, permisos, entrega parcial o
+completa y balances de existencia/reserva.
 6. Completar el flujo inmobiliario con su hito contractual de venta, sin
    generar movimientos de almacen para propiedades.
 
-El orden visual acompana el proceso, pero la prioridad de entrega sera: primero
-RBAC y traspaso a Operaciones; despues la cola de Almacen. No se expondra una
-accion de entrega usando el permiso comercial actual mientras se construye la
-nueva cola.
+El flujo desplegado es: Comercial envia a formalizacion; Operaciones confirma o
+devuelve con motivo; Almacen procesa entregas desde su cola. La accion de
+entrega se retiro del drawer comercial y no debe reintroducirse ahi.
 
 ## Estado actual
 
@@ -603,6 +594,7 @@ nueva cola.
 - El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - Ya existe un maestro editable de unidades de medida en `settings/productos/unidades-medida` y el catálogo usa ese maestro para `unidad_inventario`.
 - Ya existe un ajuste manual de inventario en la vista de compras, con movimiento auditable.
-- El flujo anterior de reservar/liberar inventario al aceptar/cancelar cotizaciones queda supersedido por la politica acordada el 2026-09-24. La reserva por pedido confirmado y el motor de salida por entrega ya estan desplegados; falta ubicar el surtido en la cola de Almacen y corregir el permiso.
+- El flujo anterior de reservar/liberar inventario al aceptar/cancelar cotizaciones queda supersedido por la politica acordada el 2026-09-24. La reserva por pedido confirmado, el motor de salida y la cola de surtidos de Almacen estan desplegados; el envio a Operaciones y la confirmacion administrativa usan capacidades RBAC especificas.
 - Migraciones `20260924015415_pedidos_venta_flujo_confirmacion.sql` y `20260924021025_pedidos_venta_fk_indexes.sql` aplicadas en Supabase; backend y panel desplegados en `20260924_021215`.
-- Siguiente: sustituir la confirmacion directa del vendedor por `Enviar a formalizacion`, crear la bandeja de Operaciones, y dejar la confirmacion/reserva a usuarios autorizados por RBAC; despues crear la cola de surtidos de Almacen y mover ahi la entrega parcial/total. El soporte de evidencia con/sin OC ya esta implementado, pero necesita validacion autenticada. Las politicas por tenant y reglas de liberacion logistica por credito/anticipo se ampliaran despues.
+- Las migraciones `20260924185828_sales_order_handoff_permissions.sql` y `20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y el release `20260924_191718` esta activo en produccion. Comercial envia a revision; Operaciones confirma o devuelve con motivo; Almacen trabaja desde `Inventario > Surtidos`. Las pantallas y API responden correctamente sin sesion; falta recorrer el flujo con usuarios autenticados y verificar persistencia de reservas/entregas.
+- Siguiente: validar por rol y tenant el ciclo completo, incluidos OC y evidencia alternativa, devolucion/reenvio, confirmacion con reserva, y surtido parcial/total. Politicas configurables por tenant, liberacion logistica por credito/anticipo, cancelacion logistica y el hito contractual inmobiliario se amplian despues.

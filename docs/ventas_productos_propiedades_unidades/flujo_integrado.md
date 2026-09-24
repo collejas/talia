@@ -65,14 +65,20 @@ pedido; ahi se formalizan venta/cuenta por cobrar y se reserva la unidad
 inmobiliaria en su estado patrimonial o el stock fisico para partidas
 stockables. La unidad inmobiliaria no entra a la cola de almacen.
 
+Las bandejas comunes de Operaciones y Surtidos estan desplegadas con permisos
+RBAC especificos. Las migraciones `20260924185828_sales_order_handoff_permissions.sql`
+y `20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y el release `20260924_191718` esta activo. Las
+propiedades solo aparecen en la primera bandeja, nunca en Surtidos. Falta
+validar con usuarios autenticados de cada area y tenant.
+
 Almacen recibe solo productos fisicos reservados y registra surtidos parciales
 o totales desde su cola. Finanzas gestiona cobranza/documentos de forma
 independiente. La oportunidad muestra el avance de cada proceso y un enlace al
 pedido para consulta, pero no permite al vendedor registrar entregas. Las
 responsabilidades se autorizan mediante el RBAC existente configurable por
-tenant; no se codifican por nombre de puesto. El catalogo actual carece de
-permiso de surtido, por lo que debe añadirse una capacidad especifica al
-catalogo RBAC existente y asignarse a los roles elegidos por la organizacion.
+tenant; no se codifican por nombre de puesto. Las capacidades especificas de
+envio, confirmacion y surtido ya estan en el catalogo RBAC y se asignan por
+codigo a los roles definidos.
 
 ### Transicion desde el comportamiento anterior
 

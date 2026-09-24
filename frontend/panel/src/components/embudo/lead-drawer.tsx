@@ -249,6 +249,8 @@ type LeadQuoteOrderDocument = {
 type LeadQuoteSalesOrder = {
   id: string;
   estatus: string;
+  estado_formalizacion: string;
+  motivo_devolucion_comercial: string | null;
   estatus_logistico: string;
   referencia_pedido_cliente: string | null;
   fecha_orden_cliente: string | null;
@@ -1086,12 +1088,6 @@ export function LeadDrawer({
   const [paymentQuote, setPaymentQuote] = useState<LeadQuoteEntry | null>(null);
   const [formalizedSalesByQuote, setFormalizedSalesByQuote] = useState<Record<string, FormalizedSale>>({});
   const [formalizeQuote, setFormalizeQuote] = useState<LeadQuoteEntry | null>(null);
-  const [fulfillmentQuote, setFulfillmentQuote] = useState<LeadQuoteEntry | null>(null);
-  const [fulfillmentQuantities, setFulfillmentQuantities] = useState<Record<string, string>>({});
-  const [fulfillmentDate, setFulfillmentDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [fulfillmentReference, setFulfillmentReference] = useState("");
-  const [fulfillmentNotes, setFulfillmentNotes] = useState("");
-  const [fulfillmentError, setFulfillmentError] = useState<string | null>(null);
   const [formalizeError, setFormalizeError] = useState<string | null>(null);
   const [orderReference, setOrderReference] = useState("");
   const [orderDate, setOrderDate] = useState("");
@@ -1181,6 +1177,10 @@ export function LeadDrawer({
     permissionContext.es_admin ||
     permissionContext.es_owner ||
     normalizedPerms.includes("sales.manage");
+  const canSubmitSalesOrders =
+    permissionContext.es_admin ||
+    permissionContext.es_owner ||
+    normalizedPerms.includes("sales.orders.submit");
   const isAdminOrOwner =
     permissionContext.es_admin ||
     permissionContext.es_owner ||
@@ -3271,7 +3271,18 @@ export function LeadDrawer({
   );
 
   const openPaymentDialog = useCallback((quote: LeadQuoteEntry) => {
-    const existingSale = formalizedSalesByQuote[quote.id];
+    const existingSale = formalizedSalesByQuote[quote.id] ?? (quote.pedido?.venta
+      ? {
+          venta_id: quote.pedido.venta.id,
+          cliente_id: quote.pedido.venta.cliente_id,
+          cuenta_por_cobrar_id: quote.pedido.venta.cuenta_por_cobrar_id,
+          total: quote.pedido.venta.total,
+          saldo: quote.pedido.venta.saldo,
+        }
+      : undefined);
+    if (existingSale) {
+      setFormalizedSalesByQuote((current) => ({ ...current, [quote.id]: existingSale }));
+    }
     setPaymentQuote(quote);
     setPaymentAmount(existingSale ? String(existingSale.saldo) : quote.total != null ? String(quote.total) : "");
     setPaymentType("parcial");
@@ -3317,7 +3328,7 @@ export function LeadDrawer({
           setOrderDocumentFile(null);
           await fetchQuotes();
         }
-        const response = await fetch(`/api/embudo/quotes/${formalizeQuote.id}/formalizar-venta`, {
+        const response = await fetch(`/api/embudo/quotes/${formalizeQuote.id}/pedido/enviar-formalizacion`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -3330,60 +3341,17 @@ export function LeadDrawer({
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
-          setFormalizeError(typeof body?.error === "string" ? body.error : "No se pudo formalizar la venta.");
+          setFormalizeError(typeof body?.error === "string" ? body.error : "No se pudo enviar el pedido a formalización.");
           return;
         }
-        const sale = body as FormalizedSale;
-        if (!sale.venta_id || !sale.cliente_id || !sale.cuenta_por_cobrar_id) {
-          setFormalizeError("La respuesta de formalización está incompleta.");
-          return;
-        }
-        setFormalizedSalesByQuote((current) => ({ ...current, [formalizeQuote.id]: sale }));
-        setQuoteSuccess("Pedido confirmado. Venta y cuenta por cobrar creadas; no se registró ningún pago.");
+        setQuoteSuccess("Pedido enviado a Operaciones para revisión y formalización.");
         setFormalizeQuote(null);
         await fetchQuotes();
       } catch (error) {
-        setFormalizeError(error instanceof Error ? error.message : "No se pudo formalizar la venta.");
+        setFormalizeError(error instanceof Error ? error.message : "No se pudo enviar el pedido a formalización.");
       }
     });
   }, [fetchQuotes, formalizeQuote, orderConfirmationDate, orderConfirmationMethod, orderConfirmationNotes, orderDate, orderDocumentFile, orderDocumentUploaded, orderReference]);
-
-  const handleRegisterDelivery = useCallback(() => {
-    if (!fulfillmentQuote) return;
-    const items = (fulfillmentQuote.pedido?.items ?? [])
-      .filter((item) => item.maneja_inventario)
-      .map((item) => ({ item_id: item.id, cantidad: Number((fulfillmentQuantities[item.id] ?? "").replace(",", ".")) }))
-      .filter((item) => Number.isFinite(item.cantidad) && item.cantidad > 0);
-    if (!items.length) {
-      setFulfillmentError("Captura al menos una cantidad para surtir.");
-      return;
-    }
-    setFulfillmentError(null);
-    startQuoteAction(async () => {
-      try {
-        const response = await fetch(`/api/embudo/quotes/${fulfillmentQuote.id}/pedido/entregas`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fecha_entrega: fulfillmentDate,
-            referencia: fulfillmentReference.trim() || null,
-            observaciones: fulfillmentNotes.trim() || null,
-            items,
-          }),
-        });
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          setFulfillmentError(typeof body?.error === "string" ? body.error : "No se pudo registrar la entrega.");
-          return;
-        }
-        setQuoteSuccess("Entrega registrada; se actualizó la existencia y la reserva del inventario.");
-        setFulfillmentQuote(null);
-        await fetchQuotes();
-      } catch (error) {
-        setFulfillmentError(error instanceof Error ? error.message : "No se pudo registrar la entrega.");
-      }
-    });
-  }, [fetchQuotes, fulfillmentDate, fulfillmentNotes, fulfillmentQuantities, fulfillmentQuote, fulfillmentReference]);
 
   const handleConfirmedPayment = useCallback(() => {
     if (!paymentQuote) return;
@@ -4182,10 +4150,17 @@ export function LeadDrawer({
                                 <IconTrophy className="size-4" />
                                 Marcar como aceptada
                               </Button>
-                              {quote.status === "aceptada" && canManageSales ? (
+                              {quote.status === "aceptada" && canSubmitSalesOrders ? (
                                 <>
-                                  {formalizedSalesByQuote[quote.id] ? (
-                                    <Badge variant="secondary">Venta formalizada · saldo {formatQuoteCurrency(Number(formalizedSalesByQuote[quote.id].saldo), quote.currency)}</Badge>
+                                  {quote.pedido?.estatus === "confirmado" || formalizedSalesByQuote[quote.id] ? (
+                                    <Badge variant="secondary">
+                                      Venta formalizada · saldo {formatQuoteCurrency(
+                                        Number(formalizedSalesByQuote[quote.id]?.saldo ?? quote.pedido?.venta?.saldo ?? 0),
+                                        quote.currency,
+                                      )}
+                                    </Badge>
+                                  ) : quote.pedido?.estado_formalizacion === "pendiente" ? (
+                                    <Badge variant="secondary">En revisión por Operaciones</Badge>
                                   ) : (
                                     <Button
                                       type="button"
@@ -4206,10 +4181,15 @@ export function LeadDrawer({
                                       }}
                                       disabled={quotePending}
                                     >
-                                      Confirmar pedido
+                                      Enviar a formalización
                                     </Button>
                                   )}
-                                  <Button
+                                  {quote.pedido?.estado_formalizacion === "devuelto" && quote.pedido.motivo_devolucion_comercial ? (
+                                    <p className="basis-full text-xs text-muted-foreground">
+                                      Operaciones solicita corregir: {quote.pedido.motivo_devolucion_comercial}
+                                    </p>
+                                  ) : null}
+                                  {quote.pedido?.estatus === "confirmado" && canManageSales ? <Button
                                     type="button"
                                     size="sm"
                                     className="gap-1"
@@ -4217,29 +4197,10 @@ export function LeadDrawer({
                                     disabled={quotePending}
                                   >
                                     <IconCheck className="size-4" />
-                                    {formalizedSalesByQuote[quote.id] ? "Registrar pago" : "Registrar pago inmediato"}
+                                    Registrar pago
                                   </Button>
+                                  : null}
                                 </>
-                              ) : null}
-                              {quote.pedido?.estatus === "confirmado" && canManageSales && quote.pedido.items.some((item) => item.maneja_inventario) ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setFulfillmentError(null);
-                                    setFulfillmentDate(new Date().toISOString().slice(0, 10));
-                                    setFulfillmentReference("");
-                                    setFulfillmentNotes("");
-                                    setFulfillmentQuantities(Object.fromEntries(quote.pedido!.items
-                                      .filter((item) => item.maneja_inventario)
-                                      .map((item) => [item.id, Math.max(0, item.cantidad - item.cantidad_entregada).toString()])));
-                                    setFulfillmentQuote(quote);
-                                  }}
-                                  disabled={quotePending || quote.pedido.estatus_logistico === "entregado"}
-                                >
-                                  Registrar entrega
-                                </Button>
                               ) : null}
                               {quote.pedido?.estatus === "confirmado" && quote.pedido.estatus_logistico !== "no_aplica" ? (
                                 <Badge variant="secondary">
@@ -5755,7 +5716,7 @@ export function LeadDrawer({
         }}
       >
         <DialogContent className="max-w-md">
-          <DialogTitle>Confirmar pedido del cliente</DialogTitle>
+          <DialogTitle>Enviar pedido a formalización</DialogTitle>
           <DialogDescription>
             Se confirma el compromiso del cliente. Tal-IA creará o activará el cliente, formalizará la venta y su cuenta por cobrar, y reservará los productos con control de inventario. No se registra ningún pago.
           </DialogDescription>
@@ -5871,7 +5832,7 @@ export function LeadDrawer({
                 />
               </div>
               <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
-                Vendedor asignado: {quoteAssignedVendorName}. El usuario que confirma quedará registrado automáticamente.
+                Vendedor asignado: {quoteAssignedVendorName}. Operaciones revisará la evidencia antes de formalizar la venta.
               </div>
             </div>
           </div>
@@ -5883,69 +5844,8 @@ export function LeadDrawer({
               Cancelar
             </Button>
             <Button type="button" onClick={handleFormalizeSale} disabled={quotePending || !formalizeQuote}>
-              {quotePending ? "Confirmando pedido..." : "Confirmar pedido y formalizar venta"}
+              {quotePending ? "Enviando a Operaciones..." : "Enviar a formalización"}
             </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={Boolean(fulfillmentQuote)}
-        onOpenChange={(openState) => {
-          if (!openState && !quotePending) {
-            setFulfillmentQuote(null);
-            setFulfillmentError(null);
-          }
-        }}
-      >
-        <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto">
-          <DialogTitle>Registrar entrega de pedido</DialogTitle>
-          <DialogDescription>
-            Captura lo que se entrega ahora. La existencia física y la reserva disminuirán por estas cantidades.
-          </DialogDescription>
-          <div className="grid gap-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="delivery-date">Fecha de entrega</Label>
-                <Input id="delivery-date" type="date" value={fulfillmentDate} onChange={(event) => setFulfillmentDate(event.target.value)} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="delivery-reference">Referencia (opcional)</Label>
-                <Input id="delivery-reference" value={fulfillmentReference} maxLength={160} onChange={(event) => setFulfillmentReference(event.target.value)} placeholder="Remisión o folio" />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              {(fulfillmentQuote?.pedido?.items ?? []).filter((item) => item.maneja_inventario).map((item) => {
-                const pending = Math.max(0, item.cantidad - item.cantidad_entregada);
-                return (
-                  <div key={item.id} className="grid grid-cols-[1fr_110px] items-center gap-3 rounded-md border px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{item.descripcion}</p>
-                      <p className="text-xs text-muted-foreground">Pendiente: {pending} de {item.cantidad}</p>
-                    </div>
-                    <Input
-                      aria-label={`Cantidad a entregar de ${item.descripcion}`}
-                      type="number"
-                      min="0"
-                      max={pending}
-                      step="0.001"
-                      value={fulfillmentQuantities[item.id] ?? "0"}
-                      onChange={(event) => setFulfillmentQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="delivery-notes">Observaciones (opcional)</Label>
-              <Input id="delivery-notes" value={fulfillmentNotes} maxLength={2000} onChange={(event) => setFulfillmentNotes(event.target.value)} />
-            </div>
-            {fulfillmentError ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{fulfillmentError}</p> : null}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setFulfillmentQuote(null)} disabled={quotePending}>Cancelar</Button>
-              <Button type="button" onClick={handleRegisterDelivery} disabled={quotePending || !fulfillmentQuote}>
-                {quotePending ? "Registrando entrega..." : "Registrar entrega"}
-              </Button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -6946,6 +6846,8 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
       ? {
           id: String(rawOrder.id ?? ""),
           estatus: typeof rawOrder.estatus === "string" ? rawOrder.estatus : "pendiente_confirmacion",
+          estado_formalizacion: typeof rawOrder.estado_formalizacion === "string" ? rawOrder.estado_formalizacion : "sin_enviar",
+          motivo_devolucion_comercial: typeof rawOrder.motivo_devolucion_comercial === "string" ? rawOrder.motivo_devolucion_comercial : null,
           estatus_logistico: typeof rawOrder.estatus_logistico === "string" ? rawOrder.estatus_logistico : "no_aplica",
           referencia_pedido_cliente:
             typeof rawOrder.referencia_pedido_cliente === "string" ? rawOrder.referencia_pedido_cliente : null,
