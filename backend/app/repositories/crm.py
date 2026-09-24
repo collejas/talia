@@ -4338,14 +4338,57 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "oportunidad_id": f"eq.{oportunidad_id}",
             "order": "creado_en.desc",
-            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id)),pedido:pedidos_venta!pedidos_venta_cotizacion_org_fkey(id,estatus,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path)))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
             "items.order": "orden.asc,id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar cotizaciones: {data!r}")
-        return data
+        return await self._attach_sales_orders_to_quotes(
+            organizacion_id=organizacion_id,
+            quotes=data,
+        )
+
+    async def _attach_sales_orders_to_quotes(
+        self,
+        *,
+        organizacion_id: UUID,
+        quotes: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Enrich RLS-visible quotes with private order data using the backend role."""
+        quote_ids = sorted(
+            {
+                str(quote_id)
+                for row in quotes
+                if (quote_id := _safe_uuid(row.get("id"))) is not None
+            }
+        )
+        if not quote_ids:
+            return quotes
+
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "cotizacion_id": f"in.({','.join(quote_ids)})",
+            "select": "id,cotizacion_id,estatus,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path))",
+        }
+        response = await self._request_service_role(
+            "GET",
+            "/rest/v1/pedidos_venta",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("sales_order_quote_enrichment_invalid_response")
+        orders_by_quote = {
+            str(row.get("cotizacion_id")): row
+            for row in data
+            if isinstance(row, dict) and row.get("cotizacion_id")
+        }
+        for quote in quotes:
+            quote["pedido"] = orders_by_quote.get(str(quote.get("id")))
+        return quotes
 
     async def get_quote_entry(
         self,
@@ -4357,7 +4400,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{quote_id}",
             "limit": "1",
-            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id)),pedido:pedidos_venta!pedidos_venta_cotizacion_org_fkey(id,estatus,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path)))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
             "items.order": "orden.asc,id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
@@ -4365,7 +4408,11 @@ class CRMRepository:
         if isinstance(data, list) and data:
             row = data[0]
             if isinstance(row, dict):
-                return row
+                enriched = await self._attach_sales_orders_to_quotes(
+                    organizacion_id=organizacion_id,
+                    quotes=[row],
+                )
+                return enriched[0]
         raise CRMRepositoryError("quote_not_found")
 
     async def registrar_pago_confirmado(
@@ -4609,7 +4656,12 @@ class CRMRepository:
             "limit": "1",
             "select": "id,organizacion_id,cotizacion_id,estatus,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,storage_path,subido_en))",
         }
-        resp = await self._request("GET", "/rest/v1/pedidos_venta", params=params)
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/pedidos_venta",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
         data = resp.json()
         if isinstance(data, list) and data and isinstance(data[0], dict):
             return data[0]

@@ -11,6 +11,13 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 
 ## 2026-09-24
 
+### Corrección del 502 al cargar cotizaciones
+
+- Los logs de Supabase identificaron `permission denied for table pedidos_venta`: la consulta de cotizaciones, ejecutada con el token autenticado del usuario, intentaba incluir pedidos protegidos para el backend.
+- Se quitó esa relación de la consulta bajo RLS. El backend ahora enriquece únicamente las cotizaciones ya devueltas al usuario, filtrando además por organización y sus IDs, mediante `service_role`; no se amplió el acceso directo de `authenticated` ni de `anon`.
+- **Desplegado (2026-09-24):** API reiniciada; `/api/health` responde HTTP 200 y el endpoint de cotizaciones rechazó sin sesión con HTTP 401. Compilación Python y `git diff --check` pasaron.
+- **Por validar con sesión:** volver a abrir la oportunidad afectada y confirmar que carga sus cotizaciones y el resumen del pedido. La cookie de sesión compartida en el reporte no se reutilizó.
+
 ### Pedido confirmado, reserva de inventario y propagación del catálogo — desplegado; validación funcional pendiente
 
 - Aceptar una cotización o ganar una oportunidad no reserva existencias.
