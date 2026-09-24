@@ -5,7 +5,7 @@
 - Para poder usar el motor de ventas del CRM (productos, cotizaciones, oportunidades) cada unidad se refleja como un `catalog_item` con `tipo = "producto"` y `activo = true`.
 - El importador y los endpoints administrativos crean/actualizan ese `catalog_item` y guardan `propiedad_id`, `unidad_id` y `catalog_item_id` dentro de `catalog_items.metadatos` y `metadatos` (ya que la columna `metadata` es generada a partir de `metadatos`).
 
-## Pedido confirmado, reserva patrimonial e inventario
+## Confirmacion comercial, aprobacion operativa e inventario
 
 Una unidad inmobiliaria es un bien individual y no participa en existencias,
 almacenes, recepciones ni movimientos cuantitativos de inventario. Su
@@ -15,14 +15,20 @@ en `catalog_items` sirve para cotizar/vender; debe tener
 indica si se ofrece comercialmente y debe sincronizarse con la disponibilidad.
 
 Aceptar una cotizacion o ganar una oportunidad no reserva productos ni
-propiedades. La reserva comienza cuando se confirma el pedido del cliente,
-normalmente al recibir y validar su orden de compra. Para unidades inmobiliarias
-eso cambia el estado a `apartado` o `reservado`; no crea un movimiento de
-almacen. La unidad pasa a `vendido` al completarse el hito contractual que
-defina la organizacion, no por aceptar la cotizacion.
+propiedades. Comercial confirma el pedido del cliente y lo envia a revision,
+pero no formaliza la venta ni crea la cuenta por cobrar. Si recibe y valida una
+OC del cliente, puede reservar solo inventario fisico stockable en ese paso;
+esto no libera el pedido a Almacen. Sin OC validada, Operaciones revisa y, al
+aprobar y liberar el pedido a surtido, formaliza la venta e inicia la reserva.
+Para unidades inmobiliarias, el apartado/reserva patrimonial se realiza al
+aprobar en Operaciones y cambia el estado a `apartado` o `reservado`; no crea
+un movimiento de almacen. La unidad pasa a `vendido` al completarse el hito
+contractual que defina la organizacion, no por aceptar la cotizacion.
 
-Para productos stockables, esa misma confirmacion aumenta el stock reservado y
-reduce el disponible, sin modificar el stock fisico. La entrega/embarque registra
+Para productos stockables, la reserva (anticipada por OC o al aprobar
+Operaciones) aumenta el stock reservado y reduce el disponible, sin modificar
+el stock fisico. La aprobacion conserva la reserva existente sin duplicarla.
+La entrega/embarque registra
 la salida y libera la reserva. Para propiedades no hay salida de inventario:
 se actualiza el estado de la unidad. Pago, factura y proforma son eventos
 financieros/documentales y no cambian por si mismos disponibilidad ni stock.
@@ -35,50 +41,66 @@ metadata para relaciones centrales.
 
 La configuracion por tenant para reservar al recibir anticipo/pago, al aceptar
 cotizacion, reservar manualmente o no reservar queda como fase futura. La
-politica inicial recomendada para productos B2B es confirmar el pedido con la
-orden de compra del cliente. Esa orden del cliente no es una fila de
+politica inicial recomendada para productos B2B es reservar el inventario
+fisico al recibir y validar una OC; si no hay OC, reservar al aprobar en
+Operaciones. El compromiso del cliente tambien puede acreditarse sin OC. Esa
+orden del cliente no es una fila de
 `ordenes_compra`, que corresponde a compras de la organizacion a proveedores.
 
-**Decision de arquitectura:** la confirmacion se gestionara mediante una
-entidad propia `pedidos_venta` con partidas `pedido_venta_items`. Una cotizacion
-aceptada puede originar un pedido pendiente de confirmacion; al confirmar el
-compromiso del cliente, el sistema formaliza de forma coordinada la venta y la
-cuenta por cobrar. En productos stockables reserva las cantidades; en
-propiedades actualiza la disponibilidad de la unidad a `apartado` o
-`reservado`, sin movimientos de almacen. En v1 cada pedido confirmado genera
-una venta y una cuenta por cobrar. Los documentos de cobro y pagos siguen
-siendo pasos separados. Este flujo y sus tablas se desplegaron el 2026-09-24;
+**Decision de arquitectura:** el pedido se gestiona mediante la entidad
+`pedidos_venta` con partidas `pedido_venta_items`. Una cotizacion aceptada
+puede originar un pedido pendiente de confirmacion. Comercial confirma el
+compromiso del cliente y adjunta evidencia; si valida una OC reserva unicamente
+el stock fisico, sin formalizar ni liberar a Almacen. Operaciones revisa y
+puede regresarlo con motivo o aprobarlo y liberarlo a surtido. Solo al aprobar
+se formaliza de forma coordinada la venta y la cuenta por cobrar; en productos
+stockables se garantiza la reserva y en propiedades se actualiza la unidad a `apartado` o
+`reservado`, sin movimientos de almacen. En v1 cada pedido aprobado genera una
+venta y una cuenta por cobrar. Los documentos de cobro y pagos siguen siendo
+pasos separados. Las tablas y el flujo anterior se desplegaron el 2026-09-24;
+la nueva distribucion de responsabilidades queda pendiente de implementacion y
 la validacion funcional autenticada sigue pendiente.
 
-La confirmacion del cliente acepta evidencia con OC o sin OC. Si el cliente
-entrega una OC, el usuario puede capturar su numero y subir el archivo al
-pedido; correo, WhatsApp, cotizacion aceptada, contrato, confirmacion verbal u
-otro tambien pueden respaldar el compromiso. El archivo tiene acceso por
-organizacion y trazabilidad de carga; queda pendiente validar autenticadamente
-el flujo.
+La confirmacion del cliente acepta evidencia con OC o sin OC. Comercial usa
+**Confirmar pedido** para registrar como confirmo el cliente y adjuntar la
+evidencia: OC, correo, WhatsApp, cotizacion aceptada, contrato, confirmacion
+verbal u otro. Esa accion solo envia el pedido a Operaciones para revision y
+nunca formaliza venta ni cuenta por cobrar. Si Comercial recibe y valida una
+OC, puede reservar unicamente inventario fisico stockable; la OC se captura y
+adjunta al pedido. El archivo tiene acceso por organizacion
+y trazabilidad de carga; queda pendiente validar autenticadamente el flujo.
 
 ## Responsabilidades y traspaso operativo
 
-El vendedor registra la aceptacion y evidencia y envia el pedido a
-formalizacion. Operaciones/Administracion revisa el expediente y confirma el
-pedido; ahi se formalizan venta/cuenta por cobrar y se reserva la unidad
-inmobiliaria en su estado patrimonial o el stock fisico para partidas
-stockables. La unidad inmobiliaria no entra a la cola de almacen.
+El vendedor registra la aceptacion y evidencia y usa **Confirmar pedido** para
+enviarlo a revision. Operaciones/Administracion comprueba cliente, evidencia y
+partidas. Si encuentra un problema, usa **Regresar a Comercial** con el motivo.
+Si todo esta correcto, usa **Aprobar y liberar a surtido**; esa unica
+aprobacion formaliza venta/cuenta por cobrar y garantiza que el stock fisico
+stockable este reservado, sin duplicar una reserva previa por OC. Para unidades inmobiliarias, la aprobacion actualiza el
+estado patrimonial a `apartado` o `reservado`, sin movimientos de almacen. La
+unidad inmobiliaria no entra a la cola de Almacen.
 
 Las bandejas comunes de Operaciones y Surtidos estan desplegadas con permisos
-RBAC especificos. Las migraciones `20260924185828_sales_order_handoff_permissions.sql`
-y `20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y el release `20260924_191718` esta activo. Las
-propiedades solo aparecen en la primera bandeja, nunca en Surtidos. Falta
-validar con usuarios autenticados de cada area y tenant.
+RBAC especificos, pero su comportamiento actual sigue el flujo anterior:
+Operaciones confirma y en esa accion se formaliza venta/cuenta por cobrar y se
+reserva. El cambio a **Aprobar y liberar a surtido** como unico punto de
+formalizacion queda pendiente de implementacion. Las migraciones
+`20260924185828_sales_order_handoff_permissions.sql` y
+`20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y
+el release `20260924_191718` esta activo. Las propiedades solo aparecen en la
+primera bandeja, nunca en Surtidos. Falta validar con usuarios autenticados de
+cada area y tenant.
 
-Almacen recibe solo productos fisicos reservados y registra surtidos parciales
-o totales desde su cola. Finanzas gestiona cobranza/documentos de forma
-independiente. La oportunidad muestra el avance de cada proceso y un enlace al
-pedido para consulta, pero no permite al vendedor registrar entregas. Las
-responsabilidades se autorizan mediante el RBAC existente configurable por
-tenant; no se codifican por nombre de puesto. Las capacidades especificas de
-envio, confirmacion y surtido ya estan en el catalogo RBAC y se asignan por
-codigo a los roles definidos.
+Almacen recibe solo productos fisicos aprobados, liberados y reservados, y
+registra surtidos parciales o totales desde su cola. Finanzas gestiona
+cobranza/documentos de forma independiente. La oportunidad muestra el avance
+de cada proceso y un enlace al pedido para consulta, pero no permite al
+vendedor registrar entregas. Las responsabilidades se autorizan mediante el
+RBAC existente configurable por tenant; no se codifican por nombre de puesto.
+Las capacidades especificas de envio, revision y surtido ya estan en el
+catalogo RBAC; debe verificarse la autorizacion para la aprobacion que dispara
+la formalizacion.
 
 ### Transicion desde el comportamiento anterior
 
@@ -98,13 +120,14 @@ El flujo inmobiliario se apoyara en el traspaso general Comercial → Operacione
 Finanzas. La unidad no usa la cola de Almacen. Sus pendientes especificos son:
 
 1. Integrar el registro de venta de propiedades con `pedidos_venta` y el envio a
-   formalizacion, evitando que aceptar una cotizacion marque la unidad como
+   revision operativa, evitando que aceptar una cotizacion marque la unidad como
    vendida o evite la revision operativa.
-2. Al confirmar Operaciones el pedido inmobiliario, apartar/reservar la unidad
-   actualizando `propiedad_unidades.status`; no crear movimientos de almacen.
+2. Al aprobar Operaciones y liberar el pedido inmobiliario, apartar/reservar
+   la unidad actualizando `propiedad_unidades.status`; no crear movimientos de
+   almacen.
 3. Definir el hito contractual que marca la unidad como `vendido` y desactiva
    su oferta comercial; venta y cuenta por cobrar ya se habran creado al
-   confirmar el pedido.
+   aprobar el pedido.
 4. Verificar que `catalog_item_id`, `propiedad_id` y `unidad_id` se conserven
    entre cotizacion, partida del pedido y venta.
 5. Extender reportes/vistas con progreso comercial, financiero y patrimonial

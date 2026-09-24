@@ -52,9 +52,11 @@ Reglas practicas:
 ## Politica acordada para reservas de venta
 
 La aceptacion de una cotizacion y el cambio de una oportunidad a ganada no
-reservan existencias. La reserva nace cuando se confirma un pedido del cliente,
-normalmente respaldado por su orden de compra recibida y validada. Para el
-alcance inicial, esa confirmacion es la politica predeterminada B2B. La
+reservan existencias. Comercial puede reservar **solo inventario fisico
+stockable** al confirmar el pedido si recibe y valida una OC del cliente. Esta
+reserva anticipada no crea venta ni cuenta por cobrar y no libera el pedido a
+Almacen. Sin OC validada, la reserva nace cuando Operaciones aprueba el pedido
+y lo libera a surtido. La
 configuracion por tenant para reservar al recibir anticipo/pago, al aceptar la
 cotizacion, reservar manualmente o no reservar queda como evolucion posterior.
 
@@ -63,21 +65,30 @@ la cobranza conservan estados propios. Un pago, una factura o una proforma no
 descuentan por si mismos las existencias fisicas. Los servicios y productos
 con `maneja_inventario = false` no generan reservas ni movimientos de almacen.
 
-La confirmacion debe admitir clientes **con OC y sin OC**. El vendedor registra
-la evidencia (OC, cotizacion firmada/aceptada, correo, WhatsApp, contrato,
-confirmacion verbal u otro) y envia el pedido a formalizacion. Cuando sea OC
-puede capturar el numero y subir el documento entregado por el cliente; se
-asocia al pedido, con acceso limitado a la organizacion y registro de quien lo
-subio. Operaciones/Administracion revisa los datos y evidencia, devuelve para
-correccion o confirma el pedido. La confirmacion se registra con la identidad
-del usuario en sesion; el vendedor proviene de la oportunidad. Una opcion de
-anticipo solo cuenta como evidencia si se vincula a un pago real. Requisitos
-de OC o anticipo por tenant se consideraran despues de la primera version.
+La confirmacion debe admitir clientes **con OC y sin OC**. Comercial usa
+**Confirmar pedido** para registrar la evidencia (OC, cotizacion
+firmada/aceptada, correo, WhatsApp, contrato, confirmacion verbal u otro) y
+enviarlo a revision; esta accion nunca formaliza venta ni cuenta por cobrar.
+Cuando recibe y valida una OC, puede capturar el numero, subir el documento y
+reservar solo inventario fisico stockable en ese paso. Esa reserva no libera el
+pedido a Almacen. Sin OC validada, no se reserva hasta que Operaciones apruebe.
+Operaciones revisa cliente, evidencia y partidas. Si encuentra un problema,
+usa **Regresar a Comercial** con el motivo; si todo esta correcto, **Aprobar y
+liberar a surtido**. Esta aprobacion es la unica accion que formaliza
+cliente/venta/cuenta por cobrar y garantiza que haya reserva, sin duplicar una
+reserva previa por OC. Una reserva por OC vigente se conserva si el pedido
+regresa a Comercial para correccion; cancelar el pedido o invalidar la OC
+libera el saldo reservado. El usuario que confirma y quien aprueba se auditan
+por separado; el vendedor proviene de la oportunidad. Una opcion de anticipo
+solo cuenta como evidencia si se vincula a un pago real. Requisitos de OC o
+anticipo por tenant se consideraran despues de la primera version.
 
 | Evento | Stock fisico | Stock reservado | Stock disponible |
 | --- | --- | --- | --- |
 | Cotizacion creada/enviada/aceptada | Sin cambio | Sin cambio | Sin cambio |
-| Pedido del cliente confirmado | Sin cambio | Aumenta | Disminuye |
+| OC recibida y validada al confirmar comercialmente | Sin cambio | Aumenta solo para productos stockables | Disminuye |
+| Aprobacion de Operaciones sin reserva previa | Sin cambio | Aumenta | Disminuye |
+| Aprobacion con reserva previa por OC | Sin cambio | Sin cambio; no duplicar | Sin cambio |
 | Pedido cancelado antes de surtir | Sin cambio | Se libera | Aumenta |
 | Entrega/embarque | Disminuye | Se libera la cantidad surtida | Se mantiene respecto a la cantidad surtida |
 
@@ -91,28 +102,35 @@ No se usara `metadata` para este vinculo. La reserva debe referenciar el pedido
 y sus renglones; la salida debe referenciar la venta y el renglon surtido.
 
 **Decision de arquitectura:** el pedido del cliente sera una entidad propia:
-`pedidos_venta` y `pedido_venta_items`. Tras documentar la aceptacion del cliente,
-Comercial envia el pedido a una cola de formalizacion. Operaciones/Administracion
-revisa y confirma el pedido; esa accion crea cliente, venta, partidas y cuenta
-por cobrar, y reserva stock en una operacion coordinada. En v1 cada pedido
-confirmado genera una venta y una cuenta por cobrar. La venta referencia de
-forma unica al pedido. La orden de compra del cliente no se confunde con
+`pedidos_venta` y `pedido_venta_items`. Tras documentar la aceptacion del
+cliente, Comercial confirma el pedido y lo envia a una cola de revision
+operativa. Una OC recibida y validada permite reservar stock fisico desde este
+paso, pero no formaliza venta ni libera el pedido a Almacen. Operaciones revisa
+cliente, evidencia y partidas; puede regresarlo a Comercial con motivo o
+aprobarlo y liberarlo a surtido. La aprobacion crea cliente, venta, partidas y
+cuenta por cobrar y garantiza que el stock quede reservado, sin duplicar una
+reserva previa. Es el unico punto que produce los efectos financieros. En v1
+cada pedido aprobado genera una venta y una cuenta por cobrar. La venta
+referencia de forma unica al pedido. La orden de compra del cliente no se confunde con
 `ordenes_compra`, que registra compras de la organizacion a sus proveedores.
 
-El flujo debe representar la entrega entre areas con un estado de revision
-previo a la confirmacion administrativa (por ejemplo,
-`pendiente_formalizacion`), y permitir devolver a Comercial para correccion.
-La enumeracion y migracion de estados deben compatibilizarse con los pedidos ya
-creados; no se debe renombrar `pendiente_confirmacion` sin una migracion y
-backfill revisados. Despues de confirmar, Almacen recibe el pedido reservado
-en una cola de surtidos y registra entregas parciales o totales. La persona
+El flujo debe representar la revision operativa posterior a la confirmacion
+comercial y previa a la aprobacion financiera/logistica, y permitir regresar
+el pedido a Comercial para correccion. La enumeracion y migracion de estados
+deben compatibilizarse con los pedidos ya creados; no se debe renombrar
+`pendiente_confirmacion` sin una migracion y backfill revisados. Despues de la
+aprobacion, Almacen recibe el pedido reservado en una cola de surtidos y
+registra entregas parciales o totales. La persona
 vendedora consulta desde la oportunidad el resumen y el enlace al pedido, pero
 no ejecuta el surtido desde ahi.
 
 Los estados existentes del pedido son `borrador`,
-`pendiente_confirmacion`, `confirmado` y `cancelado`; el ciclo de revision agrega
-`estado_formalizacion` independiente (`sin_enviar`, `pendiente`, `devuelto`,
-`confirmado`). No se mezclaran estados comerciales/logisticos con
+`pendiente_confirmacion`, `confirmado` y `cancelado`; el ciclo actual de envio
+agrega `estado_formalizacion` (`sin_enviar`, `pendiente`, `devuelto`,
+`confirmado`). La alineacion debe separar el envio Comercial, la revision
+Operativa y la aprobacion que formaliza financieramente; los nombres actuales
+de estado deben revisarse para que `confirmado` no confunda confirmacion del
+cliente con aprobacion de Operaciones. No se mezclaran estados comerciales/logisticos con
 `ventas.estatus`, el estado de cobranza ni metadata. Solo un pedido no
 confirmado o no surtido puede cancelarse y liberar su reserva; los cambios a
 partidas confirmadas requieren una operacion controlada. Las partidas del
@@ -124,8 +142,9 @@ estan desplegados. Falta la validacion autenticada de extremo a extremo.
 
 ### Responsabilidades y permisos
 
-El ciclo se divide por proceso: Comercial prepara y envia; Operaciones revisa
-y formaliza; Almacen prepara y entrega; Finanzas gestiona documentos/pagos.
+El ciclo objetivo se divide por proceso: Comercial prepara y confirma el pedido;
+Operaciones revisa, puede regresarlo con motivo o aprobarlo y liberarlo a
+surtido; Almacen prepara y entrega; Finanzas gestiona documentos/pagos.
 Una misma persona puede acumular funciones cuando el tenant asi lo decida,
 pero cada operacion debe validar permisos y conservar el usuario responsable.
 
@@ -502,14 +521,14 @@ Objetivo:
 
 Tareas:
 
-- reservar stock al confirmar el pedido del cliente, nunca por aceptar una cotizacion solamente,
+- reservar stock al aprobar Operaciones y liberar el pedido a surtido, nunca al aceptar cotizacion ni al confirmar comercialmente,
 - liberar reservas cuando se cancele un pedido no surtido,
 - descontar existencia fisica al entregar/embarcar y liberar la reserva en la misma operacion,
 - ajuste de costo promedio,
 - validaciones de stock minimo,
 - reportes de rotacion, faltantes y compras sugeridas.
 - ajuste manual de inventario con movimiento auditado.
-- reemplazar la reserva actual al aceptar cotizaciones por reserva al confirmar pedidos de cliente.
+- reemplazar la reserva actual al aceptar cotizaciones por reserva al aprobar pedidos confirmados por el cliente.
 
 ### Fase 5: edicion operativa de ordenes de compra
 
@@ -566,7 +585,9 @@ Tareas:
 
 El pedido propio, la propagacion de partidas, la confirmacion transaccional,
 reserva, entregas parciales, traspaso por RBAC y las colas de Operaciones y
-Almacen estan implementados y desplegados. La migracion
+Almacen estan implementados y desplegados bajo el flujo anterior. La alineacion
+de responsabilidad aprobada a continuacion queda pendiente de implementacion.
+La migracion
 `20260924185828_sales_order_handoff_permissions.sql` se aplico y el release
 `20260924_191718` esta activo. Queda validar con sesion autenticada la evidencia
 con/sin OC, devolucion y reenvio, formalizacion, permisos, entrega parcial o
@@ -574,9 +595,18 @@ completa y balances de existencia/reserva.
 6. Completar el flujo inmobiliario con su hito contractual de venta, sin
    generar movimientos de almacen para propiedades.
 
-El flujo desplegado es: Comercial envia a formalizacion; Operaciones confirma o
-devuelve con motivo; Almacen procesa entregas desde su cola. La accion de
-entrega se retiro del drawer comercial y no debe reintroducirse ahi.
+**Flujo objetivo aprobado (pendiente de implementar):** Comercial pulsa
+**Confirmar pedido**, registra como confirmo el cliente y adjunta evidencia con
+OC o sin ella; esto solo envia el pedido a revision. Operaciones revisa cliente,
+evidencia y partidas; si hay problemas, usa **Regresar a Comercial** con
+motivo. Si todo esta correcto, **Aprobar y liberar a surtido** formaliza venta,
+crea cuenta por cobrar y reserva stock, todo una sola vez. Almacen recibe solo
+pedidos aprobados y liberados y procesa entregas parciales o totales.
+
+**Flujo actualmente desplegado:** Comercial envia el pedido a formalizacion;
+Operaciones puede devolverlo o confirmarlo, y esa confirmacion crea los
+registros financieros y reservas. Almacen procesa entregas desde su cola. La
+accion de entrega se retiro del drawer comercial y no debe reintroducirse ahi.
 
 ## Estado actual
 
@@ -594,7 +624,7 @@ entrega se retiro del drawer comercial y no debe reintroducirse ahi.
 - El catálogo ya muestra y guarda campos operativos de inventario desde `frontend/panel/src/components/settings/catalog-items-panel.tsx`.
 - Ya existe un maestro editable de unidades de medida en `settings/productos/unidades-medida` y el catálogo usa ese maestro para `unidad_inventario`.
 - Ya existe un ajuste manual de inventario en la vista de compras, con movimiento auditable.
-- El flujo anterior de reservar/liberar inventario al aceptar/cancelar cotizaciones queda supersedido por la politica acordada el 2026-09-24. La reserva por pedido confirmado, el motor de salida y la cola de surtidos de Almacen estan desplegados; el envio a Operaciones y la confirmacion administrativa usan capacidades RBAC especificas.
+- El flujo anterior de reservar/liberar inventario al aceptar/cancelar cotizaciones queda supersedido por la politica acordada el 2026-09-24. La reserva por pedido confirmado, el motor de salida y la cola de surtidos de Almacen estan desplegados. La siguiente alineacion conserva el RBAC existente y mueve el punto de formalizacion/reserva a la aprobacion de Operaciones.
 - Migraciones `20260924015415_pedidos_venta_flujo_confirmacion.sql` y `20260924021025_pedidos_venta_fk_indexes.sql` aplicadas en Supabase; backend y panel desplegados en `20260924_021215`.
-- Las migraciones `20260924185828_sales_order_handoff_permissions.sql` y `20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y el release `20260924_191718` esta activo en produccion. Comercial envia a revision; Operaciones confirma o devuelve con motivo; Almacen trabaja desde `Inventario > Surtidos`. Las pantallas y API responden correctamente sin sesion; falta recorrer el flujo con usuarios autenticados y verificar persistencia de reservas/entregas.
-- Siguiente: validar por rol y tenant el ciclo completo, incluidos OC y evidencia alternativa, devolucion/reenvio, confirmacion con reserva, y surtido parcial/total. Politicas configurables por tenant, liberacion logistica por credito/anticipo, cancelacion logistica y el hito contractual inmobiliario se amplian despues.
+- Las migraciones `20260924185828_sales_order_handoff_permissions.sql` y `20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y el release `20260924_191718` esta activo en produccion. El flujo actualmente desplegado es Comercial envia a revision; Operaciones confirma o devuelve con motivo; Almacen trabaja desde `Inventario > Surtidos`. Las pantallas y API responden correctamente sin sesion; falta recorrer el flujo con usuarios autenticados y verificar persistencia de reservas/entregas.
+- Siguiente: implementar el flujo objetivo aprobado: Comercial confirma y envia a revision sin formalizar; si valida una OC reserva solo stock fisico. Sin OC validada, Operaciones reserva al aprobar/liberar. En ambos casos, Operaciones formaliza venta/cuenta por cobrar y no duplica reservas; luego validar por rol y tenant OC/evidencia alternativa, regreso/correccion, aprobacion, surtido parcial/total y balances. Politicas configurables por tenant, liberacion logistica por credito/anticipo, cancelacion logistica y el hito contractual inmobiliario se amplian despues.

@@ -1,5 +1,45 @@
 # Changelog — Clientes y vendedores
 
+## 2026-09-24 — Reserva anticipada cuando Comercial valida una OC
+
+- Se agrega una excepcion a la reserva: si Comercial recibe y valida una OC del
+  cliente, al **Confirmar pedido** puede reservar unicamente el inventario
+  fisico stockable.
+- La reserva anticipada no formaliza venta, no crea cuenta por cobrar y no
+  libera el pedido a Almacen. Operaciones aun debe revisar y aprobar.
+- Sin OC validada, la reserva ocurre al aprobar y liberar a surtido. Esa
+  aprobacion formaliza venta/cuenta por cobrar y conserva una reserva previa sin
+  duplicarla.
+- Si el pedido regresa a Comercial, la reserva se conserva mientras la OC siga
+  vigente; cancelar el pedido o invalidar la OC libera lo reservado. Las
+  unidades inmobiliarias se apartan al aprobar y no usan stock de almacen.
+- Los tres planes relacionados se actualizaron. Esta decision es documental;
+  no se modificaron codigo, base de datos ni permisos.
+
+## 2026-09-24 — Flujo objetivo corregido: revision antes de formalizar
+
+- Se establece el flujo vigente para los planes: Comercial pulsa **Confirmar
+  pedido**, registra como confirmo el cliente y adjunta evidencia con OC o sin
+  OC. El pedido pasa a revision y esta accion no crea venta ni cuenta por
+  cobrar. Si Comercial valida una OC, puede reservar solo stock fisico.
+- Operaciones revisa cliente, evidencia y partidas. Si detecta problemas usa
+  **Regresar a Comercial** con el motivo; si todo esta correcto usa **Aprobar y
+  liberar a surtido**.
+- La aprobacion de Operaciones es el unico evento que formaliza/activa cliente
+  y crea venta/cuenta por cobrar. Tambien reserva el stock cuando no exista ya
+  una reserva anticipada por OC, sin duplicarla.
+- Almacen recibe unicamente pedidos aprobados y liberados y registra entregas
+  parciales o completas. Finanzas conserva su proceso independiente de pagos y
+  documentos.
+- Esta decision reemplaza el diseño anterior documentado en este changelog, en
+  el que la confirmacion comercial ya formalizaba o en el que la accion de
+  Operaciones se describia solo como confirmacion. El comportamiento desplegado
+  todavia corresponde al flujo anterior; la alineacion de la aplicacion queda
+  pendiente de implementacion y validacion autenticada.
+- Los planes de clientes/vendedores, compras/inventarios y flujo integrado de
+  propiedades se actualizaron para distinguir el flujo objetivo del estado
+  actualmente desplegado. No se modificaron codigo, base de datos ni permisos.
+
 ## 2026-09-24
 
 ### Traspaso y colas operativas — desplegado; validacion autenticada pendiente

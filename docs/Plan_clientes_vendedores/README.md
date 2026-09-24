@@ -251,24 +251,30 @@ contacto / empresa
 └── una o muchas oportunidades
     └── una cotización aceptada por oportunidad
         └── oportunidad ganada
-            └── pedido del cliente confirmado
-                ├── formalizar venta
-                │   ├── cliente creado o actualizado
-                │   ├── venta + partidas
-                │   ├── cuenta por cobrar
-                │   └── documentos de venta/cobro (según el flujo)
-                └── reservar stock (solo articulos stockables)
-                    └── entrega: salida fisica y liberacion de reserva
+            └── Comercial confirma pedido y adjunta evidencia
+                ├── OC recibida y validada: reservar stock fisico
+                │   (sin venta ni cuenta por cobrar)
+                └── Operaciones revisa
+                    ├── regresar a Comercial con motivo
+                    └── aprobar y liberar a surtido
+                        ├── cliente creado o actualizado
+                        ├── venta + partidas
+                        ├── cuenta por cobrar
+                        ├── reservar stock si aun no estaba reservado
+                        └── Almacen surte solo despues de liberar el pedido
 ```
 
 ### Confirmacion del pedido e inventario
 
 Aceptar la cotizacion y ganar la oportunidad cierran el compromiso comercial,
 pero no reservan existencias. La cotizacion aceptada puede generar un pedido
-pendiente de confirmacion. La confirmacion del pedido del cliente —usualmente
-respaldada por su orden de compra recibida y validada— es la frontera para
-formalizar la venta y, para productos stockables, reservar inventario. En la
-primera version, esta es la politica B2B predeterminada. No se debe confundir
+pendiente de confirmacion. Comercial registra la confirmacion del cliente y
+envia el pedido a revision; esta accion no formaliza la venta ni crea la cuenta
+por cobrar. Si recibe y valida una OC del cliente, puede reservar en ese
+momento solo inventario fisico stockable, sin liberar el pedido a Almacen. Sin
+OC validada, la reserva ocurre al aprobar Operaciones. La aprobacion para
+liberar a surtido siempre formaliza la venta y cuenta por cobrar, y garantiza
+la reserva sin duplicarla si ya existe. No se debe confundir
 la orden de compra del cliente con `ordenes_compra`, que en Tal-IA representa
 compras de la organizacion a sus proveedores.
 
@@ -282,19 +288,23 @@ conservan estados independientes.
 **Decision de arquitectura:** el pedido del cliente sera una entidad propia,
 `pedidos_venta`, con sus partidas `pedido_venta_items`. La cotizacion aceptada
 podra originar un pedido en espera de confirmacion; aceptar la cotizacion o
-ganar la oportunidad no reserva inventario ni formaliza la venta. La
-confirmacion explicita registra que el cliente comprometio la compra (por
-ejemplo, con una orden de compra recibida y validada) y, en una operacion
-transaccional e idempotente, formaliza cliente, venta, partidas y cuenta por
-cobrar, y reserva las cantidades disponibles de articulos stockables. La orden
-de compra del cliente es evidencia/referencia del pedido; no es
+ganar la oportunidad no reserva inventario ni formaliza la venta. Comercial
+confirma el pedido registrando como el cliente comprometio la compra y adjunta
+evidencia con OC o sin ella. Si Comercial recibe y valida una OC, puede reservar
+en ese momento solo las cantidades fisicas stockables, sin formalizar venta ni
+cuenta por cobrar y sin liberar a Almacen. El pedido queda en revision
+operativa. Si Operaciones detecta problemas, lo regresa a Comercial con el
+motivo. Si lo aprueba y libera a surtido, una operacion transaccional e
+idempotente formaliza cliente, venta, partidas y cuenta por cobrar y garantiza
+la reserva si aun no existe. La orden de compra del cliente es
+evidencia/referencia del pedido; no es
 `ordenes_compra`, que representa compras a proveedores.
 
-#### Evidencia y envio a formalizacion
+#### Evidencia y confirmacion comercial del pedido
 
 El pedido debe permitir confirmar la compra tanto **con orden de compra (OC)**
 como **sin OC**. La OC del cliente es opcional y no sustituye al pedido de
-Tal-IA. Al enviar el pedido a formalizacion, Comercial registra la forma de
+Tal-IA. Al confirmar el pedido, Comercial registra la forma de
 confirmacion:
 `orden_compra`, `cotizacion_firmada_aceptada`, `correo_electronico`,
 `whatsapp`, `contrato`, `confirmacion_verbal`, `anticipo_pago` u `otro`.
@@ -303,9 +313,18 @@ El formulario registra fecha, numero/referencia de OC cuando aplique,
 observaciones y archivo de evidencia que el usuario puede subir desde el
 documento recibido del cliente. Para una confirmacion de tipo OC se debe
 capturar el numero o adjuntar el documento. Para las otras formas, el adjunto
-es opcional. Operaciones/Administracion revisa el expediente y es quien
-confirma el pedido; `Confirmado por` se toma de ese usuario en sesion. El
-vendedor se conserva desde la oportunidad/pedido; no son campos de texto libre.
+es opcional. **Confirmar pedido** nunca crea venta ni cuenta por cobrar. Si la
+evidencia es una OC recibida y validada por Comercial, se reserva unicamente el
+inventario fisico stockable; con evidencia sin OC no se reserva aun.
+Operaciones/Administracion revisa cliente,
+evidencia y partidas. Si hay problemas, usa **Regresar a Comercial** y registra
+el motivo. Si todo esta correcto, usa **Aprobar y liberar a surtido**; esa
+aprobacion formaliza cliente/venta/cuenta por cobrar y garantiza la reserva
+stockable si aun no existe, sin duplicar una reserva previa por OC. Si el
+pedido regresa a Comercial, la reserva basada en una OC vigente se conserva
+mientras se corrige; cancelar el pedido o invalidar la OC libera lo reservado.
+Se auditan por separado quien confirma y quien aprueba; el vendedor se conserva
+desde la oportunidad/pedido.
 El anticipo/pago solo puede usarse como evidencia si se vincula a un pago
 efectivamente registrado, no por seleccionar esa opcion.
 
@@ -319,23 +338,26 @@ descargarla a usuarios autorizados. La referencia de OC nunca se confundira con
 la orden de compra a proveedores.
 
 Para la primera version se establece una relacion uno a uno entre pedido
-confirmado y venta/cuenta por cobrar: cada pedido confirmado genera una venta y
-una cuenta por cobrar, y la venta conserva una referencia unica al pedido.
+aprobado por Operaciones y venta/cuenta por cobrar: cada pedido aprobado genera
+una venta y una cuenta por cobrar, y la venta conserva una referencia unica al
+pedido. La confirmacion comercial por si sola no crea esas entidades.
 Los estados del pedido/logistica se mantienen en el pedido y sus operaciones;
 los estados financieros permanecen en venta/cuenta por cobrar. En la primera
 version los estados del pedido seran `borrador`, `pendiente_confirmacion`,
-`confirmado` y `cancelado`; solo un pedido no confirmado o sin surtir puede
-cancelarse y liberar cualquier reserva asociada. La entrega parcial o total
-registrara salidas contra las partidas del pedido/venta y liberara la cantidad
-surtida. Cambios despues de confirmar requeriran una operacion controlada de
-ajuste o cancelacion, no editar silenciosamente las partidas confirmadas.
+`confirmado` y `cancelado`; la transicion de pedido confirmado por Comercial a
+aprobado por Operaciones debe quedar representada sin ambiguedad. Solo un
+pedido aun no aprobado o aprobado pero sin surtir puede cancelarse y liberar
+cualquier reserva asociada. La entrega parcial o total registrara salidas
+contra las partidas del pedido/venta y liberara la cantidad surtida. Cambios
+despues de la aprobacion de Operaciones requeriran una operacion controlada de
+ajuste o cancelacion, no editar silenciosamente las partidas aprobadas.
 
 Las partidas conservan relaciones explicitas y tenant-safe con
 `cotizacion_items`, `catalog_items` y, cuando aplique, `propiedad_id` y
-`unidad_id`; la entidad y la confirmacion del pedido ya se implementaron y
-desplegaron. La forma y evidencia con/sin OC tambien estan implementadas. El
-traspaso entre comercial y operaciones, la cola de surtidos y sus permisos
-especificos siguen pendientes.
+`unidad_id`; la entidad, confirmacion comercial y aprobacion operativa del
+flujo anterior ya estan implementadas y desplegadas. La forma y evidencia
+con/sin OC tambien estan implementadas. La nueva secuencia de revision y
+aprobacion descrita arriba queda pendiente de implementacion.
 
 La partida conserva el producto mediante `catalog_item_id` desde cotizacion,
 pedido y hasta `venta_items`. La reserva se traza hasta el pedido y su renglon;
@@ -453,21 +475,26 @@ Una cotización aceptada no debe contarse automáticamente como ingreso cobrado.
 
 ### Fases de implementación
 
-El traspaso por areas quedó implementado y desplegado el 2026-09-24:
+La primera version del traspaso por areas se implemento y desplego el
+2026-09-24. El flujo objetivo aprobado para alinear es:
 
-1. **Desplegado — Comercial:** el drawer registra evidencia y envia el pedido
-   a `Enviar a formalizacion`; no confirma venta ni reserva desde la oportunidad.
-2. **Desplegado — autorizacion:** capacidades del RBAC existente controlan
-   envio/confirmacion de pedidos y consulta/gestion de surtidos.
-3. **Desplegado — Operaciones:** la bandeja permite revisar, devolver con
-   motivo o confirmar; confirmar formaliza cliente/venta/cuenta por cobrar y
-   reserva stock transaccionalmente.
-4. **Desplegado — Almacen:** la cola de Surtidos permite registrar entregas
-   parciales o totales; la accion se retiro del drawer de oportunidad.
-5. **Pendiente — validacion:** recorrer con sesiones y roles autorizados el
-   envio con/sin OC, devolucion, confirmacion, reserva, entrega parcial y total,
-   pagos y balances. Verificar tambien usuarios sin permiso y aislamiento por
-   organizacion.
+1. **Comercial — Confirmar pedido:** registra forma de confirmacion, fecha,
+   referencia y evidencia (con OC o sin ella); no crea venta ni cuenta por
+   cobrar. Si adjunta una OC recibida y validada, reserva solo inventario fisico
+   stockable. Con otras evidencias no reserva todavia.
+2. **Operaciones — Revisar pedido:** valida cliente, evidencia y partidas; puede
+   **Regresar a Comercial** con motivo o **Aprobar y liberar a surtido**.
+3. **Aprobacion operativa:** formaliza cliente/venta/partidas/cuenta por cobrar
+   y garantiza la reserva de stock transaccionalmente si aun no existe. Es el
+   unico punto que ejecuta los efectos financieros; no duplica una reserva
+   anterior hecha con OC.
+4. **Almacen — Surtidos:** recibe solo pedidos aprobados y liberados; registra
+   entregas parciales o totales.
+5. **Pendiente — implementacion y validacion:** alinear la version desplegada
+   con este flujo y recorrerlo con sesiones/roles autorizados, OC validada
+   (reserva antes de aprobar), evidencia sin OC (reserva al aprobar),
+   regreso/correccion, aprobacion, entregas, pagos y balances;
+   verificar tambien usuarios sin permiso y aislamiento por organizacion.
 6. **Posterior — documentos y reglas:** implementar `documentos_cobro`,
    politicas configurables de liberacion logistica y vencimiento de reservas
    cuando se definan sus requisitos. No bloquear entregas por cobranza como
@@ -482,15 +509,18 @@ El flujo se separa por proceso, aunque una persona pueda recibir varios
 permisos en empresas pequeñas:
 
 1. **Comercial / vendedor — Embudo:** trabaja contacto, oportunidad y
-   cotizacion; registra la aceptacion y evidencia del cliente; usa **Enviar a
-   formalizacion**. Despues consulta el avance, pero no confirma inventario,
-   registra entregas, modifica existencias ni confirma pagos por defecto.
-2. **Operaciones comerciales / administracion — Ventas > Pedidos pendientes:**
-   revisa los datos y la evidencia; puede devolver el pedido para correccion o
-   confirmarlo. Confirmar crea cliente, venta y cuenta por cobrar y reserva los
-   articulos stockables. La reserva se realiza por la regla del sistema en esta
-   frontera; almacen recibe despues el trabajo por surtir.
-3. **Almacen / inventario — cola de Surtidos:** atiende pedidos confirmados,
+   cotizacion; registra la aceptacion y evidencia del cliente; usa **Confirmar
+   pedido** para enviarlo a Operaciones. No formaliza venta ni cuenta por
+   cobrar; puede reservar inventario fisico si valida una OC del cliente.
+   Despues consulta el avance, pero no registra
+   entregas, modifica existencias ni confirma pagos por defecto.
+2. **Operaciones comerciales / administracion — Ventas > Pedidos por revisar:**
+   revisa cliente, evidencia y partidas. Puede **Regresar a Comercial** con
+   motivo o **Aprobar y liberar a surtido**. Solo esta aprobacion crea/activa
+   cliente, venta y cuenta por cobrar, y garantiza que los articulos stockables
+   queden reservados sin duplicar una reserva creada desde una OC validada.
+3. **Almacen / inventario — cola de Surtidos:** atiende pedidos aprobados y
+   liberados,
    prepara partidas y registra entregas parciales o totales. Cada entrega
    reduce existencia fisica y reserva por la misma cantidad. Servicios y
    unidades inmobiliarias no aparecen como surtido de almacen.
@@ -501,8 +531,8 @@ permisos en empresas pequeñas:
 
 El drawer de oportunidad conserva la cotizacion aceptada como antecedente de
 solo consulta y muestra un resumen de pedido, venta/cobranza y logistica con
-el acceso **Ver pedido**. No sera el centro operativo de confirmacion ni de
-surtido. Ventas incorpora una bandeja de pedidos para formalizacion y la vista
+el acceso **Ver pedido**. No sera el centro operativo de revision ni de
+surtido. Ventas incorpora una bandeja de revision operativa y la vista
 de inventario una cola de surtidos; `/clientes` conserva su proposito actual.
 
 Los traspasos deben registrar quien envio, reviso, confirmo, asigno y surtio,
@@ -562,8 +592,8 @@ validar el recorrido financiero con un usuario autenticado.
 El flujo legacy de conversión manual quedó retirado. La versión desplegada
 permite formalizar sin pago o usar el atajo de formalizar y cobrar
 inmediatamente; ganar la oportunidad no crea por sí sola una venta ni registra
-dinero. El refactor descrito abajo cambia esa versión para que la formalización
-y la reserva de stock ocurran al confirmar un pedido del cliente.
+dinero. El flujo objetivo descrito abajo mueve la formalización y reserva desde
+la confirmación comercial hacia la aprobación de Operaciones.
 
 ### Formalización y cuentas por cobrar — código en repositorio al 2026-09-23
 
@@ -599,23 +629,30 @@ autenticada pendiente**. El panel quedó en el release `20260923_161750`;
 `{"status":"ok"}` y la ruta de formalización respondió 401 sin sesión,
 confirmando que exige autenticación.
 
-### Pedido confirmado e inventario — motor base desplegado; traspaso operativo pendiente
+### Pedido, revisión operativa e inventario — motor base desplegado; alineacion pendiente
 
 El refactor añade una entidad propia para el compromiso del cliente, separada
 de la oportunidad y de la venta:
 
 - Una cotización aceptada y oportunidad ganada crea un pedido en
   `pendiente_confirmacion`; no reserva inventario.
-- Confirmar el pedido crea o activa el cliente, formaliza venta y cuenta por
-  cobrar, preserva la relación explícita con catálogo y partidas, y reserva
-  existencias de almacén en la misma transacción.
-- Para una unidad inmobiliaria, la confirmación la aparta/reserva por estado,
-  sin movimiento de almacén ni cambio a vendida.
+- **Flujo actualmente desplegado:** Comercial envia el pedido a formalizacion;
+  Operaciones lo confirma y esa accion crea/activa cliente, venta, cuenta por
+  cobrar y reserva de stock transaccionalmente.
+- **Flujo objetivo aprobado:** Comercial usa **Confirmar pedido** para registrar
+  la evidencia y enviar a revision, sin formalizar venta ni cuenta por cobrar.
+  Si valida una OC, reserva solo stock fisico; sin OC no reserva aun.
+  Operaciones revisa y puede **Regresar a Comercial** con motivo o **Aprobar y
+  liberar a surtido**. Solo esta aprobacion formaliza venta/cuenta por cobrar y
+  garantiza la reserva, sin duplicar una reserva previa por OC.
+- Para una unidad inmobiliaria, la aprobacion operativa la aparta/reserva por
+  estado, sin movimiento de almacen ni cambio a vendida.
 - Comercial registra la forma y fecha de confirmacion, la referencia de OC y
-  observaciones al enviar a formalizacion. Puede adjuntar una OC PDF privada de
+  observaciones al enviar a revision. Puede adjuntar una OC PDF privada de
   hasta 10 MB y abrirla con URL firmada temporal.
-- El atajo de pago inmediato confirma el pedido y registra el pago en una
-  operación coordinada.
+- El atajo de pago inmediato requiere ajustarse al nuevo punto de aprobacion;
+  no debe formalizar antes de la revision de Operaciones. Si la OC ya reservo
+  stock, conserva esa reserva sin duplicarla.
 - La cancelación de una cotización libera únicamente pedidos no confirmados;
   un pedido confirmado requiere un flujo posterior de cancelación de venta y
   liberación logística.
