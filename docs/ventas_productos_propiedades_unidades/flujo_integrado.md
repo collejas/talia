@@ -57,9 +57,10 @@ se formaliza de forma coordinada la venta y la cuenta por cobrar; en productos
 stockables se garantiza la reserva y en propiedades se actualiza la unidad a `apartado` o
 `reservado`, sin movimientos de almacen. En v1 cada pedido aprobado genera una
 venta y una cuenta por cobrar. Los documentos de cobro y pagos siguen siendo
-pasos separados. Las tablas y el flujo anterior se desplegaron el 2026-09-24;
-la nueva distribucion de responsabilidades queda pendiente de implementacion y
-la validacion funcional autenticada sigue pendiente.
+pasos separados. Las tablas y el flujo anterior se desplegaron el 2026-09-24.
+La nueva distribucion de responsabilidades tiene implementacion local y
+migracion pendiente de aplicacion; la validacion funcional autenticada sigue
+pendiente.
 
 La confirmacion del cliente acepta evidencia con OC o sin OC. Comercial usa
 **Confirmar pedido** para registrar como confirmo el cliente y adjuntar la
@@ -85,7 +86,8 @@ Las bandejas comunes de Operaciones y Surtidos estan desplegadas con permisos
 RBAC especificos, pero su comportamiento actual sigue el flujo anterior:
 Operaciones confirma y en esa accion se formaliza venta/cuenta por cobrar y se
 reserva. El cambio a **Aprobar y liberar a surtido** como unico punto de
-formalizacion queda pendiente de implementacion. Las migraciones
+formalizacion ya esta implementado localmente; faltan migracion y despliegue.
+Las migraciones
 `20260924185828_sales_order_handoff_permissions.sql` y
 `20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y
 el release `20260924_191718` esta activo. Las propiedades solo aparecen en la

@@ -137,8 +137,10 @@ partidas confirmadas requieren una operacion controlada. Las partidas del
 pedido mantendran referencias explicitas a cotizacion, `catalog_item_id` y,
 cuando aplique, propiedad y unidad. Las tablas y el flujo de confirmar pedido
 estan implementados y desplegados; la evidencia con/sin OC tambien se implemento.
-El traspaso administrativo y la cola de surtidos con autorizacion RBAC tambien
-estan desplegados. Falta la validacion autenticada de extremo a extremo.
+El traspaso administrativo y la cola de surtidos con autorizacion RBAC estan
+desplegados. La nueva revision operativa y reserva anticipada por OC cuentan con
+implementacion local y migracion pendiente de aplicacion; falta validacion
+autenticada de extremo a extremo.
 
 ### Responsabilidades y permisos
 
@@ -586,8 +588,8 @@ Tareas:
 El pedido propio, la propagacion de partidas, la confirmacion transaccional,
 reserva, entregas parciales, traspaso por RBAC y las colas de Operaciones y
 Almacen estan implementados y desplegados bajo el flujo anterior. La alineacion
-de responsabilidad aprobada a continuacion queda pendiente de implementacion.
-La migracion
+de responsabilidades aprobada tiene implementacion local; su nueva migracion
+aun no se ha aplicado ni desplegado. La migracion
 `20260924185828_sales_order_handoff_permissions.sql` se aplico y el release
 `20260924_191718` esta activo. Queda validar con sesion autenticada la evidencia
 con/sin OC, devolucion y reenvio, formalizacion, permisos, entrega parcial o
@@ -595,7 +597,7 @@ completa y balances de existencia/reserva.
 6. Completar el flujo inmobiliario con su hito contractual de venta, sin
    generar movimientos de almacen para propiedades.
 
-**Flujo objetivo aprobado (pendiente de implementar):** Comercial pulsa
+**Flujo objetivo aprobado (implementado localmente; migracion y despliegue pendientes):** Comercial pulsa
 **Confirmar pedido**, registra como confirmo el cliente y adjunta evidencia con
 OC o sin ella; esto solo envia el pedido a revision. Operaciones revisa cliente,
 evidencia y partidas; si hay problemas, usa **Regresar a Comercial** con
@@ -627,4 +629,4 @@ accion de entrega se retiro del drawer comercial y no debe reintroducirse ahi.
 - El flujo anterior de reservar/liberar inventario al aceptar/cancelar cotizaciones queda supersedido por la politica acordada el 2026-09-24. La reserva por pedido confirmado, el motor de salida y la cola de surtidos de Almacen estan desplegados. La siguiente alineacion conserva el RBAC existente y mueve el punto de formalizacion/reserva a la aprobacion de Operaciones.
 - Migraciones `20260924015415_pedidos_venta_flujo_confirmacion.sql` y `20260924021025_pedidos_venta_fk_indexes.sql` aplicadas en Supabase; backend y panel desplegados en `20260924_021215`.
 - Las migraciones `20260924185828_sales_order_handoff_permissions.sql` y `20260924195100_sales_order_handoff_fk_indexes.sql` se aplicaron en Supabase y el release `20260924_191718` esta activo en produccion. El flujo actualmente desplegado es Comercial envia a revision; Operaciones confirma o devuelve con motivo; Almacen trabaja desde `Inventario > Surtidos`. Las pantallas y API responden correctamente sin sesion; falta recorrer el flujo con usuarios autenticados y verificar persistencia de reservas/entregas.
-- Siguiente: implementar el flujo objetivo aprobado: Comercial confirma y envia a revision sin formalizar; si valida una OC reserva solo stock fisico. Sin OC validada, Operaciones reserva al aprobar/liberar. En ambos casos, Operaciones formaliza venta/cuenta por cobrar y no duplica reservas; luego validar por rol y tenant OC/evidencia alternativa, regreso/correccion, aprobacion, surtido parcial/total y balances. Politicas configurables por tenant, liberacion logistica por credito/anticipo, cancelacion logistica y el hito contractual inmobiliario se amplian despues.
+- Siguiente: revisar y aplicar la migracion local del flujo objetivo; desplegar y validar por rol/tenant OC (reserva antes de aprobar), evidencia sin OC (reserva al aprobar), regreso/correccion, checklist y aprobacion, surtido parcial/total y balances. Politicas configurables por tenant, liberacion logistica por credito/anticipo, cancelacion logistica y el hito contractual inmobiliario se amplian despues.

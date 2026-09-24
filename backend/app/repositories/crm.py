@@ -4561,7 +4561,7 @@ class CRMRepository:
                 "order": "enviado_formalizacion_en.asc,id.asc",
                 "limit": str(limit),
                 "offset": str(offset),
-                "select": "id,cotizacion_id,estado_formalizacion,enviado_formalizacion_en,forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,motivo_devolucion_comercial,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,subtotal,catalog_item:catalog_items(maneja_inventario)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type))",
+                "select": "id,cotizacion_id,estado_formalizacion,enviado_formalizacion_en,forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,motivo_devolucion_comercial,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,precio_unitario_final,subtotal,moneda,catalog_item:catalog_items(maneja_inventario)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type))",
             },
             organizacion_id=organizacion_id,
         )
@@ -4729,6 +4729,36 @@ class CRMRepository:
         if isinstance(data, list) and data and isinstance(data[0], dict):
             return data[0]
         raise CRMRepositoryError("sale_formalization_response_invalid")
+
+    async def aprobar_pedido_venta_y_liberar(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedido_venta_id: UUID,
+        usuario_id: UUID,
+        revision_cliente_validada: bool,
+        revision_evidencia_validada: bool,
+        revision_partidas_validada: bool,
+        fecha_vencimiento: date | None = None,
+    ) -> dict[str, Any]:
+        response = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_aprobar_pedido_venta",
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_pedido_venta_id": str(pedido_venta_id),
+                "p_usuario_id": str(usuario_id),
+                "p_revision_cliente_validada": revision_cliente_validada,
+                "p_revision_evidencia_validada": revision_evidencia_validada,
+                "p_revision_partidas_validada": revision_partidas_validada,
+                "p_fecha_vencimiento": fecha_vencimiento.isoformat() if fecha_vencimiento else None,
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json() if response.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError("sales_order_approval_response_invalid")
 
     async def registrar_pago_confirmado_con_evidencia(
         self,

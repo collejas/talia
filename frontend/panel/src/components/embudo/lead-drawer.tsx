@@ -3344,7 +3344,11 @@ export function LeadDrawer({
           setFormalizeError(typeof body?.error === "string" ? body.error : "No se pudo enviar el pedido a formalización.");
           return;
         }
-        setQuoteSuccess("Pedido enviado a Operaciones para revisión y formalización.");
+        setQuoteSuccess(orderConfirmationMethod === "orden_compra"
+          ? (body?.inventario_reservado
+            ? "Pedido confirmado y enviado a revisión de Operaciones. El inventario físico quedó reservado; la venta se formaliza después de la aprobación."
+            : "Pedido confirmado y enviado a revisión de Operaciones. No hubo productos físicos que reservar; la venta se formaliza después de la aprobación.")
+          : "Pedido confirmado y enviado a revisión de Operaciones. La venta se formaliza después de la aprobación.");
         setFormalizeQuote(null);
         await fetchQuotes();
       } catch (error) {
@@ -4160,7 +4164,7 @@ export function LeadDrawer({
                                       )}
                                     </Badge>
                                   ) : quote.pedido?.estado_formalizacion === "pendiente" ? (
-                                    <Badge variant="secondary">En revisión por Operaciones</Badge>
+                                    <Badge variant="secondary">Pendiente de revisión por Operaciones</Badge>
                                   ) : (
                                     <Button
                                       type="button"
@@ -4168,11 +4172,11 @@ export function LeadDrawer({
                                       variant="outline"
                                       onClick={() => {
                                         setFormalizeError(null);
-                                        setOrderReference("");
-                                        setOrderDate("");
-                                        setOrderConfirmationMethod("orden_compra");
-                                        setOrderConfirmationDate(new Date().toISOString().slice(0, 10));
-                                        setOrderConfirmationNotes("");
+                                        setOrderReference(quote.pedido?.referencia_pedido_cliente ?? "");
+                                        setOrderDate(quote.pedido?.fecha_orden_cliente ?? "");
+                                        setOrderConfirmationMethod((quote.pedido?.forma_confirmacion as OrderConfirmationMethod | null) ?? "orden_compra");
+                                        setOrderConfirmationDate(quote.pedido?.fecha_confirmacion_cliente ?? new Date().toISOString().slice(0, 10));
+                                        setOrderConfirmationNotes(quote.pedido?.observaciones_confirmacion ?? "");
                                         setOrderDocumentFile(null);
                                         setOrderDocumentUploaded(
                                           quote.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra") ?? null,
@@ -4181,7 +4185,7 @@ export function LeadDrawer({
                                       }}
                                       disabled={quotePending}
                                     >
-                                      Enviar a formalización
+                                      Confirmar pedido
                                     </Button>
                                   )}
                                   {quote.pedido?.estado_formalizacion === "devuelto" && quote.pedido.motivo_devolucion_comercial ? (
@@ -5716,16 +5720,10 @@ export function LeadDrawer({
         }}
       >
         <DialogContent className="max-w-md">
-          <DialogTitle>Enviar pedido a formalización</DialogTitle>
+          <DialogTitle>Confirmar pedido</DialogTitle>
           <DialogDescription>
-            Se confirma el compromiso del cliente. Tal-IA creará o activará el cliente, formalizará la venta y su cuenta por cobrar, y reservará los productos con control de inventario. No se registra ningún pago.
+            Registra cómo confirmó el cliente y adjunta su evidencia. El pedido pasará a revisión de Operaciones; aquí todavía no se crea la venta ni la cuenta por cobrar.
           </DialogDescription>
-          <div className="rounded-md bg-muted/40 px-3 py-3 text-sm">
-            <p className="text-muted-foreground">Saldo inicial pendiente</p>
-            <p className="font-semibold">
-              {formatQuoteCurrency(formalizeQuote?.total ?? null, formalizeQuote?.currency ?? null)}
-            </p>
-          </div>
           <div className="grid gap-3">
             <div className="grid gap-2">
               <Label>Forma de confirmación</Label>
@@ -5748,7 +5746,7 @@ export function LeadDrawer({
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                Si el cliente confirma mediante un anticipo, usa “Registrar pago inmediato” para que el pago también quede registrado.
+                Con una OC válida se reservarán únicamente los productos físicos controlados por inventario. Operaciones formalizará la venta y la cuenta por cobrar al aprobar el pedido.
               </p>
             </div>
             {orderConfirmationMethod === "orden_compra" ? (
@@ -5832,7 +5830,7 @@ export function LeadDrawer({
                 />
               </div>
               <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
-                Vendedor asignado: {quoteAssignedVendorName}. Operaciones revisará la evidencia antes de formalizar la venta.
+                Vendedor asignado: {quoteAssignedVendorName}. Operaciones revisará cliente, evidencia y partidas. Si la confirmación no fue por OC, no se reserva inventario en este paso.
               </div>
             </div>
           </div>
@@ -5844,7 +5842,7 @@ export function LeadDrawer({
               Cancelar
             </Button>
             <Button type="button" onClick={handleFormalizeSale} disabled={quotePending || !formalizeQuote}>
-              {quotePending ? "Enviando a Operaciones..." : "Enviar a formalización"}
+              {quotePending ? "Confirmando pedido..." : "Confirmar pedido"}
             </Button>
           </div>
         </DialogContent>

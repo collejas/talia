@@ -4244,6 +4244,13 @@ class PedidoVentaDevolverPayload(BaseModel):
         return normalized
 
 
+class PedidoVentaAprobarPayload(BaseModel):
+    revision_cliente_validada: bool
+    revision_evidencia_validada: bool
+    revision_partidas_validada: bool
+    fecha_vencimiento: date | None = None
+
+
 class PedidoVentaDocumentoResponse(BaseModel):
     id: UUID
     tipo_documento: str
@@ -32568,57 +32575,46 @@ async def formalizar_venta_desde_cotizacion(
     cotizacion_id: UUID,
     payload: FormalizeSalePayload,
 ) -> ConfirmedPaymentResponse:
+    raise HTTPException(status_code=409, detail="operational_review_required")
+
+
+@router.post("/pedidos-venta/{pedido_venta_id}/aprobar-liberar", response_model=ConfirmedPaymentResponse)
+async def aprobar_pedido_venta_y_liberar(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.confirm")),
+    pedido_venta_id: UUID,
+    payload: PedidoVentaAprobarPayload,
+) -> ConfirmedPaymentResponse:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="auth_required")
     try:
-        quote = await repo.get_quote_entry(
+        result = await repo.aprobar_pedido_venta_y_liberar(
             organizacion_id=organizacion_id,
-            quote_id=cotizacion_id,
-        )
-        oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
-        if oportunidad_id is None:
-            raise HTTPException(status_code=409, detail="cotizacion_sin_oportunidad")
-        order = _single_related(quote.get("pedido"))
-        if not isinstance(order, dict) or order.get("estado_formalizacion") != "pendiente":
-            raise HTTPException(status_code=409, detail="pedido_no_enviado_a_formalizacion")
-        result = await repo.confirmar_pedido_venta_con_evidencia(
-            organizacion_id=organizacion_id,
-            cotizacion_id=cotizacion_id,
+            pedido_venta_id=pedido_venta_id,
             usuario_id=usuario_id,
+            revision_cliente_validada=payload.revision_cliente_validada,
+            revision_evidencia_validada=payload.revision_evidencia_validada,
+            revision_partidas_validada=payload.revision_partidas_validada,
             fecha_vencimiento=payload.fecha_vencimiento,
-            referencia_pedido_cliente=payload.referencia_pedido_cliente,
-            fecha_orden_cliente=payload.fecha_orden_cliente,
-            forma_confirmacion=payload.forma_confirmacion,
-            fecha_confirmacion_cliente=payload.fecha_confirmacion_cliente,
-            observaciones_confirmacion=payload.observaciones_confirmacion,
         )
-    except HTTPException:
-        raise
     except CRMRepositoryError as exc:
         message = str(exc)
-        if "quote_not_found" in message:
-            raise HTTPException(status_code=404, detail="cotizacion_no_encontrada") from exc
-        if "accepted_won_quote_required" in message:
-            raise HTTPException(status_code=409, detail="cotizacion_no_aceptada_oportunidad_no_ganada") from exc
-        if "sale_account_missing" in message:
-            raise HTTPException(status_code=409, detail="venta_sin_cuenta") from exc
-        if "sale_persona_missing" in message:
-            raise HTTPException(status_code=409, detail="venta_sin_contacto") from exc
-        if "sale_total_must_be_positive" in message:
-            raise HTTPException(status_code=409, detail="cotizacion_sin_total") from exc
+        if "sales_order_not_found" in message:
+            raise HTTPException(status_code=404, detail="pedido_no_encontrado") from exc
+        if "operational_review_checklist_incomplete" in message:
+            raise HTTPException(status_code=400, detail="revision_operativa_incompleta") from exc
+        if "sales_order_not_submitted_for_review" in message:
+            raise HTTPException(status_code=409, detail="pedido_no_pendiente_revision") from exc
         if "inventory_warehouse_required" in message:
             raise HTTPException(status_code=409, detail="no_hay_almacen_activo_para_reservas") from exc
         if "Stock insuficiente" in message:
             raise HTTPException(status_code=409, detail="inventario_insuficiente_para_confirmar_pedido") from exc
         if "property_unit_not_available" in message or "property_unit_already_reserved" in message:
             raise HTTPException(status_code=409, detail="unidad_inmobiliaria_no_disponible") from exc
-        if "order_purchase_order_evidence_required" in message:
-            raise HTTPException(status_code=409, detail="orden_compra_requiere_referencia_o_documento") from exc
-        if "invalid_order_confirmation_method" in message:
-            raise HTTPException(status_code=400, detail="forma_confirmacion_invalida") from exc
-        if "opportunity_already_formalized_from_another_quote" in message:
-            raise HTTPException(status_code=409, detail="oportunidad_ya_formalizada_con_otra_cotizacion") from exc
-        if "sales_order_not_submitted_for_review" in message:
-            raise HTTPException(status_code=409, detail="pedido_no_enviado_a_formalizacion") from exc
-        raise HTTPException(status_code=502, detail="no_se_pudo_formalizar_venta") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_aprobar_pedido") from exc
     try:
         return ConfirmedPaymentResponse.model_validate(result)
     except ValidationError as exc:
@@ -32669,6 +32665,10 @@ async def enviar_pedido_a_formalizacion(
             raise HTTPException(status_code=409, detail="cotizacion_no_aceptada_oportunidad_no_ganada") from exc
         if "order_purchase_order_evidence_required" in message:
             raise HTTPException(status_code=409, detail="orden_compra_requiere_referencia_o_documento") from exc
+        if "inventory_warehouse_required" in message:
+            raise HTTPException(status_code=409, detail="no_hay_almacen_activo_para_reservas") from exc
+        if "Stock insuficiente" in message:
+            raise HTTPException(status_code=409, detail="inventario_insuficiente_para_reservar_pedido") from exc
         if "invalid_order_confirmation_method" in message:
             raise HTTPException(status_code=400, detail="forma_confirmacion_invalida") from exc
         if "sales_order_not_submittable" in message:
@@ -32709,6 +32709,9 @@ async def listar_pedidos_pendientes_formalizacion(
                 "id": item.get("id"),
                 "descripcion": item.get("descripcion") or "Artículo",
                 "cantidad": item.get("cantidad"),
+                "precio_unitario": item.get("precio_unitario_final"),
+                "subtotal": item.get("subtotal"),
+                "moneda": item.get("moneda") or quote.get("moneda"),
                 "maneja_inventario": bool(catalog_item and catalog_item.get("maneja_inventario")),
             })
         documents = []
@@ -33181,6 +33184,9 @@ async def registrar_pago_confirmado(
         oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
         if oportunidad_id is None:
             raise HTTPException(status_code=409, detail="cotizacion_sin_oportunidad")
+        order = _single_related(quote.get("pedido"))
+        if not isinstance(order, dict) or order.get("estatus") != "confirmado" or not order.get("venta"):
+            raise HTTPException(status_code=409, detail="operational_approval_required_before_payment")
         if not await repo.current_user_has_perm(codigo="sales.manage"):
             raise HTTPException(status_code=403, detail="forbidden")
         await _require_sales_write_scope(

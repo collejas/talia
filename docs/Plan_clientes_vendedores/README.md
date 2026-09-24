@@ -356,8 +356,10 @@ Las partidas conservan relaciones explicitas y tenant-safe con
 `cotizacion_items`, `catalog_items` y, cuando aplique, `propiedad_id` y
 `unidad_id`; la entidad, confirmacion comercial y aprobacion operativa del
 flujo anterior ya estan implementadas y desplegadas. La forma y evidencia
-con/sin OC tambien estan implementadas. La nueva secuencia de revision y
-aprobacion descrita arriba queda pendiente de implementacion.
+con/sin OC tambien estan implementadas. La secuencia nueva de revision,
+aprobacion y reserva anticipada por OC ya tiene implementacion local en esta
+rama; su migracion aun no esta aplicada en Supabase y falta validar el flujo
+autenticado antes de considerarla desplegada.
 
 La partida conserva el producto mediante `catalog_item_id` desde cotizacion,
 pedido y hasta `venta_items`. La reserva se traza hasta el pedido y su renglon;
@@ -490,8 +492,8 @@ La primera version del traspaso por areas se implemento y desplego el
    anterior hecha con OC.
 4. **Almacen — Surtidos:** recibe solo pedidos aprobados y liberados; registra
    entregas parciales o totales.
-5. **Pendiente — implementacion y validacion:** alinear la version desplegada
-   con este flujo y recorrerlo con sesiones/roles autorizados, OC validada
+5. **Pendiente — migracion, despliegue y validacion:** aplicar la migracion,
+   alinear la version desplegada con este flujo y recorrerlo con sesiones/roles autorizados, OC validada
    (reserva antes de aprobar), evidencia sin OC (reserva al aprobar),
    regreso/correccion, aprobacion, entregas, pagos y balances;
    verificar tambien usuarios sin permiso y aislamiento por organizacion.

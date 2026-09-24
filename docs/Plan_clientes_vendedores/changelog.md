@@ -1,5 +1,23 @@
 # Changelog — Clientes y vendedores
 
+## 2026-09-24 — Implementacion local de revision operativa y reserva por OC
+
+- La bandeja de Operaciones ahora requiere marcar revision de cliente,
+  evidencia y partidas antes de aprobar y liberar a surtido.
+- Se creo una RPC transaccional para guardar la revision, formalizar venta y
+  cuenta por cobrar y liberar el pedido. La ruta anterior de formalizacion
+  directa devuelve conflicto para impedir que omita el checklist.
+- Confirmar pedido con OC validada reserva stock fisico; sin OC no reserva en
+  Comercial. La aprobacion reutiliza esa reserva o la crea una sola vez. Al
+  reenviar sin OC se liberan las reservas anticipadas; una devolucion conserva
+  la reserva mientras Comercial corrige el pedido.
+- El atajo de pago desde cotizacion requiere ahora que Operaciones ya haya
+  aprobado y formalizado el pedido.
+- Se agrego la migracion local
+  `20260924213308_order_review_and_oc_reservation.sql`. No esta aplicada a
+  Supabase ni desplegada; falta validar sintaxis de migracion, flujo autenticado,
+  permisos y balances antes de despliegue.
+
 ## 2026-09-24 — Reserva anticipada cuando Comercial valida una OC
 
 - Se agrega una excepcion a la reserva: si Comercial recibe y valida una OC del
