@@ -356,11 +356,11 @@ Las partidas conservan relaciones explicitas y tenant-safe con
 `cotizacion_items`, `catalog_items` y, cuando aplique, `propiedad_id` y
 `unidad_id`; la entidad, confirmacion comercial y aprobacion operativa del
 flujo anterior ya estan implementadas y desplegadas. La forma y evidencia
-con/sin OC tambien estan implementadas. La secuencia nueva de revision,
-aprobacion y reserva anticipada por OC tiene una implementacion preliminar local
-en esta rama; no equivale a la revision completa de seis bloques descrita mas
-adelante. Su migracion aun no esta aplicada en Supabase y falta completar y
-validar el flujo autenticado antes de considerarla desplegada.
+con/sin OC tambien estan implementadas. Las migraciones de revision preliminar,
+aprobacion y reserva anticipada por OC ya estan aplicadas en Supabase; esto no
+equivale a la revision completa de seis bloques. Falta implementar reservas
+parciales, completar la interfaz de Operaciones y validar el flujo autenticado
+antes de considerarlo terminado.
 
 La partida conserva el producto mediante `catalog_item_id` desde cotizacion,
 pedido y hasta `venta_items`. La reserva se traza hasta el pedido y su renglon;
@@ -869,9 +869,14 @@ El snapshot del pedido no depende de la ficha de direcciones del cliente, que
 puede cambiar después. La dirección acordada queda guardada como texto en la
 cotización y se copia al pedido.
 
-La migración local `20260924215640_sales_order_commercial_conditions.sql`
-agrega los campos y llena pedidos existentes desde su cotización. No se ha
-aplicado en Supabase. La API, el formulario y el PDF de cotización ya envían y
-presentan estas condiciones. Antes de aplicar o desplegar, falta revisar y
-consolidar esta migración con los cambios pendientes de revisión operativa,
-evidencia extendida y reservas parciales.
+Las migraciones `20260924213308_order_review_and_oc_reservation.sql` y
+`20260924215640_sales_order_commercial_conditions.sql` ya se aplicaron en
+Supabase el 2026-09-24. Se agregaron las validaciones preliminares de revisión,
+reserva por OC, las condiciones de cotización/pedido y el trigger de snapshot
+inmutable. La API, el formulario y el PDF de cotización ya están modificados en
+el repositorio, pero todavía no se han desplegado.
+
+La reserva sigue siendo de todo o nada y el checklist de Operaciones conserva
+tres validaciones preliminares, no la revisión completa de seis bloques. Hasta
+implementar reservas parciales y la pantalla completa, el flujo operativo no
+debe darse por terminado ni validado con pedidos que tengan faltantes de stock.

@@ -1,6 +1,20 @@
 # Changelog — Clientes y vendedores
 
-## 2026-09-24 — Captura de condiciones comerciales en cotización (local, no aplicada)
+## 2026-09-24 — Migraciones de revisión, OC y condiciones aplicadas
+
+- Se aplicaron mediante MCP Supabase las migraciones `20260924213308_order_review_and_oc_reservation.sql` y
+  `20260924215640_sales_order_commercial_conditions.sql`. Supabase las registró
+  como `20260924222105` y `20260924222108`.
+- Se confirmó en el esquema remoto la presencia de las columnas de revisión y
+  condiciones, el trigger de snapshot y los RPC de envío/aprobación.
+- Las funciones nuevas quedaron ejecutables por `service_role`; no se detectaron
+  avisos de seguridad específicos para los objetos de estas migraciones.
+- Los avisos de índices sin uso corresponden a índices recién creados y deben
+  reevaluarse con tráfico representativo.
+- La aplicación de esquema no incluye despliegue del backend/panel ni validación
+  funcional autenticada.
+
+### Captura de condiciones comerciales en cotización
 
 - Se agregaron campos estructurados para condición de pago, días de crédito,
   porcentaje de anticipo, entregas parciales, fecha/domicilio de entrega y
@@ -9,13 +23,11 @@
   que el cliente y Operaciones vean las condiciones acordadas.
 - El costo de envío se documenta como partida de cotización para que integre el
   cálculo normal de subtotal, impuestos y total.
-- La migración local `20260924215640_sales_order_commercial_conditions.sql`
-  agrega columnas explícitas a cotizaciones y pedidos, rellena pedidos
-  existentes desde su cotización y copia las condiciones al crear nuevos
-  pedidos.
-- Pendiente: revisar y consolidar la migración con evidencia extendida, reserva
-  parcial y revisión operativa antes de aplicarla en Supabase; validar el flujo
-  autenticado por rol y tenant antes del despliegue.
+- La migración `20260924215640_sales_order_commercial_conditions.sql` agrega
+  columnas explícitas a cotizaciones y pedidos, rellena pedidos existentes
+  desde su cotización y copia las condiciones al crear nuevos pedidos.
+- Pendiente: evidencia extendida, reserva parcial, revisión completa de seis
+  bloques y validación autenticada por rol/tenant antes del despliegue.
 
 ## 2026-09-24 — Secuencia para completar revision, condiciones y reserva parcial
 
@@ -35,8 +47,9 @@
   bloqueantes/alertas y devolucion tipificada; despues consolidar migraciones,
   desplegar y validar por rol/tenant.
 - La migracion preliminar `20260924213308_order_review_and_oc_reservation.sql`
-  no se aplica aun; debe ampliarse/consolidarse con estos cambios antes de
-  llevarla a Supabase.
+  se aplico en Supabase el 2026-09-24. Su checklist de tres validaciones y la
+  reserva de todo o nada son provisionales; deben completarse con reservas
+  parciales y revision operativa de seis bloques.
 
 ## 2026-09-24 — Alcance de la revision operativa en seis bloques
 
