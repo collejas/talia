@@ -569,9 +569,10 @@ de la oportunidad y de la venta:
   existencias de almacén en la misma transacción.
 - Para una unidad inmobiliaria, la confirmación la aparta/reserva por estado,
   sin movimiento de almacén ni cambio a vendida.
-- La forma de confirmación (OC o sin OC), adjuntar el documento del cliente,
-  capturar observaciones y mostrar la evidencia siguen pendientes; el alcance
-  funcional y las reglas están definidos en “Evidencia de confirmacion de compra”.
+- El formulario captura la forma y fecha de confirmación, la referencia de OC y
+  observaciones. Permite adjuntar una OC PDF privada de hasta 10 MB y abrirla con
+  una URL firmada temporal; la validación autenticada queda pendiente del
+  despliegue de esta iteración.
 - El atajo de pago inmediato confirma el pedido y registra el pago en una
   operación coordinada.
 - La cancelación de una cotización libera únicamente pedidos no confirmados;

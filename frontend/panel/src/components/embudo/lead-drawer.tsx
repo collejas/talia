@@ -228,6 +228,41 @@ function LeadDrawerSurface({
 }
 
 type QuoteChannel = "email" | "whatsapp";
+type OrderConfirmationMethod =
+  | "orden_compra"
+  | "cotizacion_firmada_aceptada"
+  | "correo_electronico"
+  | "whatsapp"
+  | "contrato"
+  | "confirmacion_verbal"
+  | "otro";
+
+type LeadQuoteOrderDocument = {
+  id: string;
+  tipo_documento: string;
+  nombre_original: string;
+  content_type: string | null;
+  tamano_bytes: number | null;
+  subido_en: string | null;
+};
+
+type LeadQuoteSalesOrder = {
+  id: string;
+  estatus: string;
+  referencia_pedido_cliente: string | null;
+  fecha_orden_cliente: string | null;
+  forma_confirmacion: string | null;
+  fecha_confirmacion_cliente: string | null;
+  observaciones_confirmacion: string | null;
+  venta: {
+    id: string;
+    cliente_id: string;
+    cuenta_por_cobrar_id: string;
+    total: number | null;
+    saldo: number | null;
+  } | null;
+  documentos: LeadQuoteOrderDocument[];
+};
 
 type LeadQuoteEntry = {
   id: string;
@@ -247,6 +282,7 @@ type LeadQuoteEntry = {
   validUntil: string | null;
   metadata: Record<string, unknown> | null;
   items: LeadQuoteItemEntry[] | null;
+  pedido: LeadQuoteSalesOrder | null;
 };
 
 type FormalizedSale = {
@@ -1045,6 +1081,11 @@ export function LeadDrawer({
   const [formalizeError, setFormalizeError] = useState<string | null>(null);
   const [orderReference, setOrderReference] = useState("");
   const [orderDate, setOrderDate] = useState("");
+  const [orderConfirmationMethod, setOrderConfirmationMethod] = useState<OrderConfirmationMethod>("orden_compra");
+  const [orderConfirmationDate, setOrderConfirmationDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [orderConfirmationNotes, setOrderConfirmationNotes] = useState("");
+  const [orderDocumentFile, setOrderDocumentFile] = useState<File | null>(null);
+  const [orderDocumentUploaded, setOrderDocumentUploaded] = useState<LeadQuoteOrderDocument | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentType, setPaymentType] = useState<"anticipo" | "parcial" | "liquidacion" | "otro">("parcial");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -1591,6 +1632,22 @@ export function LeadDrawer({
       const rows = Array.isArray(body?.quotes) ? (body.quotes as unknown[]) : [];
       const mapped = rows.map((row) => mapQuoteEntry(row));
       setQuotesState({ status: "loaded", data: mapped });
+      setFormalizedSalesByQuote((current) => {
+        const next = { ...current };
+        for (const quote of mapped) {
+          const sale = quote.pedido?.venta;
+          if (quote.pedido?.estatus === "confirmado" && sale && sale.saldo != null && sale.total != null) {
+            next[quote.id] = {
+              venta_id: sale.id,
+              cliente_id: sale.cliente_id,
+              cuenta_por_cobrar_id: sale.cuenta_por_cobrar_id,
+              total: sale.total,
+              saldo: sale.saldo,
+            };
+          }
+        }
+        return next;
+      });
     } catch (fetchError) {
       setQuotesState((prev) => ({
         status: "error",
@@ -3213,15 +3270,48 @@ export function LeadDrawer({
 
   const handleFormalizeSale = useCallback(() => {
     if (!formalizeQuote) return;
+    const existingOrderDocument = orderDocumentUploaded ?? formalizeQuote.pedido?.documentos.find(
+      (document) => document.tipo_documento === "orden_compra",
+    ) ?? null;
+    if (
+      orderConfirmationMethod === "orden_compra" &&
+      !orderReference.trim() &&
+      !existingOrderDocument &&
+      !orderDocumentFile
+    ) {
+      setFormalizeError("Agrega el número de OC o adjunta el PDF que te entregó el cliente.");
+      return;
+    }
     setFormalizeError(null);
     startQuoteAction(async () => {
       try {
+        let attachedDocument = existingOrderDocument;
+        if (orderConfirmationMethod === "orden_compra" && orderDocumentFile && !attachedDocument) {
+          const formData = new FormData();
+          formData.append("file", orderDocumentFile, orderDocumentFile.name);
+          const uploadResponse = await fetch(
+            `/api/embudo/quotes/${formalizeQuote.id}/pedido/orden-compra`,
+            { method: "POST", body: formData },
+          );
+          const uploadBody = await uploadResponse.json().catch(() => ({}));
+          if (!uploadResponse.ok) {
+            setFormalizeError(typeof uploadBody?.error === "string" ? uploadBody.error : "No se pudo adjuntar la orden de compra.");
+            return;
+          }
+          attachedDocument = uploadBody as LeadQuoteOrderDocument;
+          setOrderDocumentUploaded(attachedDocument);
+          setOrderDocumentFile(null);
+          await fetchQuotes();
+        }
         const response = await fetch(`/api/embudo/quotes/${formalizeQuote.id}/formalizar-venta`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            referencia_pedido_cliente: orderReference.trim() || null,
-            fecha_orden_cliente: orderDate || null,
+            referencia_pedido_cliente: orderConfirmationMethod === "orden_compra" ? orderReference.trim() || null : null,
+            fecha_orden_cliente: orderConfirmationMethod === "orden_compra" ? orderDate || null : null,
+            forma_confirmacion: orderConfirmationMethod,
+            fecha_confirmacion_cliente: orderConfirmationDate,
+            observaciones_confirmacion: orderConfirmationNotes.trim() || null,
           }),
         });
         const body = await response.json().catch(() => ({}));
@@ -3242,7 +3332,7 @@ export function LeadDrawer({
         setFormalizeError(error instanceof Error ? error.message : "No se pudo formalizar la venta.");
       }
     });
-  }, [fetchQuotes, formalizeQuote, orderDate, orderReference]);
+  }, [fetchQuotes, formalizeQuote, orderConfirmationDate, orderConfirmationMethod, orderConfirmationNotes, orderDate, orderDocumentFile, orderDocumentUploaded, orderReference]);
 
   const handleConfirmedPayment = useCallback(() => {
     if (!paymentQuote) return;
@@ -4012,6 +4102,24 @@ export function LeadDrawer({
                                 )}
                                 Ver PDF
                               </Button>
+                              {quote.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra") ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="gap-1"
+                                  onClick={() => {
+                                    const document = quote.pedido?.documentos.find((item) => item.tipo_documento === "orden_compra");
+                                    if (document) {
+                                      const href = `/api/embudo/quotes/${quote.id}/pedido/orden-compra?documento_id=${encodeURIComponent(document.id)}`;
+                                      window.open(href, "_blank", "noopener,noreferrer");
+                                    }
+                                  }}
+                                >
+                                  <IconPaperclip className="size-4" />
+                                  Ver OC adjunta
+                                </Button>
+                              ) : null}
                               <Button
                                 type="button"
                                 size="sm"
@@ -4036,6 +4144,13 @@ export function LeadDrawer({
                                         setFormalizeError(null);
                                         setOrderReference("");
                                         setOrderDate("");
+                                        setOrderConfirmationMethod("orden_compra");
+                                        setOrderConfirmationDate(new Date().toISOString().slice(0, 10));
+                                        setOrderConfirmationNotes("");
+                                        setOrderDocumentFile(null);
+                                        setOrderDocumentUploaded(
+                                          quote.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra") ?? null,
+                                        );
                                         setFormalizeQuote(quote);
                                       }}
                                       disabled={quotePending}
@@ -5574,25 +5689,114 @@ export function LeadDrawer({
               {formatQuoteCurrency(formalizeQuote?.total ?? null, formalizeQuote?.currency ?? null)}
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="customer-order-reference">Referencia de orden de compra</Label>
-              <Input
-                id="customer-order-reference"
-                value={orderReference}
-                onChange={(event) => setOrderReference(event.target.value)}
-                maxLength={160}
-                placeholder="Opcional"
-              />
+              <Label>Forma de confirmación</Label>
+              <Select
+                value={orderConfirmationMethod}
+                onValueChange={(value) => {
+                  setOrderConfirmationMethod(value as OrderConfirmationMethod);
+                  if (value !== "orden_compra") setOrderDocumentFile(null);
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="orden_compra">Orden de compra</SelectItem>
+                  <SelectItem value="cotizacion_firmada_aceptada">Cotización firmada / aceptada</SelectItem>
+                  <SelectItem value="correo_electronico">Correo electrónico</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="contrato">Contrato</SelectItem>
+                  <SelectItem value="confirmacion_verbal">Confirmación verbal</SelectItem>
+                  <SelectItem value="otro">Otro</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Si el cliente confirma mediante un anticipo, usa “Registrar pago inmediato” para que el pago también quede registrado.
+              </p>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="customer-order-date">Fecha de orden</Label>
-              <Input
-                id="customer-order-date"
-                type="date"
-                value={orderDate}
-                onChange={(event) => setOrderDate(event.target.value)}
-              />
+            {orderConfirmationMethod === "orden_compra" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="customer-order-reference">Número de OC</Label>
+                  <Input
+                    id="customer-order-reference"
+                    value={orderReference}
+                    onChange={(event) => setOrderReference(event.target.value)}
+                    maxLength={160}
+                    placeholder="Ej. OC-4832"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="customer-order-date">Fecha de la OC</Label>
+                  <Input
+                    id="customer-order-date"
+                    type="date"
+                    value={orderDate}
+                    onChange={(event) => setOrderDate(event.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="customer-order-file">Documento de OC del cliente (PDF)</Label>
+                  <Input
+                    id="customer-order-file"
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={(event) => setOrderDocumentFile(event.target.files?.[0] ?? null)}
+                    disabled={quotePending || Boolean(orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra"))}
+                  />
+                  <p className="text-[11px] text-muted-foreground">PDF de hasta 10 MB. Puedes indicar el número de OC, adjuntar el documento o hacer ambas cosas.</p>
+                  {orderDocumentFile ? (
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <IconPaperclip className="size-3.5" /> {orderDocumentFile.name}
+                    </p>
+                  ) : null}
+                  {(orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra")) ? (
+                    <p className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground">
+                        OC adjunta: {(orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra"))?.nombre_original}
+                      </span>
+                      {(() => {
+                        const document = orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((item) => item.tipo_documento === "orden_compra");
+                        return document ? (
+                          <a
+                            className="font-medium text-primary underline-offset-4 hover:underline"
+                            href={`/api/embudo/quotes/${formalizeQuote?.id}/pedido/orden-compra?documento_id=${encodeURIComponent(document.id)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Ver PDF
+                          </a>
+                        ) : null;
+                      })()}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="customer-confirmation-date">Fecha de confirmación del cliente</Label>
+                <Input
+                  id="customer-confirmation-date"
+                  type="date"
+                  value={orderConfirmationDate}
+                  onChange={(event) => setOrderConfirmationDate(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="customer-confirmation-notes">Observaciones</Label>
+                <Input
+                  id="customer-confirmation-notes"
+                  value={orderConfirmationNotes}
+                  onChange={(event) => setOrderConfirmationNotes(event.target.value)}
+                  maxLength={2000}
+                  placeholder="Ej. Entrega solicitada el viernes"
+                />
+              </div>
+              <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
+                Vendedor asignado: {quoteAssignedVendorName}. El usuario que confirma quedará registrado automáticamente.
+              </div>
             </div>
           </div>
           {formalizeError ? (
@@ -6570,6 +6774,9 @@ function formatBookingDate(value: string, timezone: string | null): string {
 
 function mapQuoteEntry(input: unknown): LeadQuoteEntry {
   const row = isRecord(input) ? input : {};
+  const rawOrderValue = Array.isArray(row.pedido) ? row.pedido[0] : row.pedido;
+  const rawOrder = isRecord(rawOrderValue) ? rawOrderValue : null;
+  const rawOrderDocuments = Array.isArray(rawOrder?.documentos) ? rawOrder.documentos : [];
   const metadataRecord: Record<string, unknown> = isRecord(row.metadatos)
     ? row.metadatos
     : isRecord(row.metadata)
@@ -6597,6 +6804,47 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
       ? (row.items as unknown[])
           .map((item) => mapQuoteItemEntry(item))
           .filter((entry) => !!entry)
+      : null,
+    pedido: rawOrder
+      ? {
+          id: String(rawOrder.id ?? ""),
+          estatus: typeof rawOrder.estatus === "string" ? rawOrder.estatus : "pendiente_confirmacion",
+          referencia_pedido_cliente:
+            typeof rawOrder.referencia_pedido_cliente === "string" ? rawOrder.referencia_pedido_cliente : null,
+          fecha_orden_cliente: typeof rawOrder.fecha_orden_cliente === "string" ? rawOrder.fecha_orden_cliente : null,
+          forma_confirmacion: typeof rawOrder.forma_confirmacion === "string" ? rawOrder.forma_confirmacion : null,
+          fecha_confirmacion_cliente:
+            typeof rawOrder.fecha_confirmacion_cliente === "string" ? rawOrder.fecha_confirmacion_cliente : null,
+          observaciones_confirmacion:
+            typeof rawOrder.observaciones_confirmacion === "string" ? rawOrder.observaciones_confirmacion : null,
+          venta: (() => {
+            const rawSaleValue = Array.isArray(rawOrder.venta) ? rawOrder.venta[0] : rawOrder.venta;
+            const rawSale = isRecord(rawSaleValue) ? rawSaleValue : null;
+            const rawReceivableValue = Array.isArray(rawSale?.cuenta) ? rawSale.cuenta[0] : rawSale?.cuenta;
+            const rawReceivable = isRecord(rawReceivableValue) ? rawReceivableValue : null;
+            if (!rawSale || !rawReceivable) return null;
+            return {
+              id: String(rawSale.id ?? ""),
+              cliente_id: String(rawSale.cliente_id ?? ""),
+              cuenta_por_cobrar_id: String(rawReceivable.id ?? ""),
+              total: toNumber(rawSale.total),
+              saldo: toNumber(rawReceivable.saldo),
+            };
+          })(),
+          documentos: rawOrderDocuments.flatMap((inputDocument) => {
+            if (!isRecord(inputDocument)) return [];
+            const rawFileValue = Array.isArray(inputDocument.archivo) ? inputDocument.archivo[0] : inputDocument.archivo;
+            if (!isRecord(rawFileValue) || typeof inputDocument.id !== "string") return [];
+            return [{
+              id: inputDocument.id,
+              tipo_documento: typeof inputDocument.tipo_documento === "string" ? inputDocument.tipo_documento : "",
+              nombre_original: typeof rawFileValue.nombre_original === "string" ? rawFileValue.nombre_original : "Documento",
+              content_type: typeof rawFileValue.content_type === "string" ? rawFileValue.content_type : null,
+              tamano_bytes: toNumber(rawFileValue.tamano_bytes),
+              subido_en: typeof rawFileValue.subido_en === "string" ? rawFileValue.subido_en : null,
+            }];
+          }),
+        }
       : null,
   };
 }

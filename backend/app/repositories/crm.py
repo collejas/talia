@@ -4338,7 +4338,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "oportunidad_id": f"eq.{oportunidad_id}",
             "order": "creado_en.desc",
-            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id)),pedido:pedidos_venta!pedidos_venta_cotizacion_org_fkey(id,estatus,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path)))",
             "items.order": "orden.asc,id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
@@ -4357,7 +4357,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{quote_id}",
             "limit": "1",
-            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id)),pedido:pedidos_venta!pedidos_venta_cotizacion_org_fkey(id,estatus,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path)))",
             "items.order": "orden.asc,id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
@@ -4463,6 +4463,118 @@ class CRMRepository:
             return data
         raise CRMRepositoryError("sales_order_creation_response_invalid")
 
+    async def crear_documento_pedido_venta(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedido_venta_id: UUID,
+        archivo_id: UUID,
+        tipo_documento: str,
+        usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        body = {
+            "organizacion_id": str(organizacion_id),
+            "pedido_venta_id": str(pedido_venta_id),
+            "archivo_id": str(archivo_id),
+            "tipo_documento": tipo_documento,
+            "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/pedido_venta_documentos",
+            json=body,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("sales_order_document_not_created")
+        return data[0]
+
+    async def eliminar_documento_pedido_venta(
+        self,
+        *,
+        organizacion_id: UUID,
+        documento_id: UUID,
+    ) -> None:
+        await self._request(
+            "DELETE",
+            "/rest/v1/pedido_venta_documentos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{documento_id}",
+            },
+        )
+
+    async def confirmar_pedido_venta_con_evidencia(
+        self,
+        *,
+        organizacion_id: UUID,
+        cotizacion_id: UUID,
+        usuario_id: UUID | None = None,
+        fecha_vencimiento: date | None = None,
+        referencia_pedido_cliente: str | None = None,
+        fecha_orden_cliente: date | None = None,
+        forma_confirmacion: str = "otro",
+        fecha_confirmacion_cliente: date | None = None,
+        observaciones_confirmacion: str | None = None,
+    ) -> dict[str, Any]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_confirmar_pedido_venta_con_evidencia",
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_cotizacion_id": str(cotizacion_id),
+                "p_usuario_id": str(usuario_id) if usuario_id else None,
+                "p_fecha_vencimiento": fecha_vencimiento.isoformat() if fecha_vencimiento else None,
+                "p_referencia_pedido_cliente": referencia_pedido_cliente,
+                "p_fecha_orden_cliente": fecha_orden_cliente.isoformat() if fecha_orden_cliente else None,
+                "p_forma_confirmacion": forma_confirmacion,
+                "p_fecha_confirmacion_cliente": (
+                    fecha_confirmacion_cliente.isoformat() if fecha_confirmacion_cliente else None
+                ),
+                "p_observaciones_confirmacion": observaciones_confirmacion,
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() if resp.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError("sale_formalization_response_invalid")
+
+    async def registrar_pago_confirmado_con_evidencia(
+        self,
+        *,
+        organizacion_id: UUID,
+        cotizacion_id: UUID,
+        monto: Decimal,
+        tipo_pago: str = "anticipo",
+        fecha_pago: datetime | None = None,
+        metodo_pago: str | None = None,
+        referencia_pago: str | None = None,
+        registrado_por_usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_confirmar_pedido_venta_con_pago_y_evidencia",
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_cotizacion_id": str(cotizacion_id),
+                "p_monto": str(monto),
+                "p_tipo_pago": tipo_pago,
+                "p_fecha_pago": fecha_pago.isoformat() if fecha_pago else None,
+                "p_metodo_pago": metodo_pago,
+                "p_referencia_pago": referencia_pago,
+                "p_registrado_por_usuario_id": (
+                    str(registrado_por_usuario_id) if registrado_por_usuario_id else None
+                ),
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() if resp.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError("payment_registration_response_invalid")
+
     async def cancelar_pedido_venta_por_cotizacion(
         self,
         *,
@@ -4484,6 +4596,26 @@ class CRMRepository:
         )
         if resp.status_code >= 400:
             raise CRMRepositoryError(f"sales_order_cancellation_failed:{resp.status_code}:{resp.text}")
+
+    async def obtener_pedido_venta_por_cotizacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        cotizacion_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "cotizacion_id": f"eq.{cotizacion_id}",
+            "limit": "1",
+            "select": "id,organizacion_id,cotizacion_id,estatus,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,storage_path,subido_en))",
+        }
+        resp = await self._request("GET", "/rest/v1/pedidos_venta", params=params)
+        data = resp.json()
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, list):
+            return None
+        raise CRMRepositoryError("sales_order_fetch_response_invalid")
 
     async def registrar_pago_de_venta(
         self,

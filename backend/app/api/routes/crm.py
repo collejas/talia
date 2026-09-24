@@ -4207,6 +4207,26 @@ class FormalizeSalePayload(BaseModel):
     fecha_vencimiento: date | None = None
     referencia_pedido_cliente: str | None = Field(default=None, max_length=160)
     fecha_orden_cliente: date | None = None
+    forma_confirmacion: Literal[
+        "orden_compra",
+        "cotizacion_firmada_aceptada",
+        "correo_electronico",
+        "whatsapp",
+        "contrato",
+        "confirmacion_verbal",
+        "otro",
+    ] = "orden_compra"
+    fecha_confirmacion_cliente: date | None = None
+    observaciones_confirmacion: str | None = Field(default=None, max_length=2000)
+
+
+class PedidoVentaDocumentoResponse(BaseModel):
+    id: UUID
+    tipo_documento: str
+    nombre_original: str
+    content_type: str | None = None
+    tamano_bytes: int | None = None
+    subido_en: datetime | None = None
 
 
 class ConfirmedPaymentResponse(BaseModel):
@@ -9788,6 +9808,59 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
     metadata = _ensure_dict(row.get("metadata"), default={})
     estado = row.get("estatus") or row.get("estado") or metadata.get("estado") or "borrador"
     oportunidad_id = row.get("oportunidad_id") or metadata.get("oportunidad_id")
+    order_row = _single_related(row.get("pedido"))
+    order: LeadQuoteSalesOrder | None = None
+    if isinstance(order_row, dict) and order_row.get("id"):
+        sale_row = _single_related(order_row.get("venta"))
+        receivable_row = _single_related(sale_row.get("cuenta")) if isinstance(sale_row, dict) else None
+        sale_summary = None
+        if (
+            isinstance(sale_row, dict)
+            and sale_row.get("id")
+            and sale_row.get("cliente_id")
+            and sale_row.get("total") is not None
+            and isinstance(receivable_row, dict)
+            and receivable_row.get("id")
+            and receivable_row.get("saldo") is not None
+        ):
+            sale_summary = LeadQuoteSalesOrderSale(
+                id=sale_row.get("id"),
+                cliente_id=sale_row.get("cliente_id"),
+                cuenta_por_cobrar_id=receivable_row.get("id"),
+                total=sale_row.get("total"),
+                saldo=receivable_row.get("saldo"),
+            )
+        order_documents: list[LeadQuoteSalesOrderDocument] = []
+        raw_documents = order_row.get("documentos")
+        if isinstance(raw_documents, list):
+            for document_row in raw_documents:
+                if not isinstance(document_row, dict):
+                    continue
+                file_row = _single_related(document_row.get("archivo"))
+                if not isinstance(file_row, dict) or not file_row.get("id"):
+                    continue
+                order_documents.append(
+                    LeadQuoteSalesOrderDocument(
+                        id=document_row.get("id"),
+                        tipo_documento=document_row.get("tipo_documento") or "",
+                        nombre_original=file_row.get("nombre_original") or "Documento",
+                        content_type=file_row.get("content_type"),
+                        tamano_bytes=file_row.get("tamano_bytes"),
+                        subido_en=_parse_timestamp(file_row.get("subido_en")),
+                    )
+                )
+        order = LeadQuoteSalesOrder(
+            id=order_row.get("id"),
+            estatus=order_row.get("estatus") or "pendiente_confirmacion",
+            referencia_pedido_cliente=order_row.get("referencia_pedido_cliente"),
+            fecha_orden_cliente=_parse_date(order_row.get("fecha_orden_cliente")),
+            forma_confirmacion=order_row.get("forma_confirmacion"),
+            fecha_confirmacion_cliente=_parse_date(order_row.get("fecha_confirmacion_cliente")),
+            observaciones_confirmacion=order_row.get("observaciones_confirmacion"),
+            confirmado_en=_parse_timestamp(order_row.get("confirmado_en")),
+            venta=sale_summary,
+            documentos=order_documents,
+        )
     return LeadQuote(
         id=row.get("id"),
         oportunidad_id=oportunidad_id,
@@ -9813,6 +9886,7 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         creado_en=_parse_timestamp(row.get("creado_en")),
         actualizado_en=_parse_timestamp(row.get("actualizado_en")),
         items=_parse_quote_items(row.get("items")),
+        pedido=order,
     )
 
 
@@ -17111,6 +17185,36 @@ class LeadQuoteSendPayload(LeadQuoteCreatePayload):
     subject: str | None = Field(default=None, max_length=200)
 
 
+class LeadQuoteSalesOrderDocument(BaseModel):
+    id: UUID
+    tipo_documento: str
+    nombre_original: str
+    content_type: str | None = None
+    tamano_bytes: int | None = None
+    subido_en: datetime | None = None
+
+
+class LeadQuoteSalesOrderSale(BaseModel):
+    id: UUID
+    cliente_id: UUID
+    cuenta_por_cobrar_id: UUID
+    total: Decimal
+    saldo: Decimal
+
+
+class LeadQuoteSalesOrder(BaseModel):
+    id: UUID
+    estatus: str
+    referencia_pedido_cliente: str | None = None
+    fecha_orden_cliente: date | None = None
+    forma_confirmacion: str | None = None
+    fecha_confirmacion_cliente: date | None = None
+    observaciones_confirmacion: str | None = None
+    confirmado_en: datetime | None = None
+    venta: LeadQuoteSalesOrderSale | None = None
+    documentos: list[LeadQuoteSalesOrderDocument] = Field(default_factory=list)
+
+
 class LeadQuote(BaseModel):
     id: UUID
     oportunidad_id: UUID
@@ -17136,6 +17240,7 @@ class LeadQuote(BaseModel):
     creado_en: datetime | None = None
     actualizado_en: datetime | None = None
     items: list[LeadQuoteItem] = Field(default_factory=list)
+    pedido: LeadQuoteSalesOrder | None = None
 
 
 class LeadQuoteResponse(BaseModel):
@@ -32413,13 +32518,16 @@ async def formalizar_venta_desde_cotizacion(
             usuario_id=usuario_id,
             oportunidad_id=oportunidad_id,
         )
-        result = await repo.formalizar_venta(
+        result = await repo.confirmar_pedido_venta_con_evidencia(
             organizacion_id=organizacion_id,
             cotizacion_id=cotizacion_id,
             usuario_id=usuario_id,
             fecha_vencimiento=payload.fecha_vencimiento,
             referencia_pedido_cliente=payload.referencia_pedido_cliente,
             fecha_orden_cliente=payload.fecha_orden_cliente,
+            forma_confirmacion=payload.forma_confirmacion,
+            fecha_confirmacion_cliente=payload.fecha_confirmacion_cliente,
+            observaciones_confirmacion=payload.observaciones_confirmacion,
         )
     except HTTPException:
         raise
@@ -32441,6 +32549,10 @@ async def formalizar_venta_desde_cotizacion(
             raise HTTPException(status_code=409, detail="inventario_insuficiente_para_confirmar_pedido") from exc
         if "property_unit_not_available" in message or "property_unit_already_reserved" in message:
             raise HTTPException(status_code=409, detail="unidad_inmobiliaria_no_disponible") from exc
+        if "order_purchase_order_evidence_required" in message:
+            raise HTTPException(status_code=409, detail="orden_compra_requiere_referencia_o_documento") from exc
+        if "invalid_order_confirmation_method" in message:
+            raise HTTPException(status_code=400, detail="forma_confirmacion_invalida") from exc
         if "opportunity_already_formalized_from_another_quote" in message:
             raise HTTPException(status_code=409, detail="oportunidad_ya_formalizada_con_otra_cotizacion") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_formalizar_venta") from exc
@@ -32448,6 +32560,200 @@ async def formalizar_venta_desde_cotizacion(
         return ConfirmedPaymentResponse.model_validate(result)
     except ValidationError as exc:
         raise HTTPException(status_code=502, detail="respuesta_venta_invalida") from exc
+
+
+MAX_ORDER_PURCHASE_ORDER_BYTES = 10 * 1024 * 1024
+
+
+@router.post(
+    "/cotizaciones/{cotizacion_id}/pedido/orden-compra",
+    response_model=PedidoVentaDocumentoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def subir_documento_orden_compra_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.manage")),
+    cotizacion_id: UUID,
+    file: UploadFile = File(...),
+) -> PedidoVentaDocumentoResponse:
+    try:
+        quote = await repo.get_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=cotizacion_id,
+        )
+        oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
+        if oportunidad_id is None:
+            raise HTTPException(status_code=409, detail="cotizacion_sin_oportunidad")
+        if _clean_text(quote.get("estatus") or quote.get("estado")).lower() != "aceptada":
+            raise HTTPException(status_code=409, detail="cotizacion_no_aceptada")
+        await _require_sales_write_scope(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            oportunidad_id=oportunidad_id,
+        )
+        await repo.crear_pedido_venta(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+            usuario_id=usuario_id,
+        )
+        order = await repo.obtener_pedido_venta_por_cotizacion(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+        )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "quote_not_found" in message:
+            raise HTTPException(status_code=404, detail="cotizacion_no_encontrada") from exc
+        if "accepted_won_quote_required" in message:
+            raise HTTPException(status_code=409, detail="cotizacion_no_aceptada_oportunidad_no_ganada") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_preparar_pedido") from exc
+
+    if order is None:
+        raise HTTPException(status_code=404, detail="pedido_no_encontrado")
+    if order.get("estatus") not in {"borrador", "pendiente_confirmacion"}:
+        raise HTTPException(status_code=409, detail="pedido_ya_confirmado")
+    documents = order.get("documentos")
+    if isinstance(documents, list) and any(
+        isinstance(row, dict) and row.get("tipo_documento") == "orden_compra"
+        for row in documents
+    ):
+        raise HTTPException(status_code=409, detail="orden_compra_ya_adjunta")
+
+    original_name = Path(file.filename or "").name
+    if not original_name or not original_name.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="orden_compra_debe_ser_pdf")
+    content = await file.read(MAX_ORDER_PURCHASE_ORDER_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=400, detail="orden_compra_archivo_vacio")
+    if len(content) > MAX_ORDER_PURCHASE_ORDER_BYTES:
+        raise HTTPException(status_code=413, detail="orden_compra_supera_10_mb")
+    if not content[:1024].lstrip().startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="archivo_no_es_pdf_valido")
+
+    order_id = UUID(str(order["id"]))
+    object_key = f"{order_id}/orden_compra_cliente/{uuid4().hex}.pdf"
+    storage_path: str | None = None
+    archivo_id: UUID | None = None
+    try:
+        storage_path = await repo.upload_storage_object(
+            bucket="quotes",
+            object_key=object_key,
+            content=content,
+            content_type="application/pdf",
+        )
+        archivo_row = await repo.create_file(
+            organizacion_id=organizacion_id,
+            payload={
+                "relacion_tipo": "pedido_venta",
+                "relacion_id": str(order_id),
+                "nombre_original": original_name[:255],
+                "content_type": "application/pdf",
+                "tamano_bytes": len(content),
+                "storage_path": storage_path,
+                "metadata": {"bucket": "quotes"},
+                "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+            },
+        )
+        archivo_id = _safe_uuid(archivo_row.get("id"))
+        if archivo_id is None:
+            raise CRMRepositoryError("uploaded_file_record_invalid")
+        documento_row = await repo.crear_documento_pedido_venta(
+            organizacion_id=organizacion_id,
+            pedido_venta_id=order_id,
+            archivo_id=archivo_id,
+            tipo_documento="orden_compra",
+            usuario_id=usuario_id,
+        )
+    except (CRMRepositoryError, StorageError) as exc:
+        if archivo_id is not None:
+            try:
+                await repo.delete_file(organizacion_id=organizacion_id, archivo_id=archivo_id)
+            except CRMRepositoryError:
+                logger.warning(
+                    "sales_order_oc_file_record_cleanup_failed",
+                    extra={"organizacion_id": str(organizacion_id), "archivo_id": str(archivo_id)},
+                )
+        if storage_path:
+            try:
+                await repo.delete_storage_object(bucket="quotes", object_path=storage_path)
+            except CRMRepositoryError:
+                logger.warning(
+                    "sales_order_oc_storage_cleanup_failed",
+                    extra={"organizacion_id": str(organizacion_id), "pedido_venta_id": str(order_id)},
+                )
+        if "duplicate key" in str(exc).lower() or "unique" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="orden_compra_ya_adjunta") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_guardar_orden_compra") from exc
+
+    return PedidoVentaDocumentoResponse(
+        id=documento_row["id"],
+        tipo_documento=documento_row["tipo_documento"],
+        nombre_original=original_name[:255],
+        content_type="application/pdf",
+        tamano_bytes=len(content),
+        subido_en=_parse_timestamp(documento_row.get("creado_en")),
+    )
+
+
+@router.get(
+    "/cotizaciones/{cotizacion_id}/pedido/orden-compra/{documento_id}/url",
+    response_model=CRMDocumentSignedUrlResponse,
+)
+async def obtener_url_documento_orden_compra_cliente(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.manage")),
+    cotizacion_id: UUID,
+    documento_id: UUID,
+) -> CRMDocumentSignedUrlResponse:
+    try:
+        quote = await repo.get_quote_entry(organizacion_id=organizacion_id, quote_id=cotizacion_id)
+        oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
+        if oportunidad_id is None:
+            raise HTTPException(status_code=404, detail="cotizacion_no_encontrada")
+        await _require_sales_write_scope(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            oportunidad_id=oportunidad_id,
+        )
+        order = await repo.obtener_pedido_venta_por_cotizacion(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+        )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        if "quote_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="cotizacion_no_encontrada") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_consultar_documento") from exc
+    if order is None:
+        raise HTTPException(status_code=404, detail="pedido_no_encontrado")
+    documents = order.get("documentos")
+    document = next(
+        (
+            row for row in documents
+            if isinstance(row, dict) and str(row.get("id")) == str(documento_id)
+        ),
+        None,
+    ) if isinstance(documents, list) else None
+    file_row = _single_related(document.get("archivo")) if isinstance(document, dict) else None
+    storage_path = _clean_text(file_row.get("storage_path")) if isinstance(file_row, dict) else ""
+    if not storage_path.startswith("quotes/"):
+        raise HTTPException(status_code=404, detail="documento_no_encontrado")
+    try:
+        signed_url = await storage.generate_quote_signed_url(path=storage_path, expires_in=300)
+    except StorageError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudo_generar_enlace_documento") from exc
+    return CRMDocumentSignedUrlResponse(url=signed_url, expires_in=300)
 
 
 @router.post(
@@ -32536,7 +32842,7 @@ async def registrar_pago_confirmado(
             usuario_id=usuario_id,
             oportunidad_id=oportunidad_id,
         )
-        result = await repo.registrar_pago_confirmado(
+        result = await repo.registrar_pago_confirmado_con_evidencia(
             organizacion_id=organizacion_id,
             cotizacion_id=cotizacion_id,
             monto=payload.monto,
