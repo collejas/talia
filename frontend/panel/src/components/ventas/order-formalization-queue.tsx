@@ -21,7 +21,7 @@ type QueueItem = {
   fecha_orden_cliente: string | null;
   observaciones_confirmacion: string | null;
   items: { id: string; descripcion: string; cantidad: number | string; precio_unitario: number | string | null; subtotal: number | string | null; moneda: string | null; maneja_inventario: boolean }[];
-  documentos: { id: string; tipo_documento: string; nombre_original: string | null }[];
+  documentos: { id: string; tipo_documento: string; nombre_original: string | null; referencia: string | null; observaciones: string | null }[];
 };
 
 type ReviewChecklist = { cliente: boolean; evidencia: boolean; partidas: boolean };
@@ -181,15 +181,11 @@ export function OrderFormalizationQueue() {
               ))}
               {item.observaciones_confirmacion ? <p className="sm:col-span-2 lg:col-span-3"><span className="text-muted-foreground">Observaciones: </span>{item.observaciones_confirmacion}</p> : null}
               {item.documentos.map((document) => (
-                <a
-                  key={document.id}
-                  className="text-primary underline underline-offset-4"
-                  href={`/api/embudo/quotes/${item.cotizacion_id}/pedido/orden-compra?documento_id=${encodeURIComponent(document.id)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Ver {document.nombre_original || "documento"}
-                </a>
+                <div key={document.id} className="sm:col-span-2 lg:col-span-3">
+                  <span className="text-muted-foreground">Evidencia ({CONFIRMATION_LABELS[document.tipo_documento] || "Otro"}): </span>
+                  {document.referencia || document.observaciones || "Archivo adjunto"}
+                  {document.nombre_original ? <a className="ml-2 text-primary underline underline-offset-4" href={`/api/embudo/quotes/${item.cotizacion_id}/pedido/orden-compra?documento_id=${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer">Ver {document.nombre_original}</a> : null}
+                </div>
               ))}
             </div>
             <fieldset className="grid gap-2 rounded-lg border bg-muted/20 p-3 text-sm">

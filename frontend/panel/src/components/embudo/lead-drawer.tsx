@@ -240,10 +240,12 @@ type OrderConfirmationMethod =
 type LeadQuoteOrderDocument = {
   id: string;
   tipo_documento: string;
-  nombre_original: string;
+  nombre_original: string | null;
   content_type: string | null;
   tamano_bytes: number | null;
   subido_en: string | null;
+  referencia?: string | null;
+  observaciones?: string | null;
 };
 
 type LeadQuoteSalesOrder = {
@@ -1108,6 +1110,7 @@ export function LeadDrawer({
   const [orderConfirmationMethod, setOrderConfirmationMethod] = useState<OrderConfirmationMethod>("orden_compra");
   const [orderConfirmationDate, setOrderConfirmationDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [orderConfirmationNotes, setOrderConfirmationNotes] = useState("");
+  const [orderEvidenceReference, setOrderEvidenceReference] = useState("");
   const [orderDocumentFile, setOrderDocumentFile] = useState<File | null>(null);
   const [orderDocumentUploaded, setOrderDocumentUploaded] = useState<LeadQuoteOrderDocument | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -3338,31 +3341,46 @@ export function LeadDrawer({
   const handleFormalizeSale = useCallback(() => {
     if (!formalizeQuote) return;
     const existingOrderDocument = orderDocumentUploaded ?? formalizeQuote.pedido?.documentos.find(
-      (document) => document.tipo_documento === "orden_compra",
+      (document) => document.tipo_documento === orderConfirmationMethod,
     ) ?? null;
+    const evidenceReference = orderConfirmationMethod === "orden_compra"
+      ? orderReference.trim()
+      : orderEvidenceReference.trim();
     if (
       orderConfirmationMethod === "orden_compra" &&
       !orderReference.trim() &&
-      !existingOrderDocument &&
+      !existingOrderDocument?.referencia &&
+      !existingOrderDocument?.nombre_original &&
       !orderDocumentFile
     ) {
       setFormalizeError("Agrega el número de OC o adjunta el PDF que te entregó el cliente.");
+      return;
+    }
+    if (orderConfirmationMethod !== "orden_compra" && !evidenceReference && !existingOrderDocument && !orderDocumentFile) {
+      setFormalizeError("Agrega una referencia verificable o adjunta el respaldo de la confirmación.");
       return;
     }
     setFormalizeError(null);
     startQuoteAction(async () => {
       try {
         let attachedDocument = existingOrderDocument;
-        if (orderConfirmationMethod === "orden_compra" && orderDocumentFile && !attachedDocument) {
+        const evidenceChanged = !attachedDocument
+          || (evidenceReference && evidenceReference !== (attachedDocument.referencia ?? ""))
+          || (orderConfirmationNotes.trim() && orderConfirmationNotes.trim() !== (attachedDocument.observaciones ?? ""))
+          || Boolean(orderDocumentFile);
+        if (evidenceChanged) {
           const formData = new FormData();
-          formData.append("file", orderDocumentFile, orderDocumentFile.name);
+          formData.append("tipo_evidencia", orderConfirmationMethod);
+          if (evidenceReference) formData.append("referencia", evidenceReference);
+          if (orderConfirmationNotes.trim()) formData.append("observaciones", orderConfirmationNotes.trim());
+          if (orderDocumentFile) formData.append("file", orderDocumentFile, orderDocumentFile.name);
           const uploadResponse = await fetch(
-            `/api/embudo/quotes/${formalizeQuote.id}/pedido/orden-compra`,
+            `/api/embudo/quotes/${formalizeQuote.id}/pedido/evidencias`,
             { method: "POST", body: formData },
           );
           const uploadBody = await uploadResponse.json().catch(() => ({}));
           if (!uploadResponse.ok) {
-            setFormalizeError(typeof uploadBody?.error === "string" ? uploadBody.error : "No se pudo adjuntar la orden de compra.");
+            setFormalizeError(typeof uploadBody?.error === "string" ? uploadBody.error : "No se pudo guardar la evidencia.");
             return;
           }
           attachedDocument = uploadBody as LeadQuoteOrderDocument;
@@ -3397,7 +3415,7 @@ export function LeadDrawer({
         setFormalizeError(error instanceof Error ? error.message : "No se pudo enviar el pedido a formalización.");
       }
     });
-  }, [fetchQuotes, formalizeQuote, orderConfirmationDate, orderConfirmationMethod, orderConfirmationNotes, orderDate, orderDocumentFile, orderDocumentUploaded, orderReference]);
+  }, [fetchQuotes, formalizeQuote, orderConfirmationDate, orderConfirmationMethod, orderConfirmationNotes, orderDate, orderDocumentFile, orderDocumentUploaded, orderEvidenceReference, orderReference]);
 
   const handleConfirmedPayment = useCallback(() => {
     if (!paymentQuote) return;
@@ -4217,6 +4235,7 @@ export function LeadDrawer({
                                         setOrderReference(quote.pedido?.referencia_pedido_cliente ?? "");
                                         setOrderDate(quote.pedido?.fecha_orden_cliente ?? "");
                                         setOrderConfirmationMethod((quote.pedido?.forma_confirmacion as OrderConfirmationMethod | null) ?? "orden_compra");
+                                        setOrderEvidenceReference(quote.pedido?.documentos.find((document) => document.tipo_documento === (quote.pedido?.forma_confirmacion ?? "orden_compra"))?.referencia ?? "");
                                         setOrderConfirmationDate(quote.pedido?.fecha_confirmacion_cliente ?? new Date().toISOString().slice(0, 10));
                                         setOrderConfirmationNotes(quote.pedido?.observaciones_confirmacion ?? "");
                                         setOrderDocumentFile(null);
@@ -5793,7 +5812,9 @@ export function LeadDrawer({
                 value={orderConfirmationMethod}
                 onValueChange={(value) => {
                   setOrderConfirmationMethod(value as OrderConfirmationMethod);
-                  if (value !== "orden_compra") setOrderDocumentFile(null);
+                  setOrderEvidenceReference(formalizeQuote?.pedido?.documentos.find((document) => document.tipo_documento === value)?.referencia ?? "");
+                  setOrderDocumentFile(null);
+                  setOrderDocumentUploaded(null);
                 }}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -5832,44 +5853,42 @@ export function LeadDrawer({
                     onChange={(event) => setOrderDate(event.target.value)}
                   />
                 </div>
-                <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="customer-order-file">Documento de OC del cliente (PDF)</Label>
-                  <Input
-                    id="customer-order-file"
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    onChange={(event) => setOrderDocumentFile(event.target.files?.[0] ?? null)}
-                    disabled={quotePending || Boolean(orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra"))}
-                  />
-                  <p className="text-[11px] text-muted-foreground">PDF de hasta 10 MB. Puedes indicar el número de OC, adjuntar el documento o hacer ambas cosas.</p>
-                  {orderDocumentFile ? (
-                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <IconPaperclip className="size-3.5" /> {orderDocumentFile.name}
-                    </p>
-                  ) : null}
-                  {(orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra")) ? (
-                    <p className="flex items-center gap-2 text-xs">
-                      <span className="text-muted-foreground">
-                        OC adjunta: {(orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra"))?.nombre_original}
-                      </span>
-                      {(() => {
-                        const document = orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((item) => item.tipo_documento === "orden_compra");
-                        return document ? (
-                          <a
-                            className="font-medium text-primary underline-offset-4 hover:underline"
-                            href={`/api/embudo/quotes/${formalizeQuote?.id}/pedido/orden-compra?documento_id=${encodeURIComponent(document.id)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Ver PDF
-                          </a>
-                        ) : null;
-                      })()}
-                    </p>
-                  ) : null}
-                </div>
               </div>
             ) : null}
+            {orderConfirmationMethod !== "orden_compra" ? (
+              <div className="grid gap-2">
+                <Label htmlFor="customer-evidence-reference">Referencia verificable</Label>
+                <Input
+                  id="customer-evidence-reference"
+                  value={orderEvidenceReference}
+                  onChange={(event) => setOrderEvidenceReference(event.target.value)}
+                  maxLength={500}
+                  placeholder={orderConfirmationMethod === "whatsapp" ? "Ej. mensaje del 23/09, conversación con Ana" : orderConfirmationMethod === "correo_electronico" ? "Ej. asunto y fecha del correo" : "Ej. folio, fecha o descripción del respaldo"}
+                />
+              </div>
+            ) : null}
+            <div className="grid gap-2">
+              <Label htmlFor="customer-order-file">Adjuntar evidencia (PDF, JPG o PNG, opcional)</Label>
+              <Input
+                id="customer-order-file"
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                onChange={(event) => setOrderDocumentFile(event.target.files?.[0] ?? null)}
+                disabled={quotePending}
+              />
+              <p className="text-[11px] text-muted-foreground">Hasta 10 MB. Puedes adjuntar el documento, una captura o una imagen si la tienes.</p>
+              {orderDocumentFile ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><IconPaperclip className="size-3.5" />{orderDocumentFile.name}</p> : null}
+              {(() => {
+                const document = orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((item) => item.tipo_documento === orderConfirmationMethod);
+                if (!document) return null;
+                return (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    Evidencia guardada: {document.nombre_original || document.referencia || "Referencia registrada"}
+                    {document.nombre_original ? <a className="font-medium text-primary underline-offset-4 hover:underline" href={`/api/embudo/quotes/${formalizeQuote?.id}/pedido/orden-compra?documento_id=${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer">Ver archivo</a> : null}
+                  </p>
+                );
+              })()}
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="customer-confirmation-date">Fecha de confirmación del cliente</Label>
@@ -6948,14 +6967,16 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
           documentos: rawOrderDocuments.flatMap((inputDocument) => {
             if (!isRecord(inputDocument)) return [];
             const rawFileValue = Array.isArray(inputDocument.archivo) ? inputDocument.archivo[0] : inputDocument.archivo;
-            if (!isRecord(rawFileValue) || typeof inputDocument.id !== "string") return [];
+            if (typeof inputDocument.id !== "string") return [];
             return [{
               id: inputDocument.id,
               tipo_documento: typeof inputDocument.tipo_documento === "string" ? inputDocument.tipo_documento : "",
-              nombre_original: typeof rawFileValue.nombre_original === "string" ? rawFileValue.nombre_original : "Documento",
-              content_type: typeof rawFileValue.content_type === "string" ? rawFileValue.content_type : null,
-              tamano_bytes: toNumber(rawFileValue.tamano_bytes),
-              subido_en: typeof rawFileValue.subido_en === "string" ? rawFileValue.subido_en : null,
+              nombre_original: isRecord(rawFileValue) && typeof rawFileValue.nombre_original === "string" ? rawFileValue.nombre_original : null,
+              content_type: isRecord(rawFileValue) && typeof rawFileValue.content_type === "string" ? rawFileValue.content_type : null,
+              tamano_bytes: isRecord(rawFileValue) ? toNumber(rawFileValue.tamano_bytes) : null,
+              subido_en: isRecord(rawFileValue) && typeof rawFileValue.subido_en === "string" ? rawFileValue.subido_en : null,
+              referencia: typeof inputDocument.referencia === "string" ? inputDocument.referencia : null,
+              observaciones: typeof inputDocument.observaciones === "string" ? inputDocument.observaciones : null,
             }];
           }),
           items: (Array.isArray(rawOrder.items) ? rawOrder.items : []).flatMap((inputItem) => {

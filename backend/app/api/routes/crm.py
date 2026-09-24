@@ -4268,10 +4268,12 @@ class PedidoVentaAprobarPayload(BaseModel):
 class PedidoVentaDocumentoResponse(BaseModel):
     id: UUID
     tipo_documento: str
-    nombre_original: str
+    nombre_original: str | None = None
     content_type: str | None = None
     tamano_bytes: int | None = None
     subido_en: datetime | None = None
+    referencia: str | None = None
+    observaciones: str | None = None
 
 
 class ConfirmedPaymentResponse(BaseModel):
@@ -32659,6 +32661,8 @@ async def aprobar_pedido_venta_y_liberar(
             raise HTTPException(status_code=409, detail="pedido_no_pendiente_revision") from exc
         if "inventory_warehouse_required" in message:
             raise HTTPException(status_code=409, detail="no_hay_almacen_activo_para_reservas") from exc
+        if "inventory_shortfall_partial_delivery_not_allowed" in message:
+            raise HTTPException(status_code=409, detail="inventario_insuficiente_no_permite_entrega_parcial") from exc
         if "Stock insuficiente" in message:
             raise HTTPException(status_code=409, detail="inventario_insuficiente_para_confirmar_pedido") from exc
         if "property_unit_not_available" in message or "property_unit_already_reserved" in message:
@@ -32768,12 +32772,13 @@ async def listar_pedidos_pendientes_formalizacion(
             if not isinstance(document, dict):
                 continue
             file_row = _single_related(document.get("archivo"))
-            if file_row:
-                documents.append({
-                    "id": document.get("id"),
-                    "tipo_documento": document.get("tipo_documento"),
-                    "nombre_original": file_row.get("nombre_original"),
-                })
+            documents.append({
+                "id": document.get("id"),
+                "tipo_documento": document.get("tipo_documento"),
+                "nombre_original": file_row.get("nombre_original") if file_row else None,
+                "referencia": document.get("referencia"),
+                "observaciones": document.get("observaciones"),
+            })
         items.append({
             "id": row.get("id"),
             "cotizacion_id": quote.get("id") or row.get("cotizacion_id"),
@@ -32832,12 +32837,32 @@ async def listar_pedidos_pendientes_surtido(
                 Decimal("0"),
             ) if isinstance(raw_deliveries, list) else Decimal("0")
             quantity = Decimal(str(_as_number(order_item.get("cantidad")) or 0))
+            raw_reservations = order_item.get("reservas")
+            reserved_total = sum(
+                (
+                    Decimal(str(_as_number(reservation.get("cantidad")) or 0))
+                    for reservation in raw_reservations
+                    if isinstance(reservation, dict) and reservation.get("estado") in {"activa", "consumida"}
+                ),
+                Decimal("0"),
+            ) if isinstance(raw_reservations, list) else Decimal("0")
+            available_to_fulfill = sum(
+                (
+                    max(Decimal("0"), Decimal(str(_as_number(reservation.get("cantidad")) or 0))
+                        - Decimal(str(_as_number(reservation.get("cantidad_surtida")) or 0)))
+                    for reservation in raw_reservations
+                    if isinstance(reservation, dict) and reservation.get("estado") == "activa"
+                ),
+                Decimal("0"),
+            ) if isinstance(raw_reservations, list) else Decimal("0")
             order_items.append({
                 "id": order_item.get("id"),
                 "descripcion": order_item.get("descripcion") or "Artículo",
                 "cantidad": quantity,
                 "cantidad_entregada": delivered,
                 "cantidad_pendiente": max(Decimal("0"), quantity - delivered),
+                "cantidad_reservada": available_to_fulfill,
+                "cantidad_pendiente_inventario": max(Decimal("0"), quantity - reserved_total),
             })
         if not order_items:
             continue
@@ -32883,6 +32908,35 @@ async def devolver_pedido_a_comercial(
         if "sales_order_not_returnable" in message:
             raise HTTPException(status_code=409, detail="pedido_no_puede_devolverse") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_devolver_pedido") from exc
+
+
+@router.post("/pedidos-venta/{pedido_venta_id}/reservar-faltante")
+async def reservar_faltante_pedido_por_inventario(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inventory.fulfillment.manage")),
+    pedido_venta_id: UUID,
+) -> dict[str, Any]:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="auth_required")
+    try:
+        result = await repo.reservar_faltante_pedido_venta(
+            organizacion_id=organizacion_id,
+            pedido_venta_id=pedido_venta_id,
+            usuario_id=usuario_id,
+        )
+        return {"ok": True, **result}
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "sales_order_not_found" in message:
+            raise HTTPException(status_code=404, detail="pedido_no_encontrado") from exc
+        if "sales_order_not_open_for_fulfillment" in message:
+            raise HTTPException(status_code=409, detail="pedido_no_disponible_para_reservar") from exc
+        if "inventory_warehouse_required" in message:
+            raise HTTPException(status_code=409, detail="no_hay_almacen_activo_para_reservas") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_reservar_faltante") from exc
 
 
 @router.post("/pedidos-venta/{pedido_venta_id}/entregas")
@@ -32959,6 +33013,157 @@ async def registrar_entrega_pedido_venta(
 
 
 MAX_ORDER_PURCHASE_ORDER_BYTES = 10 * 1024 * 1024
+ORDER_CONFIRMATION_EVIDENCE_TYPES = {
+    "orden_compra",
+    "cotizacion_firmada_aceptada",
+    "correo_electronico",
+    "whatsapp",
+    "contrato",
+    "confirmacion_verbal",
+    "otro",
+}
+
+
+@router.post(
+    "/cotizaciones/{cotizacion_id}/pedido/evidencias",
+    response_model=PedidoVentaDocumentoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def crear_evidencia_confirmacion_pedido(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+    cotizacion_id: UUID,
+    tipo_evidencia: str = Form(...),
+    referencia: str | None = Form(default=None),
+    observaciones: str | None = Form(default=None),
+    file: UploadFile | None = File(default=None),
+) -> PedidoVentaDocumentoResponse:
+    evidence_type = _clean_text(tipo_evidencia).lower()
+    evidence_reference = _clean_text(referencia)[:500] or None
+    evidence_notes = _clean_text(observaciones)[:2000] or None
+    if evidence_type not in ORDER_CONFIRMATION_EVIDENCE_TYPES:
+        raise HTTPException(status_code=400, detail="tipo_evidencia_invalido")
+    if not file and not evidence_reference and not evidence_notes:
+        raise HTTPException(status_code=400, detail="evidencia_requiere_referencia_descripcion_o_archivo")
+
+    try:
+        quote = await repo.get_quote_entry(organizacion_id=organizacion_id, quote_id=cotizacion_id)
+        opportunity_id = _safe_uuid(quote.get("oportunidad_id"))
+        if opportunity_id is None or _clean_text(quote.get("estatus") or quote.get("estado")).lower() != "aceptada":
+            raise HTTPException(status_code=409, detail="cotizacion_no_aceptada")
+        await _require_sales_write_scope(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            oportunidad_id=opportunity_id,
+        )
+        await repo.crear_pedido_venta(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+            usuario_id=usuario_id,
+        )
+        order = await repo.obtener_pedido_venta_por_cotizacion(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+        )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        if "quote_not_found" in str(exc):
+            raise HTTPException(status_code=404, detail="cotizacion_no_encontrada") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_preparar_pedido") from exc
+
+    if order is None:
+        raise HTTPException(status_code=404, detail="pedido_no_encontrado")
+    if order.get("estatus") not in {"borrador", "pendiente_confirmacion"}:
+        raise HTTPException(status_code=409, detail="pedido_ya_confirmado")
+
+    original_name: str | None = None
+    content_type: str | None = None
+    content: bytes | None = None
+    if file:
+        original_name = Path(file.filename or "").name
+        content = await file.read(MAX_ORDER_PURCHASE_ORDER_BYTES + 1)
+        if not original_name or not content:
+            raise HTTPException(status_code=400, detail="archivo_evidencia_vacio_o_sin_nombre")
+        if len(content) > MAX_ORDER_PURCHASE_ORDER_BYTES:
+            raise HTTPException(status_code=413, detail="evidencia_supera_10_mb")
+        if content[:1024].lstrip().startswith(b"%PDF-"):
+            content_type = "application/pdf"
+            extension = "pdf"
+        elif content.startswith(b"\x89PNG\r\n\x1a\n"):
+            content_type = "image/png"
+            extension = "png"
+        elif content.startswith(b"\xff\xd8\xff"):
+            content_type = "image/jpeg"
+            extension = "jpg"
+        else:
+            raise HTTPException(status_code=400, detail="formato_evidencia_no_admitido")
+
+    order_id = UUID(str(order["id"]))
+    storage_path: str | None = None
+    archivo_id: UUID | None = None
+    try:
+        if content is not None and content_type:
+            object_key = f"{order_id}/evidencia_cliente/{uuid4().hex}.{extension}"
+            storage_path = await repo.upload_storage_object(
+                bucket="quotes",
+                object_key=object_key,
+                content=content,
+                content_type=content_type,
+            )
+            archivo_row = await repo.create_file(
+                organizacion_id=organizacion_id,
+                payload={
+                    "relacion_tipo": "pedido_venta",
+                    "relacion_id": str(order_id),
+                    "nombre_original": original_name[:255],
+                    "content_type": content_type,
+                    "tamano_bytes": len(content),
+                    "storage_path": storage_path,
+                    "metadata": {"bucket": "quotes"},
+                    "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+                },
+            )
+            archivo_id = _safe_uuid(archivo_row.get("id"))
+            if archivo_id is None:
+                raise CRMRepositoryError("uploaded_file_record_invalid")
+
+        document_row = await repo.crear_documento_pedido_venta(
+            organizacion_id=organizacion_id,
+            pedido_venta_id=order_id,
+            archivo_id=archivo_id,
+            tipo_documento=evidence_type,
+            usuario_id=usuario_id,
+            referencia=evidence_reference,
+            observaciones=evidence_notes,
+        )
+    except (CRMRepositoryError, StorageError) as exc:
+        if archivo_id is not None:
+            try:
+                await repo.delete_file(organizacion_id=organizacion_id, archivo_id=archivo_id)
+            except CRMRepositoryError:
+                logger.warning("sales_order_evidence_file_record_cleanup_failed", extra={"organizacion_id": str(organizacion_id), "archivo_id": str(archivo_id)})
+        if storage_path:
+            try:
+                await repo.delete_storage_object(bucket="quotes", object_path=storage_path)
+            except CRMRepositoryError:
+                logger.warning("sales_order_evidence_storage_cleanup_failed", extra={"organizacion_id": str(organizacion_id), "pedido_venta_id": str(order_id)})
+        raise HTTPException(status_code=502, detail="no_se_pudo_guardar_evidencia_pedido") from exc
+
+    return PedidoVentaDocumentoResponse(
+        id=document_row["id"],
+        tipo_documento=evidence_type,
+        nombre_original=original_name,
+        content_type=content_type,
+        tamano_bytes=len(content) if content is not None else None,
+        subido_en=_parse_timestamp(document_row.get("creado_en")),
+        referencia=evidence_reference,
+        observaciones=evidence_notes,
+    )
 
 
 @router.post(

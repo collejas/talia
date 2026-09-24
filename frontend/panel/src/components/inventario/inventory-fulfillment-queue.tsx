@@ -12,6 +12,8 @@ type FulfillmentItem = {
   cantidad: number | string;
   cantidad_entregada: number | string;
   cantidad_pendiente: number | string;
+  cantidad_reservada: number | string;
+  cantidad_pendiente_inventario: number | string;
 };
 
 type FulfillmentOrder = {
@@ -31,7 +33,7 @@ function formatQuantity(value: number | string) {
   return new Intl.NumberFormat("es-MX", { maximumFractionDigits: 3 }).format(Number(value) || 0);
 }
 
-export function InventoryFulfillmentQueue() {
+export function InventoryFulfillmentQueue({ canManageFulfillment }: { canManageFulfillment: boolean }) {
   const [items, setItems] = useState<FulfillmentOrder[]>([]);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [dates, setDates] = useState<Record<string, string>>({});
@@ -39,6 +41,7 @@ export function InventoryFulfillmentQueue() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [reservingId, setReservingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -54,7 +57,12 @@ export function InventoryFulfillmentQueue() {
       setQuantities((current) => {
         const next = { ...current };
         for (const order of rows) for (const item of order.items) {
-          if (next[item.id] === undefined) next[item.id] = String(item.cantidad_pendiente);
+          const available = Number(item.cantidad_reservada) || 0;
+          const pending = Number(item.cantidad_pendiente) || 0;
+          const previous = Number((next[item.id] ?? "").replace(",", "."));
+          next[item.id] = String(Number.isFinite(previous) && previous > 0
+            ? Math.min(previous, available, pending)
+            : Math.min(available, pending));
         }
         return next;
       });
@@ -100,6 +108,23 @@ export function InventoryFulfillmentQueue() {
     }
   };
 
+  const reserveRestockedItems = async (order: FulfillmentOrder) => {
+    setReservingId(order.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/inventario/surtidos/${order.id}/reservar-faltante`, { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.error || "No se pudo reservar el inventario disponible.");
+      setNotice(`Se actualizaron las reservas para ${order.folio || order.cliente || "el pedido"}.`);
+      await loadQueue();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "No se pudo reservar el inventario disponible.");
+    } finally {
+      setReservingId(null);
+    }
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -133,7 +158,7 @@ export function InventoryFulfillmentQueue() {
                 <div key={item.id} className="grid gap-2 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                   <div>
                     <p className="text-sm font-medium">{item.descripcion}</p>
-                    <p className="text-xs text-muted-foreground">Ordenado {formatQuantity(item.cantidad)} · Entregado {formatQuantity(item.cantidad_entregada)} · Pendiente {formatQuantity(item.cantidad_pendiente)}</p>
+                    <p className="text-xs text-muted-foreground">Requerido {formatQuantity(item.cantidad)} · Reservado para surtir {formatQuantity(item.cantidad_reservada)} · Entregado {formatQuantity(item.cantidad_entregada)} · Pendiente de inventario {formatQuantity(item.cantidad_pendiente_inventario)}</p>
                   </div>
                   <Label className="text-xs text-muted-foreground" htmlFor={`delivery-${item.id}`}>Entregar ahora</Label>
                   <Input
@@ -141,10 +166,11 @@ export function InventoryFulfillmentQueue() {
                     className="sm:w-32"
                     type="number"
                     min="0"
-                    max={String(item.cantidad_pendiente)}
+                    max={String(Math.min(Number(item.cantidad_reservada) || 0, Number(item.cantidad_pendiente) || 0))}
                     step="0.001"
                     value={quantities[item.id] ?? "0"}
                     onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
+                    disabled={!canManageFulfillment || Number(item.cantidad_reservada) <= 0}
                   />
                 </div>
               ))}
@@ -155,9 +181,18 @@ export function InventoryFulfillmentQueue() {
               <div className="space-y-1"><Label htmlFor={`notes-${order.id}`}>Observaciones</Label><Input id={`notes-${order.id}`} maxLength={2000} value={notes[order.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [order.id]: event.target.value }))} /></div>
             </div>
             <div className="flex justify-end border-t pt-3">
-              <Button type="button" onClick={() => void registerDelivery(order)} disabled={pendingId === order.id}>
-                {pendingId === order.id ? "Registrando…" : "Registrar entrega"}
-              </Button>
+              <div className="flex flex-wrap justify-end gap-2">
+                {canManageFulfillment && order.items.some((item) => Number(item.cantidad_pendiente_inventario) > 0) ? (
+                  <Button type="button" variant="outline" onClick={() => void reserveRestockedItems(order)} disabled={reservingId === order.id || pendingId === order.id}>
+                    {reservingId === order.id ? "Reservando…" : "Reservar inventario disponible"}
+                  </Button>
+                ) : null}
+                {canManageFulfillment ? (
+                  <Button type="button" onClick={() => void registerDelivery(order)} disabled={pendingId === order.id || reservingId === order.id || !order.items.some((item) => Number(item.cantidad_reservada) > 0)}>
+                    {pendingId === order.id ? "Registrando…" : order.items.some((item) => Number(item.cantidad_reservada) > 0) ? "Registrar entrega" : "En espera de inventario"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </article>
         ))}

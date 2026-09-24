@@ -26,8 +26,41 @@
 - La migración `20260924215640_sales_order_commercial_conditions.sql` agrega
   columnas explícitas a cotizaciones y pedidos, rellena pedidos existentes
   desde su cotización y copia las condiciones al crear nuevos pedidos.
-- Pendiente: evidencia extendida, reserva parcial, revisión completa de seis
-  bloques y validación autenticada por rol/tenant antes del despliegue.
+- La extensión de evidencia quedó implementada y su migración se aplicó a
+  Supabase el 2026-09-24. La reserva parcial se implementa en la siguiente
+  sección; quedan pendientes la revisión completa de seis bloques, despliegue y
+  validación autenticada por rol/tenant.
+
+## 2026-09-24 — Evidencia de aceptación por distintos medios
+
+- Comercial puede registrar referencia verificable u observaciones para OC,
+  cotización firmada, correo, WhatsApp, contrato, confirmación verbal u otro.
+- La evidencia puede incluir PDF, JPG o PNG de hasta 10 MB. Se valida el
+  contenido por firma de archivo antes de guardarlo en almacenamiento privado.
+- Operaciones recibe referencias y observaciones incluso cuando no hay archivo;
+  los enlaces firmados solo se ofrecen cuando existe un archivo adjunto.
+- Una OC puede reservar inventario anticipadamente. Otros medios solo dejan el
+  pedido en revisión y no reservan desde Comercial.
+- La migración `20260924222435_pedido_venta_evidencia_multiple_medios.sql` se
+  aplicó a Supabase; permite archivo opcional, referencia/observaciones y más
+  de una evidencia del mismo tipo. RLS y permisos de `service_role` existentes
+  permanecen sin cambios.
+- Pendiente: despliegue y validación funcional autenticada.
+
+## 2026-09-24 — Reservas parciales y faltantes en Surtidos
+
+- La reserva de cada partida ahora se limita a `existencia - reservado`; no
+  falla todo el pedido por una diferencia de stock.
+- Operaciones puede aprobar con faltante solo si la cotización permite entrega
+  parcial. Si no lo permite, la aprobación se bloquea sin formalizar la venta.
+- Al aprobar se reserva la disponibilidad; Surtidos muestra cantidad requerida,
+  reservada para surtir, entregada y pendiente de inventario.
+- Cada entrega sigue limitada a la reserva activa. Con inventario repuesto,
+  usuarios con `inventory.fulfillment.manage` pueden reservar el faltante y se
+  registra el evento de auditoría correspondiente.
+- La migración `20260924223034_ventas_reservas_inventario_parciales.sql` se
+  aplicó a Supabase. Pendiente: despliegue y verificación funcional autenticada;
+  luego sigue la revisión completa de seis bloques y sus alertas/bloqueantes.
 
 ## 2026-09-24 — Secuencia para completar revision, condiciones y reserva parcial
 

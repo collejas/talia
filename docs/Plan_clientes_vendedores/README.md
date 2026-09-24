@@ -495,15 +495,16 @@ La primera version del traspaso por areas se implemento y desplego el
    permite entrega parcial; de otro modo bloquea liberar.
 4. **Almacen — Surtidos:** recibe solo pedidos aprobados y liberados; registra
    entregas parciales o totales.
-5. **Siguiente — condiciones y evidencia:** agregar campos estructurados de
-   pago/credito/anticipo, entrega parcial, fecha/domicilio y envio a cotizacion;
-   copiarlos al pedido al confirmarlo. Admitir evidencia adjunta y referencias
-   para los medios de aceptacion distintos de OC.
-6. **Siguiente — reserva parcial:** reservar solo disponibilidad real; conservar
-   cantidades requeridas, reservadas, surtidas y pendientes. OC validada permite
-   reservar anticipadamente; sin OC se reserva al aprobar. Si hay faltante, solo
-   permitir liberar cuando el acuerdo acepte entrega parcial. Surtidos entrega
-   unicamente cantidades reservadas y debe exponer faltantes/reabastecimiento.
+5. **Implementado — condiciones y evidencia:** las cotizaciones guardan
+   condiciones comerciales estructuradas y el pedido conserva su snapshot. La
+   evidencia admite OC, cotizacion firmada, correo, WhatsApp, contrato,
+   confirmacion verbal u otro medio; puede guardar referencia/observaciones y
+   adjuntar PDF, JPG o PNG. Solo la OC validada activa reserva anticipada.
+6. **Implementado — reserva parcial:** se reserva solo la disponibilidad real.
+   OC validada permite reservar anticipadamente; sin OC se reserva al aprobar.
+   Si queda faltante, solo se libera cuando el acuerdo acepta entrega parcial.
+   Surtidos muestra requerido, reservado, entregado y faltante, limita cada
+   entrega a lo reservado y permite reservar el remanente tras reabastecer.
 7. **Siguiente — revision completa:** mostrar los seis bloques, reglas
    bloqueantes/alertas, causa estructurada al devolver y comentario auditable.
    Operaciones no edita partidas ni condiciones acordadas.
@@ -623,11 +624,8 @@ controlada y auditable. Una reserva previa por OC se conserva y nunca se duplica
 
 La implementacion actual solo contiene un checklist preliminar de tres
 confirmaciones; no representa todavia esta revision de seis bloques. El
-snapshot de pedido tiene importes y partidas basicos, pero la bandeja debe
-exponer el detalle completo; la carga de evidencia actual se limita a OC; las
-condiciones de pago/entrega requieren columnas explicitas en cotizacion/pedido.
-La reserva vigente es de todo o nada y debe evolucionar a reserva parcial con
-faltante visible en Surtidos. Datos fiscales, deteccion de duplicados y
+snapshot de pedido incluye condiciones, importes y partidas, pero la bandeja
+debe exponer la revision completa. Datos fiscales, deteccion de duplicados y
 requisitos documentales deben validarse contra las fuentes existentes y
 configuracion del tenant antes de definir bloqueos automaticos. Estas brechas
 no se consideran resueltas por el checklist preliminar.

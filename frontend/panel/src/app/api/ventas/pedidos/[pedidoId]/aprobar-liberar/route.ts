@@ -22,8 +22,11 @@ export async function POST(
     withUserToken: true,
   });
   if (!response.ok) {
+    const message = response.error === "inventario_insuficiente_no_permite_entrega_parcial"
+      ? "El inventario disponible no cubre el pedido y la cotización no permite entregas parciales."
+      : response.error || "No se pudo aprobar y liberar el pedido.";
     return NextResponse.json(
-      { error: response.error || "No se pudo aprobar y liberar el pedido." },
+      { error: message },
       { status: response.status ?? 500 },
     );
   }

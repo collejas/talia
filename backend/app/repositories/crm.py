@@ -4370,7 +4370,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "cotizacion_id": f"in.({','.join(quote_ids)})",
-            "select": "id,cotizacion_id,estatus,estado_formalizacion,motivo_devolucion_comercial,estatus_logistico,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),items:pedido_venta_items(id,catalog_item_id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path))",
+            "select": "id,cotizacion_id,estatus,estado_formalizacion,motivo_devolucion_comercial,estatus_logistico,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),items:pedido_venta_items(id,catalog_item_id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path))",
         }
         response = await self._request_service_role(
             "GET",
@@ -4561,7 +4561,7 @@ class CRMRepository:
                 "order": "enviado_formalizacion_en.asc,id.asc",
                 "limit": str(limit),
                 "offset": str(offset),
-                "select": "id,cotizacion_id,estado_formalizacion,enviado_formalizacion_en,forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,motivo_devolucion_comercial,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,precio_unitario_final,subtotal,moneda,catalog_item:catalog_items(maneja_inventario)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type))",
+                "select": "id,cotizacion_id,estado_formalizacion,enviado_formalizacion_en,forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,motivo_devolucion_comercial,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,precio_unitario_final,subtotal,moneda,catalog_item:catalog_items(maneja_inventario)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type))",
             },
             organizacion_id=organizacion_id,
         )
@@ -4587,7 +4587,7 @@ class CRMRepository:
                 "order": "confirmado_en.asc,id.asc",
                 "limit": str(limit),
                 "offset": str(offset),
-                "select": "id,cotizacion_id,estatus_logistico,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad))",
+                "select": "id,cotizacion_id,estatus_logistico,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad),reservas:inventario_reservas!inventario_reservas_pedido_item_org_fkey(cantidad,cantidad_surtida,estado))",
             },
             organizacion_id=organizacion_id,
         )
@@ -4657,16 +4657,20 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         pedido_venta_id: UUID,
-        archivo_id: UUID,
+        archivo_id: UUID | None,
         tipo_documento: str,
         usuario_id: UUID | None = None,
+        referencia: str | None = None,
+        observaciones: str | None = None,
     ) -> dict[str, Any]:
         body = {
             "organizacion_id": str(organizacion_id),
             "pedido_venta_id": str(pedido_venta_id),
-            "archivo_id": str(archivo_id),
+            "archivo_id": str(archivo_id) if archivo_id else None,
             "tipo_documento": tipo_documento,
             "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+            "referencia": referencia,
+            "observaciones": observaciones,
         }
         resp = await self._request(
             "POST",
@@ -4760,6 +4764,28 @@ class CRMRepository:
             return data[0]
         raise CRMRepositoryError("sales_order_approval_response_invalid")
 
+    async def reservar_faltante_pedido_venta(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedido_venta_id: UUID,
+        usuario_id: UUID,
+    ) -> dict[str, Any]:
+        response = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_reservar_faltante_pedido_venta",
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_pedido_venta_id": str(pedido_venta_id),
+                "p_usuario_id": str(usuario_id),
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json() if response.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError("sales_order_restock_reservation_response_invalid")
+
     async def registrar_pago_confirmado_con_evidencia(
         self,
         *,
@@ -4826,7 +4852,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "cotizacion_id": f"eq.{cotizacion_id}",
             "limit": "1",
-            "select": "id,organizacion_id,cotizacion_id,estatus,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,storage_path,subido_en))",
+            "select": "id,organizacion_id,cotizacion_id,estatus,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,confirmado_en,confirmado_por_usuario_id,documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,storage_path,subido_en))",
         }
         resp = await self._request_service_role(
             "GET",
