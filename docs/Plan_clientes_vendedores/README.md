@@ -557,7 +557,7 @@ autenticada pendiente**. El panel quedó en el release `20260923_161750`;
 `{"status":"ok"}` y la ruta de formalización respondió 401 sin sesión,
 confirmando que exige autenticación.
 
-### Pedido confirmado e inventario — desplegado; validación autenticada pendiente
+### Pedido confirmado e inventario — entrega desplegada; validación autenticada pendiente
 
 El refactor añade una entidad propia para el compromiso del cliente, separada
 de la oportunidad y de la venta:
@@ -579,6 +579,13 @@ de la oportunidad y de la venta:
   un pedido confirmado requiere un flujo posterior de cancelación de venta y
   liberación logística.
 
+La entrega parcial o total queda registrada en `pedido_venta_entregas` y sus
+renglones en `pedido_venta_entrega_items`. Por cada cantidad surtida se crea
+una salida de almacén ligada al renglón de entrega, se reduce la existencia
+física y se consume la misma parte de la reserva. El pedido mantiene un estado
+logístico (`pendiente`, `parcial`, `entregado` o `no_aplica`) independiente de
+la cobranza; servicios y unidades inmobiliarias no se surten por almacén.
+
 La migración `20260924015415_pedidos_venta_flujo_confirmacion.sql` creó
 `pedidos_venta` y `pedido_venta_items`, las relaciones con ventas y reservas,
 y las funciones transaccionales. La migración
@@ -591,9 +598,17 @@ El backend y el panel se desplegaron el 2026-09-24 en el release
 `20260924_021215`. La publicación atómica completó TypeScript, lint y build;
 API y panel están activos, `/api/health` y `/ventas` responden HTTP 200, y el
 endpoint de formalización devuelve 401 sin sesión. Falta el recorrido
-autenticado de punta a punta. También siguen pendientes la salida física por
-entrega/surtido, cancelación de pedidos confirmados y definir el hito
-contractual inmobiliario que marca una unidad como vendida.
+autenticado de punta a punta. La cancelación de pedidos confirmados y definir
+el hito contractual inmobiliario que marca una unidad como vendida siguen
+pendientes.
+
+La migración `20260924031112_sales_order_fulfillment.sql` ya se aplicó en
+Supabase. El API y el panel se desplegaron el 2026-09-24; release del panel:
+`20260924_031802`. Pasaron `py_compile`, ESLint, TypeScript y `git diff
+--check`; el build de producción finalizó. `/api/health` y `/ventas` responden
+HTTP 200 y el endpoint de entrega requiere sesión (401 sin sesión). Falta
+validar el recorrido autenticado con un pedido real y revisar la existencia,
+reserva y estado logístico después de una entrega parcial y una total.
 
 ## 14) Reportes de ventas
 

@@ -4220,6 +4220,18 @@ class FormalizeSalePayload(BaseModel):
     observaciones_confirmacion: str | None = Field(default=None, max_length=2000)
 
 
+class PedidoVentaEntregaItemPayload(BaseModel):
+    item_id: UUID
+    cantidad: Decimal = Field(..., gt=0, max_digits=14, decimal_places=3)
+
+
+class PedidoVentaEntregaPayload(BaseModel):
+    fecha_entrega: date = Field(default_factory=date.today)
+    referencia: str | None = Field(default=None, max_length=160)
+    observaciones: str | None = Field(default=None, max_length=2000)
+    items: list[PedidoVentaEntregaItemPayload] = Field(..., min_length=1, max_length=100)
+
+
 class PedidoVentaDocumentoResponse(BaseModel):
     id: UUID
     tipo_documento: str
@@ -9849,15 +9861,40 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
                         subido_en=_parse_timestamp(file_row.get("subido_en")),
                     )
                 )
+        order_items: list[LeadQuoteSalesOrderItem] = []
+        raw_order_items = order_row.get("items")
+        if isinstance(raw_order_items, list):
+            for item_row in raw_order_items:
+                if not isinstance(item_row, dict):
+                    continue
+                catalog_row = _single_related(item_row.get("catalog_item"))
+                raw_deliveries = item_row.get("entregas")
+                delivered = sum(
+                    (Decimal(str(_as_number(delivery.get("cantidad")) or 0)) for delivery in raw_deliveries if isinstance(delivery, dict)),
+                    Decimal("0"),
+                ) if isinstance(raw_deliveries, list) else Decimal("0")
+                try:
+                    order_items.append(LeadQuoteSalesOrderItem(
+                        id=item_row.get("id"),
+                        catalog_item_id=_safe_uuid(item_row.get("catalog_item_id")),
+                        descripcion=item_row.get("descripcion") or "",
+                        cantidad=Decimal(str(_as_number(item_row.get("cantidad")) or 0)),
+                        maneja_inventario=bool(catalog_row and catalog_row.get("maneja_inventario")),
+                        cantidad_entregada=delivered,
+                    ))
+                except ValidationError:
+                    continue
         order = LeadQuoteSalesOrder(
             id=order_row.get("id"),
             estatus=order_row.get("estatus") or "pendiente_confirmacion",
+            estatus_logistico=order_row.get("estatus_logistico") or "no_aplica",
             referencia_pedido_cliente=order_row.get("referencia_pedido_cliente"),
             fecha_orden_cliente=_parse_date(order_row.get("fecha_orden_cliente")),
             forma_confirmacion=order_row.get("forma_confirmacion"),
             fecha_confirmacion_cliente=_parse_date(order_row.get("fecha_confirmacion_cliente")),
             observaciones_confirmacion=order_row.get("observaciones_confirmacion"),
             confirmado_en=_parse_timestamp(order_row.get("confirmado_en")),
+            items=order_items,
             venta=sale_summary,
             documentos=order_documents,
         )
@@ -17202,6 +17239,15 @@ class LeadQuoteSalesOrderSale(BaseModel):
     saldo: Decimal
 
 
+class LeadQuoteSalesOrderItem(BaseModel):
+    id: UUID
+    catalog_item_id: UUID | None = None
+    descripcion: str
+    cantidad: Decimal
+    maneja_inventario: bool = False
+    cantidad_entregada: Decimal = Decimal("0")
+
+
 class LeadQuoteSalesOrder(BaseModel):
     id: UUID
     estatus: str
@@ -17211,6 +17257,8 @@ class LeadQuoteSalesOrder(BaseModel):
     fecha_confirmacion_cliente: date | None = None
     observaciones_confirmacion: str | None = None
     confirmado_en: datetime | None = None
+    estatus_logistico: str = "no_aplica"
+    items: list[LeadQuoteSalesOrderItem] = Field(default_factory=list)
     venta: LeadQuoteSalesOrderSale | None = None
     documentos: list[LeadQuoteSalesOrderDocument] = Field(default_factory=list)
 
@@ -32560,6 +32608,54 @@ async def formalizar_venta_desde_cotizacion(
         return ConfirmedPaymentResponse.model_validate(result)
     except ValidationError as exc:
         raise HTTPException(status_code=502, detail="respuesta_venta_invalida") from exc
+
+
+@router.post("/cotizaciones/{cotizacion_id}/pedido/entregas")
+async def registrar_entrega_pedido_venta(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.manage")),
+    cotizacion_id: UUID,
+    payload: PedidoVentaEntregaPayload,
+) -> dict[str, Any]:
+    try:
+        quote = await repo.get_quote_entry(organizacion_id=organizacion_id, quote_id=cotizacion_id)
+        order = _single_related(quote.get("pedido"))
+        order_id = _safe_uuid(order.get("id")) if isinstance(order, dict) else None
+        oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
+        if order_id is None or oportunidad_id is None:
+            raise HTTPException(status_code=409, detail="pedido_confirmado_requerido")
+        if order.get("estatus") != "confirmado":
+            raise HTTPException(status_code=409, detail="pedido_confirmado_requerido")
+        await _require_sales_write_scope(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            oportunidad_id=oportunidad_id,
+        )
+        result = await repo.registrar_entrega_pedido_venta(
+            organizacion_id=organizacion_id,
+            pedido_venta_id=order_id,
+            items=[{"item_id": str(item.item_id), "cantidad": str(item.cantidad)} for item in payload.items],
+            fecha_entrega=payload.fecha_entrega,
+            referencia=payload.referencia,
+            observaciones=payload.observaciones,
+            usuario_id=usuario_id,
+        )
+        return {"ok": True, **result}
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "delivery_exceeds_reserved_or_ordered_quantity" in message:
+            raise HTTPException(status_code=409, detail="cantidad_supera_pendiente_o_reservada") from exc
+        if any(code in message for code in ("confirmed_order_required", "order_item_not_found", "inventory_item_required")):
+            raise HTTPException(status_code=409, detail="pedido_o_producto_no_disponible_para_entrega") from exc
+        if "delivery_items_required" in message or "invalid_delivery_item" in message or "duplicate_delivery_item" in message:
+            raise HTTPException(status_code=400, detail="renglones_entrega_invalidos") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_registrar_entrega") from exc
 
 
 MAX_ORDER_PURCHASE_ORDER_BYTES = 10 * 1024 * 1024

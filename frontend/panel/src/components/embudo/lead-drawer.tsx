@@ -249,6 +249,7 @@ type LeadQuoteOrderDocument = {
 type LeadQuoteSalesOrder = {
   id: string;
   estatus: string;
+  estatus_logistico: string;
   referencia_pedido_cliente: string | null;
   fecha_orden_cliente: string | null;
   forma_confirmacion: string | null;
@@ -262,6 +263,13 @@ type LeadQuoteSalesOrder = {
     saldo: number | null;
   } | null;
   documentos: LeadQuoteOrderDocument[];
+  items: {
+    id: string;
+    descripcion: string;
+    cantidad: number;
+    cantidad_entregada: number;
+    maneja_inventario: boolean;
+  }[];
 };
 
 type LeadQuoteEntry = {
@@ -1078,6 +1086,12 @@ export function LeadDrawer({
   const [paymentQuote, setPaymentQuote] = useState<LeadQuoteEntry | null>(null);
   const [formalizedSalesByQuote, setFormalizedSalesByQuote] = useState<Record<string, FormalizedSale>>({});
   const [formalizeQuote, setFormalizeQuote] = useState<LeadQuoteEntry | null>(null);
+  const [fulfillmentQuote, setFulfillmentQuote] = useState<LeadQuoteEntry | null>(null);
+  const [fulfillmentQuantities, setFulfillmentQuantities] = useState<Record<string, string>>({});
+  const [fulfillmentDate, setFulfillmentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fulfillmentReference, setFulfillmentReference] = useState("");
+  const [fulfillmentNotes, setFulfillmentNotes] = useState("");
+  const [fulfillmentError, setFulfillmentError] = useState<string | null>(null);
   const [formalizeError, setFormalizeError] = useState<string | null>(null);
   const [orderReference, setOrderReference] = useState("");
   const [orderDate, setOrderDate] = useState("");
@@ -3334,6 +3348,43 @@ export function LeadDrawer({
     });
   }, [fetchQuotes, formalizeQuote, orderConfirmationDate, orderConfirmationMethod, orderConfirmationNotes, orderDate, orderDocumentFile, orderDocumentUploaded, orderReference]);
 
+  const handleRegisterDelivery = useCallback(() => {
+    if (!fulfillmentQuote) return;
+    const items = (fulfillmentQuote.pedido?.items ?? [])
+      .filter((item) => item.maneja_inventario)
+      .map((item) => ({ item_id: item.id, cantidad: Number((fulfillmentQuantities[item.id] ?? "").replace(",", ".")) }))
+      .filter((item) => Number.isFinite(item.cantidad) && item.cantidad > 0);
+    if (!items.length) {
+      setFulfillmentError("Captura al menos una cantidad para surtir.");
+      return;
+    }
+    setFulfillmentError(null);
+    startQuoteAction(async () => {
+      try {
+        const response = await fetch(`/api/embudo/quotes/${fulfillmentQuote.id}/pedido/entregas`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fecha_entrega: fulfillmentDate,
+            referencia: fulfillmentReference.trim() || null,
+            observaciones: fulfillmentNotes.trim() || null,
+            items,
+          }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setFulfillmentError(typeof body?.error === "string" ? body.error : "No se pudo registrar la entrega.");
+          return;
+        }
+        setQuoteSuccess("Entrega registrada; se actualizó la existencia y la reserva del inventario.");
+        setFulfillmentQuote(null);
+        await fetchQuotes();
+      } catch (error) {
+        setFulfillmentError(error instanceof Error ? error.message : "No se pudo registrar la entrega.");
+      }
+    });
+  }, [fetchQuotes, fulfillmentDate, fulfillmentNotes, fulfillmentQuantities, fulfillmentQuote, fulfillmentReference]);
+
   const handleConfirmedPayment = useCallback(() => {
     if (!paymentQuote) return;
     const amount = Number(paymentAmount.replace(",", "."));
@@ -4169,6 +4220,31 @@ export function LeadDrawer({
                                     {formalizedSalesByQuote[quote.id] ? "Registrar pago" : "Registrar pago inmediato"}
                                   </Button>
                                 </>
+                              ) : null}
+                              {quote.pedido?.estatus === "confirmado" && canManageSales && quote.pedido.items.some((item) => item.maneja_inventario) ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setFulfillmentError(null);
+                                    setFulfillmentDate(new Date().toISOString().slice(0, 10));
+                                    setFulfillmentReference("");
+                                    setFulfillmentNotes("");
+                                    setFulfillmentQuantities(Object.fromEntries(quote.pedido!.items
+                                      .filter((item) => item.maneja_inventario)
+                                      .map((item) => [item.id, Math.max(0, item.cantidad - item.cantidad_entregada).toString()])));
+                                    setFulfillmentQuote(quote);
+                                  }}
+                                  disabled={quotePending || quote.pedido.estatus_logistico === "entregado"}
+                                >
+                                  Registrar entrega
+                                </Button>
+                              ) : null}
+                              {quote.pedido?.estatus === "confirmado" && quote.pedido.estatus_logistico !== "no_aplica" ? (
+                                <Badge variant="secondary">
+                                  Inventario: {quote.pedido.estatus_logistico === "entregado" ? "entregado" : quote.pedido.estatus_logistico === "parcial" ? "parcial" : "pendiente"}
+                                </Badge>
                               ) : null}
                               <Button
                                 type="button"
@@ -5813,6 +5889,67 @@ export function LeadDrawer({
         </DialogContent>
       </Dialog>
       <Dialog
+        open={Boolean(fulfillmentQuote)}
+        onOpenChange={(openState) => {
+          if (!openState && !quotePending) {
+            setFulfillmentQuote(null);
+            setFulfillmentError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto">
+          <DialogTitle>Registrar entrega de pedido</DialogTitle>
+          <DialogDescription>
+            Captura lo que se entrega ahora. La existencia física y la reserva disminuirán por estas cantidades.
+          </DialogDescription>
+          <div className="grid gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="delivery-date">Fecha de entrega</Label>
+                <Input id="delivery-date" type="date" value={fulfillmentDate} onChange={(event) => setFulfillmentDate(event.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="delivery-reference">Referencia (opcional)</Label>
+                <Input id="delivery-reference" value={fulfillmentReference} maxLength={160} onChange={(event) => setFulfillmentReference(event.target.value)} placeholder="Remisión o folio" />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              {(fulfillmentQuote?.pedido?.items ?? []).filter((item) => item.maneja_inventario).map((item) => {
+                const pending = Math.max(0, item.cantidad - item.cantidad_entregada);
+                return (
+                  <div key={item.id} className="grid grid-cols-[1fr_110px] items-center gap-3 rounded-md border px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{item.descripcion}</p>
+                      <p className="text-xs text-muted-foreground">Pendiente: {pending} de {item.cantidad}</p>
+                    </div>
+                    <Input
+                      aria-label={`Cantidad a entregar de ${item.descripcion}`}
+                      type="number"
+                      min="0"
+                      max={pending}
+                      step="0.001"
+                      value={fulfillmentQuantities[item.id] ?? "0"}
+                      onChange={(event) => setFulfillmentQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="delivery-notes">Observaciones (opcional)</Label>
+              <Input id="delivery-notes" value={fulfillmentNotes} maxLength={2000} onChange={(event) => setFulfillmentNotes(event.target.value)} />
+            </div>
+            {fulfillmentError ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{fulfillmentError}</p> : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setFulfillmentQuote(null)} disabled={quotePending}>Cancelar</Button>
+              <Button type="button" onClick={handleRegisterDelivery} disabled={quotePending || !fulfillmentQuote}>
+                {quotePending ? "Registrando entrega..." : "Registrar entrega"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={quoteCatalogPickerOpen}
         onOpenChange={(openState) => {
           if (openState) {
@@ -6809,6 +6946,7 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
       ? {
           id: String(rawOrder.id ?? ""),
           estatus: typeof rawOrder.estatus === "string" ? rawOrder.estatus : "pendiente_confirmacion",
+          estatus_logistico: typeof rawOrder.estatus_logistico === "string" ? rawOrder.estatus_logistico : "no_aplica",
           referencia_pedido_cliente:
             typeof rawOrder.referencia_pedido_cliente === "string" ? rawOrder.referencia_pedido_cliente : null,
           fecha_orden_cliente: typeof rawOrder.fecha_orden_cliente === "string" ? rawOrder.fecha_orden_cliente : null,
@@ -6842,6 +6980,20 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
               content_type: typeof rawFileValue.content_type === "string" ? rawFileValue.content_type : null,
               tamano_bytes: toNumber(rawFileValue.tamano_bytes),
               subido_en: typeof rawFileValue.subido_en === "string" ? rawFileValue.subido_en : null,
+            }];
+          }),
+          items: (Array.isArray(rawOrder.items) ? rawOrder.items : []).flatMap((inputItem) => {
+            if (!isRecord(inputItem)) return [];
+            const rawCatalogValue = Array.isArray(inputItem.catalog_item) ? inputItem.catalog_item[0] : inputItem.catalog_item;
+            const rawCatalog = isRecord(rawCatalogValue) ? rawCatalogValue : null;
+            const deliveries = Array.isArray(inputItem.entregas) ? inputItem.entregas : [];
+            const delivered = deliveries.reduce((total, row) => total + (isRecord(row) ? toNumber(row.cantidad) ?? 0 : 0), 0);
+            return [{
+              id: String(inputItem.id ?? ""),
+              descripcion: String(inputItem.descripcion ?? ""),
+              cantidad: toNumber(inputItem.cantidad) ?? 0,
+              cantidad_entregada: delivered,
+              maneja_inventario: rawCatalog?.maneja_inventario === true,
             }];
           }),
         }

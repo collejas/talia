@@ -1,5 +1,19 @@
 # Changelog — Clientes y vendedores
 
+## 2026-09-24
+
+### Entrega parcial y salida de inventario — desplegada, validación autenticada pendiente
+
+- Se agregó la migración `20260924031112_sales_order_fulfillment.sql` y se aplicó en Supabase mediante MCP.
+- Se modelaron encabezados y renglones de entrega con claves foráneas explícitas a pedido, renglón, reserva, producto y almacén.
+- La función transaccional consume solo la cantidad surtida: descuenta existencia física y reserva, crea el movimiento `salida_venta` y mantiene trazabilidad hasta el renglón entregado.
+- Se agregó estado logístico separado de venta y cobranza; el pedido puede quedar pendiente, parcial o entregado. Servicios sin control de inventario quedan como `no_aplica`.
+- La liberación de inventario ahora opera sobre el remanente no surtido para preservar balances si una reserva tuvo entregas parciales.
+- Se conectaron endpoint, repositorio, proxy del panel y modal para registrar entrega parcial o total por renglón.
+- API y panel desplegados. `py_compile`, ESLint, TypeScript, build de producción y `git diff --check` pasaron; ESLint dejó dos advertencias existentes fuera de los archivos modificados.
+- `/api/health` y `/ventas` responden HTTP 200; el nuevo endpoint rechaza solicitudes sin sesión con 401. Pendiente el recorrido autenticado y revisar que una entrega parcial y una total persistan correctamente el balance de existencias/reservas.
+- Continúan pendientes la cancelación logística de pedidos ya confirmados y definir el evento contractual inmobiliario que cambia una unidad a vendida.
+
 Registro del avance, decisiones y validaciones del plan de clientes y vendedores.
 
 ## Convención de estados
