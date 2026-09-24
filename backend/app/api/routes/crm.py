@@ -2923,6 +2923,13 @@ async def _build_quote_pdf_context_from_quote_entry(
         total=quote_model.total,
         moneda=_clean_text(quote_model.moneda) or "MXN",
         valido_hasta=quote_model.valido_hasta,
+        condicion_pago=quote_model.condicion_pago,
+        dias_credito=quote_model.dias_credito,
+        anticipo_porcentaje=quote_model.anticipo_porcentaje,
+        permite_entrega_parcial=quote_model.permite_entrega_parcial,
+        fecha_entrega_comprometida=quote_model.fecha_entrega_comprometida,
+        domicilio_entrega=quote_model.domicilio_entrega,
+        observaciones_comerciales=quote_model.observaciones_comerciales,
         descripcion=project_description,
         notes=quote_vendor_notes,
         items=quote_items,
@@ -3276,6 +3283,13 @@ async def _render_quote_pdf_after_sale(
         total=total_value,
         moneda=_clean_text(quote_row.get("moneda") or "MXN") or "MXN",
         valido_hasta=_parse_date(quote_row.get("valida_hasta")),
+        condicion_pago=quote_row.get("condicion_pago"),
+        dias_credito=quote_row.get("dias_credito"),
+        anticipo_porcentaje=_as_number(quote_row.get("anticipo_porcentaje")),
+        permite_entrega_parcial=bool(quote_row.get("permite_entrega_parcial")),
+        fecha_entrega_comprometida=_parse_date(quote_row.get("fecha_entrega_comprometida")),
+        domicilio_entrega=quote_row.get("domicilio_entrega"),
+        observaciones_comerciales=quote_row.get("observaciones_comerciales"),
         items=items_list if isinstance(items_list, list) else [],
         organization_name=vendor_context["organization_name"],
         organization_slogan=vendor_context["organization_slogan"],
@@ -9915,6 +9929,13 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
             fecha_confirmacion_cliente=_parse_date(order_row.get("fecha_confirmacion_cliente")),
             observaciones_confirmacion=order_row.get("observaciones_confirmacion"),
             confirmado_en=_parse_timestamp(order_row.get("confirmado_en")),
+            condicion_pago=order_row.get("condicion_pago"),
+            dias_credito=order_row.get("dias_credito"),
+            anticipo_porcentaje=_as_number(order_row.get("anticipo_porcentaje")),
+            permite_entrega_parcial=bool(order_row.get("permite_entrega_parcial")),
+            fecha_entrega_comprometida=_parse_date(order_row.get("fecha_entrega_comprometida")),
+            domicilio_entrega=order_row.get("domicilio_entrega"),
+            observaciones_comerciales=order_row.get("observaciones_comerciales"),
             items=order_items,
             venta=sale_summary,
             documentos=order_documents,
@@ -9932,6 +9953,13 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
         total=_as_number(row.get("total")) or _as_number(metadata.get("total")),
         moneda=_clean_text(row.get("moneda") or metadata.get("moneda")),
         valido_hasta=_parse_date(row.get("valida_hasta") or metadata.get("valido_hasta")),
+        condicion_pago=row.get("condicion_pago"),
+        dias_credito=row.get("dias_credito"),
+        anticipo_porcentaje=_as_number(row.get("anticipo_porcentaje")),
+        permite_entrega_parcial=bool(row.get("permite_entrega_parcial")),
+        fecha_entrega_comprometida=_parse_date(row.get("fecha_entrega_comprometida")),
+        domicilio_entrega=row.get("domicilio_entrega"),
+        observaciones_comerciales=row.get("observaciones_comerciales"),
         estado=estado,
         canal_envio=metadata.get("canal_envio") or row.get("canal_envio"),
         enviada_por=metadata.get("enviada_por") or row.get("enviada_por"),
@@ -17223,6 +17251,13 @@ class LeadQuoteCreatePayload(BaseModel):
     total: float | None = Field(default=None)
     moneda: str | None = Field(default=None, min_length=3, max_length=3)
     valido_hasta: date | None = Field(default=None)
+    condicion_pago: Literal["contado", "credito", "anticipo_y_saldo", "parcialidades", "otro"] | None = None
+    dias_credito: int | None = Field(default=None, ge=1, le=365)
+    anticipo_porcentaje: float | None = Field(default=None, ge=0, le=100)
+    permite_entrega_parcial: bool = False
+    fecha_entrega_comprometida: date | None = None
+    domicilio_entrega: str | None = Field(default=None, max_length=2000)
+    observaciones_comerciales: str | None = Field(default=None, max_length=4000)
     pdf_url: str | None = Field(default=None, max_length=2048)
     pdf_path: str | None = Field(default=None, max_length=512)
     metadatos: dict[str, Any] | None = Field(default=None)
@@ -17279,6 +17314,13 @@ class LeadQuoteSalesOrder(BaseModel):
     forma_confirmacion: str | None = None
     fecha_confirmacion_cliente: date | None = None
     observaciones_confirmacion: str | None = None
+    condicion_pago: str | None = None
+    dias_credito: int | None = None
+    anticipo_porcentaje: float | None = None
+    permite_entrega_parcial: bool = False
+    fecha_entrega_comprometida: date | None = None
+    domicilio_entrega: str | None = None
+    observaciones_comerciales: str | None = None
     confirmado_en: datetime | None = None
     estatus_logistico: str = "no_aplica"
     items: list[LeadQuoteSalesOrderItem] = Field(default_factory=list)
@@ -17299,6 +17341,13 @@ class LeadQuote(BaseModel):
     total: float | None = None
     moneda: str | None = None
     valido_hasta: date | None = None
+    condicion_pago: str | None = None
+    dias_credito: int | None = None
+    anticipo_porcentaje: float | None = None
+    permite_entrega_parcial: bool = False
+    fecha_entrega_comprometida: date | None = None
+    domicilio_entrega: str | None = None
+    observaciones_comerciales: str | None = None
     estado: Literal["borrador", "enviada", "aceptada", "rechazada", "cancelada"]
     canal_envio: Literal["email", "whatsapp", "manual", "otro", "mapbox"] | None = None
     enviada_por: UUID | None = None
@@ -33362,6 +33411,13 @@ async def create_lead_quote(
         total=_as_number(body.get("total")),
         moneda=currency,
         valido_hasta=_resolve_quote_valid_until(body.get("valido_hasta"), quote_vendor_settings),
+        condicion_pago=body.get("condicion_pago"),
+        dias_credito=body.get("dias_credito"),
+        anticipo_porcentaje=body.get("anticipo_porcentaje"),
+        permite_entrega_parcial=bool(body.get("permite_entrega_parcial", False)),
+        fecha_entrega_comprometida=_to_iso_date(body.get("fecha_entrega_comprometida")),
+        domicilio_entrega=body.get("domicilio_entrega"),
+        observaciones_comerciales=body.get("observaciones_comerciales"),
         descripcion=project_description,
         notes=quote_vendor_notes,
         items=normalized_items,
@@ -33411,13 +33467,24 @@ async def create_lead_quote(
         created_row = await repo.create_quote_entry(
             organizacion_id=organizacion_id,
             oportunidad_id=oportunidad_id,
-        cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
-        contacto_id=_safe_uuid(opportunity.get("contacto_principal_id")),
-        folio=quote_folio,
-        estatus=body.pop("estado", None) or body.pop("estatus", None) or "borrador",
-        total=_as_number(body.get("total")),
+            cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
+            contacto_id=_safe_uuid(opportunity.get("contacto_principal_id")),
+            folio=quote_folio,
+            estatus=body.pop("estado", None) or body.pop("estatus", None) or "borrador",
+            total=_as_number(body.get("total")),
             moneda=(body.get("moneda") or "MXN").upper(),
             valida_hasta=valido_hasta.isoformat() if valido_hasta else None,
+            condicion_pago=body.get("condicion_pago"),
+            dias_credito=body.get("dias_credito"),
+            anticipo_porcentaje=body.get("anticipo_porcentaje"),
+            permite_entrega_parcial=bool(body.get("permite_entrega_parcial", False)),
+            fecha_entrega_comprometida=(
+                body["fecha_entrega_comprometida"].isoformat()
+                if isinstance(body.get("fecha_entrega_comprometida"), date)
+                else body.get("fecha_entrega_comprometida")
+            ),
+            domicilio_entrega=body.get("domicilio_entrega"),
+            observaciones_comerciales=body.get("observaciones_comerciales"),
             metadata=metadata,
             items=repo_items,
             usuario_id=usuario_id,
@@ -33529,6 +33596,13 @@ async def preview_lead_quote_pdf(
         total=base_payload.total,
         moneda=currency,
         valido_hasta=_resolve_quote_valid_until(base_payload.valido_hasta, quote_vendor_settings),
+        condicion_pago=base_payload.condicion_pago,
+        dias_credito=base_payload.dias_credito,
+        anticipo_porcentaje=base_payload.anticipo_porcentaje,
+        permite_entrega_parcial=base_payload.permite_entrega_parcial,
+        fecha_entrega_comprometida=base_payload.fecha_entrega_comprometida,
+        domicilio_entrega=base_payload.domicilio_entrega,
+        observaciones_comerciales=base_payload.observaciones_comerciales,
         descripcion=project_description,
         items=normalized_items,
         quote_vendor_settings=quote_vendor_settings,
@@ -33758,6 +33832,13 @@ async def send_lead_quote(
         total=base_payload.total,
         moneda=currency,
         valido_hasta=_resolve_quote_valid_until(base_payload.valido_hasta, quote_vendor_settings),
+        condicion_pago=base_payload.condicion_pago,
+        dias_credito=base_payload.dias_credito,
+        anticipo_porcentaje=base_payload.anticipo_porcentaje,
+        permite_entrega_parcial=base_payload.permite_entrega_parcial,
+        fecha_entrega_comprometida=base_payload.fecha_entrega_comprometida,
+        domicilio_entrega=base_payload.domicilio_entrega,
+        observaciones_comerciales=base_payload.observaciones_comerciales,
         descripcion=project_description,
         notes=quote_vendor_notes,
         items=normalized_items,

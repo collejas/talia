@@ -151,6 +151,13 @@ class QuoteRenderContext:
     total: float | None
     moneda: str
     valido_hasta: date | None
+    condicion_pago: str | None = None
+    dias_credito: int | None = None
+    anticipo_porcentaje: float | None = None
+    permite_entrega_parcial: bool = False
+    fecha_entrega_comprometida: date | None = None
+    domicilio_entrega: str | None = None
+    observaciones_comerciales: str | None = None
     descripcion: str | None = None
     notes: str | None = None
     items: list[dict[str, Any]] = field(default_factory=list)
@@ -872,6 +879,7 @@ def _build_modern_quote_html(
         quote_vendor_settings,
         fallback_html=None,
     )
+    conditions_html += _build_quote_structured_conditions_html(context)
     validity_days_value = quote_vendor_settings.get("validityDays", 15)
     try:
         validity_days = max(1, int(str(validity_days_value).strip())) if validity_days_value is not None else 15
@@ -1078,6 +1086,39 @@ def _build_quote_vendor_conditions_html(
     if fallback_html:
         return fallback_html
     return '<div class="proposal-details"><div class="proposal-detail"><h3>Sin condiciones comerciales adicionales.</h3><p>—</p></div></div>'
+
+
+def _build_quote_structured_conditions_html(context: QuoteRenderContext) -> str:
+    labels = {
+        "contado": "Contado",
+        "credito": f"Crédito a {context.dias_credito} días" if context.dias_credito else "Crédito",
+        "anticipo_y_saldo": "Anticipo y saldo",
+        "parcialidades": "Pago en parcialidades",
+        "otro": "Otra condición acordada",
+    }
+    rows: list[tuple[str, str]] = []
+    if context.condicion_pago:
+        rows.append(("Condición de pago", labels.get(context.condicion_pago, context.condicion_pago)))
+    if context.anticipo_porcentaje is not None:
+        rows.append(("Anticipo", f"{context.anticipo_porcentaje:g}%"))
+    if context.fecha_entrega_comprometida:
+        rows.append(("Entrega comprometida", context.fecha_entrega_comprometida.isoformat()))
+    if context.domicilio_entrega:
+        rows.append(("Domicilio de entrega", context.domicilio_entrega))
+    if context.permite_entrega_parcial:
+        rows.append(("Entregas", "Se permiten entregas parciales"))
+    if context.observaciones_comerciales:
+        rows.append(("Observaciones", context.observaciones_comerciales))
+    if not rows:
+        return ""
+    parts = ['<div class="proposal-details">']
+    for label, value in rows:
+        parts.append(
+            '<div class="proposal-detail">'
+            f"<h3>{html_escape(label)}</h3><p>{html_escape(value)}</p></div>"
+        )
+    parts.append("</div>")
+    return "".join(parts)
 
 
 def _build_quote_vendor_notes_html(

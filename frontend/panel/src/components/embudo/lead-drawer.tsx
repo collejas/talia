@@ -257,6 +257,13 @@ type LeadQuoteSalesOrder = {
   forma_confirmacion: string | null;
   fecha_confirmacion_cliente: string | null;
   observaciones_confirmacion: string | null;
+  condicion_pago: string | null;
+  dias_credito: number | null;
+  anticipo_porcentaje: number | null;
+  permite_entrega_parcial: boolean;
+  fecha_entrega_comprometida: string | null;
+  domicilio_entrega: string | null;
+  observaciones_comerciales: string | null;
   venta: {
     id: string;
     cliente_id: string;
@@ -290,6 +297,13 @@ type LeadQuoteEntry = {
   subtotal: number | null;
   taxes: number | null;
   validUntil: string | null;
+  paymentCondition: string | null;
+  creditDays: number | null;
+  advancePercent: number | null;
+  allowsPartialDelivery: boolean;
+  promisedDeliveryDate: string | null;
+  deliveryAddress: string | null;
+  commercialNotes: string | null;
   metadata: Record<string, unknown> | null;
   items: LeadQuoteItemEntry[] | null;
   pedido: LeadQuoteSalesOrder | null;
@@ -1116,6 +1130,13 @@ export function LeadDrawer({
   const [quoteValidoHasta, setQuoteValidoHasta] = useState<string>(() =>
     formatDateInput(addDays(new Date(), DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays)),
   );
+  const [quotePaymentCondition, setQuotePaymentCondition] = useState("contado");
+  const [quoteCreditDays, setQuoteCreditDays] = useState("");
+  const [quoteAdvancePercent, setQuoteAdvancePercent] = useState("");
+  const [quotePartialDelivery, setQuotePartialDelivery] = useState(false);
+  const [quoteDeliveryDate, setQuoteDeliveryDate] = useState("");
+  const [quoteDeliveryAddress, setQuoteDeliveryAddress] = useState("");
+  const [quoteCommercialNotes, setQuoteCommercialNotes] = useState("");
   const [quoteFolio, setQuoteFolio] = useState("");
   const [quoteItems, setQuoteItems] = useState<QuoteItemForm[]>(() => []);
   const computedQuoteTotals = useMemo(() => computeQuoteTotals(quoteItems), [quoteItems]);
@@ -1347,6 +1368,13 @@ export function LeadDrawer({
   useEffect(() => {
     setQuoteItems([createQuoteItemForm({ moneda: card?.moneda ?? "MXN" })]);
     setCatalogSearch("");
+    setQuotePaymentCondition("contado");
+    setQuoteCreditDays("");
+    setQuoteAdvancePercent("");
+    setQuotePartialDelivery(false);
+    setQuoteDeliveryDate("");
+    setQuoteDeliveryAddress("");
+    setQuoteCommercialNotes("");
   }, [card?.oportunidadId, card?.moneda]);
 
   useEffect(() => {
@@ -2934,6 +2962,13 @@ export function LeadDrawer({
       total: totalValue ?? null,
       moneda: (quoteMoneda || "MXN").trim().toUpperCase(),
       valido_hasta: quoteValidoHasta?.trim() || null,
+      condicion_pago: quotePaymentCondition,
+      dias_credito: quotePaymentCondition === "credito" ? parseNumberInput(quoteCreditDays) : null,
+      anticipo_porcentaje: parseNumberInput(quoteAdvancePercent),
+      permite_entrega_parcial: quotePartialDelivery,
+      fecha_entrega_comprometida: quoteDeliveryDate || null,
+      domicilio_entrega: quoteDeliveryAddress.trim() || null,
+      observaciones_comerciales: quoteCommercialNotes.trim() || null,
       folio: (folioOverride ?? quoteFolio).trim() || null,
       metadatos: {
         quote_vendedores: quoteVendorSettingsSnapshot,
@@ -2951,6 +2986,13 @@ export function LeadDrawer({
     quoteTitle,
     quoteTotal,
     quoteValidoHasta,
+    quotePaymentCondition,
+    quoteCreditDays,
+    quoteAdvancePercent,
+    quotePartialDelivery,
+    quoteDeliveryDate,
+    quoteDeliveryAddress,
+    quoteCommercialNotes,
     quoteFolio,
     quoteVendorSettingsSnapshot,
   ]);
@@ -4918,6 +4960,26 @@ export function LeadDrawer({
                     </div>
                   </div>
 
+                  <div className="space-y-2 rounded-md border border-border/50 p-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground">Condiciones comerciales</h4>
+                      <p className="text-[11px] text-muted-foreground">Quedarán guardadas en la cotización y copiadas al pedido confirmado.</p>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-4">
+                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">Condición de pago
+                        <select value={quotePaymentCondition} onChange={(event) => setQuotePaymentCondition(event.target.value)} disabled={quotePending} className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground">
+                          <option value="contado">Contado</option><option value="credito">Crédito</option><option value="anticipo_y_saldo">Anticipo y saldo</option><option value="parcialidades">Parcialidades</option><option value="otro">Otra</option>
+                        </select>
+                      </label>
+                      {quotePaymentCondition === "credito" ? <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">Días de crédito<Input type="number" min="1" max="365" value={quoteCreditDays} onChange={(event) => setQuoteCreditDays(event.target.value)} disabled={quotePending} className={quoteCompactInputClass} /></label> : null}
+                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">Anticipo (%)<Input type="number" min="0" max="100" step="0.01" value={quoteAdvancePercent} onChange={(event) => setQuoteAdvancePercent(event.target.value)} disabled={quotePending} placeholder="Opcional" className={quoteCompactInputClass} /></label>
+                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">Fecha prometida de entrega<Input type="date" value={quoteDeliveryDate} onChange={(event) => setQuoteDeliveryDate(event.target.value)} disabled={quotePending} className={quoteCompactInputClass} /></label>
+                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground md:col-span-2">Domicilio de entrega<Input value={quoteDeliveryAddress} onChange={(event) => setQuoteDeliveryAddress(event.target.value)} disabled={quotePending} maxLength={2000} placeholder="Domicilio acordado para esta cotización" className={quoteCompactInputClass} /></label>
+                      <label className="flex items-center gap-2 pt-5 text-xs text-foreground"><input type="checkbox" checked={quotePartialDelivery} onChange={(event) => setQuotePartialDelivery(event.target.checked)} disabled={quotePending} />Se permiten entregas parciales</label>
+                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground md:col-span-4">Observaciones comerciales<Input value={quoteCommercialNotes} onChange={(event) => setQuoteCommercialNotes(event.target.value)} disabled={quotePending} maxLength={4000} placeholder="Instrucciones acordadas sobre pago o entrega" className={quoteCompactInputClass} /></label>
+                    </div>
+                  </div>
+
                   <div className="grid gap-3 lg:grid-cols-2">
                     <div className="rounded-md bg-muted/20 p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
@@ -6834,6 +6896,13 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
     subtotal: toNumber(row.subtotal),
     taxes: toNumber(row.impuestos),
     validUntil: typeof row.valido_hasta === "string" ? row.valido_hasta : null,
+    paymentCondition: typeof row.condicion_pago === "string" ? row.condicion_pago : null,
+    creditDays: typeof row.dias_credito === "number" ? row.dias_credito : null,
+    advancePercent: toNumber(row.anticipo_porcentaje),
+    allowsPartialDelivery: row.permite_entrega_parcial === true,
+    promisedDeliveryDate: typeof row.fecha_entrega_comprometida === "string" ? row.fecha_entrega_comprometida : null,
+    deliveryAddress: typeof row.domicilio_entrega === "string" ? row.domicilio_entrega : null,
+    commercialNotes: typeof row.observaciones_comerciales === "string" ? row.observaciones_comerciales : null,
     metadata: metadataRecord,
     items: Array.isArray(row.items)
       ? (row.items as unknown[])
@@ -6855,6 +6924,13 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
             typeof rawOrder.fecha_confirmacion_cliente === "string" ? rawOrder.fecha_confirmacion_cliente : null,
           observaciones_confirmacion:
             typeof rawOrder.observaciones_confirmacion === "string" ? rawOrder.observaciones_confirmacion : null,
+          condicion_pago: typeof rawOrder.condicion_pago === "string" ? rawOrder.condicion_pago : null,
+          dias_credito: typeof rawOrder.dias_credito === "number" ? rawOrder.dias_credito : null,
+          anticipo_porcentaje: toNumber(rawOrder.anticipo_porcentaje),
+          permite_entrega_parcial: rawOrder.permite_entrega_parcial === true,
+          fecha_entrega_comprometida: typeof rawOrder.fecha_entrega_comprometida === "string" ? rawOrder.fecha_entrega_comprometida : null,
+          domicilio_entrega: typeof rawOrder.domicilio_entrega === "string" ? rawOrder.domicilio_entrega : null,
+          observaciones_comerciales: typeof rawOrder.observaciones_comerciales === "string" ? rawOrder.observaciones_comerciales : null,
           venta: (() => {
             const rawSaleValue = Array.isArray(rawOrder.venta) ? rawOrder.venta[0] : rawOrder.venta;
             const rawSale = isRecord(rawSaleValue) ? rawSaleValue : null;

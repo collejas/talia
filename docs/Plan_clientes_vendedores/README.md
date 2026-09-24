@@ -848,3 +848,30 @@ inmutable, por lo que una reasignación pasada podría no ser reconstruible.
 Además, `pagos.estatus = 'reembolsado'` no conserva una fila/evento de reembolso
 separada con su propia fecha. El reporte cuenta pagos que mantienen estado
 `confirmado`; no presenta reembolsos como movimientos mensuales.
+
+## 15) Condiciones comerciales del pedido y snapshot — en implementación
+
+Comercial captura las condiciones en la cotización. Al crearse el pedido se
+copian a columnas propias de `pedidos_venta`; Operaciones las consulta durante
+la revisión, sin reinterpretar ni cambiar el acuerdo del vendedor.
+
+### Campos explícitos
+
+- `condicion_pago`: contado, crédito, anticipo y saldo, parcialidades u otra.
+- `dias_credito` y `anticipo_porcentaje`: detalle cuando corresponda.
+- `permite_entrega_parcial`: indica si el acuerdo acepta surtidos parciales.
+- `fecha_entrega_comprometida`, `domicilio_entrega` y
+  `observaciones_comerciales`: información acordada para la ejecución.
+- Los gastos de envío se capturan como partidas de cotización para que formen
+  parte del mismo subtotal, impuestos, moneda y total que revisa Operaciones.
+
+El snapshot del pedido no depende de la ficha de direcciones del cliente, que
+puede cambiar después. La dirección acordada queda guardada como texto en la
+cotización y se copia al pedido.
+
+La migración local `20260924215640_sales_order_commercial_conditions.sql`
+agrega los campos y llena pedidos existentes desde su cotización. No se ha
+aplicado en Supabase. La API, el formulario y el PDF de cotización ya envían y
+presentan estas condiciones. Antes de aplicar o desplegar, falta revisar y
+consolidar esta migración con los cambios pendientes de revisión operativa,
+evidencia extendida y reservas parciales.

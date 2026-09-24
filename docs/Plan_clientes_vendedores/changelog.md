@@ -1,5 +1,22 @@
 # Changelog — Clientes y vendedores
 
+## 2026-09-24 — Captura de condiciones comerciales en cotización (local, no aplicada)
+
+- Se agregaron campos estructurados para condición de pago, días de crédito,
+  porcentaje de anticipo, entregas parciales, fecha/domicilio de entrega y
+  observaciones comerciales.
+- El formulario de cotización incluye estos campos y el PDF los presenta para
+  que el cliente y Operaciones vean las condiciones acordadas.
+- El costo de envío se documenta como partida de cotización para que integre el
+  cálculo normal de subtotal, impuestos y total.
+- La migración local `20260924215640_sales_order_commercial_conditions.sql`
+  agrega columnas explícitas a cotizaciones y pedidos, rellena pedidos
+  existentes desde su cotización y copia las condiciones al crear nuevos
+  pedidos.
+- Pendiente: revisar y consolidar la migración con evidencia extendida, reserva
+  parcial y revisión operativa antes de aplicarla en Supabase; validar el flujo
+  autenticado por rol y tenant antes del despliegue.
+
 ## 2026-09-24 — Secuencia para completar revision, condiciones y reserva parcial
 
 - Comercial captura las condiciones acordadas en la cotizacion: pago/credito,
