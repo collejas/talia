@@ -3285,7 +3285,81 @@ async def update_persona(persona_id: str, patch: dict[str, Any]) -> dict[str, An
     except CRMRepositoryError as exc:
         raise StorageError(str(exc)) from exc
 
-    return _normalize_persona_payload(row)
+    normalized_row = _normalize_persona_payload(row)
+    await maybe_promote_persona_opportunities_from_contact_data(normalized_row)
+    return normalized_row
+
+
+async def maybe_promote_persona_opportunities_from_contact_data(
+    contact: Mapping[str, Any],
+) -> int:
+    """Avanza oportunidades abiertas cuando el contacto ya tiene nombre, correo y teléfono."""
+    if not (_contact_has_name(contact) and _contact_has_email(contact) and _contact_has_phone(contact)):
+        return 0
+    try:
+        persona_uuid = UUID(str(contact.get("id")))
+        org_uuid = UUID(str(contact.get("organizacion_id")))
+    except (TypeError, ValueError):
+        return 0
+
+    repo = CRMRepository()
+    try:
+        opportunities = await repo.list_open_opportunities_for_persona(
+            organizacion_id=org_uuid,
+            persona_id=persona_uuid,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "storage.contact_complete.opportunities_lookup_failed",
+            extra={"organizacion_id": str(org_uuid), "persona_id": str(persona_uuid), "error": str(exc)},
+        )
+        return 0
+
+    promoted = 0
+    for opportunity in opportunities:
+        opportunity_id = opportunity.get("id")
+        origin_stage_id = opportunity.get("etapa_id")
+        if not opportunity_id or not origin_stage_id:
+            continue
+        try:
+            changed = await promote_opportunity_stage(
+                oportunidad_id=str(opportunity_id),
+                organizacion_id=str(org_uuid),
+                stage_code="precalificado",
+                source="datos_contacto_completos",
+            )
+            if not changed:
+                continue
+            updated_opportunity = await repo.get_pipeline_opportunity(
+                organizacion_id=org_uuid,
+                oportunidad_id=UUID(str(opportunity_id)),
+            )
+            target_stage_id = (updated_opportunity or {}).get("etapa_id")
+            if not target_stage_id:
+                continue
+            await repo.append_stage_history(
+                organizacion_id=org_uuid,
+                payload={
+                    "oportunidad_id": str(opportunity_id),
+                    "etapa_origen_id": str(origin_stage_id),
+                    "etapa_destino_id": str(target_stage_id),
+                    "motivo": "Nombre, correo y teléfono registrados",
+                    "fuente": "contacto_completo",
+                    "metadata": {"regla": "datos_contacto_completos"},
+                },
+            )
+            promoted += 1
+        except (StorageError, CRMRepositoryError, TypeError, ValueError) as exc:
+            logger.warning(
+                "storage.contact_complete.promotion_failed",
+                extra={
+                    "organizacion_id": str(org_uuid),
+                    "persona_id": str(persona_uuid),
+                    "oportunidad_id": str(opportunity_id),
+                    "error": str(exc),
+                },
+            )
+    return promoted
 
 
 async def fetch_visitantes_estados(
@@ -4378,6 +4452,9 @@ async def maybe_promote_prequalified_from_scoring(
     if not opportunity:
         return False
 
+    if _contact_has_name(contact) and _contact_has_email(contact) and _contact_has_phone(contact):
+        return bool(await maybe_promote_persona_opportunities_from_contact_data(contact))
+
     metadata = _ensure_dict(opportunity.get("metadata"))
     scoring = _ensure_dict(metadata.get("lead_scoring"))
     answers = _ensure_dict(scoring.get("answers"))
@@ -4920,6 +4997,7 @@ async def capture_opportunity_if_ready(
             source="capture_opportunity",
             channel=capture_channel,
         )
+        await maybe_promote_persona_opportunities_from_contact_data(contact)
     except (CRMRepositoryError, StorageError) as exc:
         logger.warning(
             "storage.capture_opportunity.promote_failed",

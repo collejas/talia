@@ -7010,6 +7010,26 @@ class CRMRepository:
                 )
         return row
 
+    async def list_open_opportunities_for_persona(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "estado": "eq.abierta",
+            "or": f"(contacto_principal_id.eq.{persona_id},persona_id.eq.{persona_id})",
+            "select": self._PIPELINE_SELECT,
+            "order": "creado_en.desc",
+            "limit": "500",
+        }
+        resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("Respuesta inválida al listar oportunidades del contacto")
+        return [row for row in data if isinstance(row, dict)]
+
     async def update_opportunity(
         self,
         *,

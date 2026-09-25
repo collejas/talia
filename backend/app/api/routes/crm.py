@@ -2131,7 +2131,7 @@ def _normalize_property_destination(value: Any) -> str:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="destino_inventario_invalid",
-        ) from exc
+            ) from exc
 
 
 def _normalize_property_price_type(value: Any) -> str:
@@ -26342,6 +26342,8 @@ async def create_persona_alta(
             ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    await storage.maybe_promote_persona_opportunities_from_contact_data(contact_row)
+
     persona_out = _safe_model_from_row(
         CRMPersona,
         contact_row,
@@ -27394,6 +27396,7 @@ async def update_persona_legacy(
         if "contacto_no_encontrado" in str(exc):
             raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await storage.maybe_promote_persona_opportunities_from_contact_data(row)
     if not skip_conversation_sync:
         try:
             latest_conversation_id = await repo.get_latest_conversation_id_by_contact(
@@ -27476,6 +27479,7 @@ async def update_persona_crud(
         if "contacto_no_encontrado" in str(exc):
             raise HTTPException(status_code=404, detail="contacto_no_encontrado") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await storage.maybe_promote_persona_opportunities_from_contact_data(row)
     if not skip_conversation_sync:
         try:
             latest_conversation_id = await repo.get_latest_conversation_id_by_contact(
