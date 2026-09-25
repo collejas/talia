@@ -492,40 +492,6 @@ const ALLOWED_TYPES: Set<DrawerPrepFieldType> = new Set([
 ]);
 
 const DEFAULT_DRAWER_DEFINITIONS: Record<string, DrawerPrepDefinition> = {
-  precalificado: {
-    sections: [
-      {
-        key: "qualification_check",
-        title: "Validación de datos completos",
-        description: "Verifica que la información requerida esté completa antes de avanzar.",
-        order: 10,
-        fields: [
-          {
-            key: "qualification_status",
-            type: "select",
-            label: "Estado de validación",
-            required: true,
-            options: [
-              { value: "calificado", label: "Calificado" },
-              { value: "pendiente", label: "Pendiente" },
-              { value: "descartado", label: "Descartado" },
-            ],
-          },
-          {
-            key: "qualification_deadline",
-            type: "date",
-            label: "Fecha límite de evaluación",
-          },
-          {
-            key: "qualification_notes",
-            type: "textarea",
-            label: "Notas de validación",
-            placeholder: "Puntos clave que justifican el avance.",
-          },
-        ],
-      },
-    ],
-  },
   demo: {
     sections: [
       {
@@ -683,11 +649,6 @@ const DEFAULT_DRAWER_DEFINITIONS: Record<string, DrawerPrepDefinition> = {
 };
 
 const FIELD_OPTION_FALLBACKS: Record<string, DrawerPrepOption[]> = {
-  qualification_status: [
-    { value: "calificado", label: "Calificado" },
-    { value: "pendiente", label: "Pendiente" },
-    { value: "descartado", label: "Descartado" },
-  ],
   demo_format: [
     { value: "virtual", label: "Virtual" },
     { value: "presencial", label: "Presencial" },
@@ -6294,6 +6255,8 @@ function buildDrawerDefinitions(stages: EmbudoStage[]): Map<string, DrawerDefini
   const map = new Map<string, DrawerDefinition>();
 
   for (const stage of stages) {
+    if (collectStageDrawerCodes(stage).some(isPrequalificationStageCode)) continue;
+
     const meta = stage.metadatos;
     let definition: DrawerPrepDefinition | null = null;
     if (isRecord(meta)) {
@@ -6318,6 +6281,11 @@ function buildDrawerDefinitions(stages: EmbudoStage[]): Map<string, DrawerDefini
   }
 
   return map;
+}
+
+function isPrequalificationStageCode(code: string): boolean {
+  const normalized = code.trim().toLowerCase();
+  return normalized === "precalificado" || normalized.endsWith("_precalificado");
 }
 
 function resolveDrawerDefinitionFallback(stage: EmbudoStage): DrawerPrepDefinition | null {
