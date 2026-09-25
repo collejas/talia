@@ -106,3 +106,55 @@ def test_google_places_is_required_when_selected() -> None:
 
     busqueda = next(step for step in progress["pasos"] if step["id"] == "busqueda")
     assert busqueda["completado"] is False
+
+
+def test_brevo_tenant_completes_email_without_postmark_domain() -> None:
+    tenant = _tenant()
+    tenant["config"] = {
+        "mail": {
+            "incoming_server": "imap.example.com",
+            "incoming_port_imap": 993,
+            "outgoing_server": "smtp.example.com",
+            "outgoing_port_smtp": 465,
+            "use_ssl": True,
+            "use_tls": False,
+        },
+        "brevo": {"sender_email": "sender@example.com"},
+    }
+    progress = build_onboarding_progress(
+        tenant=tenant,
+        routes=[],
+        secrets=[{"clave": "mail.username"}, {"clave": "mail.password"}, {"clave": "brevo.api_key"}],
+        preferences=None,
+        email_service={"migration": {"status": "pending", "feature_enabled": False}},
+    )
+
+    correo = next(step for step in progress["pasos"] if step["id"] == "correo")
+    assert correo["completado"] is True
+
+
+def test_postmark_tenant_still_requires_verified_domain() -> None:
+    tenant = _tenant()
+    tenant["config"] = {
+        "mail": {
+            "incoming_server": "imap.example.com",
+            "incoming_port_imap": 993,
+            "outgoing_server": "smtp.example.com",
+            "outgoing_port_smtp": 465,
+            "use_ssl": True,
+            "use_tls": False,
+        },
+    }
+    progress = build_onboarding_progress(
+        tenant=tenant,
+        routes=[],
+        secrets=[{"clave": "mail.username"}, {"clave": "mail.password"}],
+        preferences=None,
+        email_service={
+            "migration": {"status": "active", "feature_enabled": True},
+            "domain": {"status": "pending_dns", "verified_at": None, "default_from_email": None},
+        },
+    )
+
+    correo = next(step for step in progress["pasos"] if step["id"] == "correo")
+    assert correo["completado"] is False

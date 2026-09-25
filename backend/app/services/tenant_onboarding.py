@@ -46,6 +46,12 @@ def _search_configuration_ready(config: dict[str, Any], secrets: list[dict[str, 
     )
 
 
+def _brevo_configured(config: dict[str, Any], secrets: list[dict[str, Any]]) -> bool:
+    """Indica si el tenant tiene Brevo listo sin exponerlo en el onboarding."""
+    brevo = config.get("brevo") if isinstance(config.get("brevo"), dict) else {}
+    return _has_text(brevo.get("sender_email")) and _secret_exists(secrets, "brevo", "api_key")
+
+
 def build_onboarding_progress(
     *,
     tenant: dict[str, Any],
@@ -133,10 +139,16 @@ def build_onboarding_progress(
         "validated",
         "migrated",
     }
-    # La habilitación administrativa del servicio central es independiente del
-    # avance que puede completar el tenant. El onboarding valida la configuración
-    # que el tenant controla: correo operativo, DNS y remitente.
-    correo_done = mail_operational_done and domain_verified and sender_configured
+    brevo_ready = _brevo_configured(config, secrets)
+    # Postmark es el proveedor predeterminado para tenants nuevos. Brevo queda
+    # como compatibilidad para tenants existentes, pero su nombre/configuración
+    # no forma parte de la respuesta visible del onboarding.
+    provider_ready = (
+        mail_operational_done and domain_verified and sender_configured
+        if service_enabled
+        else mail_operational_done and brevo_ready
+    )
+    correo_done = provider_ready
     web_tracking_sites = web_tracking_sites or []
     web_tracking_domains = web_tracking_domains or []
     active_tracking_site_ids = {
