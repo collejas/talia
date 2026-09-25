@@ -452,7 +452,10 @@ async def notify_sales_rep(
         primary_reason = "case_d_lead_captured"
 
     primary_by_channel = _get_primary_notification_by_channel(metadata)
-    if primary_reason and primary_by_channel.get(channel_key) and not force_retry:
+    # Booking lifecycle notifications are independent events. A lead/opportunity
+    # notice must never suppress an appointment confirmation or cancellation.
+    booking_event = trigger in {"booking_confirmed", "booking_canceled"}
+    if primary_reason and not booking_event and primary_by_channel.get(channel_key) and not force_retry:
         logger.info(
             "webchat.notify_sales.primary_already_sent",
             extra={
@@ -463,7 +466,11 @@ async def notify_sales_rep(
         )
         return
 
-    if notifications.get(trigger) and not force_retry:
+    notification_key = trigger
+    if booking_event and extra_payload.get("booking_id"):
+        event_slot = str(extra_payload.get("slot_start") or "").strip()
+        notification_key = f"{trigger}:{extra_payload['booking_id']}:{event_slot}"
+    if (notifications.get(notification_key) or (booking_event and not extra_payload.get("booking_id") and notifications.get(trigger))) and not force_retry:
         logger.info(
             "webchat.notify_sales.already_sent",
             extra={"conversation_id": context.conversation_id, "trigger": trigger},
@@ -650,20 +657,25 @@ async def notify_sales_rep(
         },
     )
 
-    previous_notification = _ensure_dict(notifications.get(trigger))
+    previous_notification = _ensure_dict(notifications.get(notification_key))
     retry_count = 0
     if force_retry:
         try:
             retry_count = max(0, int(previous_notification.get("retry_count") or 0)) + 1
         except (TypeError, ValueError):
             retry_count = 1
-    notifications[trigger] = {
+    notification_record = {
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "conversation_id": context.conversation_id,
         "contact_id": persona_id,
         "notification_sid": message_sid,
         "retry_count": retry_count,
     }
+    notifications[notification_key] = notification_record
+    # Keep the generic key for existing UI/readers while storing each booking
+    # lifecycle event under its own id and slot for correct idempotency.
+    if booking_event:
+        notifications[trigger] = notification_record
     metadata["sales_notifications"] = notifications
     if primary_reason:
         primary_by_channel[channel_key] = {

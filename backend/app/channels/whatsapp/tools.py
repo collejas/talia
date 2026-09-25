@@ -2699,6 +2699,8 @@ async def _handle_schedule_demo(
         if candidate:
             start_raw = candidate
     slot_datetime = webchat_service._parse_calendar_datetime(start_raw)
+    if slot_datetime.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+        return {"status": "slot_in_past", "message": "Ese horario ya pasó. Consulta disponibilidad futura antes de reservar."}
     hold_minutes = max(1, calendar_settings.hold_minutes)
     slot_identifier = slot_id or webchat_service._build_slot_identifier(resource_id, slot_datetime)
     notes = (arguments.get("notes") or "").strip() or None
@@ -2938,36 +2940,47 @@ async def _handle_reschedule_demo(
             conversation_meta = {}
         org_hint = str(conversation_meta.get("organizacion_id") or "").strip() or None
     resolved_org = webchat_service._resolve_org_uuid(org_hint)
-    metadata_payload: dict[str, Any] = {
-        "conversation_id": context.conversation_id,
-        "persona_id": persona_id,
-        "session_id": context.session_id,
-    }
-    if resolved_org:
-        metadata_payload["organizacion_id"] = resolved_org
     try:
-        booking = await webchat_service.calendar_service.reschedule_booking(
+        booking_before = await storage.fetch_calendar_booking(booking_id)
+    except StorageError as exc:
+        raise ValueError("booking_not_found") from exc
+    if not booking_before or (
+        resolved_org and str(booking_before.get("organizacion_id") or "") != resolved_org
+    ) or (
+        booking_before.get("contact_id") and str(booking_before.get("contact_id")) != str(persona_id)
+    ) or (
+        booking_before.get("conversacion_id") and str(booking_before.get("conversacion_id")) != str(context.conversation_id)
+    ):
+        raise ValueError("booking_not_found")
+    old_start = booking_before.get("start_at")
+    old_end = booking_before.get("end_at")
+    try:
+        booking_response = await webchat_service.reschedule_calendar_booking(
+            conversation_id=context.conversation_id,
             booking_id=booking_id,
-            new_slot_start=new_slot_datetime,
+            start_at=new_slot_datetime,
             notes=notes,
-            metadata=metadata_payload,
         )
     except CalendarError as exc:
         raise ValueError(str(exc)) from exc
-    booking_response = webchat_service._build_booking_response(booking)
-    await webchat_service._sync_booking_with_opportunity(
-        booking=booking_response,
-        tarjeta_id=booking_response.tarjeta_id,
-        persona=persona,
-        channel="whatsapp",
-    )
-    await webchat_service._send_booking_confirmation_email(
-        booking=booking_response,
-        persona_id=persona_id,
-        conversation_id=context.conversation_id,
-        tarjeta_id=booking_response.tarjeta_id,
-        persona=persona,
-    )
+    try:
+        await _notify_sales_rep(
+            context=context,
+            trigger="booking_canceled",
+            persona=persona,
+            opportunity_id=booking_response.tarjeta_id,
+            resumen="Horario anterior cancelado por reprogramación",
+            notes="La cita anterior fue reemplazada por un nuevo horario.",
+            email=webchat_service._extract_persona_email(persona),
+            extra={
+                "booking_id": booking_response.booking_id,
+                "slot_start": str(old_start or ""),
+                "slot_end": str(old_end or "") or None,
+                "reason": "Reprogramación solicitada por el cliente",
+            },
+        )
+    except Exception as exc:
+        logger.warning("whatsapp.booking_cancel_notify_failed", extra={"booking_id": booking_id, "error": str(exc)})
     try:
         await _notify_sales_rep(
             context=context,
@@ -3009,6 +3022,20 @@ async def _handle_cancel_demo(arguments: dict[str, Any], context: ToolRuntimeCon
     if not booking_id:
         raise ValueError("booking_id requerido para cancel_demo")
     reason = (arguments.get("reason") or "").strip() or None
+    persona_record = await _resolve_persona(persona_id)
+    org_uuid = _persona_org_uuid(persona_record)
+    try:
+        booking_before = await storage.fetch_calendar_booking(booking_id)
+    except StorageError as exc:
+        raise ValueError("booking_not_found") from exc
+    if not booking_before or (
+        org_uuid and str(booking_before.get("organizacion_id") or "") != str(org_uuid)
+    ) or (
+        booking_before.get("contact_id") and str(booking_before.get("contact_id")) != str(persona_id)
+    ) or (
+        booking_before.get("conversacion_id") and str(booking_before.get("conversacion_id")) != str(context.conversation_id)
+    ):
+        raise ValueError("booking_not_found")
     try:
         booking = await webchat_service.calendar_service.cancel_booking(
             booking_id=booking_id,
@@ -3267,7 +3294,15 @@ async def _notify_sales_rep(
             )
             return
 
-    if notifications.get(trigger) and not force_retry:
+    booking_event = trigger in {"booking_confirmed", "booking_canceled"}
+    notification_key = trigger
+    extra_payload = extra if isinstance(extra, dict) else {}
+    if booking_event and extra_payload.get("booking_id"):
+        notification_key = (
+            f"{trigger}:{extra_payload['booking_id']}:"
+            f"{str(extra_payload.get('slot_start') or '').strip()}"
+        )
+    if (notifications.get(notification_key) or (booking_event and not extra_payload.get("booking_id") and notifications.get(trigger))) and not force_retry:
         logger.info(
             "whatsapp.notify_sales.already_sent",
             extra={"conversation_id": context.conversation_id, "trigger": trigger},
@@ -3474,20 +3509,23 @@ async def _notify_sales_rep(
         },
     )
 
-    previous_notification = _ensure_dict(notifications.get(trigger))
+    previous_notification = _ensure_dict(notifications.get(notification_key))
     retry_count = 0
     if force_retry:
         try:
             retry_count = max(0, int(previous_notification.get("retry_count") or 0)) + 1
         except (TypeError, ValueError):
             retry_count = 1
-    notifications[trigger] = {
+    notification_record = {
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "conversation_id": context.conversation_id,
         "persona_id": persona_id,
         "notification_sid": message_sid,
         "retry_count": retry_count,
     }
+    notifications[notification_key] = notification_record
+    if booking_event:
+        notifications[trigger] = notification_record
     metadata["sales_notifications"] = notifications
     if primary_reason:
         primary_by_channel[channel_key] = {

@@ -18720,7 +18720,7 @@ class CRMRepository:
     ) -> dict[str, Any]:
         params = {
             "id": f"eq.{booking_id}",
-            "select": "id,resource_id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
+            "select": "id,organizacion_id,resource_id,conversacion_id,contact_id,tarjeta_id,status,timezone,start_at,end_at,metadata",
             "limit": "1",
         }
         resp = await self._request_with_user(

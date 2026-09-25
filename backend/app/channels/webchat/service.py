@@ -4902,6 +4902,8 @@ async def _execute_function_call(
             if candidate:
                 start_raw = candidate
         slot_datetime = _parse_calendar_datetime(start_raw)
+        if slot_datetime.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+            return {"status": "slot_in_past", "message": "Ese horario ya pasó. Consulta disponibilidad futura antes de reservar."}
         hold_minutes = max(1, calendar_settings.hold_minutes)
         slot_identifier = slot_id or _build_slot_identifier(resource_id, slot_datetime)
         notes = (arguments.get("notes") or "").strip() or None
@@ -5151,6 +5153,25 @@ async def _execute_function_call(
             raise ValueError("booking_id requerido para reschedule_demo")
         new_slot_raw = arguments.get("start_at") or arguments.get("slot_start")
         new_slot_datetime = _parse_calendar_datetime(new_slot_raw)
+        try:
+            booking_before = await storage.fetch_calendar_booking(booking_id)
+        except storage.StorageError as exc:
+            raise ValueError("booking_not_found") from exc
+        persona = await _resolve_persona(context.persona_id)
+        booking_org = str(booking_before.get("organizacion_id") or "") if booking_before else ""
+        persona_org = str(_extract_persona_org(persona) or context.organizacion_id or "")
+        if not booking_before or (
+            booking_org and persona_org and booking_org != persona_org
+        ) or (
+            booking_before.get("organizacion_id") and context.organizacion_id and str(booking_before.get("organizacion_id")) != str(context.organizacion_id)
+        ) or (
+            booking_before.get("contact_id") and str(booking_before.get("contact_id")) != str(context.persona_id)
+        ) or (
+            booking_before.get("conversacion_id") and str(booking_before.get("conversacion_id")) != str(context.conversation_id)
+        ):
+            raise ValueError("booking_not_found")
+        old_start = booking_before.get("start_at")
+        old_end = booking_before.get("end_at")
         notes = (arguments.get("notes") or "").strip() or None
         try:
             booking = await calendar_service.reschedule_booking(
@@ -5166,7 +5187,6 @@ async def _execute_function_call(
         except CalendarError as exc:
             raise ValueError(str(exc)) from exc
         booking_response = _build_booking_response(booking)
-        persona = await _resolve_persona(context.persona_id)
         await _sync_booking_with_opportunity(
             booking=booking_response,
             tarjeta_id=booking_response.tarjeta_id,
@@ -5180,6 +5200,47 @@ async def _execute_function_call(
             tarjeta_id=booking_response.tarjeta_id,
             persona=persona,
         )
+        try:
+            org_uuid = UUID(str((persona or {}).get("organizacion_id")))
+            for trigger, resumen, event_start, event_end, event_notes in (
+                (
+                    "booking_canceled",
+                    "Horario anterior cancelado por reprogramación",
+                    old_start,
+                    old_end,
+                    "La cita anterior fue reemplazada por un nuevo horario.",
+                ),
+                (
+                    "booking_confirmed",
+                    "Cita reprogramada",
+                    booking_response.start_at.isoformat(),
+                    booking_response.end_at.isoformat() if booking_response.end_at else None,
+                    notes,
+                ),
+            ):
+                await enqueue_webchat_sales_notification(
+                    conversation_id=context.conversation_id,
+                    persona_id=context.persona_id,
+                    trigger=trigger,
+                    channel="webchat",
+                    organizacion_id=org_uuid,
+                    contact=persona,
+                    opportunity_id=booking_response.tarjeta_id,
+                    resumen=resumen,
+                    notes=event_notes,
+                    email=_extract_persona_email(persona),
+                    extra={
+                        "booking_id": booking_response.booking_id,
+                        "slot_start": event_start,
+                        "slot_end": event_end,
+                        **({"reason": "Reprogramación solicitada por el cliente"} if trigger == "booking_canceled" else {}),
+                    },
+                )
+        except Exception as exc:
+            logger.warning(
+                "webchat.reschedule_notify_enqueue_failed",
+                extra={"conversation_id": context.conversation_id, "booking_id": booking_response.booking_id, "error": str(exc)},
+            )
         booking_payload = {
             "booking_id": booking_response.booking_id,
             "resource_id": booking_response.resource_id,
@@ -5202,6 +5263,20 @@ async def _execute_function_call(
             raise ValueError("booking_id requerido para cancel_demo")
         reason = (arguments.get("reason") or "").strip() or None
         try:
+            booking_before = await storage.fetch_calendar_booking(booking_id)
+        except storage.StorageError as exc:
+            raise ValueError("booking_not_found") from exc
+        persona = await _resolve_persona(context.persona_id)
+        expected_org = str(_extract_persona_org(persona) or context.organizacion_id or "")
+        if not booking_before or (
+            booking_before.get("organizacion_id") and expected_org and str(booking_before.get("organizacion_id")) != expected_org
+        ) or (
+            booking_before.get("contact_id") and str(booking_before.get("contact_id")) != str(context.persona_id)
+        ) or (
+            booking_before.get("conversacion_id") and str(booking_before.get("conversacion_id")) != str(context.conversation_id)
+        ):
+            raise ValueError("booking_not_found")
+        try:
             booking = await calendar_service.cancel_booking(
                 booking_id=booking_id,
                 reason=reason,
@@ -5215,7 +5290,6 @@ async def _execute_function_call(
             "end_at": booking.get("end_at"),
             "status": booking.get("status"),
         }
-        persona = await _resolve_persona(context.persona_id)
         try:
             org_uuid = UUID(str((persona or {}).get("organizacion_id")))
             await enqueue_webchat_sales_notification(

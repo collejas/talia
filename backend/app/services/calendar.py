@@ -28,6 +28,16 @@ def _normalize_datetime(value: datetime | str) -> str:
     return dt.isoformat()
 
 
+def _as_utc_datetime(value: datetime | str) -> datetime:
+    normalized = _normalize_datetime(value)
+    return datetime.fromisoformat(normalized.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
+def _require_future_slot(value: datetime | str) -> None:
+    if _as_utc_datetime(value) <= datetime.now(timezone.utc):
+        raise CalendarError("calendar_slot_in_past")
+
+
 def _normalize_date(value: date | str | None) -> str | None:
     if value is None:
         return None
@@ -120,6 +130,8 @@ async def list_slots(
     for row in rows:
         slot_start = row.get("slot_start")
         slot_end = row.get("slot_end")
+        if not slot_start or _as_utc_datetime(slot_start) <= datetime.now(timezone.utc):
+            continue
         timezone_value = row.get("timezone") or timezone_hint
         slot_id = _compute_slot_id(resource_id, slot_start) if slot_start else None
         slots.append(
@@ -162,6 +174,7 @@ async def hold_slot(
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Crea un hold temporal para evitar doble reserva."""
+    _require_future_slot(slot_start)
     resolved_persona_id = persona_id or contact_id
     payload = {
         "p_resource_id": resource_id,
@@ -241,6 +254,7 @@ async def reschedule_booking(
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Reprograma una cita existente hacia un nuevo horario."""
+    _require_future_slot(new_slot_start)
     payload = {
         "p_booking_id": booking_id,
         "p_new_slot_start": _normalize_datetime(new_slot_start),

@@ -4309,6 +4309,24 @@ async def _generate_assistant_reply(
                 "whatsapp.fetch_history_for_openai_failed",
                 extra={"conversation_id": conversation_id, "error": str(exc)},
             )
+    elif booking_context:
+        # Prior-response conversations still need the last human-readable offer
+        # to recognize a short acceptance such as "sí, a las 2".
+        try:
+            history_messages = await storage.fetch_recent_messages(
+                conversation_id=conversation_id,
+                limit=8,
+            )
+            current_id = str(inbound_message_id or "").strip()
+            history_messages = [
+                row for row in history_messages
+                if str(row.get("id") or "").strip() != current_id
+            ]
+        except StorageError as exc:
+            logger.warning(
+                "whatsapp.fetch_booking_history_failed",
+                extra={"conversation_id": conversation_id, "error": str(exc)},
+            )
 
     initial_input = _build_openai_input(
         message,
@@ -4584,6 +4602,30 @@ async def _generate_assistant_reply(
         "metadata": metadata_payload,
         "tool_choice": "auto",
     }
+
+    # When a confirmed booking exists and the customer selects a time from the
+    # latest explicit rescheduling offer, require the reschedule tool call. This
+    # prevents a generated acknowledgement from masquerading as a DB update.
+    current_text = _normalize_fast_path_text(message.body or "")
+    last_outbound = _recent_last_outbound_message(history_messages)
+    last_offer = _normalize_fast_path_text(_recent_message_text(last_outbound))
+    accepted_time = re.search(r"\b(?:a\s+las?\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", current_text)
+    prior_offer_has_choices = any(token in last_offer for token in ("prefieres", "elige", "opciones", "puedes a las", "te queda"))
+    if (
+        booking_context
+        and accepted_time
+        and prior_offer_has_choices
+        and re.search(rf"\b{re.escape(accepted_time.group(1))}\b", last_offer)
+    ):
+        request_kwargs["tool_choice"] = {"type": "function", "name": "reschedule_demo"}
+        initial_input.insert(0, {
+            "role": "developer",
+            "content": [{"type": "input_text", "text": (
+                "El cliente acaba de aceptar una hora ofrecida para cambiar su cita existente. "
+                "Ejecuta reschedule_demo con esa hora y la booking_id confirmada del contexto. "
+                "Solo confirma el cambio si la herramienta devuelve status ok; si falla, explica que no quedó reprogramada."
+            )}],
+        })
 
     prompt_variables: dict[str, Any] = {"conversacion_id": conversation_id}
 
