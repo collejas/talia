@@ -144,6 +144,7 @@ class PostmarkProvisioningService:
             transactional_stream=str(server.get("transactional_stream") or "outbound"),
             broadcast_stream=str(server.get("broadcast_stream") or "broadcast"),
         )
+        provider_webhooks = await client.list_webhooks()
         for stream in (
             str(server.get("transactional_stream") or "outbound"),
             str(server.get("broadcast_stream") or "broadcast"),
@@ -151,9 +152,30 @@ class PostmarkProvisioningService:
             existing = await self.repository.get_server_webhook(
                 server_id=UUID(str(server["id"])), message_stream=stream
             )
+            endpoint = f"{base_url}/webhooks/postmark/{server['id']}/{stream}"
+            expected_provider_streams = {stream.lower()}
+            if stream.lower() == "broadcast":
+                expected_provider_streams.add("broadcasts")
+            same_target = [
+                item for item in provider_webhooks
+                if str(item.get("Url") or "").rstrip("/") == endpoint.rstrip("/")
+                and str(item.get("MessageStream") or "").lower() in expected_provider_streams
+                and item.get("ID") is not None
+            ]
+            keep_id = int(existing["provider_webhook_id"]) if existing and existing.get("provider_webhook_id") else None
+            if keep_id is None and same_target:
+                keep_id = int(same_target[0]["ID"])
+            for duplicate in same_target:
+                duplicate_id = int(duplicate["ID"])
+                if keep_id is not None and duplicate_id != keep_id:
+                    await client.delete_webhook(webhook_id=duplicate_id)
+            provider_webhooks = [
+                item for item in provider_webhooks if item.get("ID") not in {
+                    int(item["ID"]) for item in same_target if keep_id is not None and int(item["ID"]) != keep_id
+                }
+            ]
             if existing and existing.get("status") == "verified":
                 continue
-            endpoint = f"{base_url}/webhooks/postmark/{server['id']}/{stream}"
             response: dict[str, object] = {}
             try:
                 if existing and existing.get("provider_webhook_id"):

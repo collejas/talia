@@ -115,6 +115,17 @@ async def process_postmark_event(
                 external_message_id=external_message_id or "",
                 payload={"status": status, timestamp_field: timestamp}, status_filter=status_filter,
             )
+        if message:
+            await repository.project_event_to_prospeccion(
+                organizacion_id=organizacion_id,
+                message_id=UUID(str(message["id"])),
+                event_type=record_type,
+                event_at=timestamp,
+                event_id=event_id,
+                error_code=str(payload.get("TypeCode")) if payload.get("TypeCode") is not None else None,
+                error_description=str(payload.get("Description") or payload.get("Details") or "")[:2000] or None,
+                bounce_type=str(payload.get("Type") or "")[:100] or None,
+            )
         is_hard_bounce = record_type == "Bounce" and str(payload.get("Type") or "").strip() == "HardBounce"
         is_subscription_hard_bounce = (
             record_type == "SubscriptionChange"

@@ -321,6 +321,32 @@ class PostmarkRepository:
             payload=payload,
         )
 
+    async def project_event_to_prospeccion(
+        self,
+        *,
+        organizacion_id: UUID,
+        message_id: UUID,
+        event_type: str,
+        event_at: str,
+        event_id: str | None,
+        error_code: str | None,
+        error_description: str | None,
+        bounce_type: str | None,
+    ) -> None:
+        await self._rpc(
+            "tenant_email_project_postmark_event",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_message_id": str(message_id),
+                "p_event_type": event_type,
+                "p_event_at": event_at,
+                "p_event_id": event_id,
+                "p_error_code": error_code,
+                "p_error_description": error_description,
+                "p_bounce_type": bounce_type,
+            },
+        )
+
     async def upsert_suppression(self, *, payload: dict[str, Any]) -> None:
         # El índice de negocio es parcial y usa lower(email_address), por lo
         # que no se puede delegar ciegamente en PostgREST on_conflict. Se

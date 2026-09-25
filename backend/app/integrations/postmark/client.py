@@ -206,6 +206,19 @@ class PostmarkClient:
             raise PostmarkRequestError("invalid_provider_webhook_response")
         return data
 
+    async def list_webhooks(self) -> list[dict[str, object]]:
+        """Lista los webhooks del servidor para detectar duplicados de provisión."""
+        response = await self._server_request("GET", "/webhooks")
+        data = response.json()
+        items = data.get("Webhooks") if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            raise PostmarkRequestError("invalid_provider_webhooks_response")
+        return [item for item in items if isinstance(item, dict)]
+
+    async def delete_webhook(self, *, webhook_id: int) -> None:
+        """Elimina exclusivamente un webhook del servidor actual."""
+        await self._server_request("DELETE", f"/webhooks/{webhook_id}")
+
     async def list_outbound_messages(
         self,
         *,
