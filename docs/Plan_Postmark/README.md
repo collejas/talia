@@ -25,7 +25,8 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 6. [Runbook de dominios por tenant](./05-runbook-dominio-tenant.md)
 7. [Decisiones operativas y criterios](./06-decisiones-operativas-y-criterios.md)
 8. [Sincronización Postmark por tenant](./07-sincronizacion-postmark-por-tenant.md)
-9. [Changelog](./CHANGELOG.md)
+9. [Sincronización Brevo y métricas unificadas](./08-sincronizacion-brevo-y-metricas.md)
+10. [Changelog](./CHANGELOG.md)
 
 ## Decisiones iniciales
 

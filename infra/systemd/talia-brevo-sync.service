@@ -1,0 +1,17 @@
+[Unit]
+Description=TalIA Brevo historical event synchronization worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jorge
+WorkingDirectory=/var/www/talia/backend
+ExecStart=/var/www/talia/backend/scripts/run_brevo_sync_worker.sh
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

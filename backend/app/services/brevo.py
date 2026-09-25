@@ -33,6 +33,11 @@ BREVO_EVENT_STATE = {
     "invalid": "fallido",
     "error": "fallido",
     "unsubscribe": "fallido",
+    "uniqueopened": "entregado",
+    "uniqueclick": "entregado",
+    "softbounce": "fallido",
+    "hardbounce": "fallido",
+    "spamcomplaint": "fallido",
 }
 MESSAGE_ID_PART_PATTERN = re.compile(r"<([^>]+)>")
 
@@ -239,7 +244,46 @@ def _iter_brevo_inbound_payloads(event: dict[str, Any]) -> list[dict[str, Any]]:
 def _map_brevo_event(event_name: str | None) -> str | None:
     if not event_name:
         return None
-    return BREVO_EVENT_STATE.get(event_name.strip().lower())
+    normalized = event_name.strip().lower()
+    return BREVO_EVENT_STATE.get(normalized) or BREVO_EVENT_STATE.get(
+        normalized.replace("_", "").replace("-", "")
+    )
+
+
+def _canonical_brevo_event_name(event_name: str | None) -> str:
+    normalized = (_clean_text(event_name) or "").lower().replace("-", "_")
+    aliases = {
+        "uniqueopened": "unique_opened",
+        "unique_opened": "unique_opened",
+        "uniqueclick": "unique_click",
+        "unique_click": "unique_click",
+        "softbounce": "soft_bounce",
+        "soft_bounce": "soft_bounce",
+        "hardbounce": "hard_bounce",
+        "hard_bounce": "hard_bounce",
+        "spamcomplaint": "spam",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _brevo_event_at(event: dict[str, Any]) -> str:
+    raw_ts = event.get("ts_event") or event.get("ts_epoch")
+    if raw_ts is not None:
+        try:
+            value = float(raw_ts)
+            if value > 10_000_000_000:
+                value /= 1000
+            return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
+        except (TypeError, ValueError, OSError, OverflowError):
+            pass
+    raw_date = _clean_text(event.get("date"))
+    if raw_date:
+        normalized = raw_date.replace(" ", "T")
+        try:
+            return datetime.fromisoformat(normalized.replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _should_apply_brevo_state(*, current_state: str | None, incoming_state: str) -> bool:
@@ -664,6 +708,7 @@ async def process_brevo_events(
     *,
     repo: CRMRepository,
     events: Sequence[dict[str, Any]],
+    organizacion_id: UUID | None = None,
 ) -> int:
     """Actualiza envíos de correo con base en los webhooks de Brevo."""
 
@@ -671,7 +716,7 @@ async def process_brevo_events(
     for event in events:
         if not isinstance(event, dict):
             continue
-        event_name = _clean_text(event.get("event")) or ""
+        event_name = _canonical_brevo_event_name(event.get("event"))
         estado = _map_brevo_event(event_name)
         if not estado:
             continue
@@ -680,7 +725,10 @@ async def process_brevo_events(
             continue
         for message_id in message_ids:
             try:
-                envio = await repo.worker_get_envio_by_mensaje(mensaje_id=message_id)
+                lookup_kwargs = {"mensaje_id": message_id}
+                if organizacion_id is not None:
+                    lookup_kwargs["organizacion_id"] = organizacion_id
+                envio = await repo.worker_get_envio_by_mensaje(**lookup_kwargs)
             except CRMRepositoryError as exc:
                 log_event(logger, "brevo.webhook_envio_lookup_failed", error=str(exc))
                 continue
@@ -727,7 +775,32 @@ async def process_brevo_events(
                 continue
 
             current_state = _clean_text(envio.get("estado"))
-            if not _should_apply_brevo_state(current_state=current_state, incoming_state=estado):
+            apply_state = _should_apply_brevo_state(current_state=current_state, incoming_state=estado)
+            event_at = _brevo_event_at(event)
+            record_event = getattr(repo, "worker_record_brevo_event", None)
+            if record_event is not None and envio.get("organizacion_id"):
+                try:
+                    await record_event(
+                        organizacion_id=UUID(str(envio["organizacion_id"])),
+                        envio_id=envio_uuid,
+                        message_id=message_id,
+                        event_name=event_name,
+                        estado_normalizado=estado,
+                        ocurrido_en=event_at,
+                        email=_clean_text(event.get("email")),
+                        provider_event_id=str(event.get("id")) if event.get("id") is not None else None,
+                        error_code=str(event.get("code")) if event.get("code") is not None else None,
+                        error_detail=_clean_text(event.get("reason") or event.get("description")),
+                        tag=_clean_text(event.get("tag")),
+                        template_id=int(event["template_id"])
+                        if str(event.get("template_id") or "").isdigit()
+                        else None,
+                        url=_clean_text(event.get("URL") or event.get("link")),
+                        payload=brevo_info,
+                    )
+                except (CRMRepositoryError, ValueError) as exc:
+                    log_event(logger, "brevo.event_persist_failed", error=str(exc), message_id=message_id)
+            if not apply_state:
                 log_event(
                     logger,
                     "brevo.webhook_state_regression_ignored",
@@ -736,30 +809,29 @@ async def process_brevo_events(
                     estado_evento=estado,
                     event=event_name,
                 )
-                continue
-
-            merged_detalle = {**detalle_actual, "brevo": brevo_info}
-            if estado != "fallido":
-                reason_value = _clean_text(merged_detalle.get("reason"))
-                if reason_value in {"per_minute_limit", "cooldown"}:
-                    merged_detalle.pop("reason", None)
-                    merged_detalle.pop("throttle_scope", None)
-            payload = {
-                "estado": estado,
-                "detalle": merged_detalle,
-                "error": brevo_info.get("reason") if estado == "fallido" else None,
-                "procesado_en": datetime.now(timezone.utc).isoformat(),
-            }
-            try:
-                await repo.worker_complete_envio(envio_id=envio_uuid, payload=payload)
-            except CRMRepositoryError as exc:
-                log_event(
-                    logger,
-                    "brevo.webhook_envio_update_failed",
-                    error=str(exc),
-                    envio_id=str(envio_uuid),
-                )
-                continue
+            else:
+                merged_detalle = {**detalle_actual, "brevo": brevo_info}
+                if estado != "fallido":
+                    reason_value = _clean_text(merged_detalle.get("reason"))
+                    if reason_value in {"per_minute_limit", "cooldown"}:
+                        merged_detalle.pop("reason", None)
+                        merged_detalle.pop("throttle_scope", None)
+                payload = {
+                    "estado": estado,
+                    "detalle": merged_detalle,
+                    "error": brevo_info.get("reason") if estado == "fallido" else None,
+                    "procesado_en": datetime.now(timezone.utc).isoformat(),
+                }
+                try:
+                    await repo.worker_complete_envio(envio_id=envio_uuid, payload=payload)
+                except CRMRepositoryError as exc:
+                    log_event(
+                        logger,
+                        "brevo.webhook_envio_update_failed",
+                        error=str(exc),
+                        envio_id=str(envio_uuid),
+                    )
+                    continue
             if event_name.lower() == "unsubscribe":
                 raw_org = envio.get("organizacion_id")
                 try:
@@ -812,7 +884,7 @@ async def process_brevo_events(
                 "organizacion_id": str(envio.get("organizacion_id")) if envio.get("organizacion_id") else None,
                 "prospecto_id": str(envio.get("prospecto_id")) if envio.get("prospecto_id") else None,
                 "canal": "correo",
-                "estado": estado,
+                "estado": estado if apply_state else (current_state or estado),
                 "detalle": brevo_info,
                 "error": brevo_info.get("reason") if estado == "fallido" else None,
                 "batch_id": str(batch_id_value) if batch_id_value else None,
@@ -829,7 +901,7 @@ async def process_brevo_events(
                     estado=estado,
                     repo=repo,
                 )
-            if batch_id_value:
+            if batch_id_value and apply_state:
                 try:
                     batch_state = await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id_value)))
                 except (ValueError, CRMRepositoryError) as exc:

@@ -16,11 +16,11 @@ Ejecutar probes periodicos de salud para `production` y `staging` con alerta bas
 ## Checks incluidos
 - `api_health` (`GET /api/health` local por puerto del ambiente)
 - `panel_dashboard` (`GET /dashboard` via dominio publico)
-- `auth_login` (`POST /api/auth/login` sintetico; respuesta esperada `401` o equivalente controlado)
+
+No se prueba el login con credenciales ficticias: ese patrón genera eventos `invalid_credentials` en Supabase Auth y no confirma la salud del proveedor. La disponibilidad observada se limita a la API y al panel; el flujo de autenticación debe supervisarse con métricas que no intenten iniciar sesión con una contraseña inválida.
 
 ## Umbrales por defecto
 - `API_HEALTH_MAX_MS=300`
-- `AUTH_LOGIN_MAX_MS=1200`
 - `DASHBOARD_MAX_MS=2500`
 
 ## Activacion

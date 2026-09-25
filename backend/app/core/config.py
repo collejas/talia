@@ -291,6 +291,28 @@ class Settings(BaseSettings):
             "TALIA_POSTMARK_SYNC_PAGE_TIMEOUT_SECONDS",
         ),
     )
+    brevo_sync_enabled: bool = Field(
+        default=False,
+        description="Habilita la conciliación histórica no destructiva de Brevo.",
+        validation_alias=AliasChoices("BREVO_SYNC_ENABLED", "TALIA_BREVO_SYNC_ENABLED"),
+    )
+    brevo_sync_interval_seconds: int = Field(
+        default=900,
+        ge=60,
+        le=86400,
+        description="Intervalo entre ciclos de conciliación histórica de Brevo.",
+        validation_alias=AliasChoices(
+            "BREVO_SYNC_INTERVAL_SECONDS",
+            "TALIA_BREVO_SYNC_INTERVAL_SECONDS",
+        ),
+    )
+    brevo_sync_days: int = Field(
+        default=90,
+        ge=1,
+        le=90,
+        description="Ventana histórica máxima consultada en Brevo.",
+        validation_alias=AliasChoices("BREVO_SYNC_DAYS", "TALIA_BREVO_SYNC_DAYS"),
+    )
     postmark_sync_page_size: int = Field(
         default=100,
         ge=25,

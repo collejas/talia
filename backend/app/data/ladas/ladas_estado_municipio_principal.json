@@ -1,0 +1,1987 @@
+[
+  {
+    "lada": "33",
+    "estado": "Jalisco",
+    "municipio": "Tlajomulco de Zúñiga"
+  },
+  {
+    "lada": "55",
+    "estado": "México",
+    "municipio": "Nicolás Romero"
+  },
+  {
+    "lada": "81",
+    "estado": "Nuevo León",
+    "municipio": "Salinas Victoria"
+  },
+  {
+    "lada": "222",
+    "estado": "Puebla",
+    "municipio": "Puebla"
+  },
+  {
+    "lada": "223",
+    "estado": "Puebla",
+    "municipio": "Acajete"
+  },
+  {
+    "lada": "224",
+    "estado": "Puebla",
+    "municipio": "Santo Tomás Hueyotlipan"
+  },
+  {
+    "lada": "225",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Tlapacoyan"
+  },
+  {
+    "lada": "226",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Jalacingo"
+  },
+  {
+    "lada": "227",
+    "estado": "Puebla",
+    "municipio": "Huejotzingo"
+  },
+  {
+    "lada": "228",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Coatepec"
+  },
+  {
+    "lada": "229",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Veracruz"
+  },
+  {
+    "lada": "231",
+    "estado": "Puebla",
+    "municipio": "Teziutlán"
+  },
+  {
+    "lada": "232",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Tecolutla"
+  },
+  {
+    "lada": "233",
+    "estado": "Puebla",
+    "municipio": "Tlatlauquitepec"
+  },
+  {
+    "lada": "235",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Misantla"
+  },
+  {
+    "lada": "236",
+    "estado": "Oaxaca",
+    "municipio": "Huautla de Jiménez"
+  },
+  {
+    "lada": "237",
+    "estado": "Puebla",
+    "municipio": "Zapotitlán"
+  },
+  {
+    "lada": "238",
+    "estado": "Puebla",
+    "municipio": "Nicolás Bravo"
+  },
+  {
+    "lada": "241",
+    "estado": "Tlaxcala",
+    "municipio": "Tlaxco"
+  },
+  {
+    "lada": "243",
+    "estado": "Puebla",
+    "municipio": "Chietla"
+  },
+  {
+    "lada": "244",
+    "estado": "Puebla",
+    "municipio": "Atlixco"
+  },
+  {
+    "lada": "245",
+    "estado": "Puebla",
+    "municipio": "Ajalpan"
+  },
+  {
+    "lada": "246",
+    "estado": "Tlaxcala",
+    "municipio": "Panotla"
+  },
+  {
+    "lada": "247",
+    "estado": "Tlaxcala",
+    "municipio": "Huamantla"
+  },
+  {
+    "lada": "248",
+    "estado": "Puebla",
+    "municipio": "San Martín Texmelucan"
+  },
+  {
+    "lada": "249",
+    "estado": "Puebla",
+    "municipio": "Cañada Morelos"
+  },
+  {
+    "lada": "271",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Amatlán de los Reyes"
+  },
+  {
+    "lada": "272",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Ixtaczoquitlán"
+  },
+  {
+    "lada": "273",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Tuxpan"
+  },
+  {
+    "lada": "274",
+    "estado": "Oaxaca",
+    "municipio": "Acatlán de Pérez Figueroa"
+  },
+  {
+    "lada": "275",
+    "estado": "Puebla",
+    "municipio": "Tulcingo"
+  },
+  {
+    "lada": "276",
+    "estado": "Puebla",
+    "municipio": "Cuyoaco"
+  },
+  {
+    "lada": "278",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Cotaxtla"
+  },
+  {
+    "lada": "279",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Actopan"
+  },
+  {
+    "lada": "281",
+    "estado": "Oaxaca",
+    "municipio": "El Barrio de la Soledad"
+  },
+  {
+    "lada": "282",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Perote"
+  },
+  {
+    "lada": "283",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Playa Vicente"
+  },
+  {
+    "lada": "284",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Angel R. Cabada"
+  },
+  {
+    "lada": "285",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Paso de Ovejas"
+  },
+  {
+    "lada": "287",
+    "estado": "Oaxaca",
+    "municipio": "San Juan Bautista Tuxtepec"
+  },
+  {
+    "lada": "288",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Cosamaloapan de Carpio"
+  },
+  {
+    "lada": "294",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "San Andrés Tuxtla"
+  },
+  {
+    "lada": "296",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Actopan"
+  },
+  {
+    "lada": "297",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Alvarado"
+  },
+  {
+    "lada": "311",
+    "estado": "Nayarit",
+    "municipio": "Tepic"
+  },
+  {
+    "lada": "312",
+    "estado": "Colima",
+    "municipio": "Colima"
+  },
+  {
+    "lada": "313",
+    "estado": "Colima",
+    "municipio": "Tecomán"
+  },
+  {
+    "lada": "314",
+    "estado": "Colima",
+    "municipio": "Manzanillo"
+  },
+  {
+    "lada": "315",
+    "estado": "Jalisco",
+    "municipio": "Cihuatlán"
+  },
+  {
+    "lada": "316",
+    "estado": "Jalisco",
+    "municipio": "Unión de Tula"
+  },
+  {
+    "lada": "317",
+    "estado": "Jalisco",
+    "municipio": "Autlán de Navarro"
+  },
+  {
+    "lada": "319",
+    "estado": "Nayarit",
+    "municipio": "Rosamorada"
+  },
+  {
+    "lada": "321",
+    "estado": "Jalisco",
+    "municipio": "El Grullo"
+  },
+  {
+    "lada": "322",
+    "estado": "Jalisco",
+    "municipio": "Tomatlán"
+  },
+  {
+    "lada": "323",
+    "estado": "Nayarit",
+    "municipio": "Santiago Ixcuintla"
+  },
+  {
+    "lada": "324",
+    "estado": "Nayarit",
+    "municipio": "Amatlán de Cañas"
+  },
+  {
+    "lada": "325",
+    "estado": "Nayarit",
+    "municipio": "Acaponeta"
+  },
+  {
+    "lada": "326",
+    "estado": "Jalisco",
+    "municipio": "Atemajac de Brizuela"
+  },
+  {
+    "lada": "327",
+    "estado": "Nayarit",
+    "municipio": "Compostela"
+  },
+  {
+    "lada": "328",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Ecuandureo"
+  },
+  {
+    "lada": "329",
+    "estado": "Nayarit",
+    "municipio": "Bahía de Banderas"
+  },
+  {
+    "lada": "341",
+    "estado": "Jalisco",
+    "municipio": "Zapotiltic"
+  },
+  {
+    "lada": "342",
+    "estado": "Jalisco",
+    "municipio": "Sayula"
+  },
+  {
+    "lada": "343",
+    "estado": "Jalisco",
+    "municipio": "Tapalpa"
+  },
+  {
+    "lada": "344",
+    "estado": "Jalisco",
+    "municipio": "Yahualica de González Gallo"
+  },
+  {
+    "lada": "345",
+    "estado": "Jalisco",
+    "municipio": "Ayotlán"
+  },
+  {
+    "lada": "346",
+    "estado": "Jalisco",
+    "municipio": "Teocaltiche"
+  },
+  {
+    "lada": "347",
+    "estado": "Jalisco",
+    "municipio": "San Miguel el Alto"
+  },
+  {
+    "lada": "348",
+    "estado": "Jalisco",
+    "municipio": "Arandas"
+  },
+  {
+    "lada": "349",
+    "estado": "Jalisco",
+    "municipio": "Atengo"
+  },
+  {
+    "lada": "351",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Zamora"
+  },
+  {
+    "lada": "352",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "La Piedad"
+  },
+  {
+    "lada": "353",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Venustiano Carranza"
+  },
+  {
+    "lada": "354",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Los Reyes"
+  },
+  {
+    "lada": "355",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Chilchota"
+  },
+  {
+    "lada": "356",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Tanhuato"
+  },
+  {
+    "lada": "357",
+    "estado": "Jalisco",
+    "municipio": "Casimiro Castillo"
+  },
+  {
+    "lada": "358",
+    "estado": "Jalisco",
+    "municipio": "Tamazula de Gordiano"
+  },
+  {
+    "lada": "359",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Penjamillo"
+  },
+  {
+    "lada": "371",
+    "estado": "Jalisco",
+    "municipio": "Tuxpan"
+  },
+  {
+    "lada": "372",
+    "estado": "Jalisco",
+    "municipio": "Atoyac"
+  },
+  {
+    "lada": "373",
+    "estado": "Jalisco",
+    "municipio": "Ixtlahuacán del Río"
+  },
+  {
+    "lada": "374",
+    "estado": "Jalisco",
+    "municipio": "Tequila"
+  },
+  {
+    "lada": "375",
+    "estado": "Jalisco",
+    "municipio": "Ameca"
+  },
+  {
+    "lada": "376",
+    "estado": "Jalisco",
+    "municipio": "Chapala"
+  },
+  {
+    "lada": "377",
+    "estado": "Jalisco",
+    "municipio": "Cocula"
+  },
+  {
+    "lada": "378",
+    "estado": "Jalisco",
+    "municipio": "Tepatitlán de Morelos"
+  },
+  {
+    "lada": "381",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Marcos Castellanos"
+  },
+  {
+    "lada": "382",
+    "estado": "Jalisco",
+    "municipio": "Mazamitla"
+  },
+  {
+    "lada": "383",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Tangamandapio"
+  },
+  {
+    "lada": "384",
+    "estado": "Jalisco",
+    "municipio": "Tala"
+  },
+  {
+    "lada": "385",
+    "estado": "Jalisco",
+    "municipio": "San Martín Hidalgo"
+  },
+  {
+    "lada": "386",
+    "estado": "Jalisco",
+    "municipio": "Lagos de Moreno"
+  },
+  {
+    "lada": "387",
+    "estado": "Jalisco",
+    "municipio": "Jocotepec"
+  },
+  {
+    "lada": "388",
+    "estado": "Jalisco",
+    "municipio": "Atenguillo"
+  },
+  {
+    "lada": "389",
+    "estado": "Nayarit",
+    "municipio": "Tecuala"
+  },
+  {
+    "lada": "391",
+    "estado": "Jalisco",
+    "municipio": "Atotonilco el Alto"
+  },
+  {
+    "lada": "392",
+    "estado": "Jalisco",
+    "municipio": "Ocotlán"
+  },
+  {
+    "lada": "393",
+    "estado": "Jalisco",
+    "municipio": "La Barca"
+  },
+  {
+    "lada": "394",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Cotija"
+  },
+  {
+    "lada": "395",
+    "estado": "Jalisco",
+    "municipio": "San Juan de los Lagos"
+  },
+  {
+    "lada": "411",
+    "estado": "Guanajuato",
+    "municipio": "Yuriria"
+  },
+  {
+    "lada": "412",
+    "estado": "Guanajuato",
+    "municipio": "Santa Cruz de Juventino Rosas"
+  },
+  {
+    "lada": "413",
+    "estado": "Guanajuato",
+    "municipio": "Apaseo el Alto"
+  },
+  {
+    "lada": "414",
+    "estado": "Querétaro",
+    "municipio": "Tequisquiapan"
+  },
+  {
+    "lada": "415",
+    "estado": "Guanajuato",
+    "municipio": "San Miguel de Allende"
+  },
+  {
+    "lada": "417",
+    "estado": "Guanajuato",
+    "municipio": "Acámbaro"
+  },
+  {
+    "lada": "418",
+    "estado": "Guanajuato",
+    "municipio": "Dolores Hidalgo Cuna de la Independencia Nacional"
+  },
+  {
+    "lada": "419",
+    "estado": "Querétaro",
+    "municipio": "Colón"
+  },
+  {
+    "lada": "421",
+    "estado": "Guanajuato",
+    "municipio": "Jerécuaro"
+  },
+  {
+    "lada": "422",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Ario"
+  },
+  {
+    "lada": "423",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Nahuatzen"
+  },
+  {
+    "lada": "424",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Tepalcatepec"
+  },
+  {
+    "lada": "425",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "La Huacana"
+  },
+  {
+    "lada": "426",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Buenavista"
+  },
+  {
+    "lada": "427",
+    "estado": "Querétaro",
+    "municipio": "San Juan del Río"
+  },
+  {
+    "lada": "428",
+    "estado": "Guanajuato",
+    "municipio": "San Felipe"
+  },
+  {
+    "lada": "429",
+    "estado": "Guanajuato",
+    "municipio": "Abasolo"
+  },
+  {
+    "lada": "431",
+    "estado": "Jalisco",
+    "municipio": "Jalostotitlán"
+  },
+  {
+    "lada": "432",
+    "estado": "Guanajuato",
+    "municipio": "Manuel Doblado"
+  },
+  {
+    "lada": "433",
+    "estado": "Zacatecas",
+    "municipio": "Sombrerete"
+  },
+  {
+    "lada": "434",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Tzintzuntzan"
+  },
+  {
+    "lada": "435",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "San Lucas"
+  },
+  {
+    "lada": "436",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Zacapu"
+  },
+  {
+    "lada": "437",
+    "estado": "Jalisco",
+    "municipio": "Bolaños"
+  },
+  {
+    "lada": "438",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Puruándiro"
+  },
+  {
+    "lada": "441",
+    "estado": "Querétaro",
+    "municipio": "Cadereyta de Montes"
+  },
+  {
+    "lada": "442",
+    "estado": "Querétaro",
+    "municipio": "Querétaro"
+  },
+  {
+    "lada": "443",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Morelia"
+  },
+  {
+    "lada": "444",
+    "estado": "San Luis Potosí",
+    "municipio": "Mexquitic de Carmona"
+  },
+  {
+    "lada": "445",
+    "estado": "Guanajuato",
+    "municipio": "Moroleón"
+  },
+  {
+    "lada": "447",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Maravatío"
+  },
+  {
+    "lada": "448",
+    "estado": "Querétaro",
+    "municipio": "Huimilpan"
+  },
+  {
+    "lada": "449",
+    "estado": "Aguascalientes",
+    "municipio": "Aguascalientes"
+  },
+  {
+    "lada": "451",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Zinapécuaro"
+  },
+  {
+    "lada": "452",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Uruapan"
+  },
+  {
+    "lada": "453",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Apatzingán"
+  },
+  {
+    "lada": "454",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Panindícuaro"
+  },
+  {
+    "lada": "455",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Cuitzeo"
+  },
+  {
+    "lada": "456",
+    "estado": "Guanajuato",
+    "municipio": "Valle de Santiago"
+  },
+  {
+    "lada": "457",
+    "estado": "Zacatecas",
+    "municipio": "Chalchihuites"
+  },
+  {
+    "lada": "458",
+    "estado": "San Luis Potosí",
+    "municipio": "Villa de Ramos"
+  },
+  {
+    "lada": "459",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Tacámbaro"
+  },
+  {
+    "lada": "461",
+    "estado": "Guanajuato",
+    "municipio": "Celaya"
+  },
+  {
+    "lada": "462",
+    "estado": "Guanajuato",
+    "municipio": "Irapuato"
+  },
+  {
+    "lada": "463",
+    "estado": "Zacatecas",
+    "municipio": "Huanusco"
+  },
+  {
+    "lada": "464",
+    "estado": "Guanajuato",
+    "municipio": "Salamanca"
+  },
+  {
+    "lada": "465",
+    "estado": "Aguascalientes",
+    "municipio": "Tepezalá"
+  },
+  {
+    "lada": "466",
+    "estado": "Guanajuato",
+    "municipio": "Salvatierra"
+  },
+  {
+    "lada": "467",
+    "estado": "Zacatecas",
+    "municipio": "Teúl de González Ortega"
+  },
+  {
+    "lada": "468",
+    "estado": "Guanajuato",
+    "municipio": "San Luis de la Paz"
+  },
+  {
+    "lada": "469",
+    "estado": "Guanajuato",
+    "municipio": "Pénjamo"
+  },
+  {
+    "lada": "471",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Tlazazalca"
+  },
+  {
+    "lada": "472",
+    "estado": "Guanajuato",
+    "municipio": "Silao de la Victoria"
+  },
+  {
+    "lada": "473",
+    "estado": "Guanajuato",
+    "municipio": "Guanajuato"
+  },
+  {
+    "lada": "474",
+    "estado": "Jalisco",
+    "municipio": "Lagos de Moreno"
+  },
+  {
+    "lada": "475",
+    "estado": "Jalisco",
+    "municipio": "Encarnación de Díaz"
+  },
+  {
+    "lada": "476",
+    "estado": "Guanajuato",
+    "municipio": "Purísima del Rincón"
+  },
+  {
+    "lada": "477",
+    "estado": "Guanajuato",
+    "municipio": "León"
+  },
+  {
+    "lada": "478",
+    "estado": "Zacatecas",
+    "municipio": "Pánuco"
+  },
+  {
+    "lada": "481",
+    "estado": "San Luis Potosí",
+    "municipio": "Ciudad Valles"
+  },
+  {
+    "lada": "482",
+    "estado": "San Luis Potosí",
+    "municipio": "Tamasopo"
+  },
+  {
+    "lada": "483",
+    "estado": "San Luis Potosí",
+    "municipio": "Tamazunchale"
+  },
+  {
+    "lada": "485",
+    "estado": "San Luis Potosí",
+    "municipio": "Santa María del Río"
+  },
+  {
+    "lada": "486",
+    "estado": "San Luis Potosí",
+    "municipio": "Guadalcázar"
+  },
+  {
+    "lada": "487",
+    "estado": "San Luis Potosí",
+    "municipio": "Rioverde"
+  },
+  {
+    "lada": "488",
+    "estado": "San Luis Potosí",
+    "municipio": "Catorce"
+  },
+  {
+    "lada": "489",
+    "estado": "San Luis Potosí",
+    "municipio": "Tamazunchale"
+  },
+  {
+    "lada": "492",
+    "estado": "Zacatecas",
+    "municipio": "Guadalupe"
+  },
+  {
+    "lada": "493",
+    "estado": "Zacatecas",
+    "municipio": "Fresnillo"
+  },
+  {
+    "lada": "494",
+    "estado": "Zacatecas",
+    "municipio": "Jerez"
+  },
+  {
+    "lada": "495",
+    "estado": "Aguascalientes",
+    "municipio": "Calvillo"
+  },
+  {
+    "lada": "496",
+    "estado": "Zacatecas",
+    "municipio": "Pinos"
+  },
+  {
+    "lada": "498",
+    "estado": "Zacatecas",
+    "municipio": "Río Grande"
+  },
+  {
+    "lada": "499",
+    "estado": "Zacatecas",
+    "municipio": "Villanueva"
+  },
+  {
+    "lada": "588",
+    "estado": "México",
+    "municipio": "Villa del Carbón"
+  },
+  {
+    "lada": "591",
+    "estado": "Hidalgo",
+    "municipio": "Atotonilco de Tula"
+  },
+  {
+    "lada": "592",
+    "estado": "México",
+    "municipio": "Otumba"
+  },
+  {
+    "lada": "593",
+    "estado": "México",
+    "municipio": "Huehuetoca"
+  },
+  {
+    "lada": "594",
+    "estado": "México",
+    "municipio": "Acolman"
+  },
+  {
+    "lada": "595",
+    "estado": "México",
+    "municipio": "Texcoco"
+  },
+  {
+    "lada": "596",
+    "estado": "México",
+    "municipio": "Temascalapa"
+  },
+  {
+    "lada": "597",
+    "estado": "México",
+    "municipio": "Atlautla"
+  },
+  {
+    "lada": "599",
+    "estado": "México",
+    "municipio": "Hueypoxtla"
+  },
+  {
+    "lada": "612",
+    "estado": "Baja California Sur",
+    "municipio": "La Paz"
+  },
+  {
+    "lada": "613",
+    "estado": "Baja California Sur",
+    "municipio": "Comondú"
+  },
+  {
+    "lada": "614",
+    "estado": "Chihuahua",
+    "municipio": "Ojinaga"
+  },
+  {
+    "lada": "615",
+    "estado": "Baja California Sur",
+    "municipio": "Mulegé"
+  },
+  {
+    "lada": "616",
+    "estado": "Baja California",
+    "municipio": "San Quintín"
+  },
+  {
+    "lada": "618",
+    "estado": "Durango",
+    "municipio": "Durango"
+  },
+  {
+    "lada": "621",
+    "estado": "Chihuahua",
+    "municipio": "Saucillo"
+  },
+  {
+    "lada": "622",
+    "estado": "Sonora",
+    "municipio": "Empalme"
+  },
+  {
+    "lada": "623",
+    "estado": "Sonora",
+    "municipio": "Ures"
+  },
+  {
+    "lada": "624",
+    "estado": "Baja California Sur",
+    "municipio": "Los Cabos"
+  },
+  {
+    "lada": "625",
+    "estado": "Chihuahua",
+    "municipio": "Gran Morelos"
+  },
+  {
+    "lada": "626",
+    "estado": "Chihuahua",
+    "municipio": "Manuel Benavides"
+  },
+  {
+    "lada": "627",
+    "estado": "Chihuahua",
+    "municipio": "Hidalgo del Parral"
+  },
+  {
+    "lada": "628",
+    "estado": "Chihuahua",
+    "municipio": "Allende"
+  },
+  {
+    "lada": "629",
+    "estado": "Chihuahua",
+    "municipio": "Jiménez"
+  },
+  {
+    "lada": "631",
+    "estado": "Sonora",
+    "municipio": "Nogales"
+  },
+  {
+    "lada": "632",
+    "estado": "Sonora",
+    "municipio": "Hermosillo"
+  },
+  {
+    "lada": "633",
+    "estado": "Sonora",
+    "municipio": "Fronteras"
+  },
+  {
+    "lada": "634",
+    "estado": "Sonora",
+    "municipio": "Arivechi"
+  },
+  {
+    "lada": "635",
+    "estado": "Chihuahua",
+    "municipio": "Bocoyna"
+  },
+  {
+    "lada": "636",
+    "estado": "Chihuahua",
+    "municipio": "Janos"
+  },
+  {
+    "lada": "637",
+    "estado": "Sonora",
+    "municipio": "Pitiquito"
+  },
+  {
+    "lada": "638",
+    "estado": "Sonora",
+    "municipio": "Caborca"
+  },
+  {
+    "lada": "639",
+    "estado": "Chihuahua",
+    "municipio": "Meoqui"
+  },
+  {
+    "lada": "641",
+    "estado": "Sonora",
+    "municipio": "Santa Ana"
+  },
+  {
+    "lada": "642",
+    "estado": "Sonora",
+    "municipio": "Navojoa"
+  },
+  {
+    "lada": "643",
+    "estado": "Sonora",
+    "municipio": "Guaymas"
+  },
+  {
+    "lada": "644",
+    "estado": "Sonora",
+    "municipio": "Cajeme"
+  },
+  {
+    "lada": "645",
+    "estado": "Sonora",
+    "municipio": "Álamos"
+  },
+  {
+    "lada": "646",
+    "estado": "Baja California",
+    "municipio": "Ensenada"
+  },
+  {
+    "lada": "647",
+    "estado": "Sonora",
+    "municipio": "Etchojoa"
+  },
+  {
+    "lada": "648",
+    "estado": "Chihuahua",
+    "municipio": "Delicias"
+  },
+  {
+    "lada": "649",
+    "estado": "Durango",
+    "municipio": "Ocampo"
+  },
+  {
+    "lada": "651",
+    "estado": "Sonora",
+    "municipio": "General Plutarco Elías Calles"
+  },
+  {
+    "lada": "652",
+    "estado": "Chihuahua",
+    "municipio": "Gómez Farías"
+  },
+  {
+    "lada": "653",
+    "estado": "Sonora",
+    "municipio": "San Luis Río Colorado"
+  },
+  {
+    "lada": "656",
+    "estado": "Chihuahua",
+    "municipio": "Juárez"
+  },
+  {
+    "lada": "658",
+    "estado": "Baja California",
+    "municipio": "Mexicali"
+  },
+  {
+    "lada": "659",
+    "estado": "Chihuahua",
+    "municipio": "Namiquipa"
+  },
+  {
+    "lada": "661",
+    "estado": "Baja California",
+    "municipio": "Playas de Rosarito"
+  },
+  {
+    "lada": "662",
+    "estado": "Sonora",
+    "municipio": "Hermosillo"
+  },
+  {
+    "lada": "664",
+    "estado": "Baja California",
+    "municipio": "Tijuana"
+  },
+  {
+    "lada": "665",
+    "estado": "Baja California",
+    "municipio": "Tecate"
+  },
+  {
+    "lada": "667",
+    "estado": "Sinaloa",
+    "municipio": "Culiacán"
+  },
+  {
+    "lada": "668",
+    "estado": "Sinaloa",
+    "municipio": "Ahome"
+  },
+  {
+    "lada": "669",
+    "estado": "Sinaloa",
+    "municipio": "Mazatlán"
+  },
+  {
+    "lada": "671",
+    "estado": "Durango",
+    "municipio": "Cuencamé"
+  },
+  {
+    "lada": "672",
+    "estado": "Sinaloa",
+    "municipio": "Navolato"
+  },
+  {
+    "lada": "673",
+    "estado": "Sinaloa",
+    "municipio": "Mocorito"
+  },
+  {
+    "lada": "674",
+    "estado": "Durango",
+    "municipio": "Santiago Papasquiaro"
+  },
+  {
+    "lada": "675",
+    "estado": "Durango",
+    "municipio": "Nombre de Dios"
+  },
+  {
+    "lada": "676",
+    "estado": "Durango",
+    "municipio": "Guadalupe Victoria"
+  },
+  {
+    "lada": "677",
+    "estado": "Durango",
+    "municipio": "Canatlán"
+  },
+  {
+    "lada": "686",
+    "estado": "Baja California",
+    "municipio": "Mexicali"
+  },
+  {
+    "lada": "687",
+    "estado": "Sinaloa",
+    "municipio": "Guasave"
+  },
+  {
+    "lada": "694",
+    "estado": "Sinaloa",
+    "municipio": "Rosario"
+  },
+  {
+    "lada": "695",
+    "estado": "Sinaloa",
+    "municipio": "Escuinapa"
+  },
+  {
+    "lada": "696",
+    "estado": "Sinaloa",
+    "municipio": "Elota"
+  },
+  {
+    "lada": "697",
+    "estado": "Sinaloa",
+    "municipio": "Mocorito"
+  },
+  {
+    "lada": "698",
+    "estado": "Sinaloa",
+    "municipio": "El Fuerte"
+  },
+  {
+    "lada": "711",
+    "estado": "México",
+    "municipio": "El Oro"
+  },
+  {
+    "lada": "712",
+    "estado": "México",
+    "municipio": "Jocotitlán"
+  },
+  {
+    "lada": "713",
+    "estado": "México",
+    "municipio": "Atizapán"
+  },
+  {
+    "lada": "714",
+    "estado": "México",
+    "municipio": "Malinalco"
+  },
+  {
+    "lada": "715",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Ocampo"
+  },
+  {
+    "lada": "716",
+    "estado": "México",
+    "municipio": "Tlatlaya"
+  },
+  {
+    "lada": "717",
+    "estado": "México",
+    "municipio": "Tenango del Valle"
+  },
+  {
+    "lada": "718",
+    "estado": "México",
+    "municipio": "Temascalcingo"
+  },
+  {
+    "lada": "719",
+    "estado": "México",
+    "municipio": "Otzolotepec"
+  },
+  {
+    "lada": "721",
+    "estado": "México",
+    "municipio": "Tonatico"
+  },
+  {
+    "lada": "722",
+    "estado": "México",
+    "municipio": "Toluca"
+  },
+  {
+    "lada": "723",
+    "estado": "México",
+    "municipio": "Coatepec Harinas"
+  },
+  {
+    "lada": "724",
+    "estado": "México",
+    "municipio": "Tejupilco"
+  },
+  {
+    "lada": "725",
+    "estado": "México",
+    "municipio": "Almoloya de Juárez"
+  },
+  {
+    "lada": "726",
+    "estado": "México",
+    "municipio": "Valle de Bravo"
+  },
+  {
+    "lada": "727",
+    "estado": "Guerrero",
+    "municipio": "Huitzuco de los Figueroa"
+  },
+  {
+    "lada": "728",
+    "estado": "México",
+    "municipio": "Lerma"
+  },
+  {
+    "lada": "731",
+    "estado": "Morelos",
+    "municipio": "Ocuituco"
+  },
+  {
+    "lada": "732",
+    "estado": "Guerrero",
+    "municipio": "Cutzamala de Pinzón"
+  },
+  {
+    "lada": "733",
+    "estado": "Guerrero",
+    "municipio": "Tepecoacuilco de Trujano"
+  },
+  {
+    "lada": "734",
+    "estado": "Morelos",
+    "municipio": "Jojutla"
+  },
+  {
+    "lada": "735",
+    "estado": "Morelos",
+    "municipio": "Ayala"
+  },
+  {
+    "lada": "736",
+    "estado": "Guerrero",
+    "municipio": "Teloloapan"
+  },
+  {
+    "lada": "737",
+    "estado": "Morelos",
+    "municipio": "Miacatlán"
+  },
+  {
+    "lada": "738",
+    "estado": "Hidalgo",
+    "municipio": "Chilcuautla"
+  },
+  {
+    "lada": "739",
+    "estado": "Morelos",
+    "municipio": "Tepoztlán"
+  },
+  {
+    "lada": "741",
+    "estado": "Guerrero",
+    "municipio": "Ometepec"
+  },
+  {
+    "lada": "742",
+    "estado": "Guerrero",
+    "municipio": "Técpan de Galeana"
+  },
+  {
+    "lada": "743",
+    "estado": "Hidalgo",
+    "municipio": "Zempoala"
+  },
+  {
+    "lada": "744",
+    "estado": "Guerrero",
+    "municipio": "Acapulco de Juárez"
+  },
+  {
+    "lada": "745",
+    "estado": "Guerrero",
+    "municipio": "Ayutla de los Libres"
+  },
+  {
+    "lada": "746",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Ixhuatlán de Madero"
+  },
+  {
+    "lada": "747",
+    "estado": "Guerrero",
+    "municipio": "Chilpancingo de los Bravo"
+  },
+  {
+    "lada": "748",
+    "estado": "Hidalgo",
+    "municipio": "Apan"
+  },
+  {
+    "lada": "749",
+    "estado": "Tlaxcala",
+    "municipio": "Calpulalpan"
+  },
+  {
+    "lada": "751",
+    "estado": "Morelos",
+    "municipio": "Amacuzac"
+  },
+  {
+    "lada": "753",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Lázaro Cárdenas"
+  },
+  {
+    "lada": "754",
+    "estado": "Guerrero",
+    "municipio": "Ahuacuotzingo"
+  },
+  {
+    "lada": "755",
+    "estado": "Guerrero",
+    "municipio": "Zihuatanejo de Azueta"
+  },
+  {
+    "lada": "756",
+    "estado": "Guerrero",
+    "municipio": "Olinalá"
+  },
+  {
+    "lada": "757",
+    "estado": "Guerrero",
+    "municipio": "Huamuxtitlán"
+  },
+  {
+    "lada": "758",
+    "estado": "Guerrero",
+    "municipio": "Petatlán"
+  },
+  {
+    "lada": "759",
+    "estado": "Hidalgo",
+    "municipio": "Ixmiquilpan"
+  },
+  {
+    "lada": "761",
+    "estado": "Hidalgo",
+    "municipio": "Huichapan"
+  },
+  {
+    "lada": "762",
+    "estado": "Guerrero",
+    "municipio": "Taxco de Alarcón"
+  },
+  {
+    "lada": "763",
+    "estado": "Hidalgo",
+    "municipio": "Chapantongo"
+  },
+  {
+    "lada": "764",
+    "estado": "Puebla",
+    "municipio": "Xicotepec"
+  },
+  {
+    "lada": "765",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Álamo Temapache"
+  },
+  {
+    "lada": "766",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Gutiérrez Zamora"
+  },
+  {
+    "lada": "767",
+    "estado": "Guerrero",
+    "municipio": "Coyuca de Catalán"
+  },
+  {
+    "lada": "768",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Naranjos Amatlán"
+  },
+  {
+    "lada": "769",
+    "estado": "Morelos",
+    "municipio": "Axochiapan"
+  },
+  {
+    "lada": "771",
+    "estado": "Hidalgo",
+    "municipio": "Epazoyucan"
+  },
+  {
+    "lada": "772",
+    "estado": "Hidalgo",
+    "municipio": "Actopan"
+  },
+  {
+    "lada": "773",
+    "estado": "Hidalgo",
+    "municipio": "Tepeji del Río de Ocampo"
+  },
+  {
+    "lada": "774",
+    "estado": "Hidalgo",
+    "municipio": "Atotonilco el Grande"
+  },
+  {
+    "lada": "775",
+    "estado": "Hidalgo",
+    "municipio": "Tulancingo de Bravo"
+  },
+  {
+    "lada": "776",
+    "estado": "Hidalgo",
+    "municipio": "Acaxochitlán"
+  },
+  {
+    "lada": "777",
+    "estado": "Morelos",
+    "municipio": "Temixco"
+  },
+  {
+    "lada": "778",
+    "estado": "Hidalgo",
+    "municipio": "Ajacuba"
+  },
+  {
+    "lada": "779",
+    "estado": "Hidalgo",
+    "municipio": "Tizayuca"
+  },
+  {
+    "lada": "781",
+    "estado": "Guerrero",
+    "municipio": "Coyuca de Benítez"
+  },
+  {
+    "lada": "782",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Coatzintla"
+  },
+  {
+    "lada": "783",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Tuxpan"
+  },
+  {
+    "lada": "784",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Papantla"
+  },
+  {
+    "lada": "785",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Chicontepec"
+  },
+  {
+    "lada": "786",
+    "estado": "Michoacán de Ocampo",
+    "municipio": "Hidalgo"
+  },
+  {
+    "lada": "789",
+    "estado": "Hidalgo",
+    "municipio": "Huejutla de Reyes"
+  },
+  {
+    "lada": "791",
+    "estado": "Hidalgo",
+    "municipio": "Tepeapulco"
+  },
+  {
+    "lada": "797",
+    "estado": "Puebla",
+    "municipio": "Zacatlán"
+  },
+  {
+    "lada": "821",
+    "estado": "Nuevo León",
+    "municipio": "Linares"
+  },
+  {
+    "lada": "823",
+    "estado": "Nuevo León",
+    "municipio": "China"
+  },
+  {
+    "lada": "824",
+    "estado": "Nuevo León",
+    "municipio": "Vallecillo"
+  },
+  {
+    "lada": "825",
+    "estado": "Nuevo León",
+    "municipio": "Pesquería"
+  },
+  {
+    "lada": "826",
+    "estado": "Nuevo León",
+    "municipio": "Galeana"
+  },
+  {
+    "lada": "828",
+    "estado": "Nuevo León",
+    "municipio": "Cadereyta Jiménez"
+  },
+  {
+    "lada": "829",
+    "estado": "Nuevo León",
+    "municipio": "China"
+  },
+  {
+    "lada": "831",
+    "estado": "Tamaulipas",
+    "municipio": "El Mante"
+  },
+  {
+    "lada": "832",
+    "estado": "Tamaulipas",
+    "municipio": "Llera"
+  },
+  {
+    "lada": "833",
+    "estado": "Tamaulipas",
+    "municipio": "Altamira"
+  },
+  {
+    "lada": "834",
+    "estado": "Tamaulipas",
+    "municipio": "Victoria"
+  },
+  {
+    "lada": "835",
+    "estado": "Tamaulipas",
+    "municipio": "Hidalgo"
+  },
+  {
+    "lada": "836",
+    "estado": "Tamaulipas",
+    "municipio": "González"
+  },
+  {
+    "lada": "841",
+    "estado": "Tamaulipas",
+    "municipio": "San Fernando"
+  },
+  {
+    "lada": "842",
+    "estado": "Zacatecas",
+    "municipio": "Mazapil"
+  },
+  {
+    "lada": "844",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Arteaga"
+  },
+  {
+    "lada": "845",
+    "estado": "San Luis Potosí",
+    "municipio": "Ebano"
+  },
+  {
+    "lada": "846",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Pánuco"
+  },
+  {
+    "lada": "861",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Juárez"
+  },
+  {
+    "lada": "862",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Allende"
+  },
+  {
+    "lada": "864",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Múzquiz"
+  },
+  {
+    "lada": "866",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Frontera"
+  },
+  {
+    "lada": "867",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Francisco I. Madero"
+  },
+  {
+    "lada": "868",
+    "estado": "Tamaulipas",
+    "municipio": "Matamoros"
+  },
+  {
+    "lada": "869",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Lamadrid"
+  },
+  {
+    "lada": "871",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Matamoros"
+  },
+  {
+    "lada": "872",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "San Pedro"
+  },
+  {
+    "lada": "873",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Candela"
+  },
+  {
+    "lada": "877",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Acuña"
+  },
+  {
+    "lada": "878",
+    "estado": "Coahuila de Zaragoza",
+    "municipio": "Jiménez"
+  },
+  {
+    "lada": "891",
+    "estado": "Tamaulipas",
+    "municipio": "Camargo"
+  },
+  {
+    "lada": "892",
+    "estado": "Nuevo León",
+    "municipio": "Agualeguas"
+  },
+  {
+    "lada": "894",
+    "estado": "Tamaulipas",
+    "municipio": "Valle Hermoso"
+  },
+  {
+    "lada": "897",
+    "estado": "Tamaulipas",
+    "municipio": "Miguel Alemán"
+  },
+  {
+    "lada": "899",
+    "estado": "Tamaulipas",
+    "municipio": "Reynosa"
+  },
+  {
+    "lada": "913",
+    "estado": "Tabasco",
+    "municipio": "Centla"
+  },
+  {
+    "lada": "914",
+    "estado": "Tabasco",
+    "municipio": "Nacajuca"
+  },
+  {
+    "lada": "916",
+    "estado": "Chiapas",
+    "municipio": "Villaflores"
+  },
+  {
+    "lada": "917",
+    "estado": "Chiapas",
+    "municipio": "La Concordia"
+  },
+  {
+    "lada": "918",
+    "estado": "Chiapas",
+    "municipio": "Mapastepec"
+  },
+  {
+    "lada": "919",
+    "estado": "Chiapas",
+    "municipio": "Chilón"
+  },
+  {
+    "lada": "921",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Coatzacoalcos"
+  },
+  {
+    "lada": "922",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Uxpanapa"
+  },
+  {
+    "lada": "923",
+    "estado": "Tabasco",
+    "municipio": "Huimanguillo"
+  },
+  {
+    "lada": "924",
+    "estado": "Veracruz de Ignacio de la Llave",
+    "municipio": "Sayula de Alemán"
+  },
+  {
+    "lada": "932",
+    "estado": "Tabasco",
+    "municipio": "Tacotalpa"
+  },
+  {
+    "lada": "933",
+    "estado": "Tabasco",
+    "municipio": "Comalcalco"
+  },
+  {
+    "lada": "934",
+    "estado": "Tabasco",
+    "municipio": "Balancán"
+  },
+  {
+    "lada": "936",
+    "estado": "Tabasco",
+    "municipio": "Macuspana"
+  },
+  {
+    "lada": "937",
+    "estado": "Tabasco",
+    "municipio": "Cárdenas"
+  },
+  {
+    "lada": "938",
+    "estado": "Campeche",
+    "municipio": "Carmen"
+  },
+  {
+    "lada": "951",
+    "estado": "Oaxaca",
+    "municipio": "San Bartolo Coyotepec"
+  },
+  {
+    "lada": "953",
+    "estado": "Puebla",
+    "municipio": "Acatlán"
+  },
+  {
+    "lada": "954",
+    "estado": "Oaxaca",
+    "municipio": "Santiago Pinotepa Nacional"
+  },
+  {
+    "lada": "958",
+    "estado": "Oaxaca",
+    "municipio": "San Pedro Pochutla"
+  },
+  {
+    "lada": "961",
+    "estado": "Chiapas",
+    "municipio": "Chiapa de Corzo"
+  },
+  {
+    "lada": "962",
+    "estado": "Chiapas",
+    "municipio": "Cacahoatán"
+  },
+  {
+    "lada": "963",
+    "estado": "Chiapas",
+    "municipio": "Ocosingo"
+  },
+  {
+    "lada": "964",
+    "estado": "Chiapas",
+    "municipio": "Huehuetán"
+  },
+  {
+    "lada": "965",
+    "estado": "Chiapas",
+    "municipio": "Villa Corzo"
+  },
+  {
+    "lada": "966",
+    "estado": "Chiapas",
+    "municipio": "Venustiano Carranza"
+  },
+  {
+    "lada": "967",
+    "estado": "Chiapas",
+    "municipio": "San Cristóbal de las Casas"
+  },
+  {
+    "lada": "968",
+    "estado": "Chiapas",
+    "municipio": "Escuintla"
+  },
+  {
+    "lada": "969",
+    "estado": "Yucatán",
+    "municipio": "Mérida"
+  },
+  {
+    "lada": "971",
+    "estado": "Oaxaca",
+    "municipio": "Heroica Ciudad de Juchitán de Zaragoza"
+  },
+  {
+    "lada": "972",
+    "estado": "Oaxaca",
+    "municipio": "El Barrio de la Soledad"
+  },
+  {
+    "lada": "981",
+    "estado": "Campeche",
+    "municipio": "Campeche"
+  },
+  {
+    "lada": "982",
+    "estado": "Campeche",
+    "municipio": "Carmen"
+  },
+  {
+    "lada": "983",
+    "estado": "Quintana Roo",
+    "municipio": "Othón P. Blanco"
+  },
+  {
+    "lada": "984",
+    "estado": "Quintana Roo",
+    "municipio": "Lázaro Cárdenas"
+  },
+  {
+    "lada": "985",
+    "estado": "Yucatán",
+    "municipio": "Chemax"
+  },
+  {
+    "lada": "986",
+    "estado": "Yucatán",
+    "municipio": "Tizimín"
+  },
+  {
+    "lada": "987",
+    "estado": "Quintana Roo",
+    "municipio": "Cozumel"
+  },
+  {
+    "lada": "988",
+    "estado": "Yucatán",
+    "municipio": "Espita"
+  },
+  {
+    "lada": "991",
+    "estado": "Yucatán",
+    "municipio": "Baca"
+  },
+  {
+    "lada": "992",
+    "estado": "Chiapas",
+    "municipio": "Motozintla"
+  },
+  {
+    "lada": "993",
+    "estado": "Tabasco",
+    "municipio": "Centro"
+  },
+  {
+    "lada": "994",
+    "estado": "Chiapas",
+    "municipio": "Tonalá"
+  },
+  {
+    "lada": "995",
+    "estado": "Oaxaca",
+    "municipio": "Nejapa de Madero"
+  },
+  {
+    "lada": "996",
+    "estado": "Campeche",
+    "municipio": "Calkiní"
+  },
+  {
+    "lada": "997",
+    "estado": "Quintana Roo",
+    "municipio": "José María Morelos"
+  },
+  {
+    "lada": "998",
+    "estado": "Quintana Roo",
+    "municipio": "Benito Juárez"
+  },
+  {
+    "lada": "999",
+    "estado": "Yucatán",
+    "municipio": "Mérida"
+  }
+]

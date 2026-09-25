@@ -26297,6 +26297,84 @@ class CRMRepository:
         data = resp.json() or []
         return isinstance(data, list) and bool(data)
 
+    async def worker_record_brevo_event(
+        self,
+        *,
+        organizacion_id: UUID,
+        envio_id: UUID,
+        message_id: str,
+        event_name: str,
+        estado_normalizado: str,
+        ocurrido_en: str,
+        email: str | None = None,
+        provider_event_id: str | None = None,
+        error_code: str | None = None,
+        error_detail: str | None = None,
+        tag: str | None = None,
+        template_id: int | None = None,
+        url: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        """Persiste un evento Brevo sin duplicarlo por mensaje/tipo/fecha."""
+        body = {
+            "organizacion_id": str(organizacion_id),
+            "envio_id": str(envio_id),
+            "proveedor": "brevo",
+            "mensaje_id": message_id.strip("<> "),
+            "tipo_evento": event_name.strip().lower(),
+            "estado_normalizado": estado_normalizado.strip().lower(),
+            "correo_destino": email.strip().lower() if isinstance(email, str) and email.strip() else None,
+            "ocurrido_en": ocurrido_en,
+            "proveedor_evento_id": provider_event_id,
+            "codigo_error": error_code,
+            "detalle_error": error_detail,
+            "etiqueta": tag,
+            "plantilla_proveedor_id": template_id,
+            "url_clic": url,
+            "payload": payload or {},
+        }
+        await self._request(
+            "POST",
+            "/rest/v1/prospeccion_correo_eventos",
+            json=body,
+            params={
+                "on_conflict": "organizacion_id,proveedor,mensaje_id,tipo_evento,ocurrido_en",
+            },
+            prefer="resolution=ignore-duplicates,return=minimal",
+        )
+
+    async def list_active_brevo_organizations(self) -> list[UUID]:
+        """Lista tenants activos con configuración Brevo candidata.
+
+        La API key se lee después, por tenant, desde el almacén cifrado; nunca se
+        devuelve ni se consulta desde la columna de configuración pública.
+        """
+        response = await self._request_service_role(
+            "GET",
+            "/rest/v1/organizaciones",
+            params={
+                "select": "id,config",
+                "activo": "eq.true",
+                "limit": "1000",
+            },
+        )
+        rows = response.json() or []
+        if not isinstance(rows, list):
+            raise CRMRepositoryError("Respuesta inesperada al listar organizaciones Brevo")
+        result: list[UUID] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            config = row.get("config") if isinstance(row.get("config"), dict) else {}
+            brevo_config = config.get("brevo") if isinstance(config.get("brevo"), dict) else {}
+            if not brevo_config:
+                continue
+            try:
+                result.append(UUID(str(row.get("id"))))
+            except (TypeError, ValueError):
+                continue
+        return result
+
     async def worker_find_prospecto_by_contacto(
         self,
         *,

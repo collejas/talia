@@ -126,7 +126,7 @@ async def test_process_brevo_events_deferred_does_not_requeue(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_process_brevo_events_blocks_state_regression(monkeypatch):
+async def test_process_brevo_events_persists_state_regression_without_updating_envio(monkeypatch):
     repo = RepoStub()
     repo.envios["brevo-1"]["estado"] = "entregado"
 
@@ -141,9 +141,9 @@ async def test_process_brevo_events_blocks_state_regression(monkeypatch):
         events=[{"event": "deferred", "message-id": "brevo-1", "email": "demo@example.com"}],
     )
 
-    assert processed == 0
+    assert processed == 1
     assert not repo.updates
-    assert not repo.logs
+    assert repo.logs[0]["estado"] == "entregado"
 
 
 @pytest.mark.anyio

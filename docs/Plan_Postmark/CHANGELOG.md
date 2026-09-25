@@ -77,6 +77,20 @@ destinatarios ni URLs en estas métricas.
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
 
+## [2026-09-25] — Eventos Brevo en métricas unificadas
+
+- Se agregó `prospeccion_correo_eventos` para conservar eventos Brevo por tenant,
+  mensaje, tipo y fecha con idempotencia e índices de consulta.
+- El webhook Brevo ahora reconoce variantes camelCase como `uniqueOpened`,
+  `softBounce` y `hardBounce`, y conserva aperturas/clics aunque el envío ya
+  esté entregado.
+- Se agregó un sincronizador histórico independiente basado en la actividad
+  SMTP de Brevo; no bloquea la creación ni entrega de lotes.
+- La ventana histórica queda limitada a 90 días por la API del proveedor; Talia
+  conserva localmente los eventos ya persistidos.
+- La vista existente `prospeccion/metricas` reutiliza sus campos de aperturas y
+  clics, sin crear una vista separada para Brevo.
+
 ## [2026-09-19] — Implementación del preparador y cola durable de webhooks
 
 ### Cambios

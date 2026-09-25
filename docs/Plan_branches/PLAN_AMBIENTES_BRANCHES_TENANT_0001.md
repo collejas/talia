@@ -372,7 +372,7 @@ Checklist:
 - [ ] Logs centralizados por servicio
 
 Implementación E10 (2026-03-27):
-- Script de probes creado: `scripts/monitor_env_health.sh` (checks: `api_health`, `panel_dashboard`, `auth_login`).
+- Script de probes creado: `scripts/monitor_env_health.sh` (checks: `api_health`, `panel_dashboard`).
 - Units/timers creados: `infra/systemd/talia-observability-{production,staging}.{service,timer}`.
 - Script de instalación creado: `scripts/install_observability_timers.sh`.
 - Ejemplos de variables creados: `infra/env/observability.{production,staging}.env.example`.
