@@ -4561,7 +4561,7 @@ class CRMRepository:
                 "order": "enviado_formalizacion_en.asc,id.asc",
                 "limit": str(limit),
                 "offset": str(offset),
-                "select": "id,cotizacion_id,estado_formalizacion,enviado_formalizacion_en,forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,motivo_devolucion_comercial,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,precio_unitario_final,subtotal,moneda,catalog_item:catalog_items(maneja_inventario)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type))",
+                "select": "id,cotizacion_id,estado_formalizacion,enviado_formalizacion_en,forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,motivo_devolucion_comercial,motivo_devolucion_codigo,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo,correo_principal,telefono_principal_e164),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre,razon_social,rfc,email_facturacion,correo_principal,codigo_postal,regimen_capital),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,cotizacion_item_id,descripcion,cantidad,precio_unitario_final,subtotal,moneda,catalog_item_id,catalog_item:catalog_items(maneja_inventario),cotizacion_item:cotizacion_items!pedido_venta_items_cotizacion_item_org_fkey(cantidad,precio_unitario_final,precio_unitario,descuento_porcentaje,limite_descuento_porcentaje,subtotal,moneda_aplicada,catalog_item_id)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type))",
             },
             organizacion_id=organizacion_id,
         )
@@ -4569,6 +4569,91 @@ class CRMRepository:
         if not isinstance(data, list) or not all(isinstance(row, dict) for row in data):
             raise CRMRepositoryError("sales_order_formalization_queue_invalid_response")
         return data
+
+    async def get_sales_order_inventory_availability(
+        self,
+        *,
+        organizacion_id: UUID,
+        catalog_item_ids: list[UUID],
+    ) -> dict[str, Decimal]:
+        """Return stock in the same active warehouse used by the approval RPC."""
+        item_ids = sorted({str(item_id) for item_id in catalog_item_ids})
+        if not item_ids:
+            return {}
+        warehouse_response = await self._request_service_role(
+            "GET",
+            "/rest/v1/almacenes",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "activo": "eq.true",
+                "select": "id,es_principal",
+            },
+            organizacion_id=organizacion_id,
+        )
+        warehouse_rows = warehouse_response.json()
+        if not isinstance(warehouse_rows, list):
+            raise CRMRepositoryError("sales_order_inventory_warehouses_invalid_response")
+        active_warehouses = [
+            row for row in warehouse_rows if isinstance(row, dict) and row.get("id")
+        ]
+        if not active_warehouses:
+            return {item_id: Decimal("0") for item_id in item_ids}
+        active_warehouses.sort(key=lambda row: (not bool(row.get("es_principal")), str(row["id"])))
+        warehouse_id = str(active_warehouses[0]["id"])
+        stock_response = await self._request_service_role(
+            "GET",
+            "/rest/v1/inventario_existencias",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "catalog_item_id": f"in.({','.join(item_ids)})",
+                "almacen_id": f"eq.{warehouse_id}",
+                "select": "catalog_item_id,stock_actual,stock_reservado",
+            },
+            organizacion_id=organizacion_id,
+        )
+        stock_rows = stock_response.json()
+        if not isinstance(stock_rows, list):
+            raise CRMRepositoryError("sales_order_inventory_stock_invalid_response")
+        availability = {item_id: Decimal("0") for item_id in item_ids}
+        for row in stock_rows:
+            if not isinstance(row, dict) or not row.get("catalog_item_id"):
+                continue
+            item_id = str(row["catalog_item_id"])
+            physical = Decimal(str(row.get("stock_actual") or 0))
+            reserved = Decimal(str(row.get("stock_reservado") or 0))
+            availability[item_id] = availability.get(item_id, Decimal("0")) + max(Decimal("0"), physical - reserved)
+        return availability
+
+    async def get_sales_order_existing_reservations(
+        self,
+        *,
+        organizacion_id: UUID,
+        quote_ids: list[UUID],
+    ) -> dict[str, Decimal]:
+        quote_id_values = sorted({str(quote_id) for quote_id in quote_ids})
+        if not quote_id_values:
+            return {}
+        response = await self._request_service_role(
+            "GET",
+            "/rest/v1/inventario_reservas",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "quote_id": f"in.({','.join(quote_id_values)})",
+                "estado": "eq.activa",
+                "select": "quote_item_id,cantidad",
+            },
+            organizacion_id=organizacion_id,
+        )
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise CRMRepositoryError("sales_order_inventory_reservations_invalid_response")
+        totals: dict[str, Decimal] = {}
+        for row in rows:
+            if not isinstance(row, dict) or not row.get("quote_item_id"):
+                continue
+            item_id = str(row["quote_item_id"])
+            totals[item_id] = totals.get(item_id, Decimal("0")) + Decimal(str(row.get("cantidad") or 0))
+        return totals
 
     async def list_pedidos_venta_pendientes_surtido(
         self,
@@ -4602,6 +4687,7 @@ class CRMRepository:
         organizacion_id: UUID,
         pedido_venta_id: UUID,
         usuario_id: UUID,
+        codigo_motivo: str,
         motivo: str,
     ) -> dict[str, Any]:
         response = await self._request_service_role(
@@ -4611,6 +4697,7 @@ class CRMRepository:
                 "p_organizacion_id": str(organizacion_id),
                 "p_pedido_venta_id": str(pedido_venta_id),
                 "p_usuario_id": str(usuario_id),
+                "p_codigo_motivo": codigo_motivo,
                 "p_motivo": motivo,
             },
             organizacion_id=organizacion_id,
@@ -4743,6 +4830,9 @@ class CRMRepository:
         revision_cliente_validada: bool,
         revision_evidencia_validada: bool,
         revision_partidas_validada: bool,
+        revision_inventario_validada: bool,
+        revision_condiciones_validada: bool,
+        revision_riesgos_validada: bool,
         fecha_vencimiento: date | None = None,
     ) -> dict[str, Any]:
         response = await self._request_service_role(
@@ -4755,6 +4845,9 @@ class CRMRepository:
                 "p_revision_cliente_validada": revision_cliente_validada,
                 "p_revision_evidencia_validada": revision_evidencia_validada,
                 "p_revision_partidas_validada": revision_partidas_validada,
+                "p_revision_inventario_validada": revision_inventario_validada,
+                "p_revision_condiciones_validada": revision_condiciones_validada,
+                "p_revision_riesgos_validada": revision_riesgos_validada,
                 "p_fecha_vencimiento": fecha_vencimiento.isoformat() if fecha_vencimiento else None,
             },
             organizacion_id=organizacion_id,

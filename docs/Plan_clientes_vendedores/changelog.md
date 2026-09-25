@@ -310,3 +310,24 @@ Registro del avance, decisiones y validaciones del plan de clientes y vendedores
 El detalle de la implementación reportada al 2026-09-12 se conserva en
 [`README.md`](README.md), sección 13. Este changelog registra el seguimiento a
 partir de esta revisión y no sustituye esa descripción técnica.
+
+
+## 2026-09-25 — Revision operativa de seis bloques
+
+- La bandeja de Operaciones ahora organiza la validacion en cliente,
+  confirmacion/evidencia, partidas, inventario, condiciones y riesgos, usando
+  datos persistidos del cliente, pedido, cotizacion y documentos.
+- La disponibilidad se calcula como stock fisico menos reservas activas en
+  el almacen activo seleccionado por la aprobacion. La RPC recalcula/reserva dentro de la transaccion;
+  los faltantes bloquean cuando el pedido no permite entregas parciales.
+- RFC, codigo postal, condicion de pago o domicilio ausentes se presentan como
+  alertas/contexto y no como requisitos fiscales o comerciales universales.
+- La aprobacion persiste las seis confirmaciones. La devolucion ahora requiere
+  una causa estructurada y conserva un comentario libre para Comercial.
+- La base de datos bloquea liberar si las partidas ya no coinciden en cantidad,
+  producto, moneda o precio con la cotizacion aceptada, o si el descuento supera
+  el limite guardado. La pantalla muestra la comparacion y el motivo.
+- Migraciones `20260925012201_sales_order_operations_review_six_sections.sql` y
+  `20260925012622_sales_order_review_commercial_consistency_guards.sql`
+  aplicadas en Supabase el 2026-09-25; falta despliegue del panel/API y
+  validacion con usuarios y tenant reales.

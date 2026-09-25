@@ -4247,6 +4247,12 @@ class PedidoVentaEntregaPayload(BaseModel):
 
 
 class PedidoVentaDevolverPayload(BaseModel):
+    codigo_motivo: Literal[
+        "falta_evidencia", "oc_no_coincide", "precio_incorrecto",
+        "descuento_no_autorizado", "datos_cliente_incompletos",
+        "partidas_incorrectas", "condiciones_incompletas",
+        "problema_inventario", "otro",
+    ]
     motivo: str = Field(..., min_length=1, max_length=2000)
 
     @field_validator("motivo")
@@ -4262,6 +4268,9 @@ class PedidoVentaAprobarPayload(BaseModel):
     revision_cliente_validada: bool
     revision_evidencia_validada: bool
     revision_partidas_validada: bool
+    revision_inventario_validada: bool
+    revision_condiciones_validada: bool
+    revision_riesgos_validada: bool
     fecha_vencimiento: date | None = None
 
 
@@ -32649,6 +32658,9 @@ async def aprobar_pedido_venta_y_liberar(
             revision_cliente_validada=payload.revision_cliente_validada,
             revision_evidencia_validada=payload.revision_evidencia_validada,
             revision_partidas_validada=payload.revision_partidas_validada,
+            revision_inventario_validada=payload.revision_inventario_validada,
+            revision_condiciones_validada=payload.revision_condiciones_validada,
+            revision_riesgos_validada=payload.revision_riesgos_validada,
             fecha_vencimiento=payload.fecha_vencimiento,
         )
     except CRMRepositoryError as exc:
@@ -32663,6 +32675,10 @@ async def aprobar_pedido_venta_y_liberar(
             raise HTTPException(status_code=409, detail="no_hay_almacen_activo_para_reservas") from exc
         if "inventory_shortfall_partial_delivery_not_allowed" in message:
             raise HTTPException(status_code=409, detail="inventario_insuficiente_no_permite_entrega_parcial") from exc
+        if "sales_order_quote_items_mismatch" in message:
+            raise HTTPException(status_code=409, detail="partidas_pedido_no_coinciden_con_cotizacion") from exc
+        if "sales_order_discount_exceeds_approved_limit" in message:
+            raise HTTPException(status_code=409, detail="descuento_supera_limite_autorizado") from exc
         if "Stock insuficiente" in message:
             raise HTTPException(status_code=409, detail="inventario_insuficiente_para_confirmar_pedido") from exc
         if "property_unit_not_available" in message or "property_unit_already_reserved" in message:
@@ -32748,6 +32764,29 @@ async def listar_pedidos_pendientes_formalizacion(
         raise HTTPException(status_code=502, detail="no_se_pudo_consultar_pedidos_pendientes") from exc
 
     items: list[dict[str, Any]] = []
+    inventory_item_ids = sorted({
+        item_id
+        for row in rows
+        for item in (row.get("items") if isinstance(row.get("items"), list) else [])
+        if isinstance(item, dict)
+        if (item_id := _safe_uuid(item.get("catalog_item_id"))) is not None
+    })
+    inventory_quote_ids = sorted({
+        quote_id
+        for row in rows
+        if (quote_id := _safe_uuid(row.get("cotizacion_id"))) is not None
+    })
+    try:
+        inventory_available = await repo.get_sales_order_inventory_availability(
+            organizacion_id=organizacion_id,
+            catalog_item_ids=inventory_item_ids,
+        )
+        inventory_reserved_by_quote_item = await repo.get_sales_order_existing_reservations(
+            organizacion_id=organizacion_id,
+            quote_ids=inventory_quote_ids,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudo_consultar_disponibilidad_inventario") from exc
     for row in rows:
         quote = _single_related(row.get("cotizacion")) or {}
         contact = _single_related(quote.get("contacto"))
@@ -32758,6 +32797,7 @@ async def listar_pedidos_pendientes_formalizacion(
             if not isinstance(item, dict):
                 continue
             catalog_item = _single_related(item.get("catalog_item"))
+            quote_item = _single_related(item.get("cotizacion_item")) or {}
             order_items.append({
                 "id": item.get("id"),
                 "descripcion": item.get("descripcion") or "Artículo",
@@ -32765,7 +32805,22 @@ async def listar_pedidos_pendientes_formalizacion(
                 "precio_unitario": item.get("precio_unitario_final"),
                 "subtotal": item.get("subtotal"),
                 "moneda": item.get("moneda") or quote.get("moneda"),
+                "catalog_item_id": str(item.get("catalog_item_id")) if item.get("catalog_item_id") else None,
                 "maneja_inventario": bool(catalog_item and catalog_item.get("maneja_inventario")),
+                "stock_disponible": (
+                    inventory_available.get(str(item.get("catalog_item_id")), Decimal("0"))
+                    + inventory_reserved_by_quote_item.get(str(item.get("cotizacion_item_id")), Decimal("0"))
+                    if catalog_item and catalog_item.get("maneja_inventario") else None
+                ),
+                "stock_reservado_pedido": inventory_reserved_by_quote_item.get(
+                    str(item.get("cotizacion_item_id")), Decimal("0")
+                ) if catalog_item and catalog_item.get("maneja_inventario") else None,
+                "cotizacion_cantidad": quote_item.get("cantidad"),
+                "cotizacion_precio_unitario": quote_item.get("precio_unitario_final") or quote_item.get("precio_unitario"),
+                "cotizacion_descuento_porcentaje": quote_item.get("descuento_porcentaje"),
+                "cotizacion_limite_descuento_porcentaje": quote_item.get("limite_descuento_porcentaje"),
+                "cotizacion_moneda": quote_item.get("moneda_aplicada") or quote.get("moneda"),
+                "cotizacion_catalog_item_id": quote_item.get("catalog_item_id"),
             })
         documents = []
         for document in row.get("documentos") if isinstance(row.get("documentos"), list) else []:
@@ -32785,6 +32840,15 @@ async def listar_pedidos_pendientes_formalizacion(
             "folio": quote.get("folio"),
             "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
             "cliente": account.get("nombre") if account else None,
+            "cliente_datos": {
+                "razon_social": account.get("razon_social") if account else None,
+                "rfc": account.get("rfc") if account else None,
+                "correo_facturacion": (account.get("email_facturacion") or account.get("correo_principal")) if account else None,
+                "codigo_postal": account.get("codigo_postal") if account else None,
+                "regimen_capital": account.get("regimen_capital") if account else None,
+                "contacto_correo": contact.get("correo_principal") if contact else None,
+                "contacto_telefono": contact.get("telefono_principal_e164") if contact else None,
+            },
             "contacto": contact.get("nombre_completo") if contact else None,
             "total": quote.get("total"),
             "moneda": quote.get("moneda"),
@@ -32794,6 +32858,14 @@ async def listar_pedidos_pendientes_formalizacion(
             "referencia_pedido_cliente": row.get("referencia_pedido_cliente"),
             "fecha_orden_cliente": row.get("fecha_orden_cliente"),
             "observaciones_confirmacion": row.get("observaciones_confirmacion"),
+            "condicion_pago": row.get("condicion_pago"),
+            "dias_credito": row.get("dias_credito"),
+            "anticipo_porcentaje": row.get("anticipo_porcentaje"),
+            "permite_entrega_parcial": bool(row.get("permite_entrega_parcial")),
+            "fecha_entrega_comprometida": row.get("fecha_entrega_comprometida"),
+            "domicilio_entrega": row.get("domicilio_entrega"),
+            "observaciones_comerciales": row.get("observaciones_comerciales"),
+            "motivo_devolucion_codigo": row.get("motivo_devolucion_codigo"),
             "items": order_items,
             "documentos": documents,
         })
@@ -32898,6 +32970,7 @@ async def devolver_pedido_a_comercial(
             organizacion_id=organizacion_id,
             pedido_venta_id=pedido_venta_id,
             usuario_id=usuario_id,
+            codigo_motivo=payload.codigo_motivo,
             motivo=payload.motivo,
         )
         return {"ok": True, **result}

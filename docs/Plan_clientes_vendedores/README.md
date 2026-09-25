@@ -505,14 +505,19 @@ La primera version del traspaso por areas se implemento y desplego el
    Si queda faltante, solo se libera cuando el acuerdo acepta entrega parcial.
    Surtidos muestra requerido, reservado, entregado y faltante, limita cada
    entrega a lo reservado y permite reservar el remanente tras reabastecer.
-7. **Siguiente — revision completa:** mostrar los seis bloques, reglas
-   bloqueantes/alertas, causa estructurada al devolver y comentario auditable.
-   Operaciones no edita partidas ni condiciones acordadas.
-8. **Migracion, despliegue y validacion:** aplicar migraciones despues de
-   revisar contratos; recorrer con sesiones/roles autorizados OC y sin OC,
-   reserva parcial y total, falta de stock, devolucion/reenvio, aprobacion,
-   surtidos, pagos y balances; probar tambien usuario sin permiso y aislamiento
-   por organizacion.
+7. **Implementado — revision de seis bloques:** cliente, evidencia,
+   partidas, inventario, condiciones y riesgos muestran datos disponibles y
+   registran que Operaciones los reviso. El stock se calcula en el almacen
+   activo que usa la aprobacion y se vuelve a validar transaccionalmente.
+   Las alertas de datos fiscales o condiciones ausentes se muestran como
+   contexto, no como bloqueos universales. Cantidad, producto, moneda o precio
+   distintos de la cotizacion aceptada y descuentos sobre el limite registrado
+   son bloqueantes en base de datos. Las causas de devolucion se guardan como
+   codigo y comentario separado. Operaciones no edita el acuerdo.
+8. **Pendiente — despliegue y validacion funcional:** recorrer con sesiones/roles
+   autorizados OC y sin OC, reserva parcial y total, falta de stock,
+   devolucion/reenvio, aprobacion, surtidos, pagos y balances; probar tambien
+   usuario sin permiso y aislamiento por organizacion.
 9. **Posterior — documentos y reglas:** implementar `documentos_cobro`,
    politicas configurables de liberacion logistica y vencimiento de reservas
    cuando se definan sus requisitos. No bloquear entregas por cobranza como
