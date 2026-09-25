@@ -50,6 +50,19 @@ export function parseMetadatos(input: Record<string, unknown> | null | undefined
   return input;
 }
 
+function normalizeCurrencyCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const currency = value.trim().toUpperCase();
+  if (!currency) return null;
+
+  try {
+    new Intl.NumberFormat("es-MX", { style: "currency", currency });
+    return currency;
+  } catch {
+    return null;
+  }
+}
+
 function normalizePersonaFisicaMoral(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
@@ -183,7 +196,7 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     etapaNombre: card.etapa_nombre,
     etapaCodigo,
     monto: resolvedMonto,
-    moneda: card.moneda,
+    moneda: normalizeCurrencyCode(card.moneda),
     probabilidad: card.probabilidad,
     proyectoNombre: card.proyecto_nombre ?? resolvedTitulo ?? null,
     proyectoNecesidades: card.proyecto_necesidades ?? null,
