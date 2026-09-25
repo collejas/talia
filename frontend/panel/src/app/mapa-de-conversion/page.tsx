@@ -35,8 +35,8 @@ type ChannelKey = (typeof DEFAULT_CHANNELS)[number];
 type ColorMode = "sequential" | "channel";
 
 const STAGE_LABELS: Record<string, string> = {
-  captado: "Captado",
-  precalificado: "Precalificado",
+  captado: "Contacto capturado",
+  precalificado: "Datos completos",
   demo: "Cita agendada",
   negociacion: "Negociación",
   cerrado_ganado: "Cerrado (ganado)",
@@ -178,8 +178,8 @@ const METRIC_COLUMNS: Array<{ id: string; label: string; metricKey: string }> = 
   { id: "leads_voz", label: "Leads Voz", metricKey: "leads_voz" },
   { id: "total_whatsapp", label: "Total WhatsApp", metricKey: "total_whatsapp" },
   { id: "total_voz", label: "Total Voz", metricKey: "total_voz" },
-  { id: "etapa_captado", label: "Captado", metricKey: "etapa_captado" },
-  { id: "etapa_precalificado", label: "Precalificado", metricKey: "etapa_precalificado" },
+  { id: "etapa_captado", label: "Contacto capturado", metricKey: "etapa_captado" },
+  { id: "etapa_precalificado", label: "Datos completos", metricKey: "etapa_precalificado" },
   { id: "etapa_negociacion", label: "Negociación", metricKey: "etapa_negociacion" },
   { id: "etapa_ganado", label: "Ganado", metricKey: "etapa_ganado" },
   { id: "etapa_perdido", label: "Perdido", metricKey: "etapa_perdido" },

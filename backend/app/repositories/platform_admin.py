@@ -1191,6 +1191,7 @@ class PlatformRepository:
         params = {
             "select": "id,organizacion_id,codigo,nombre,orden,probabilidad,categoria,metadata,creado_en,actualizado_en",
             "organizacion_id": f"eq.{organizacion_id}",
+            "visible_en_embudo": "eq.true",
             "order": "orden.asc",
         }
         data = await self._rest("GET", "/rest/v1/etapas_pipeline", params=params)

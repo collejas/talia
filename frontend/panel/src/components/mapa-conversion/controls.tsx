@@ -42,8 +42,8 @@ const CHANNEL_OPTIONS = [
 const DEFAULT_CHANNELS = CHANNEL_OPTIONS.map((item) => item.value);
 
 const STAGE_OPTIONS = [
-  { value: "captado", label: "Captado" },
-  { value: "precalificado", label: "Precalificado" },
+  { value: "captado", label: "Contacto capturado" },
+  { value: "precalificado", label: "Datos completos" },
   { value: "negociacion", label: "Negociación" },
   { value: "ganado", label: "Ganado" },
   { value: "perdido", label: "Perdido" },

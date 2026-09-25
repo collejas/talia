@@ -4911,14 +4911,16 @@ async def capture_opportunity_if_ready(
         return True, oportunidad_id
 
     try:
+        repo = CRMRepository()
+        await repo.ensure_prospeccion_stage(organizacion_id=UUID(str(organizacion_id)))
         await promote_opportunity_stage(
             oportunidad_id=oportunidad_id,
             organizacion_id=str(organizacion_id),
-            stage_code="captado",
+            stage_code="prospeccion_primer_contacto",
             source="capture_opportunity",
             channel=capture_channel,
         )
-    except StorageError as exc:
+    except (CRMRepositoryError, StorageError) as exc:
         logger.warning(
             "storage.capture_opportunity.promote_failed",
             extra={
@@ -4940,7 +4942,7 @@ async def capture_opportunity_if_ready(
         logger,
         "capture_opportunity.promoted",
         opportunity_id=oportunidad_id,
-        stage_code="captado",
+        stage_code="prospeccion_primer_contacto",
         **log_context,
     )
     return True, oportunidad_id

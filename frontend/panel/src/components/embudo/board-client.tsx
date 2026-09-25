@@ -1427,7 +1427,7 @@ export function EmbudoBoardClient({
     const sourceStage = stages.find((item) => item.id === stageInfo.stage.id) ?? stageInfo.stage;
 
     if (sourceStage.orden != null && sourceStage.orden < 2) {
-      setDragMessage("Solo puedes arrastrar leads a partir de la etapa Precalificado.");
+      setDragMessage("Solo puedes arrastrar leads a partir de la etapa Datos completos.");
       setActiveDragId(null);
       setActiveDragCard(null);
       setActiveDragStage(null);
@@ -1486,7 +1486,7 @@ export function EmbudoBoardClient({
       return;
     }
     if (destinationStage.orden != null && destinationStage.orden < 2) {
-      setDragMessage("No puedes mover leads a etapas anteriores a Precalificado.");
+      setDragMessage("No puedes mover leads a etapas anteriores a Datos completos.");
       handleDragCancel();
       return;
     }

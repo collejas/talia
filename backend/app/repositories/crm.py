@@ -2371,6 +2371,7 @@ class CRMRepository:
 
         params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
+            "visible_en_embudo": "eq.true",
             "order": "orden.asc",
         }
         if tablero_id:
@@ -9644,6 +9645,7 @@ class CRMRepository:
             return cached
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
+            "visible_en_embudo": "eq.true",
             "order": "orden.asc",
             "select": "id",
             "limit": "1",
@@ -9664,6 +9666,7 @@ class CRMRepository:
     async def _get_first_stage_row(self, *, organizacion_id: UUID) -> dict[str, Any] | None:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
+            "visible_en_embudo": "eq.true",
             "order": "orden.asc",
             "select": "id,codigo,nombre,orden,categoria,metadata",
             "limit": "1",
@@ -9872,6 +9875,7 @@ class CRMRepository:
             "select": "id,codigo,nombre,orden,categoria,metadata",
             "metadata->>legacy_codigo": f"eq.{normalized}",
             "metadata->>tablero_id": "not.is.null",
+            "visible_en_embudo": "eq.true",
             "order": "orden.asc",
             "limit": "1",
         }

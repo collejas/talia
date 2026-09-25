@@ -69,8 +69,8 @@ const CHANNEL_CONFIG: ChartConfig = {
 };
 
 const STAGE_CONFIG: ChartConfig = {
-  captado: { label: "Captado", color: "var(--chart-1)" },
-  precalificado: { label: "Precalificado", color: "var(--chart-2)" },
+  captado: { label: "Contacto capturado", color: "var(--chart-1)" },
+  precalificado: { label: "Datos completos", color: "var(--chart-2)" },
   negociacion: { label: "Negociación", color: "var(--chart-3)" },
   ganado: { label: "Ganado", color: "var(--chart-4)" },
   perdido: { label: "Perdido", color: "var(--chart-5)" },
@@ -405,7 +405,7 @@ export function MapaConversionRowDetail({ row, nivel, summary }: Props) {
           </li>
           <li>
             • El avance concentra {formatNumber(sanitizeNumber(etapasTotales.captado))} casos en{" "}
-            <strong className="text-foreground">Captado</strong> y {formatNumber(sanitizeNumber(etapasTotales.negociacion))} en{" "}
+            <strong className="text-foreground">Contacto capturado</strong> y {formatNumber(sanitizeNumber(etapasTotales.negociacion))} en{" "}
             <strong className="text-foreground">Negociación</strong>.
           </li>
           <li>

@@ -496,14 +496,14 @@ const DEFAULT_DRAWER_DEFINITIONS: Record<string, DrawerPrepDefinition> = {
     sections: [
       {
         key: "qualification_check",
-        title: "Checklist de precalificación",
-        description: "Valida que el lead cumple los requisitos antes de avanzar.",
+        title: "Validación de datos completos",
+        description: "Verifica que la información requerida esté completa antes de avanzar.",
         order: 10,
         fields: [
           {
             key: "qualification_status",
             type: "select",
-            label: "Estatus de precalificación",
+            label: "Estado de validación",
             required: true,
             options: [
               { value: "calificado", label: "Calificado" },
@@ -519,7 +519,7 @@ const DEFAULT_DRAWER_DEFINITIONS: Record<string, DrawerPrepDefinition> = {
           {
             key: "qualification_notes",
             type: "textarea",
-            label: "Notas de precalificación",
+            label: "Notas de validación",
             placeholder: "Puntos clave que justifican el avance.",
           },
         ],
