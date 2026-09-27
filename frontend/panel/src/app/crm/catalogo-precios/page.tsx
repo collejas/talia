@@ -5,6 +5,13 @@ import { CatalogPricesWorkspace, type CatalogPriceProduct, type CatalogPriceProp
 
 export const dynamic = "force-dynamic";
 
+type CatalogPrintBrand = {
+  organization_name: string;
+  logo_url: string;
+  primary_color: string;
+  accent_color: string;
+};
+
 type HierarchyNode = Record<string, unknown>;
 
 function asRecord(value: unknown): HierarchyNode | null {
@@ -69,15 +76,19 @@ async function fetchPropertyHierarchy(): Promise<CatalogPriceProperty[]> {
 }
 
 export default async function CrmCatalogoPreciosPage() {
-  const [items, priceLists, properties] = await Promise.all([
+  const [items, priceLists, properties, brandResponse] = await Promise.all([
     fetchCatalogItems({ includeInactive: false, limit: 5000 }),
     fetchCatalogPriceLists(),
     fetchPropertyHierarchy(),
+    callCrmApi<CatalogPrintBrand>("/crm/catalogo-precios/branding"),
   ]);
+  const printBrand = brandResponse.ok ? brandResponse.data : null;
   const priceListValues = await fetchCatalogItemPriceListsBatch(items.map((item) => item.id));
   const products: CatalogPriceProduct[] = items.map((item) => ({
     id: item.id,
     nombre: item.nombre,
+    descripcionCorta: item.descripcionCorta,
+    descripcionLarga: item.descripcionLarga,
     codigo: item.codigo,
     tipo: item.tipo,
     unidad: item.unidad ?? "unidad",
@@ -96,7 +107,7 @@ export default async function CrmCatalogoPreciosPage() {
 
   return (
     <AppViewLayout title="CRM · Catálogo de precios">
-      <CatalogPricesWorkspace products={products} properties={properties} />
+      <CatalogPricesWorkspace products={products} properties={properties} printBrand={printBrand} />
     </AppViewLayout>
   );
 }

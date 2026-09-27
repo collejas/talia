@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { IconAdjustmentsHorizontal, IconBuilding, IconDownload, IconPackage, IconSearch } from "@tabler/icons-react";
+import { IconAdjustmentsHorizontal, IconBuilding, IconDownload, IconPackage, IconPrinter, IconSearch } from "@tabler/icons-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export type CatalogPriceProduct = {
   id: string;
   nombre: string;
+  descripcionCorta: string | null;
+  descripcionLarga: string | null;
   codigo: string | null;
   tipo: string;
   unidad: string;
@@ -52,6 +54,8 @@ export type CatalogPriceProperty = {
 
 type CatalogColumnId =
   | "producto"
+  | "descripcion_corta"
+  | "descripcion_larga"
   | "tipo"
   | "clasificacion"
   | "unidad"
@@ -79,8 +83,17 @@ type TablePreferences = {
   widths?: Partial<Record<CatalogColumnId, number>>;
 };
 
+export type CatalogPrintBrand = {
+  organization_name: string;
+  logo_url: string;
+  primary_color: string;
+  accent_color: string;
+};
+
 const COLUMNS: Array<{ id: CatalogColumnId; label: string; initialWidth: number; minWidth: number }> = [
   { id: "producto", label: "Producto / servicio", initialWidth: 300, minWidth: 220 },
+  { id: "descripcion_corta", label: "Descripción corta", initialWidth: 240, minWidth: 160 },
+  { id: "descripcion_larga", label: "Descripción larga", initialWidth: 320, minWidth: 200 },
   { id: "tipo", label: "Tipo", initialWidth: 120, minWidth: 100 },
   { id: "clasificacion", label: "Clasificación", initialWidth: 220, minWidth: 150 },
   { id: "unidad", label: "Unidad", initialWidth: 105, minWidth: 85 },
@@ -93,6 +106,8 @@ const COLUMNS: Array<{ id: CatalogColumnId; label: string; initialWidth: number;
 
 const DEFAULT_VISIBILITY: Record<CatalogColumnId, boolean> = {
   producto: true,
+  descripcion_corta: true,
+  descripcion_larga: true,
   tipo: true,
   clasificacion: true,
   unidad: true,
@@ -141,6 +156,95 @@ function ExportExcelButton({ onClick, disabled = false }: { onClick: () => void;
   );
 }
 
+function PrintCatalogButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onClick} disabled={disabled}>
+      <IconPrinter className="mr-2 size-4" />Imprimir / guardar PDF
+    </Button>
+  );
+}
+
+function escapeHtml(value: unknown) {
+  const escaped: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  };
+  return String(value ?? "—").replace(/[&<>"']/g, (character) => escaped[character] ?? character);
+}
+
+function openCatalogPrintWindow({
+  brand,
+  title,
+  details,
+  headers,
+  rows,
+}: {
+  brand: CatalogPrintBrand;
+  title: string;
+  details: string[];
+  headers: string[];
+  rows: unknown[][];
+}) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return false;
+  printWindow.opener = null;
+
+  const primary = /^#[\da-f]{6}$/i.test(brand.primary_color) ? brand.primary_color : "#0f172a";
+  const accent = /^#[\da-f]{6}$/i.test(brand.accent_color) ? brand.accent_color : "#14b8a6";
+  const logoUrl = brand.logo_url;
+  const safeLogoUrl = (logoUrl.startsWith("/") && !logoUrl.startsWith("//")) || /^https?:\/\//i.test(logoUrl)
+    ? logoUrl
+    : "";
+  const tableHeader = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("");
+  const tableRows = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
+  const logo = safeLogoUrl ? `<img class="logo" src="${escapeHtml(safeLogoUrl)}" alt="Logo de ${escapeHtml(brand.organization_name)}">` : "";
+  const detailMarkup = details.map((detail) => `<span>${escapeHtml(detail)}</span>`).join("");
+
+  printWindow.document.open();
+  printWindow.document.write(`<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)} · ${escapeHtml(brand.organization_name)}</title>
+<style>
+@page { size: A4 landscape; margin: 12mm; }
+* { box-sizing: border-box; }
+body { color: ${primary}; font: 10px/1.4 Arial, sans-serif; margin: 0; }
+header { align-items: center; border-bottom: 3px solid ${accent}; display: flex; gap: 18px; margin-bottom: 18px; padding: 0 0 12px; }
+.logo { max-height: 58px; max-width: 150px; object-fit: contain; }
+h1 { font-size: 19px; margin: 0 0 3px; }
+h2 { color: ${accent}; font-size: 14px; margin: 0; }
+.details { color: #475569; display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 12px; }
+table { border-collapse: collapse; table-layout: auto; width: 100%; }
+thead { display: table-header-group; }
+th { background: ${primary}; color: #fff; font-weight: 600; text-align: left; }
+th, td { border: 1px solid #d8dee8; padding: 6px 7px; vertical-align: top; }
+tbody tr:nth-child(even) { background: #f5f7fa; }
+tr { break-inside: avoid; page-break-inside: avoid; }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<header>${logo}<div><h1>${escapeHtml(brand.organization_name)}</h1><h2>${escapeHtml(title)}</h2></div></header>
+<p class="details">${detailMarkup}</p>
+<table><thead><tr>${tableHeader}</tr></thead><tbody>${tableRows}</tbody></table>
+</body></html>`);
+  printWindow.document.close();
+
+  const waitForImages = Promise.all(Array.from(printWindow.document.images).map((image) => image.complete
+    ? Promise.resolve()
+    : new Promise<void>((resolve) => {
+        image.onload = () => resolve();
+        image.onerror = () => resolve();
+        window.setTimeout(resolve, 2500);
+      }),
+  ));
+  void waitForImages.then(() => {
+    printWindow.focus();
+    printWindow.print();
+  });
+  return true;
+}
+
 function ProductTable({
   items,
   inventoryAccess,
@@ -158,6 +262,8 @@ function ProductTable({
   savingPreferences,
   preferencesError,
   onExport,
+  onPrint,
+  printDisabled,
   exportDisabled,
 }: {
   items: CatalogPriceProduct[];
@@ -176,6 +282,8 @@ function ProductTable({
   savingPreferences: boolean;
   preferencesError: boolean;
   onExport: () => void;
+  onPrint: () => void;
+  printDisabled: boolean;
   exportDisabled: boolean;
 }) {
   const resizeRef = useRef<{ columnId: CatalogColumnId; startX: number; startWidth: number } | null>(null);
@@ -245,6 +353,7 @@ function ProductTable({
       {savingPreferences ? <p aria-live="polite" className="text-xs text-muted-foreground">Guardando preferencias de columnas…</p> : null}
 
       <div className="flex flex-wrap justify-end gap-2">
+        <PrintCatalogButton onClick={onPrint} disabled={printDisabled || exportDisabled} />
         <ExportExcelButton onClick={onExport} disabled={exportDisabled} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -315,6 +424,12 @@ function ProductTable({
                       {item.codigo ? <div className="truncate text-xs text-muted-foreground" title={item.codigo}>{item.codigo}</div> : null}
                       {!item.manejaInventario ? <div className="text-xs text-muted-foreground">No maneja inventario</div> : null}
                     </TableCell>;
+                    if (column.id === "descripcion_corta" || column.id === "descripcion_larga") {
+                      const description = column.id === "descripcion_corta" ? item.descripcionCorta : item.descripcionLarga;
+                      return <TableCell key={column.id} className="text-muted-foreground">
+                        <div className="line-clamp-2 whitespace-normal" title={description ?? undefined}>{description || "—"}</div>
+                      </TableCell>;
+                    }
                     if (column.id === "tipo") return <TableCell key={column.id}><Badge variant="outline">{item.tipo}</Badge></TableCell>;
                     if (column.id === "clasificacion") return <TableCell key={column.id} className="truncate text-muted-foreground" title={hierarchy}>{hierarchy || "—"}</TableCell>;
                     if (column.id === "unidad") return <TableCell key={column.id}>{item.unidad}</TableCell>;
@@ -340,11 +455,14 @@ function ProductTable({
   );
 }
 
-function PropertyTable({ items, onExport, exportDisabled }: { items: CatalogPriceProperty[]; onExport: () => void; exportDisabled: boolean }) {
+function PropertyTable({ items, onExport, onPrint, printDisabled, exportDisabled }: { items: CatalogPriceProperty[]; onExport: () => void; onPrint: () => void; printDisabled: boolean; exportDisabled: boolean }) {
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <ExportExcelButton onClick={onExport} disabled={exportDisabled} />
+        <div className="flex flex-wrap justify-end gap-2">
+          <PrintCatalogButton onClick={onPrint} disabled={printDisabled || exportDisabled} />
+          <ExportExcelButton onClick={onExport} disabled={exportDisabled} />
+        </div>
       </div>
       <div className="overflow-x-auto rounded-lg border">
       <Table className="min-w-[900px]"><TableHeader><TableRow>
@@ -369,9 +487,11 @@ function PropertyTable({ items, onExport, exportDisabled }: { items: CatalogPric
 export function CatalogPricesWorkspace({
   products,
   properties,
+  printBrand,
 }: {
   products: CatalogPriceProduct[];
   properties: CatalogPriceProperty[];
+  printBrand: CatalogPrintBrand | null;
 }) {
   const [search, setSearch] = useState("");
   const [productType, setProductType] = useState("all");
@@ -525,6 +645,8 @@ export function CatalogPricesWorkspace({
           const stock = stockByItemId.get(item.id);
           return columns.flatMap((column) => {
             if (column.id === "producto") return [item.codigo ? `${item.nombre} · ${item.codigo}` : item.nombre];
+            if (column.id === "descripcion_corta") return [item.descripcionCorta ?? "—"];
+            if (column.id === "descripcion_larga") return [item.descripcionLarga ?? "—"];
             if (column.id === "tipo") return [item.tipo];
             if (column.id === "clasificacion") return [[item.lineaNombre, item.familiaNombre, item.modeloNombre].filter(Boolean).join(" · ") || "—"];
             if (column.id === "unidad") return [item.unidad];
@@ -555,6 +677,51 @@ export function CatalogPricesWorkspace({
       setExporting(false);
     }
   }, [filteredProducts, inventory.almacenes, inventoryAccess, productType, search, selectedWarehouseId, stockByItemId, visibility, widths]);
+
+  const printProducts = useCallback(() => {
+    if (!printBrand) {
+      toast.error("No se pudo cargar el formato de cotización de esta empresa.");
+      return;
+    }
+    const columns = COLUMNS.filter((column) =>
+      visibility[column.id] && (inventoryAccess || !column.id.startsWith("stock_")),
+    );
+    const listNames = Array.from(new Set(filteredProducts.flatMap((item) => item.preciosLista.map((price) => price.nombre))));
+    const headers = columns.flatMap((column) => column.id === "precios_lista" ? listNames : [column.label]);
+    const selectedWarehouse = inventory.almacenes.find((warehouse) => warehouse.id === selectedWarehouseId);
+    const rows = filteredProducts.map((item) => {
+      const stock = stockByItemId.get(item.id);
+      return columns.flatMap((column) => {
+        if (column.id === "producto") return [item.codigo ? `${item.nombre} · ${item.codigo}` : item.nombre];
+        if (column.id === "descripcion_corta") return [item.descripcionCorta ?? "—"];
+        if (column.id === "descripcion_larga") return [item.descripcionLarga ?? "—"];
+        if (column.id === "tipo") return [item.tipo];
+        if (column.id === "clasificacion") return [[item.lineaNombre, item.familiaNombre, item.modeloNombre].filter(Boolean).join(" · ") || "—"];
+        if (column.id === "unidad") return [item.unidad];
+        if (column.id === "precio_base") return [formatMoney(item.precioBase, item.moneda)];
+        if (column.id === "precios_lista") return listNames.map((name) => {
+          const price = item.preciosLista.find((entry) => entry.nombre === name);
+          return price ? formatMoney(price.precio, price.moneda) : "—";
+        });
+        if (!item.manejaInventario || !selectedWarehouseId) return ["—"];
+        const quantity = column.id === "stock_actual"
+          ? stock?.stock_actual
+          : column.id === "stock_reservado"
+            ? stock?.stock_reservado
+            : stock?.stock_disponible;
+        return [formatQuantity(quantity ?? 0)];
+      });
+    });
+    const details = [
+      `Fecha: ${new Intl.DateTimeFormat("es-MX").format(new Date())}`,
+      `Almacén: ${selectedWarehouse?.nombre ?? "No aplica"}`,
+      `Tipo: ${productType === "all" ? "Todos" : productType}`,
+      `Búsqueda: ${search.trim() || "Sin filtro"}`,
+    ];
+    if (!openCatalogPrintWindow({ brand: printBrand, title: "Catálogo · Productos y servicios", details, headers, rows })) {
+      toast.error("Permite las ventanas emergentes para abrir la impresión.");
+    }
+  }, [filteredProducts, inventory.almacenes, inventoryAccess, printBrand, productType, search, selectedWarehouseId, stockByItemId, visibility]);
 
   const exportProperties = useCallback(async () => {
     setExporting(true);
@@ -590,12 +757,43 @@ export function CatalogPricesWorkspace({
     }
   }, [filteredProperties, search]);
 
+  const printProperties = useCallback(() => {
+    if (!printBrand) {
+      toast.error("No se pudo cargar el formato de cotización de esta empresa.");
+      return;
+    }
+    const headers = ["Propiedad / unidad", "Desarrollo", "Nivel", "Manzana", "Estado", "Precio total", "Precio por m²", "Área (m²)"];
+    const rows = filteredProperties.map((item) => {
+      const total = item.precioTipo.toLowerCase() === "m2" && item.precioM2 !== null && item.areaM2 !== null
+        ? item.precioM2 * item.areaM2
+        : item.precio;
+      return [
+        item.unidad && item.unidad !== item.nombre ? `${item.nombre} · ${item.unidad}` : item.nombre,
+        item.desarrollo,
+        item.capa ?? "—",
+        item.manzana ?? "—",
+        item.status ?? "—",
+        formatMoney(total),
+        item.precioM2 === null ? "—" : formatMoney(item.precioM2),
+        item.areaM2 === null ? "—" : `${item.areaM2.toLocaleString("es-MX")} m²`,
+      ];
+    });
+    const details = [
+      `Fecha: ${new Intl.DateTimeFormat("es-MX").format(new Date())}`,
+      `Búsqueda: ${search.trim() || "Sin filtro"}`,
+    ];
+    if (!openCatalogPrintWindow({ brand: printBrand, title: "Catálogo · Propiedades", details, headers, rows })) {
+      toast.error("Permite las ventanas emergentes para abrir la impresión.");
+    }
+  }, [filteredProperties, printBrand, search]);
+
   return (
     <div className="space-y-6 px-4 py-6 lg:px-6">
       <header className="space-y-2">
         <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Consulta comercial</p>
         <h1 className="text-2xl font-semibold">Catálogo de precios</h1>
         <p className="max-w-3xl text-sm text-muted-foreground">Consulta precios de productos, servicios y propiedades, además de existencias por almacén cuando tu rol tiene acceso. Esta vista es de solo lectura.</p>
+        {!printBrand ? <p role="status" className="text-sm text-destructive">No se pudo cargar el formato de cotización; la impresión está deshabilitada.</p> : null}
       </header>
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -638,12 +836,14 @@ export function CatalogPricesWorkspace({
               savingPreferences={savingPreferences}
               preferencesError={preferencesError}
               onExport={() => { void exportProducts(); }}
+              onPrint={printProducts}
+              printDisabled={!printBrand}
               exportDisabled={exporting || inventoryLoading || (inventoryAccess && Boolean(inventoryError))}
             />
           ) : <EmptyState text="No hay productos que coincidan con la búsqueda." />}
         </TabsContent>
         <TabsContent value="propiedades">
-          {filteredProperties.length ? <PropertyTable items={filteredProperties} onExport={() => { void exportProperties(); }} exportDisabled={exporting} /> : <EmptyState text="No hay propiedades que coincidan con la búsqueda." />}
+          {filteredProperties.length ? <PropertyTable items={filteredProperties} onExport={() => { void exportProperties(); }} onPrint={printProperties} printDisabled={!printBrand} exportDisabled={exporting} /> : <EmptyState text="No hay propiedades que coincidan con la búsqueda." />}
         </TabsContent>
       </Tabs>
     </div>

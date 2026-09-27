@@ -15735,6 +15735,13 @@ class CRMQuoteTemplateUpdate(BaseModel):
     is_active: bool = True
 
 
+class CRMCatalogPriceBrand(BaseModel):
+    organization_name: str
+    logo_url: str
+    primary_color: str
+    accent_color: str
+
+
 class CRMCatalogItem(BaseModel):
     id: UUID
     codigo: str | None = None
@@ -22622,6 +22629,68 @@ async def listar_existencias_catalogo_precios(
             for row in stock_rows
         ],
     }
+
+
+@router.get("/catalogo-precios/branding", response_model=CRMCatalogPriceBrand)
+async def obtener_branding_catalogo_precios(
+    *,
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_any_permission(["propuesta.view", "propiedades.view"])),
+) -> CRMCatalogPriceBrand:
+    """Identidad del tenant y del formato de cotización para imprimir el catálogo."""
+    try:
+        platform_repo = PlatformRepository()
+        organization = await platform_repo.get_organizacion_details(
+            organizacion_id=organizacion_id
+        )
+        template = await platform_repo.get_quote_template(
+            slug=DEFAULT_QUOTE_TEMPLATE_SLUG,
+            organizacion_id=organizacion_id,
+        )
+    except PlatformRepositoryError as exc:
+        raise HTTPException(
+            status_code=502, detail="no_se_pudo_consultar_branding_catalogo"
+        ) from exc
+
+    if not isinstance(organization, dict):
+        raise HTTPException(status_code=404, detail="organizacion_no_encontrada")
+
+    organization_name = (
+        _clean_text(organization.get("nombre"))
+        or _clean_text(organization.get("nombre_comercial"))
+        or _clean_text(organization.get("razon_social"))
+        or "Empresa"
+    )
+    config = _ensure_dict(template.get("config"), default={}) if isinstance(template, dict) else {}
+
+    def valid_color(value: Any, fallback: str) -> str:
+        candidate = _clean_text(value)
+        return candidate if candidate and re.fullmatch(r"#[0-9a-fA-F]{6}", candidate) else fallback
+
+    logo_url = (
+        _clean_text(config.get("logoUrl"))
+        or _clean_text(config.get("logo_url"))
+        or _clean_text(organization.get("logo_url"))
+        or DEFAULT_QUOTE_LOGO_PATH
+    )
+    parsed_logo = urlparse(logo_url)
+    if not (
+        (logo_url.startswith("/") and not logo_url.startswith("//"))
+        or (
+            parsed_logo.scheme in {"http", "https"}
+            and bool(parsed_logo.netloc)
+            and parsed_logo.username is None
+            and parsed_logo.password is None
+        )
+    ):
+        logo_url = DEFAULT_QUOTE_LOGO_PATH
+
+    return CRMCatalogPriceBrand(
+        organization_name=organization_name,
+        logo_url=logo_url,
+        primary_color=valid_color(config.get("primaryColor"), "#0f172a"),
+        accent_color=valid_color(config.get("accentColor"), "#14b8a6"),
+    )
 
 
 @router.post("/compras/inventario/ajustes", response_model=CRMInventarioExistencia)
