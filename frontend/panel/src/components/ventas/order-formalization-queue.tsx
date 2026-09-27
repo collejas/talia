@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { printApprovedOrder, printApprovedOrdersList, type ApprovedOrderForPrint, type OrderPrintBrand } from "@/components/ventas/approved-order-print";
+import { printApprovedOrder, printApprovedOrdersList, printOrderForExceptionApproval, type ApprovedOrderForPrint, type OrderPrintBrand } from "@/components/ventas/approved-order-print";
 
 type QueueItem = {
   id: string;
@@ -246,6 +246,83 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
     }
   };
 
+  const printPendingOrder = (item: QueueItem) => {
+    if (!printBrand) {
+      setError("No se pudo cargar el formato de impresión de la empresa.");
+      return;
+    }
+    const inventory = getInventoryProjection(item);
+    const findings: Array<{ level: "Bloqueo" | "Alerta"; text: string }> = [];
+    if (!item.cuenta_crm_asociada) findings.push({ level: "Bloqueo", text: "No hay una cuenta CRM asociada al cliente." });
+    if (item.items.some((line) => differsFromAcceptedQuote(line))) findings.push({ level: "Bloqueo", text: "Una o más partidas, cantidades, productos o precios difieren de la cotización aceptada." });
+    if (item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje))) findings.push({ level: "Bloqueo", text: "Hay un descuento que supera el límite registrado." });
+    if (!item.permite_entrega_parcial && inventory.some((product) => product.pendienteDespues > 0)) findings.push({ level: "Bloqueo", text: "El inventario no cubre la cantidad solicitada y no se permiten entregas parciales." });
+    if (inventory.some((product) => product.pendienteDespues > 0) && item.permite_entrega_parcial) findings.push({ level: "Alerta", text: "Hay faltantes de inventario; se reservaría parcialmente y el remanente quedaría pendiente." });
+    if (item.items.some((line) => !line.catalog_item_id)) findings.push({ level: "Alerta", text: "Hay partidas sin artículo de catálogo asociado; no se puede validar ni reservar ese inventario." });
+    if (item.items.some((line) => line.tipo_catalogo === "producto" && !line.maneja_inventario)) findings.push({ level: "Alerta", text: "Hay productos con Maneja inventario desactivado." });
+    if (!item.condicion_pago) findings.push({ level: "Alerta", text: "No se especificó una condición de pago." });
+    if (item.items.some((line) => line.maneja_inventario) && !item.domicilio_entrega) findings.push({ level: "Alerta", text: "No se registró un domicilio de entrega." });
+    if (!item.cliente_datos.rfc || !item.cliente_datos.codigo_postal) findings.push({ level: "Alerta", text: "Los datos fiscales disponibles están incompletos; confirma si aplican a esta operación." });
+
+    const sections = [
+      {
+        title: "1. Cliente",
+        details: [
+          `Cuenta CRM asociada: ${item.cuenta_crm_asociada ? "Sí" : "No"}`,
+          `RFC: ${item.cliente_datos.rfc || "No registrado"}`,
+          `Correo de facturación: ${item.cliente_datos.correo_facturacion || "No registrado"}`,
+          `Código postal: ${item.cliente_datos.codigo_postal || "No registrado"}`,
+        ],
+      },
+      {
+        title: "2. Disponibilidad y reserva estimada",
+        details: inventory.length ? inventory.map((product) => `${product.descripcion}: solicitado ${formatQuantity(product.solicitado)}, disponible ahora ${formatQuantity(product.disponibleAhora)}, ya reservado ${formatQuantity(product.reservado)}, reserva adicional ${formatQuantity(product.reservaAdicional)}, pendiente ${formatQuantity(product.pendienteDespues)}, disponible después ${formatQuantity(product.disponibleDespues)}`) : item.items.some((line) => line.maneja_inventario) ? ["No se pudo calcular la disponibilidad para las partidas controladas por inventario."] : ["No hay partidas con control de inventario."],
+      },
+      {
+        title: "3. Condiciones comerciales y entrega",
+        details: [
+          `Pago: ${item.condicion_pago || "No especificado"}${item.dias_credito ? ` · ${item.dias_credito} días de crédito` : ""}${item.anticipo_porcentaje != null ? ` · Anticipo ${item.anticipo_porcentaje}%` : ""}`,
+          `Entrega parcial: ${item.permite_entrega_parcial ? "Permitida" : "No permitida"}`,
+          `Entrega comprometida: ${item.fecha_entrega_comprometida || "No especificada"}`,
+          `Domicilio: ${item.domicilio_entrega || "No especificado"}`,
+          item.observaciones_comerciales || "Sin observaciones comerciales",
+        ],
+      },
+    ];
+    const documents = item.documentos.map((document) => [
+      CONFIRMATION_LABELS[document.tipo_documento] || document.tipo_documento,
+      document.referencia,
+      document.nombre_original,
+      document.observaciones,
+    ].filter(Boolean).join(" · "));
+    const opened = printOrderForExceptionApproval({
+      folio: item.folio,
+      cliente: item.cliente,
+      razon_social: item.cliente_datos.razon_social,
+      contacto: item.contacto,
+      total: item.total,
+      moneda: item.moneda,
+      confirmation: CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada",
+      confirmationDate: item.fecha_confirmacion_cliente,
+      purchaseOrder: item.referencia_pedido_cliente,
+      paymentTerms: item.condicion_pago,
+      deliveryDate: item.fecha_entrega_comprometida,
+      deliveryAddress: item.domicilio_entrega,
+      documents,
+      observations: item.observaciones_confirmacion,
+      lines: item.items.map((line) => ({
+        description: line.descripcion,
+        quantity: `${line.cantidad}`,
+        price: formatMoney(line.precio_unitario, line.moneda),
+        amount: formatMoney(line.subtotal, line.moneda),
+        verification: differsFromAcceptedQuote(line) ? `No coincide con cotización (${line.cotizacion_cantidad ?? "—"} × ${formatMoney(line.cotizacion_precio_unitario, line.cotizacion_moneda)})` : "Coincide con cotización aceptada",
+      })),
+      sections,
+      findings,
+    }, printBrand);
+    if (!opened) setError("Permite las ventanas emergentes para imprimir la orden de venta.");
+  };
+
   const printAllApprovedOrders = async () => {
     if (!printBrand) {
       setError("No se pudo cargar el formato de impresión de la empresa.");
@@ -452,6 +529,7 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
               </ReviewBlock>
             </div>
             <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
+              <Button type="button" variant="outline" onClick={() => printPendingOrder(item)} disabled={!printBrand}><IconPrinter className="mr-2 size-4" />Imprimir para autorización</Button>
               {returningId === item.id ? (
                 <div className="flex w-full flex-col gap-2 sm:flex-row">
                   <select className="h-10 rounded-md border bg-background px-3 text-sm" value={returnCode} onChange={(event) => setReturnCode(event.target.value as typeof returnCode)} aria-label="Causa de devolución">

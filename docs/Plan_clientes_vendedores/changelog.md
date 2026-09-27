@@ -9,6 +9,11 @@
   configurados para la organización y permite guardar como PDF desde el diálogo
   de impresión del navegador. El documento individual incluye espacios para
   nombre, firma y fecha de autorización.
+- Cada pedido pendiente de revisión también puede imprimirse para autorización
+  excepcional. El formato resume datos del cliente, evidencia, partidas,
+  inventario estimado, condiciones, bloqueos y alertas; incluye campos de motivo,
+  nombre, firma y fecha. La firma en papel no altera los bloqueos o el estado
+  operativo de Tal-IA.
 - El listado conserva tenant y autorización mediante `sales.orders.confirm`.
   No incluye saldos de cobranza, que pertenecen a Finanzas.
 - Implementado en código local; pendiente de despliegue y validación funcional
