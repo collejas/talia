@@ -42,7 +42,8 @@ export type ClienteContacto = {
 export type ClienteRecord = {
   id: string;
   organizacion_id: string;
-  contacto_id: string;
+  contacto_id: string | null;
+  persona_id: string | null;
   cuenta_id: string;
   oportunidad_id: string | null;
   vendedor_usuario_id: string | null;

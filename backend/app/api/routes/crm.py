@@ -4110,7 +4110,8 @@ class ClienteResponsableRecord(BaseModel):
 class ClienteRecord(BaseModel):
     id: UUID
     organizacion_id: UUID
-    contacto_id: UUID
+    contacto_id: UUID | None = None
+    persona_id: UUID | None = None
     cuenta_id: UUID
     oportunidad_id: UUID | None = None
     vendedor_usuario_id: UUID | None = None

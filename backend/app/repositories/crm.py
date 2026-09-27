@@ -19217,7 +19217,7 @@ class CRMRepository:
             await self._attach_contact_rows(
                 organizacion_id=organizacion_id,
                 rows=rows,
-                source_fields=("contacto_id",),
+                source_fields=("persona_id", "contacto_id"),
             )
             await self._attach_cliente_vendor_rows(
                 organizacion_id=organizacion_id,
@@ -19540,7 +19540,7 @@ class CRMRepository:
                     await self._attach_contact_rows(
                         organizacion_id=organizacion_id,
                         rows=[row],
-                        source_fields=("contacto_id",),
+                        source_fields=("persona_id", "contacto_id"),
                     )
                     await self._attach_cliente_vendor_rows(
                         organizacion_id=organizacion_id,
@@ -19554,7 +19554,7 @@ class CRMRepository:
             await self._attach_contact_rows(
                 organizacion_id=organizacion_id,
                 rows=[row],
-                source_fields=("contacto_id",),
+                source_fields=("persona_id", "contacto_id"),
             )
             await self._attach_cliente_vendor_rows(
                 organizacion_id=organizacion_id,
@@ -19647,6 +19647,7 @@ class CRMRepository:
             "select": self._CLIENTE_SELECT,
             "limit": "1",
         }
+        row: dict[str, Any] | None = None
         if usuario_token:
             try:
                 resp = await self._request_with_user(
@@ -19660,19 +19661,20 @@ class CRMRepository:
                     raise
             else:
                 data = resp.json() or []
-                row = self._first_row(data)
-                if isinstance(row, dict):
-                    return row
-        resp = await self._request("GET", "/rest/v1/clientes", params=params)
-        data = resp.json() or []
-        row = self._first_row(data)
+                candidate = self._first_row(data)
+                row = candidate if isinstance(candidate, dict) else None
+        if row is None:
+            resp = await self._request("GET", "/rest/v1/clientes", params=params)
+            data = resp.json() or []
+            candidate = self._first_row(data)
+            row = candidate if isinstance(candidate, dict) else None
         if isinstance(row, dict):
             row_org_id = _safe_uuid(row.get("organizacion_id"))
             if row_org_id is not None:
                 await self._attach_contact_rows(
                     organizacion_id=row_org_id,
                     rows=[row],
-                    source_fields=("contacto_id",),
+                    source_fields=("persona_id", "contacto_id"),
                 )
                 await self._attach_cliente_vendor_rows(
                     organizacion_id=row_org_id,
@@ -19700,7 +19702,7 @@ class CRMRepository:
                 await self._attach_contact_rows(
                     organizacion_id=row_org_id,
                     rows=[row],
-                    source_fields=("contacto_id",),
+                    source_fields=("persona_id", "contacto_id"),
                 )
                 await self._attach_cliente_vendor_rows(
                     organizacion_id=row_org_id,
@@ -19748,7 +19750,7 @@ class CRMRepository:
                 await self._attach_contact_rows(
                     organizacion_id=org_uuid,
                     rows=[row],
-                    source_fields=("contacto_id",),
+                    source_fields=("persona_id", "contacto_id"),
                 )
                 await self._attach_cliente_vendor_rows(
                     organizacion_id=org_uuid,
@@ -19935,7 +19937,7 @@ class CRMRepository:
                 await self._attach_contact_rows(
                     organizacion_id=org_uuid,
                     rows=[cliente],
-                    source_fields=("contacto_id",),
+                    source_fields=("persona_id", "contacto_id"),
                 )
         return row
 
