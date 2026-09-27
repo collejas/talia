@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { IconAdjustmentsHorizontal, IconBuilding, IconPackage, IconSearch } from "@tabler/icons-react";
+import { IconAdjustmentsHorizontal, IconBuilding, IconDownload, IconPackage, IconSearch } from "@tabler/icons-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -117,6 +118,29 @@ function normalize(value: string | null | undefined) {
   return (value ?? "").trim().toLocaleLowerCase("es-MX");
 }
 
+async function downloadCatalogWorkbook(fileName: string, sheetName: string, rows: unknown[][], widths: number[]) {
+  const xlsx = await import("@e965/xlsx");
+  const sheet = xlsx.utils.aoa_to_sheet(rows);
+  sheet["!cols"] = widths.map((wch) => ({ wch }));
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, sheet, sheetName);
+  const buffer = xlsx.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+  const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function ExportExcelButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onClick} disabled={disabled}>
+      <IconDownload className="mr-2 size-4" />Exportar Excel
+    </Button>
+  );
+}
+
 function ProductTable({
   items,
   inventoryAccess,
@@ -133,6 +157,8 @@ function ProductTable({
   onReset,
   savingPreferences,
   preferencesError,
+  onExport,
+  exportDisabled,
 }: {
   items: CatalogPriceProduct[];
   inventoryAccess: boolean;
@@ -149,6 +175,8 @@ function ProductTable({
   onReset: () => void;
   savingPreferences: boolean;
   preferencesError: boolean;
+  onExport: () => void;
+  exportDisabled: boolean;
 }) {
   const resizeRef = useRef<{ columnId: CatalogColumnId; startX: number; startWidth: number } | null>(null);
   const visibleColumns = COLUMNS.filter((column) =>
@@ -216,7 +244,8 @@ function ProductTable({
       ) : null}
       {savingPreferences ? <p aria-live="polite" className="text-xs text-muted-foreground">Guardando preferencias de columnas…</p> : null}
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <ExportExcelButton onClick={onExport} disabled={exportDisabled} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="outline" size="sm"><IconAdjustmentsHorizontal className="mr-2 size-4" />Columnas</Button>
@@ -311,9 +340,13 @@ function ProductTable({
   );
 }
 
-function PropertyTable({ items }: { items: CatalogPriceProperty[] }) {
+function PropertyTable({ items, onExport, exportDisabled }: { items: CatalogPriceProperty[]; onExport: () => void; exportDisabled: boolean }) {
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <ExportExcelButton onClick={onExport} disabled={exportDisabled} />
+      </div>
+      <div className="overflow-x-auto rounded-lg border">
       <Table className="min-w-[900px]"><TableHeader><TableRow>
         <TableHead>Propiedad / unidad</TableHead><TableHead>Desarrollo</TableHead><TableHead>Nivel</TableHead><TableHead>Manzana</TableHead>
         <TableHead>Estado</TableHead><TableHead className="text-right">Precio total</TableHead><TableHead className="text-right">Precio por m²</TableHead><TableHead className="text-right">Área</TableHead>
@@ -328,6 +361,7 @@ function PropertyTable({ items }: { items: CatalogPriceProperty[] }) {
           <TableCell className="text-right">{item.areaM2 !== null ? `${item.areaM2.toLocaleString("es-MX")} m²` : "—"}</TableCell>
         </TableRow>;
       })}</TableBody></Table>
+      </div>
     </div>
   );
 }
@@ -349,6 +383,7 @@ export function CatalogPricesWorkspace({
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [preferencesError, setPreferencesError] = useState(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY);
   const [widths, setWidths] = useState(DEFAULT_WIDTHS);
   const loadedWarehouseRef = useRef<string | null>(null);
@@ -470,6 +505,91 @@ export function CatalogPricesWorkspace({
     setWidths(DEFAULT_WIDTHS);
   }, []);
 
+  const exportProducts = useCallback(async () => {
+    setExporting(true);
+    try {
+      const columns = COLUMNS.filter((column) =>
+        visibility[column.id] && (inventoryAccess || !column.id.startsWith("stock_")),
+      );
+      const listNames = Array.from(new Set(filteredProducts.flatMap((item) => item.preciosLista.map((price) => price.nombre))));
+      const headers = columns.flatMap((column) => column.id === "precios_lista" ? listNames : [column.label]);
+      const selectedWarehouse = inventory.almacenes.find((warehouse) => warehouse.id === selectedWarehouseId);
+      const rows: unknown[][] = [
+        ["Catálogo de precios · Productos y servicios"],
+        ["Almacén", selectedWarehouse?.nombre ?? "No aplica"],
+        ["Filtro de tipo", productType === "all" ? "Todos" : productType],
+        ["Búsqueda", search.trim() || "Sin filtro"],
+        [],
+        headers,
+        ...filteredProducts.map((item) => {
+          const stock = stockByItemId.get(item.id);
+          return columns.flatMap((column) => {
+            if (column.id === "producto") return [item.codigo ? `${item.nombre} · ${item.codigo}` : item.nombre];
+            if (column.id === "tipo") return [item.tipo];
+            if (column.id === "clasificacion") return [[item.lineaNombre, item.familiaNombre, item.modeloNombre].filter(Boolean).join(" · ") || "—"];
+            if (column.id === "unidad") return [item.unidad];
+            if (column.id === "precio_base") return [formatMoney(item.precioBase, item.moneda)];
+            if (column.id === "precios_lista") return listNames.map((name) => {
+              const price = item.preciosLista.find((entry) => entry.nombre === name);
+              return price ? formatMoney(price.precio, price.moneda) : "—";
+            });
+            if (!item.manejaInventario || !selectedWarehouseId) return ["—"];
+            const quantity = column.id === "stock_actual"
+              ? stock?.stock_actual
+              : column.id === "stock_reservado"
+                ? stock?.stock_reservado
+                : stock?.stock_disponible;
+            return [formatQuantity(quantity ?? 0)];
+          });
+        }),
+      ];
+      const exportColumnWidths = columns.flatMap((column) => column.id === "precios_lista"
+        ? listNames.map(() => 24)
+        : [Math.max(14, Math.min(36, Math.round(widths[column.id] / 8)))],
+      );
+      await downloadCatalogWorkbook(`catalogo_productos_${new Date().toISOString().slice(0, 10)}.xlsx`, "Productos", rows, exportColumnWidths);
+      toast.success("Archivo de productos exportado.");
+    } catch {
+      toast.error("No se pudo generar el archivo de Excel.");
+    } finally {
+      setExporting(false);
+    }
+  }, [filteredProducts, inventory.almacenes, inventoryAccess, productType, search, selectedWarehouseId, stockByItemId, visibility, widths]);
+
+  const exportProperties = useCallback(async () => {
+    setExporting(true);
+    try {
+      const selectedProperties = filteredProperties.map((item) => ({
+        item,
+        total: item.precioTipo.toLowerCase() === "m2" && item.precioM2 !== null && item.areaM2 !== null
+          ? item.precioM2 * item.areaM2
+          : item.precio,
+      }));
+      const rows: unknown[][] = [
+        ["Catálogo de precios · Propiedades"],
+        ["Búsqueda", search.trim() || "Sin filtro"],
+        [],
+        ["Propiedad / unidad", "Desarrollo", "Nivel", "Manzana", "Estado", "Precio total", "Precio por m²", "Área (m²)"],
+        ...selectedProperties.map(({ item, total }) => [
+          item.unidad && item.unidad !== item.nombre ? `${item.nombre} · ${item.unidad}` : item.nombre,
+          item.desarrollo,
+          item.capa ?? "—",
+          item.manzana ?? "—",
+          item.status ?? "—",
+          formatMoney(total),
+          item.precioM2 === null ? "—" : formatMoney(item.precioM2),
+          item.areaM2 === null ? "—" : item.areaM2,
+        ]),
+      ];
+      await downloadCatalogWorkbook(`catalogo_propiedades_${new Date().toISOString().slice(0, 10)}.xlsx`, "Propiedades", rows, [32, 28, 18, 18, 18, 20, 20, 14]);
+      toast.success("Archivo de propiedades exportado.");
+    } catch {
+      toast.error("No se pudo generar el archivo de Excel.");
+    } finally {
+      setExporting(false);
+    }
+  }, [filteredProperties, search]);
+
   return (
     <div className="space-y-6 px-4 py-6 lg:px-6">
       <header className="space-y-2">
@@ -517,11 +637,13 @@ export function CatalogPricesWorkspace({
               onReset={resetColumns}
               savingPreferences={savingPreferences}
               preferencesError={preferencesError}
+              onExport={() => { void exportProducts(); }}
+              exportDisabled={exporting || inventoryLoading || (inventoryAccess && Boolean(inventoryError))}
             />
           ) : <EmptyState text="No hay productos que coincidan con la búsqueda." />}
         </TabsContent>
         <TabsContent value="propiedades">
-          {filteredProperties.length ? <PropertyTable items={filteredProperties} /> : <EmptyState text="No hay propiedades que coincidan con la búsqueda." />}
+          {filteredProperties.length ? <PropertyTable items={filteredProperties} onExport={() => { void exportProperties(); }} exportDisabled={exporting} /> : <EmptyState text="No hay propiedades que coincidan con la búsqueda." />}
         </TabsContent>
       </Tabs>
     </div>
