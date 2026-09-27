@@ -188,6 +188,8 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     correo: resolvedCorreo,
     telefono: resolvedTelefono,
     empresa: resolvedEmpresa,
+    cuentaCrmId: card.cuenta_crm_id ?? null,
+    cuentaCrmNombre: card.cuenta_crm_nombre ?? null,
     notas: resolvedNotas,
     necesidadProposito: resolvedNecesidadProposito,
     canal: card.canal,

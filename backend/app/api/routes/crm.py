@@ -18721,6 +18721,8 @@ class CRMPipelineBoardCard(BaseModel):
     correo: str | None = None
     telefono: str | None = None
     empresa: str | None = None
+    cuenta_crm_id: UUID | None = None
+    cuenta_crm_nombre: str | None = None
     notas: str | None = None
     necesidad_proposito: str | None = None
     canal: str | None = None
@@ -54504,6 +54506,12 @@ def _card_from_opportunity(row: dict[str, Any]) -> CRMPipelineBoardCard | None:
         correo=contacto_correo,
         telefono=contacto_telefono,
         empresa=contacto_empresa,
+        cuenta_crm_id=_safe_uuid(row.get("cuenta_id")),
+        cuenta_crm_nombre=(
+            _clean_text(cuenta.get("nombre"))
+            if _safe_uuid(row.get("cuenta_id"))
+            else None
+        ),
         notas=resumen_contexto,
         necesidad_proposito=necesidad_proposito,
         canal=canal,

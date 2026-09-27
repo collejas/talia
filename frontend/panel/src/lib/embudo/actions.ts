@@ -343,6 +343,9 @@ function patchCardFromLeadPayload(
       };
     }
   }
+  if ("cuenta_id" in opportunityPayload) {
+    patched.cuentaCrmId = sanitizeNullableString(opportunityPayload.cuenta_id);
+  }
   if ("descripcion" in opportunityPayload) {
     const value = sanitizeNullableString(opportunityPayload.descripcion);
     patched.proyectoNecesidades = value;
@@ -687,6 +690,9 @@ export async function updateLeadCard(input: UpdateLeadInput): Promise<LeadAction
     opportunityPayload.descripcion =
       sanitizeNullableString(opportunityInput.descripcion) ??
       sanitizeNullableString(opportunityInput.proyecto_necesidades);
+  }
+  if (typeof opportunityInput.cuenta_id === "string" && opportunityInput.cuenta_id.trim()) {
+    opportunityPayload.cuenta_id = opportunityInput.cuenta_id.trim();
   }
   if ("metadata" in opportunityInput) {
     const metadata = normalizeMetadata(opportunityInput.metadata);

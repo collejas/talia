@@ -10423,7 +10423,7 @@ class CRMRepository:
         if not isinstance(relation_data, list):
             return rows
 
-        account_by_persona: dict[str, str] = {}
+        relation_accounts_by_persona: dict[str, set[str]] = {}
         account_by_opportunity: dict[str, str] = {}
         account_ids: list[str] = []
         for row in rows:
@@ -10438,9 +10438,9 @@ class CRMRepository:
                 continue
             persona_id = str(relation.get("persona_id") or "").strip()
             account_id = str(relation.get("cuenta_id") or "").strip()
-            if not persona_id or not account_id or persona_id in account_by_persona:
+            if not persona_id or not account_id:
                 continue
-            account_by_persona[persona_id] = account_id
+            relation_accounts_by_persona.setdefault(persona_id, set()).add(account_id)
             if account_id not in account_ids:
                 account_ids.append(account_id)
         if not account_ids:
@@ -10452,6 +10452,8 @@ class CRMRepository:
             params={
                 "organizacion_id": f"eq.{organizacion_id}",
                 "id": _postgrest_in_clause(account_ids),
+                "archived_at": "is.null",
+                "merged_into_cuenta_id": "is.null",
                 "select": "id,nombre,tipo,razon_social,rfc,regimen_capital,telefono,correo,necesidad_proposito",
                 "limit": str(min(1000, len(account_ids))),
             },
@@ -10464,6 +10466,11 @@ class CRMRepository:
             for account in account_data
             if isinstance(account, dict) and account.get("id")
         }
+        account_by_persona: dict[str, str] = {}
+        for persona_id, linked_ids in relation_accounts_by_persona.items():
+            valid_ids = {account_id for account_id in linked_ids if account_id in account_map}
+            if len(valid_ids) == 1:
+                account_by_persona[persona_id] = next(iter(valid_ids))
         for row in rows:
             account_id = account_by_opportunity.get(str(row.get("id") or "").strip())
             if not account_id:

@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  searchEmbudoContacts,
   type ContactSearchResult,
   type LeadActionResult,
   type LeadDeleteResult,
@@ -1202,6 +1203,10 @@ export function LeadDrawer({
   const [deletePending, setDeletePending] = useState(false);
   const [revertPending, setRevertPending] = useState(false);
   const [selectedContact, setSelectedContact] = useState<ContactSearchResult | null>(null);
+  const [opportunityAccountId, setOpportunityAccountId] = useState("");
+  const [opportunityAccountOptions, setOpportunityAccountOptions] = useState<ContactSearchResult[]>([]);
+  const [opportunityAccountLookupPending, setOpportunityAccountLookupPending] = useState(false);
+  const [opportunityAccountLookupError, setOpportunityAccountLookupError] = useState<string | null>(null);
   const [contactSearchQuery, setContactSearchQuery] = useState("");
   const [contactSearchResults, setContactSearchResults] = useState<ContactSearchResult[]>([]);
   const [contactSearchError, setContactSearchError] = useState<string | null>(null);
@@ -1280,6 +1285,30 @@ export function LeadDrawer({
     const requestId = contactSearchRequestRef.current + 1;
     void runContactSearch(term, requestId);
   }, [contactSearchQuery, runContactSearch]);
+
+  const handleOpportunityAccountLookup = async () => {
+    if (!card?.contactoId) {
+      setOpportunityAccountLookupError("La oportunidad no tiene un contacto CRM asociado para buscar sus empresas.");
+      return;
+    }
+    setOpportunityAccountLookupPending(true);
+    setOpportunityAccountLookupError(null);
+    try {
+      const rows = await searchEmbudoContacts(card.nombre ?? card.codigoOportunidad ?? "", 25);
+      const variants = rows.filter((row) => row.id === card.contactoId && row.cuenta_id);
+      const unique = [...new Map(variants.map((row) => [row.cuenta_id, row])).values()];
+      setOpportunityAccountOptions(unique);
+      if (!unique.length) {
+        setOpportunityAccountLookupError("No se encontraron cuentas CRM activas vinculadas a este contacto.");
+      } else if (unique.length === 1) {
+        setOpportunityAccountId(unique[0].cuenta_id ?? "");
+      }
+    } catch {
+      setOpportunityAccountLookupError("No se pudieron consultar las cuentas vinculadas al contacto.");
+    } finally {
+      setOpportunityAccountLookupPending(false);
+    }
+  };
 
   useEffect(() => {
     if (isCreateMode && open) {
@@ -1434,6 +1463,13 @@ export function LeadDrawer({
       setActiveTab("resumen");
     }
   }, [isCreateMode, card]);
+
+  useEffect(() => {
+    if (!open || isCreateMode || !card) return;
+    setOpportunityAccountId(card.cuentaCrmId ?? "");
+    setOpportunityAccountOptions([]);
+    setOpportunityAccountLookupError(null);
+  }, [open, isCreateMode, card]);
 
   useEffect(() => {
     if (!open || !isCreateMode) {
@@ -2208,6 +2244,9 @@ export function LeadDrawer({
       titulo: proyectoNombreRaw.length ? proyectoNombreRaw : null,
       descripcion: proyectoNecesidadesRaw.length ? proyectoNecesidadesRaw : null,
     };
+    if (!isCreateMode && opportunityAccountId && opportunityAccountId !== card?.cuentaCrmId) {
+      oportunidadUpdates.cuenta_id = opportunityAccountId;
+    }
 
     const stagePrepChanged = !areStagePrepsEqual(normalizedStagePrep, initialStagePrepPayload);
     const metadataUpdates: Record<string, unknown> = {};
@@ -3718,6 +3757,50 @@ export function LeadDrawer({
               ) : null}
               <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4 shadow-sm">
                 <h4 className="text-sm font-semibold text-foreground">Contacto</h4>
+                {!isCreateMode && card ? (
+                  <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                    <label className="text-xs font-medium text-foreground">Cuenta CRM de esta oportunidad</label>
+                    <p className="text-xs text-muted-foreground">
+                      {card.cuentaCrmNombre || "Sin cuenta CRM directa"}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void handleOpportunityAccountLookup()}
+                      disabled={isBusy || opportunityAccountLookupPending}
+                    >
+                      {opportunityAccountLookupPending ? "Buscando cuentas..." : "Buscar empresas vinculadas al contacto"}
+                    </Button>
+                    {opportunityAccountLookupError ? (
+                      <p className="text-xs text-muted-foreground">{opportunityAccountLookupError}</p>
+                    ) : null}
+                    {opportunityAccountOptions.length > 1 ? (
+                      <ul className="space-y-1 rounded-lg border border-border/60 bg-background p-2">
+                        {opportunityAccountOptions.map((option) => (
+                          <li key={option.cuenta_id}>
+                            <button
+                              type="button"
+                              onClick={() => setOpportunityAccountId(option.cuenta_id ?? "")}
+                              className={cn(
+                                "w-full rounded-md px-3 py-2 text-left text-sm hover:bg-primary/10",
+                                opportunityAccountId === option.cuenta_id && "bg-primary/10 font-medium",
+                              )}
+                              disabled={isBusy}
+                            >
+                              {option.cuenta_nombre || option.empresa || "Cuenta CRM"}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {opportunityAccountOptions.length === 1 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Cuenta seleccionada: {opportunityAccountOptions[0].cuenta_nombre || opportunityAccountOptions[0].empresa}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 {isCreateMode ? (
                   <div className="space-y-3 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-3">
                     <div className="flex items-center justify-between text-xs text-muted-foreground">

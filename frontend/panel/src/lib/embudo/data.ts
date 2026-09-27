@@ -55,6 +55,8 @@ export type EmbudoCard = {
   correo: string | null;
   telefono: string | null;
   empresa: string | null;
+  cuentaCrmId?: string | null;
+  cuentaCrmNombre?: string | null;
   notas: string | null;
   necesidadProposito: string | null;
   canal: string | null;
@@ -145,6 +147,8 @@ export type PipelineBoardCard = {
   correo: string | null;
   telefono: string | null;
   empresa: string | null;
+  cuenta_crm_id?: string | null;
+  cuenta_crm_nombre?: string | null;
   notas: string | null;
   necesidad_proposito: string | null;
   canal: string | null;
