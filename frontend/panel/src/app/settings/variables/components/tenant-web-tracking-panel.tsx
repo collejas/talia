@@ -297,12 +297,14 @@ export function TenantWebTrackingPanel({
             <div>
               <CardTitle>Página Web</CardTitle>
               <CardDescription>
-                Instala un único script en el sitio de la organización para registrar sesiones, referrals y UTM en Mapa de Conversión.
+                Configura una única instalación para registrar sesiones, referrals y UTM en Mapa de Conversión.
               </CardDescription>
             </div>
-            <Button type="button" onClick={() => void createSite()} disabled={saving}>
-              {saving ? "Guardando…" : "Crear instalación"}
-            </Button>
+            {!loading && sites.length === 0 ? (
+              <Button type="button" onClick={() => void createSite()} disabled={saving}>
+                {saving ? "Guardando…" : "Crear instalación"}
+              </Button>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
@@ -310,7 +312,7 @@ export function TenantWebTrackingPanel({
             El identificador público no es una contraseña. La aplicación solo aceptará eventos cuando el dominio esté activo y verificado.
           </p>
           <ol className="list-decimal space-y-1 pl-5">
-            <li>Crea una instalación.</li>
+            <li>{sites.length === 0 ? "Crea la instalación única." : "Usa la instalación existente."}</li>
             <li>Agrega el dominio exacto que usará el tenant.</li>
             <li>Agrega primero el registro de verificación en el DNS del dominio.</li>
             <li>Instala el código en todas las páginas públicas del sitio.</li>

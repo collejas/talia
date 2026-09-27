@@ -1879,11 +1879,31 @@ async def list_tenant_web_tracking(
 @router.post("/me/web-tracking/sites", response_model=TenantWebTrackingSite, status_code=201)
 async def create_tenant_web_tracking_site(
     payload: TenantWebTrackingSiteCreateRequest,
+    response: Response,
     context: TenantContext = Depends(require_tenant_context),
     user_token: str = Depends(require_user_token),
 ) -> TenantWebTrackingSite:
     await require_permission(user_token, "settings.manage")
     repo = CRMRepository(user_token=user_token)
+    try:
+        existing_sites = await repo.list_web_tracking_sites(
+            organizacion_id=context.organizacion_id,
+        )
+        if existing_sites:
+            existing_site = next(
+                (site for site in existing_sites if site.get("active") is True),
+                existing_sites[0],
+            )
+            existing_site_id = UUID(str(existing_site["id"]))
+            existing_domains = await repo.list_web_tracking_domains(
+                organizacion_id=context.organizacion_id,
+                tracking_site_id=existing_site_id,
+            )
+            response.status_code = 200
+            return _tracking_site_response(existing_site, existing_domains)
+    except CRMRepositoryError as exc:
+        raise _tracking_http_error(exc) from exc
+
     public_site_id = f"talia_site_{uuid4().hex}"
     try:
         site = await repo.create_web_tracking_site(
