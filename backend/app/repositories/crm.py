@@ -4760,11 +4760,12 @@ class CRMRepository:
             "referencia": referencia,
             "observaciones": observaciones,
         }
-        resp = await self._request(
+        resp = await self._request_service_role(
             "POST",
             "/rest/v1/pedido_venta_documentos",
             json=body,
             prefer="return=representation",
+            organizacion_id=organizacion_id,
         )
         data = resp.json()
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
