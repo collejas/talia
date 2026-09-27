@@ -30,7 +30,7 @@ type QueueItem = {
   domicilio_entrega: string | null;
   observaciones_comerciales: string | null;
   cliente_datos: Record<string, string | null>;
-  items: { id: string; catalog_item_id: string | null; descripcion: string; cantidad: number | string; precio_unitario: number | string | null; subtotal: number | string | null; moneda: string | null; maneja_inventario: boolean; stock_disponible: number | string | null; stock_reservado_pedido: number | string | null; cotizacion_cantidad: number | string | null; cotizacion_precio_unitario: number | string | null; cotizacion_descuento_porcentaje: number | string | null; cotizacion_limite_descuento_porcentaje: number | string | null; cotizacion_moneda: string | null; cotizacion_catalog_item_id: string | null }[];
+  items: { id: string; catalog_item_id: string | null; tipo_catalogo: string | null; descripcion: string; cantidad: number | string; precio_unitario: number | string | null; subtotal: number | string | null; moneda: string | null; maneja_inventario: boolean; stock_disponible: number | string | null; stock_reservado_pedido: number | string | null; cotizacion_cantidad: number | string | null; cotizacion_precio_unitario: number | string | null; cotizacion_descuento_porcentaje: number | string | null; cotizacion_limite_descuento_porcentaje: number | string | null; cotizacion_moneda: string | null; cotizacion_catalog_item_id: string | null }[];
   documentos: { id: string; tipo_documento: string; nombre_original: string | null; referencia: string | null; observaciones: string | null }[];
 };
 
@@ -108,14 +108,71 @@ function differsFromAcceptedQuote(item: QueueItem["items"][number]) {
   return quantityDiffers || priceDiffers || currencyDiffers || productDiffers;
 }
 
+type InventoryProjection = {
+  key: string;
+  descripcion: string;
+  solicitado: number;
+  reservado: number;
+  disponibleAhora: number;
+  reservaAdicional: number;
+  reservadoDespues: number;
+  pendienteDespues: number;
+  disponibleDespues: number;
+};
+
+function getInventoryProjection(item: QueueItem): InventoryProjection[] {
+  const grouped = new Map<string, InventoryProjection>();
+  for (const line of item.items.filter((entry) => entry.maneja_inventario)) {
+    const key = line.catalog_item_id || line.id;
+    const solicitado = Math.max(0, Number(line.cantidad) || 0);
+    const reservado = Math.max(0, Number(line.stock_reservado_pedido) || 0);
+    const disponibleAhora = Math.max(0, (Number(line.stock_disponible) || 0) - reservado);
+    const current = grouped.get(key);
+    if (current) {
+      current.solicitado += solicitado;
+      current.reservado += reservado;
+    } else {
+      grouped.set(key, {
+        key,
+        descripcion: line.descripcion,
+        solicitado,
+        reservado,
+        disponibleAhora,
+        reservaAdicional: 0,
+        reservadoDespues: 0,
+        pendienteDespues: 0,
+        disponibleDespues: 0,
+      });
+    }
+  }
+
+  return [...grouped.values()].map((product) => {
+    const porReservar = Math.max(0, product.solicitado - product.reservado);
+    const reservaAdicional = item.permite_entrega_parcial
+      ? Math.min(porReservar, product.disponibleAhora)
+      : porReservar <= product.disponibleAhora ? porReservar : 0;
+    const reservadoDespues = product.reservado + reservaAdicional;
+    return {
+      ...product,
+      reservaAdicional,
+      reservadoDespues,
+      pendienteDespues: Math.max(0, product.solicitado - reservadoDespues),
+      disponibleDespues: Math.max(0, product.disponibleAhora - reservaAdicional),
+    };
+  });
+}
+
+function formatQuantity(value: number) {
+  return new Intl.NumberFormat("es-MX", { maximumFractionDigits: 3 }).format(value);
+}
+
 function hasBlockingIssues(item: QueueItem) {
   return !item.cuenta_crm_asociada
     || item.items.some((line) => differsFromAcceptedQuote(line)
     || (line.cotizacion_descuento_porcentaje != null
       && line.cotizacion_limite_descuento_porcentaje != null
       && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje)))
-    || (!item.permite_entrega_parcial && item.items.some((line) => line.maneja_inventario
-      && Number(line.stock_disponible ?? 0) < Number(line.cantidad)));
+    || (!item.permite_entrega_parcial && getInventoryProjection(item).some((product) => product.pendienteDespues > 0));
 }
 
 export function OrderFormalizationQueue() {
@@ -262,9 +319,26 @@ export function OrderFormalizationQueue() {
                 {item.items.map((line) => <div key={line.id} className="border-b pb-1 last:border-0"><p>{line.descripcion} · {line.cantidad} × {formatMoney(line.precio_unitario, line.moneda)} = {formatMoney(line.subtotal, line.moneda)}</p><p className="text-muted-foreground">Cotización aceptada: {line.cotizacion_cantidad ?? "—"} × {formatMoney(line.cotizacion_precio_unitario, line.cotizacion_moneda)} {line.cotizacion_descuento_porcentaje != null ? `· Descuento ${line.cotizacion_descuento_porcentaje}% (límite ${line.cotizacion_limite_descuento_porcentaje ?? "no registrado"}%)` : ""}{differsFromAcceptedQuote(line) ? <span className="ml-2 font-medium text-destructive">No coincide con el pedido</span> : null}</p></div>)}
                 <p className="font-medium">Total de la cotización: {formatMoney(item.total, item.moneda)}</p>
               </ReviewBlock>
-              <ReviewBlock title="4. Inventario" label="Revisé la disponibilidad y la política de entregas parciales" checked={reviews[item.id]?.inventario ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), inventario: checked } }))} disabled={pendingId === item.id}>
-                {item.items.filter((line) => line.maneja_inventario).length ? item.items.filter((line) => line.maneja_inventario).map((line) => <p key={line.id}>{line.descripcion}: solicitado {line.cantidad}, disponible para este pedido {line.stock_disponible ?? "—"} (ya reservado {line.stock_reservado_pedido ?? 0}){Number(line.stock_disponible ?? 0) < Number(line.cantidad) ? <span className="ml-2 text-amber-700">Faltante posible</span> : null}</p>) : <p>No hay partidas con control de inventario.</p>}
-                <p className="text-muted-foreground">{item.permite_entrega_parcial ? "La cotización permite entrega parcial." : "La cotización no permite entrega parcial."} La reserva se recalcula al aprobar.</p>
+              <ReviewBlock title="4. Inventario" label="Revisé la disponibilidad y el efecto estimado de aprobar" checked={reviews[item.id]?.inventario ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), inventario: checked } }))} disabled={pendingId === item.id}>
+                {getInventoryProjection(item).length ? <div className="space-y-3">{getInventoryProjection(item).map((product) => <div key={product.key} className="rounded-md border bg-background p-2.5">
+                  <p className="font-medium">{product.descripcion}</p>
+                  <dl className="mt-1 grid gap-x-4 gap-y-1 text-muted-foreground sm:grid-cols-2">
+                    <div className="flex justify-between gap-2"><dt>Pedido</dt><dd className="font-medium text-foreground">{formatQuantity(product.solicitado)}</dd></div>
+                    <div className="flex justify-between gap-2"><dt>Disponible ahora</dt><dd className="font-medium text-foreground">{formatQuantity(product.disponibleAhora)}</dd></div>
+                    <div className="flex justify-between gap-2"><dt>Ya reservado para este pedido</dt><dd>{formatQuantity(product.reservado)}</dd></div>
+                    <div className="flex justify-between gap-2"><dt>Reserva adicional estimada</dt><dd className="font-medium text-foreground">{formatQuantity(product.reservaAdicional)}</dd></div>
+                    <div className="flex justify-between gap-2"><dt>Reservado después de aprobar</dt><dd>{formatQuantity(product.reservadoDespues)}</dd></div>
+                    <div className="flex justify-between gap-2"><dt>Disponible después de aprobar</dt><dd>{formatQuantity(product.disponibleDespues)}</dd></div>
+                  </dl>
+                  {product.pendienteDespues > 0 ? <p className="mt-2 font-medium text-amber-700">Quedarían {formatQuantity(product.pendienteDespues)} pendientes de inventario.</p> : null}
+                  {product.pendienteDespues > 0 && !item.permite_entrega_parcial ? <p className="mt-1 font-medium text-destructive">Bloqueante: no se puede aprobar porque no se permiten entregas parciales.</p> : null}
+                </div>)}</div> : null}
+                {item.items.filter((line) => !line.maneja_inventario).map((line) => <div key={`sin-inventario-${line.id}`} className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-amber-950">
+                  <p className="font-medium">{line.descripcion} · {line.cantidad}</p>
+                  {line.tipo_catalogo === "servicio" ? <p>Es un servicio; no requiere reserva de inventario.</p> : line.tipo_catalogo === "producto" ? <p>El producto tiene desactivado “Maneja inventario”</p> : line.catalog_item_id ? <p>El artículo de catálogo no tiene control de inventario habilitado; no se consultará ni reservará stock.</p> : <p>Esta partida no está vinculada a un artículo de catálogo; no se puede consultar ni reservar stock.</p>}
+                </div>)}
+                {!getInventoryProjection(item).length && !item.items.some((line) => !line.maneja_inventario) ? <p>No hay partidas de inventario que revisar.</p> : null}
+                {getInventoryProjection(item).length ? <p className="text-muted-foreground">{item.permite_entrega_parcial ? "La cotización permite entrega parcial." : "La cotización no permite entrega parcial."} Estimación con el stock consultado del almacén principal; al aprobar se valida de nuevo y la reserva puede variar si cambió la existencia.</p> : null}
               </ReviewBlock>
               <ReviewBlock title="5. Condiciones comerciales y entrega" label="Revisé las condiciones registradas y la fecha/domicilio de entrega" checked={reviews[item.id]?.condiciones ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), condiciones: checked } }))} disabled={pendingId === item.id}>
                 <p>Pago: {item.condicion_pago || "No especificado"}{item.dias_credito ? ` · ${item.dias_credito} días de crédito` : ""}{item.anticipo_porcentaje != null ? ` · Anticipo ${item.anticipo_porcentaje}%` : ""}</p>
@@ -272,14 +346,16 @@ export function OrderFormalizationQueue() {
                 {item.observaciones_comerciales ? <p className="text-muted-foreground">Notas: {item.observaciones_comerciales}</p> : null}
               </ReviewBlock>
               <ReviewBlock title="6. Alertas y riesgos" label="Revisé las alertas y riesgos visibles antes de liberar" checked={reviews[item.id]?.riesgos ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), riesgos: checked } }))} disabled={pendingId === item.id}>
-                {item.items.some((line) => line.maneja_inventario && Number(line.stock_disponible ?? 0) < Number(line.cantidad)) ? <p className="text-amber-700">Alerta: el stock consultado ahora no cubre todas las cantidades; la aprobación verifica de nuevo y aplicará la política de parcialidades.</p> : null}
+                {getInventoryProjection(item).some((product) => product.pendienteDespues > 0) ? <p className="text-amber-700">Alerta: con el stock consultado quedarían partidas pendientes de inventario después de la reserva estimada.</p> : null}
+                {item.items.some((line) => line.tipo_catalogo === "producto" && !line.maneja_inventario) ? <p className="text-amber-700">Alerta: hay productos sin control de inventario; esos renglones no se reservarán al aprobar.</p> : null}
+                {item.items.some((line) => !line.catalog_item_id) ? <p className="text-amber-700">Alerta: hay partidas sin producto de catálogo asociado; no se puede validar ni reservar su inventario.</p> : null}
                 {item.items.some((line) => line.maneja_inventario) && !item.domicilio_entrega ? <p className="text-amber-700">Alerta: no hay domicilio de entrega registrado.</p> : null}
                 {!item.condicion_pago ? <p className="text-amber-700">Alerta: no se especificó condición de pago.</p> : null}
                 {item.items.some((line) => differsFromAcceptedQuote(line)) ? <p className="font-medium text-destructive">Bloqueante: las partidas o sus precios no coinciden con la cotización aceptada. Regresa el pedido a Comercial.</p> : null}
                 {item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje)) ? <p className="font-medium text-destructive">Bloqueante: existe un descuento superior al límite registrado.</p> : null}
-                {!item.permite_entrega_parcial && item.items.some((line) => line.maneja_inventario && Number(line.stock_disponible ?? 0) < Number(line.cantidad)) ? <p className="font-medium text-destructive">Bloqueante: no hay inventario suficiente y la cotización no permite entregas parciales.</p> : null}
+                {!item.permite_entrega_parcial && getInventoryProjection(item).some((product) => product.pendienteDespues > 0) ? <p className="font-medium text-destructive">Bloqueante: no hay inventario suficiente y la cotización no permite entregas parciales.</p> : null}
                 {!item.cliente_datos.rfc || !item.cliente_datos.codigo_postal ? <p className="text-muted-foreground">Datos fiscales incompletos; confirma si aplican a esta operación.</p> : null}
-                {!item.items.some((line) => line.maneja_inventario && Number(line.stock_disponible ?? 0) < Number(line.cantidad)) && !(item.items.some((line) => line.maneja_inventario) && !item.domicilio_entrega) && item.condicion_pago && item.cliente_datos.rfc && item.cliente_datos.codigo_postal && !item.items.some((line) => differsFromAcceptedQuote(line)) ? <p>No se detectan alertas con los datos disponibles.</p> : null}
+                {!getInventoryProjection(item).some((product) => product.pendienteDespues > 0) && !item.items.some((line) => (line.tipo_catalogo === "producto" && !line.maneja_inventario) || !line.catalog_item_id) && !(item.items.some((line) => line.maneja_inventario) && !item.domicilio_entrega) && item.condicion_pago && item.cliente_datos.rfc && item.cliente_datos.codigo_postal && !item.items.some((line) => differsFromAcceptedQuote(line)) ? <p>No se detectan alertas con los datos disponibles.</p> : null}
               </ReviewBlock>
             </div>
             <div className="flex flex-wrap justify-end gap-2 border-t pt-3">

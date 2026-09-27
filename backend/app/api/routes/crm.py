@@ -32819,6 +32819,7 @@ async def listar_pedidos_pendientes_formalizacion(
                 "moneda": item.get("moneda") or quote.get("moneda"),
                 "catalog_item_id": str(item.get("catalog_item_id")) if item.get("catalog_item_id") else None,
                 "maneja_inventario": bool(catalog_item and catalog_item.get("maneja_inventario")),
+                "tipo_catalogo": catalog_item.get("tipo") if catalog_item else None,
                 "stock_disponible": (
                     inventory_available.get(str(item.get("catalog_item_id")), Decimal("0"))
                     + inventory_reserved_by_quote_item.get(str(item.get("cotizacion_item_id")), Decimal("0"))
