@@ -22635,7 +22635,7 @@ async def listar_existencias_catalogo_precios(
 async def obtener_branding_catalogo_precios(
     *,
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_any_permission(["propuesta.view", "propiedades.view"])),
+    _: str = Depends(require_any_permission(["propuesta.view", "propiedades.view", "sales.orders.confirm"])),
 ) -> CRMCatalogPriceBrand:
     """Identidad del tenant y del formato de cotización para imprimir el catálogo."""
     try:
@@ -33141,6 +33141,91 @@ async def listar_pedidos_pendientes_surtido(
             "moneda": quote.get("moneda"),
             "estatus_logistico": row.get("estatus_logistico"),
             "items": order_items,
+        })
+    return {"items": items, "limit": limit, "offset": offset, "has_more": len(items) == limit}
+
+
+@router.get("/pedidos-venta/autorizados")
+async def listar_pedidos_venta_autorizados(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("sales.orders.confirm")),
+    limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    try:
+        rows = await repo.list_pedidos_venta_aprobados(
+            organizacion_id=organizacion_id,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudo_consultar_pedidos_autorizados") from exc
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        quote = _single_related(row.get("cotizacion")) or {}
+        contact = _single_related(quote.get("contacto"))
+        account = _single_related(quote.get("cuenta"))
+        approver = _single_related(row.get("confirmado_por"))
+        order_items: list[dict[str, Any]] = []
+        for line in row.get("items") if isinstance(row.get("items"), list) else []:
+            if not isinstance(line, dict):
+                continue
+            deliveries = line.get("entregas") if isinstance(line.get("entregas"), list) else []
+            delivered = sum(
+                (Decimal(str(_as_number(delivery.get("cantidad")) or 0)) for delivery in deliveries if isinstance(delivery, dict)),
+                Decimal("0"),
+            )
+            order_items.append({
+                "id": line.get("id"),
+                "descripcion": line.get("descripcion") or "Artículo",
+                "unidad": line.get("unidad"),
+                "cantidad": line.get("cantidad"),
+                "cantidad_entregada": float(delivered),
+                "precio_unitario": line.get("precio_unitario_final"),
+                "subtotal": line.get("subtotal"),
+                "moneda": line.get("moneda") or quote.get("moneda"),
+            })
+        documents = []
+        for document in row.get("documentos") if isinstance(row.get("documentos"), list) else []:
+            if not isinstance(document, dict):
+                continue
+            file_row = _single_related(document.get("archivo"))
+            documents.append({
+                "tipo_documento": document.get("tipo_documento"),
+                "nombre_original": file_row.get("nombre_original") if file_row else None,
+                "referencia": document.get("referencia"),
+                "observaciones": document.get("observaciones"),
+                "nombre_original": file_row.get("nombre_original") if file_row else None,
+            })
+        items.append({
+            "id": row.get("id"),
+            "cotizacion_id": quote.get("id") or row.get("cotizacion_id"),
+            "folio": quote.get("folio"),
+            "cliente": account.get("nombre") if account else None,
+            "razon_social": account.get("razon_social") if account else None,
+            "contacto": contact.get("nombre_completo") if contact else None,
+            "total": quote.get("total"),
+            "moneda": quote.get("moneda"),
+            "estatus": row.get("estatus"),
+            "estatus_logistico": row.get("estatus_logistico"),
+            "autorizado_en": row.get("confirmado_en"),
+            "autorizado_por": approver.get("nombre_completo") if approver else None,
+            "forma_confirmacion": row.get("forma_confirmacion"),
+            "fecha_confirmacion_cliente": row.get("fecha_confirmacion_cliente"),
+            "referencia_pedido_cliente": row.get("referencia_pedido_cliente"),
+            "fecha_orden_cliente": row.get("fecha_orden_cliente"),
+            "observaciones_confirmacion": row.get("observaciones_confirmacion"),
+            "condicion_pago": row.get("condicion_pago"),
+            "dias_credito": row.get("dias_credito"),
+            "anticipo_porcentaje": row.get("anticipo_porcentaje"),
+            "fecha_entrega_comprometida": row.get("fecha_entrega_comprometida"),
+            "domicilio_entrega": row.get("domicilio_entrega"),
+            "observaciones_comerciales": row.get("observaciones_comerciales"),
+            "items": order_items,
+            "documentos": documents,
         })
     return {"items": items, "limit": limit, "offset": offset, "has_more": len(items) == limit}
 

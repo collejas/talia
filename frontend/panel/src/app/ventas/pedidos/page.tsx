@@ -1,12 +1,23 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
 import { OrderFormalizationQueue } from "@/components/ventas/order-formalization-queue";
+import { callCrmApi } from "@/lib/api/crm";
 
 export const dynamic = "force-dynamic";
 
 export default function SalesOrdersPage() {
+  return <SalesOrdersPageContent />;
+}
+
+async function SalesOrdersPageContent() {
+  const brandResponse = await callCrmApi<{
+    organization_name: string;
+    logo_url: string;
+    primary_color: string;
+    accent_color: string;
+  }>("/crm/catalogo-precios/branding");
   return (
-    <AppViewLayout title="Pedidos por revisar" contentClassName="px-4 sm:px-6 lg:px-8">
-      <OrderFormalizationQueue />
+    <AppViewLayout title="Órdenes de venta" contentClassName="px-4 sm:px-6 lg:px-8">
+      <OrderFormalizationQueue printBrand={brandResponse.ok ? brandResponse.data : null} />
     </AppViewLayout>
   );
 }

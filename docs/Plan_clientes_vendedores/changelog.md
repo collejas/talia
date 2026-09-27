@@ -1,5 +1,19 @@
 # Changelog — Clientes y vendedores
 
+## 2026-09-27 — Consulta e impresión de pedidos autorizados
+
+- Se agregó una pestaña **Órdenes autorizadas** a `Ventas > Órdenes de venta`, con paginación,
+  estado logístico, datos de autorización, cliente, cotización y OC.
+- Cada orden de venta puede imprimirse individualmente y el listado completo puede
+  imprimirse en una sola operación; el formato usa el nombre, logo y colores
+  configurados para la organización y permite guardar como PDF desde el diálogo
+  de impresión del navegador. El documento individual incluye espacios para
+  nombre, firma y fecha de autorización.
+- El listado conserva tenant y autorización mediante `sales.orders.confirm`.
+  No incluye saldos de cobranza, que pertenecen a Finanzas.
+- Implementado en código local; pendiente de despliegue y validación funcional
+  con un usuario autorizado.
+
 ## 2026-09-24 — Migraciones de revisión, OC y condiciones aplicadas
 
 - Se aplicaron mediante MCP Supabase las migraciones `20260924213308_order_review_and_oc_reservation.sql` y

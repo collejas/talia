@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { IconPrinter } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { printApprovedOrder, printApprovedOrdersList, type ApprovedOrderForPrint, type OrderPrintBrand } from "@/components/ventas/approved-order-print";
 
 type QueueItem = {
   id: string;
@@ -32,6 +35,11 @@ type QueueItem = {
   cliente_datos: Record<string, string | null>;
   items: { id: string; catalog_item_id: string | null; tipo_catalogo: string | null; descripcion: string; cantidad: number | string; precio_unitario: number | string | null; subtotal: number | string | null; moneda: string | null; maneja_inventario: boolean; stock_disponible: number | string | null; stock_reservado_pedido: number | string | null; cotizacion_cantidad: number | string | null; cotizacion_precio_unitario: number | string | null; cotizacion_descuento_porcentaje: number | string | null; cotizacion_limite_descuento_porcentaje: number | string | null; cotizacion_moneda: string | null; cotizacion_catalog_item_id: string | null }[];
   documentos: { id: string; tipo_documento: string; nombre_original: string | null; referencia: string | null; observaciones: string | null }[];
+};
+
+type ApprovedOrder = ApprovedOrderForPrint & {
+  id: string;
+  cotizacion_id: string;
 };
 
 function ReviewBlock({
@@ -175,8 +183,14 @@ function hasBlockingIssues(item: QueueItem) {
     || (!item.permite_entrega_parcial && getInventoryProjection(item).some((product) => product.pendienteDespues > 0));
 }
 
-export function OrderFormalizationQueue() {
+export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrintBrand | null }) {
   const [items, setItems] = useState<QueueItem[]>([]);
+  const [approvedItems, setApprovedItems] = useState<ApprovedOrder[]>([]);
+  const [approvedLoaded, setApprovedLoaded] = useState(false);
+  const [approvedHasMore, setApprovedHasMore] = useState(false);
+  const [approvedOffset, setApprovedOffset] = useState(0);
+  const [approvedLoading, setApprovedLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("revision");
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [returningId, setReturningId] = useState<string | null>(null);
@@ -185,6 +199,25 @@ export function OrderFormalizationQueue() {
   const [reviews, setReviews] = useState<Record<string, ReviewChecklist>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const loadApproved = useCallback(async ({ append = false, offset = 0 }: { append?: boolean; offset?: number } = {}) => {
+    setApprovedLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/ventas/pedidos/autorizados?limit=100&offset=${offset}`, { cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.error || "No se pudo cargar el listado de pedidos autorizados.");
+      const nextItems = Array.isArray(body?.items) ? body.items as ApprovedOrder[] : [];
+      setApprovedItems((current) => append ? [...current, ...nextItems] : nextItems);
+      setApprovedOffset(offset + nextItems.length);
+      setApprovedHasMore(body?.has_more === true);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "No se pudo cargar el listado de pedidos autorizados.");
+    } finally {
+      setApprovedLoading(false);
+      setApprovedLoaded(true);
+    }
+  }, []);
 
   const loadQueue = useCallback(async () => {
     setLoading(true);
@@ -202,6 +235,55 @@ export function OrderFormalizationQueue() {
   }, []);
 
   useEffect(() => { void loadQueue(); }, [loadQueue]);
+
+  useEffect(() => {
+    if (activeTab === "autorizados" && !approvedLoaded && !approvedLoading) void loadApproved();
+  }, [activeTab, approvedLoaded, approvedLoading, loadApproved]);
+
+  const printSingleApprovedOrder = (order: ApprovedOrder) => {
+    if (!printBrand || !printApprovedOrder(order, printBrand)) {
+      setError(printBrand ? "Permite las ventanas emergentes para imprimir el pedido." : "No se pudo cargar el formato de impresión de la empresa.");
+    }
+  };
+
+  const printAllApprovedOrders = async () => {
+    if (!printBrand) {
+      setError("No se pudo cargar el formato de impresión de la empresa.");
+      return;
+    }
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setError("Permite las ventanas emergentes para imprimir el listado.");
+      return;
+    }
+    printWindow.opener = null;
+    setApprovedLoading(true);
+    setError(null);
+    try {
+      let allOrders = [...approvedItems];
+      let offset = approvedOffset;
+      let hasMore = approvedHasMore;
+      while (hasMore) {
+        const response = await fetch(`/api/ventas/pedidos/autorizados?limit=100&offset=${offset}`, { cache: "no-store" });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body?.error || "No se pudo completar el listado de pedidos autorizados.");
+        const nextItems = Array.isArray(body?.items) ? body.items as ApprovedOrder[] : [];
+        allOrders = [...allOrders, ...nextItems];
+        offset += nextItems.length;
+        hasMore = body?.has_more === true;
+        if (nextItems.length === 0) break;
+      }
+      setApprovedItems(allOrders);
+      setApprovedOffset(offset);
+      setApprovedHasMore(false);
+      printApprovedOrdersList(allOrders, printBrand, printWindow);
+    } catch (loadError) {
+      printWindow.close();
+      setError(loadError instanceof Error ? loadError.message : "No se pudo imprimir el listado autorizado.");
+    } finally {
+      setApprovedLoading(false);
+    }
+  };
 
   const confirmOrder = async (item: QueueItem) => {
     if (hasBlockingIssues(item)) {
@@ -233,6 +315,7 @@ export function OrderFormalizationQueue() {
       if (!response.ok) throw new Error(body?.error || "No se pudo confirmar el pedido.");
       setNotice(`Pedido ${item.folio || "del cliente"} aprobado y liberado a surtido. Venta y cuenta por cobrar formalizadas.`);
       await loadQueue();
+      if (approvedItems.length > 0) await loadApproved();
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "No se pudo confirmar el pedido.");
     } finally {
@@ -275,12 +358,22 @@ export function OrderFormalizationQueue() {
         <div>
           <p className="text-sm text-muted-foreground">Revisa cliente, aceptación, partidas, inventario, condiciones y alertas. La aprobación formaliza la venta y la cuenta por cobrar y libera lo reservado a Surtidos.</p>
         </div>
-        <Button type="button" variant="outline" onClick={() => void loadQueue()} disabled={loading}>
+        {activeTab === "revision" ? <Button type="button" variant="outline" onClick={() => void loadQueue()} disabled={loading}>
           {loading ? "Actualizando…" : "Actualizar"}
-        </Button>
+        </Button> : <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={() => void loadApproved()} disabled={approvedLoading}>Actualizar</Button>
+          <Button type="button" onClick={() => void printAllApprovedOrders()} disabled={approvedLoading || approvedItems.length === 0 || !printBrand}><IconPrinter className="mr-2 size-4" />Imprimir listado de órdenes</Button>
+        </div>}
       </div>
       {error ? <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
       {notice ? <p role="status" className="rounded-md bg-primary/10 px-3 py-2 text-sm">{notice}</p> : null}
+      {!printBrand ? <p role="status" className="text-sm text-muted-foreground">No está disponible el formato de impresión de la empresa.</p> : null}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="revision">Por revisar ({items.length})</TabsTrigger>
+          <TabsTrigger value="autorizados">Órdenes autorizadas</TabsTrigger>
+        </TabsList>
+        <TabsContent value="revision" className="space-y-4">
       {loading && items.length === 0 ? <p className="text-sm text-muted-foreground">Cargando pedidos…</p> : null}
       {!loading && items.length === 0 && !error ? (
         <div className="rounded-xl border border-dashed p-8 text-center">
@@ -380,6 +473,30 @@ export function OrderFormalizationQueue() {
           </article>
         ))}
       </div>
+        </TabsContent>
+        <TabsContent value="autorizados" className="space-y-4">
+          {approvedLoading && approvedItems.length === 0 ? <p className="text-sm text-muted-foreground">Cargando órdenes autorizadas…</p> : null}
+          {!approvedLoading && approvedItems.length === 0 && !error ? <div className="rounded-xl border border-dashed p-8 text-center"><h2 className="font-semibold">Aún no hay órdenes de venta autorizadas</h2><p className="mt-1 text-sm text-muted-foreground">Las órdenes aprobadas por Operaciones aparecerán aquí.</p></div> : null}
+          <div className="space-y-3">
+            {approvedItems.map((order) => (
+              <article key={order.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4">
+                <div className="min-w-0 space-y-1">
+                  <h2 className="font-semibold">Orden de venta · {order.folio || "Sin referencia de cotización"}</h2>
+                  <p className="text-sm">{order.cliente || order.razon_social || "Cliente sin nombre"}{order.contacto ? ` · ${order.contacto}` : ""}</p>
+                  <p className="text-sm text-muted-foreground">Autorizado {order.autorizado_en ? `el ${new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" }).format(new Date(order.autorizado_en))}` : ""}{order.autorizado_por ? ` por ${order.autorizado_por}` : ""}</p>
+                  <p className="text-xs text-muted-foreground">OC: {order.referencia_pedido_cliente || "Sin OC"} · Logística: {order.estatus_logistico || "Pendiente"}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right"><p className="font-semibold">{formatMoney(order.total, order.moneda)}</p></div>
+                  <Badge variant={order.estatus === "cancelado" ? "outline" : "secondary"}>{order.estatus === "cancelado" ? "Autorizado · cancelado" : "Autorizado"}</Badge>
+                  <Button type="button" variant="outline" size="sm" onClick={() => printSingleApprovedOrder(order)} disabled={!printBrand}><IconPrinter className="mr-2 size-4" />Imprimir orden</Button>
+                </div>
+              </article>
+            ))}
+          </div>
+          {approvedHasMore ? <div className="flex justify-center"><Button type="button" variant="outline" onClick={() => void loadApproved({ append: true, offset: approvedOffset })} disabled={approvedLoading}>{approvedLoading ? "Cargando…" : "Cargar más pedidos"}</Button></div> : null}
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

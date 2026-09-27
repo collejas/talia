@@ -120,7 +120,7 @@ const NAVIGATION: {
       icon: IconClipboardCheck,
       permission: ["sales.orders.confirm", "inventory.fulfillment.view"],
       children: [
-        { title: "Pedidos por revisar", url: "/ventas/pedidos", icon: IconClipboardCheck, permission: "sales.orders.confirm" },
+        { title: "Órdenes de venta", url: "/ventas/pedidos", icon: IconClipboardCheck, permission: "sales.orders.confirm" },
         { title: "Surtidos", url: "/inventario/surtidos", icon: IconTruckDelivery, permission: "inventory.fulfillment.view" },
       ],
     },

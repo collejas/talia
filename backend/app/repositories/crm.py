@@ -4571,6 +4571,31 @@ class CRMRepository:
             raise CRMRepositoryError("sales_order_formalization_queue_invalid_response")
         return data
 
+    async def list_pedidos_venta_aprobados(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        response = await self._request_service_role(
+            "GET",
+            "/rest/v1/pedidos_venta",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "estado_formalizacion": "eq.confirmado",
+                "order": "confirmado_en.desc,id.desc",
+                "limit": str(limit),
+                "offset": str(offset),
+                "select": "id,cotizacion_id,estatus,estatus_logistico,confirmado_en,confirmado_por_usuario_id,confirmado_por:usuarios!pedidos_venta_confirmado_usuario_fkey(id,nombre_completo),forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre,razon_social,rfc)),items:pedido_venta_items(id,descripcion,unidad,cantidad,precio_unitario_final,subtotal,moneda,entregas:pedido_venta_entrega_items(cantidad)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original))",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not all(isinstance(row, dict) for row in data):
+            raise CRMRepositoryError("sales_order_approved_list_invalid_response")
+        return data
+
     async def get_sales_order_inventory_availability(
         self,
         *,
