@@ -114,8 +114,16 @@ const NAVIGATION: {
         { title: "Auditoría reasignaciones", url: "/crm/asignaciones-vendedores", icon: IconShieldCheck, permission: ["audit.view", "audit.view_all"] },
       ],
     },
-    { title: "Pedidos por revisar", url: "/ventas/pedidos", icon: IconClipboardCheck, permission: "sales.orders.confirm" },
-    { title: "Surtidos", url: "/inventario/surtidos", icon: IconTruckDelivery, permission: "inventory.fulfillment.view" },
+    {
+      title: "Operación",
+      url: "/operacion",
+      icon: IconClipboardCheck,
+      permission: ["sales.orders.confirm", "inventory.fulfillment.view"],
+      children: [
+        { title: "Pedidos por revisar", url: "/ventas/pedidos", icon: IconClipboardCheck, permission: "sales.orders.confirm" },
+        { title: "Surtidos", url: "/inventario/surtidos", icon: IconTruckDelivery, permission: "inventory.fulfillment.view" },
+      ],
+    },
     { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },
     { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
     { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
