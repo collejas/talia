@@ -34,6 +34,10 @@ Implementado y verificado:
 - RLS, foreign keys, constraints e índices multi-tenant.
 - Snapshot inicial de 1,702 precios base existentes.
 - Prueba reversible de trigger para creación de precio de lista y actualización de `Precio base`.
+- Catálogo comercial de solo lectura en `/crm/catalogo-precios`, con consulta de existencias por almacén para los roles autorizados.
+- Columnas de existencias `Actual`, `Reservado` y `Disponible`, configurables por usuario junto con los demás campos de la tabla.
+- Preferencias de visibilidad y ancho guardadas por usuario; el ancho también puede cambiarse arrastrando el borde de cada columna.
+- Permiso independiente `inventory.stock.view`; el endpoint no devuelve costos ni permite modificar inventario.
 
 La migración no recupera cambios ocurridos antes de su aplicación; el historial completo comienza a partir de este punto.
 

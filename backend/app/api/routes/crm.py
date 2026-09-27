@@ -1929,6 +1929,19 @@ MIN_PROSPECCION_SEPARACION_SEGUNDOS = 5
 PROSPECTOS_PREFS_MODULO = "prospeccion.prospectos"
 PROSPECTOS_PREFS_CLAVE_TABLA = "tabla"
 PROSPECTOS_PREFS_CLAVE_VIEWS = "views"
+CATALOG_PRICE_PREFS_MODULO = "crm.catalogo_precios"
+CATALOG_PRICE_PREFS_CLAVE_TABLA = "tabla"
+CATALOG_PRICE_PREF_COLUMNS: tuple[str, ...] = (
+    "producto",
+    "tipo",
+    "clasificacion",
+    "unidad",
+    "precio_base",
+    "precios_lista",
+    "stock_actual",
+    "stock_reservado",
+    "stock_disponible",
+)
 PROSPECTOS_PREFS_VIEWS_MAX = 20
 PROSPECTOS_PREFS_COLUMNS: tuple[str, ...] = (
     "prospecto",
@@ -5468,6 +5481,45 @@ class ProspectosTablePreferencePayload(BaseModel):
     @model_validator(mode="after")
     def _ensure_payload(self) -> "ProspectosTablePreferencePayload":
         if self.order is None and self.visibility is None:
+            raise ValueError("preferences_payload_required")
+        return self
+
+
+class CatalogPriceTablePreferencePayload(BaseModel):
+    """Preferencias personales para las columnas del catálogo comercial."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    visibility: dict[str, bool] | None = None
+    widths: dict[str, int] | None = None
+
+    @field_validator("visibility")
+    @classmethod
+    def _validate_visibility(cls, value: dict[str, bool] | None) -> dict[str, bool] | None:
+        if value is None:
+            return None
+        return {
+            str(column).strip(): bool(visible)
+            for column, visible in value.items()
+            if str(column).strip() in CATALOG_PRICE_PREF_COLUMNS
+        } or None
+
+    @field_validator("widths")
+    @classmethod
+    def _validate_widths(cls, value: dict[str, int] | None) -> dict[str, int] | None:
+        if value is None:
+            return None
+        normalized: dict[str, int] = {}
+        for raw_column, raw_width in value.items():
+            column = str(raw_column).strip()
+            if column not in CATALOG_PRICE_PREF_COLUMNS:
+                continue
+            normalized[column] = max(100, min(int(raw_width), 800))
+        return normalized or None
+
+    @model_validator(mode="after")
+    def _ensure_payload(self) -> "CatalogPriceTablePreferencePayload":
+        if self.visibility is None and self.widths is None:
             raise ValueError("preferences_payload_required")
         return self
 
@@ -22516,6 +22568,62 @@ async def list_compras_existencias(
     return [CRMInventarioExistencia.model_validate(row) for row in rows]
 
 
+@router.get("/catalogo-precios/inventario")
+async def listar_existencias_catalogo_precios(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.stock.view")),
+    almacen_id: UUID | None = Query(default=None),
+) -> dict[str, Any]:
+    """Existencias comerciales sin datos de costo ni capacidad de modificación."""
+    try:
+        warehouses = await repo.list_almacenes(organizacion_id=organizacion_id, limit=5000)
+        if almacen_id is not None:
+            selected_warehouse = next(
+                (warehouse for warehouse in warehouses if str(warehouse.get("id")) == str(almacen_id)),
+                None,
+            )
+            if selected_warehouse is None:
+                raise HTTPException(status_code=404, detail="almacen_no_encontrado")
+        else:
+            selected_warehouse = next(
+                (warehouse for warehouse in warehouses if warehouse.get("es_principal")),
+                warehouses[0] if warehouses else None,
+            )
+        stock_rows = await repo.list_catalog_price_inventory(
+            organizacion_id=organizacion_id,
+            almacen_id=UUID(str(selected_warehouse["id"])) if selected_warehouse else None,
+        ) if selected_warehouse else []
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudieron_consultar_existencias") from exc
+
+    return {
+        "almacenes": [
+            {
+                "id": warehouse.get("id"),
+                "codigo": warehouse.get("codigo"),
+                "nombre": warehouse.get("nombre"),
+                "es_principal": bool(warehouse.get("es_principal")),
+            }
+            for warehouse in warehouses
+        ],
+        "almacen_seleccionado_id": selected_warehouse.get("id") if selected_warehouse else None,
+        "existencias": [
+            {
+                "catalog_item_id": row.get("catalog_item_id"),
+                "almacen_id": row.get("almacen_id"),
+                "stock_actual": float(row.get("stock_actual") or 0),
+                "stock_reservado": float(row.get("stock_reservado") or 0),
+                "stock_disponible": float(row.get("stock_disponible") or 0),
+            }
+            for row in stock_rows
+        ],
+    }
+
+
 @router.post("/compras/inventario/ajustes", response_model=CRMInventarioExistencia)
 async def create_compras_ajuste_inventario(
     *,
@@ -36851,6 +36959,53 @@ async def hide_my_notification(
     if row is None:
         raise HTTPException(status_code=404, detail="notification_not_found")
     return {"ok": True, "item": user_notification_row_to_event(row)}
+
+
+@router.get("/catalogo-precios/preferences")
+async def obtener_preferencias_catalogo_precios(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_any_permission(["propuesta.view", "propiedades.view"])),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    try:
+        row = await repo.get_prospeccion_user_preference(
+            usuario_token=user_token,
+            modulo=CATALOG_PRICE_PREFS_MODULO,
+            clave=CATALOG_PRICE_PREFS_CLAVE_TABLA,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudieron_consultar_preferencias") from exc
+    raw_value = row.get("valor") if isinstance(row, dict) else None
+    if not isinstance(raw_value, dict):
+        return {"ok": True, "preferences": None}
+    try:
+        normalized = CatalogPriceTablePreferencePayload(**raw_value)
+    except ValidationError:
+        return {"ok": True, "preferences": None}
+    return {"ok": True, "preferences": normalized.model_dump(exclude_none=True)}
+
+
+@router.put("/catalogo-precios/preferences")
+async def guardar_preferencias_catalogo_precios(
+    *,
+    payload: CatalogPriceTablePreferencePayload,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_any_permission(["propuesta.view", "propiedades.view"])),
+    user_token: str = Depends(require_user_token),
+) -> dict[str, Any]:
+    value = payload.model_dump(exclude_none=True)
+    try:
+        row = await repo.upsert_prospeccion_user_preference(
+            usuario_token=user_token,
+            modulo=CATALOG_PRICE_PREFS_MODULO,
+            clave=CATALOG_PRICE_PREFS_CLAVE_TABLA,
+            valor=value,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudieron_guardar_preferencias") from exc
+    persisted = row.get("valor") if isinstance(row, dict) else None
+    return {"ok": True, "preferences": persisted if isinstance(persisted, dict) else value}
 
 
 @router.get("/prospeccion/prospectos/preferences")

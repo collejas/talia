@@ -2,6 +2,19 @@
 
 Registro de avances, cambios aplicados, verificaciones y pendientes de la funcionalidad de listas de precios.
 
+## 2026-09-27
+
+### Existencias y columnas configurables en Catálogo de precios — implementado localmente
+
+- `CRM → Catálogo de precios` muestra `Actual`, `Reservado` y `Disponible` para productos con control de inventario.
+- La consulta usa un almacén a la vez, con selección inicial del almacén principal; productos sin control muestran `No maneja inventario`.
+- El usuario puede mostrar u ocultar campos y ajustar anchos arrastrando el borde del encabezado. Las preferencias se guardan por usuario en `prospeccion_user_preferences`.
+- Se agregó `GET /crm/catalogo-precios/inventario`, limitado al tenant y al almacén seleccionado. Devuelve cantidades y nombres/códigos de almacén; excluye costos y no permite cambios de stock.
+- Se agregó `GET/PUT /crm/catalogo-precios/preferences`; el backend limita las columnas permitidas y los anchos entre 100 y 800 px.
+- La migración `supabase/migrations/20260927200313_catalog_price_inventory_visibility.sql` fue aplicada con MCP Supabase. `inventory.stock.view` quedó asignado a roles comerciales y operativos; se confirmó en 10 tenants y 69 roles.
+- Verificación local: compilación Python y `git diff --check` correctos. No se ejecutaron pruebas automatizadas.
+- Pendiente: desplegar backend y panel, instalar dependencias del panel para poder ejecutar el chequeo TypeScript/ESLint, y probar la vista con un usuario con permiso y otro sin él.
+
 ## 2026-08-22
 
 ### Límites de descuento por tipo de precio — implementado localmente y migrado

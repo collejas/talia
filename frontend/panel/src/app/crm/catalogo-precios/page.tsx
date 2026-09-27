@@ -84,6 +84,7 @@ export default async function CrmCatalogoPreciosPage() {
     precioBase: item.precioBase,
     moneda: item.moneda,
     activo: item.activo,
+    manejaInventario: item.manejaInventario,
     lineaNombre: item.lineaNombre,
     familiaNombre: item.familiaNombre,
     modeloNombre: item.modeloNombre,

@@ -15788,6 +15788,38 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar existencias: {data!r}")
         return data
 
+    async def list_catalog_price_inventory(
+        self,
+        *,
+        organizacion_id: UUID,
+        almacen_id: UUID | None = None,
+        limit: int = 5000,
+    ) -> list[dict[str, Any]]:
+        max_rows = max(1, min(limit, 5000))
+        page_size = 500
+        offset = 0
+        rows: list[dict[str, Any]] = []
+        while offset < max_rows:
+            current_limit = min(page_size, max_rows - offset)
+            params: dict[str, Any] = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "order": "almacen_id.asc,catalog_item_id.asc",
+                "limit": str(current_limit),
+                "offset": str(offset),
+                "select": "catalog_item_id,almacen_id,stock_actual,stock_reservado,stock_disponible",
+            }
+            if almacen_id is not None:
+                params["almacen_id"] = f"eq.{almacen_id}"
+            response = await self._request("GET", "/rest/v1/inventario_existencias", params=params)
+            data = response.json()
+            if not isinstance(data, list) or not all(isinstance(row, dict) for row in data):
+                raise CRMRepositoryError("catalog_price_inventory_invalid_response")
+            rows.extend(data)
+            if len(data) < current_limit:
+                break
+            offset += len(data)
+        return rows
+
     async def get_inventario_existencia(
         self,
         *,
