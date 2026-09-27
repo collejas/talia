@@ -32675,6 +32675,12 @@ async def aprobar_pedido_venta_y_liberar(
             raise HTTPException(status_code=400, detail="revision_operativa_incompleta") from exc
         if "sales_order_not_submitted_for_review" in message:
             raise HTTPException(status_code=409, detail="pedido_no_pendiente_revision") from exc
+        if "sale_account_missing" in message:
+            raise HTTPException(status_code=409, detail="pedido_sin_cuenta_crm") from exc
+        if "sale_persona_missing" in message:
+            raise HTTPException(status_code=409, detail="pedido_sin_contacto_crm") from exc
+        if "sale_total_must_be_positive" in message:
+            raise HTTPException(status_code=409, detail="cotizacion_sin_total") from exc
         if "inventory_warehouse_required" in message:
             raise HTTPException(status_code=409, detail="no_hay_almacen_activo_para_reservas") from exc
         if "inventory_shortfall_partial_delivery_not_allowed" in message:
@@ -32794,8 +32800,8 @@ async def listar_pedidos_pendientes_formalizacion(
     for row in rows:
         quote = _single_related(row.get("cotizacion")) or {}
         contact = _single_related(quote.get("contacto"))
-        account = _single_related(quote.get("cuenta"))
         opportunity = _single_related(quote.get("oportunidad"))
+        account = _single_related(quote.get("cuenta")) or _single_related(opportunity.get("cuenta"))
         order_items = []
         for item in row.get("items") if isinstance(row.get("items"), list) else []:
             if not isinstance(item, dict):
@@ -32844,6 +32850,7 @@ async def listar_pedidos_pendientes_formalizacion(
             "folio": quote.get("folio"),
             "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
             "cliente": account.get("nombre") if account else None,
+            "cuenta_crm_asociada": account is not None,
             "cliente_datos": {
                 "razon_social": account.get("razon_social") if account else None,
                 "rfc": account.get("rfc") if account else None,

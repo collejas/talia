@@ -12,6 +12,7 @@ type QueueItem = {
   folio: string | null;
   oportunidad_titulo: string | null;
   cliente: string | null;
+  cuenta_crm_asociada: boolean;
   contacto: string | null;
   total: number | string | null;
   moneda: string | null;
@@ -108,7 +109,8 @@ function differsFromAcceptedQuote(item: QueueItem["items"][number]) {
 }
 
 function hasBlockingIssues(item: QueueItem) {
-  return item.items.some((line) => differsFromAcceptedQuote(line)
+  return !item.cuenta_crm_asociada
+    || item.items.some((line) => differsFromAcceptedQuote(line)
     || (line.cotizacion_descuento_porcentaje != null
       && line.cotizacion_limite_descuento_porcentaje != null
       && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje)))
@@ -246,6 +248,7 @@ export function OrderFormalizationQueue() {
             <div className="grid gap-3 text-sm lg:grid-cols-2">
               <ReviewBlock title="1. Cliente" label="Revisé la identidad y los datos disponibles del cliente" checked={reviews[item.id]?.cliente ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), cliente: checked } }))} disabled={pendingId === item.id}>
                 <p>{item.cliente || item.contacto || "Sin nombre registrado"}</p>
+                {!item.cuenta_crm_asociada ? <p className="font-medium text-destructive">Bloqueante: no hay una cuenta CRM asociada. Devuelve el pedido a Comercial para vincular la cuenta real del cliente.</p> : null}
                 <p className="text-muted-foreground">Razón social: {item.cliente_datos.razon_social || "No registrada"} · RFC: {item.cliente_datos.rfc || "No registrado"}</p>
                 <p className="text-muted-foreground">Correo de facturación: {item.cliente_datos.correo_facturacion || "No registrado"} · C.P.: {item.cliente_datos.codigo_postal || "No registrado"}</p>
               </ReviewBlock>
@@ -291,7 +294,7 @@ export function OrderFormalizationQueue() {
                 </div>
               ) : (
                 <>
-                  <Button type="button" variant="outline" onClick={() => { setReturningId(item.id); setError(null); }} disabled={pendingId === item.id}>Devolver para corrección</Button>
+                  <Button type="button" variant="outline" onClick={() => { setReturningId(item.id); setError(null); setReturnCode(item.cuenta_crm_asociada ? "otro" : "datos_cliente_incompletos"); setReturnReason(item.cuenta_crm_asociada ? "" : "Falta vincular la cuenta CRM real del cliente a la oportunidad."); }} disabled={pendingId === item.id}>Devolver para corrección</Button>
                   <Button type="button" onClick={() => void confirmOrder(item)} disabled={pendingId === item.id || hasBlockingIssues(item)}>
                     {pendingId === item.id ? "Aprobando…" : "Aprobar y liberar a surtido"}
                   </Button>
