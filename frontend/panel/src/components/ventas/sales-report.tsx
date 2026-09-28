@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { printSalesReport, type SalesReportPrintBrand, type SalesReportPrintFilters, type SalesReportPrintItem } from "@/components/ventas/sales-report-print";
 
 type Amount = number | string;
 
-type SalesReportSummary = {
+export type SalesReportSummary = {
   numero_ventas: number;
   total_vendido: Amount;
   total_cobrado_periodo: Amount;
@@ -20,8 +21,8 @@ type SalesReportSummary = {
   numero_pagadas: number;
 };
 
-type SalesReportPoint = { mes: string; total_vendido: Amount; total_cobrado: Amount };
-type SalesReportItem = {
+export type SalesReportPoint = { mes: string; total_vendido: Amount; total_cobrado: Amount };
+export type SalesReportItem = {
   id: string;
   cliente_id: string;
   cliente_nombre: string;
@@ -39,7 +40,7 @@ type SalesReportItem = {
 };
 
 type Seller = { id: string; nombre_completo: string | null; correo: string | null };
-type SalesReportData = {
+export type SalesReportData = {
   resumen: SalesReportSummary;
   serie: SalesReportPoint[];
   items: SalesReportItem[];
@@ -67,7 +68,7 @@ const EMPTY_REPORT: SalesReportData = {
 };
 
 type DatePreset = "mes" | "90d" | "ano" | "personalizado";
-type Filters = { desde: string; hasta: string; estatus: string; vendedor: string; moneda: string };
+type Filters = SalesReportPrintFilters;
 
 function dateInputValue(date: Date): string {
   const year = date.getFullYear();
@@ -125,13 +126,15 @@ function periodLabel(value: string): string {
   return new Intl.DateTimeFormat("es-MX", { month: "short", year: "2-digit" }).format(new Date(year, (month || 1) - 1, 1));
 }
 
-export function SalesReport() {
+export function SalesReport({ printBrand }: { printBrand: SalesReportPrintBrand | null }) {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [preset, setPreset] = useState<DatePreset>("mes");
   const [offset, setOffset] = useState(0);
   const [report, setReport] = useState<SalesReportData>(EMPTY_REPORT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
 
   const updateFilter = useCallback((key: keyof Filters, value: string) => {
     setLoading(true);
@@ -213,6 +216,57 @@ export function SalesReport() {
   const pageCount = Math.max(1, Math.ceil(report.total / PAGE_SIZE));
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
+  const printFilteredReport = async () => {
+    setPrintError(null);
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setPrintError("Permite ventanas emergentes para imprimir o guardar el reporte como PDF.");
+      return;
+    }
+    printWindow.document.write("<!doctype html><html lang=\"es\"><body>Preparando reporte de ventas…</body></html>");
+    setPrinting(true);
+    const selectedFilters: Filters = { ...filters };
+    const makeReportUrl = (pageOffset: number) => {
+      const params = new URLSearchParams({
+        desde: selectedFilters.desde,
+        hasta: selectedFilters.hasta,
+        limit: "200",
+        offset: String(pageOffset),
+        moneda: selectedFilters.moneda,
+      });
+      if (selectedFilters.estatus !== "todos") params.set("estatus", selectedFilters.estatus);
+      if (selectedFilters.vendedor !== "todos") params.set("vendedor_usuario_id", selectedFilters.vendedor);
+      return `/api/crm/ventas/reporte?${params.toString()}`;
+    };
+    try {
+      if (!printBrand) throw new Error("No está disponible el formato de impresión de la empresa.");
+      const firstResponse = await fetch(makeReportUrl(0), { cache: "no-store" });
+      const firstPage = await firstResponse.json() as SalesReportData & { error?: string };
+      if (!firstResponse.ok) throw new Error(firstPage.error || "No se pudo cargar el reporte para imprimir.");
+      const allItems: SalesReportItem[] = [...(firstPage.items ?? [])];
+      for (let pageOffset = 200; pageOffset < firstPage.total; pageOffset += 200) {
+        const response = await fetch(makeReportUrl(pageOffset), { cache: "no-store" });
+        const page = await response.json() as SalesReportData & { error?: string };
+        if (!response.ok) throw new Error(page.error || "No se pudo cargar el listado completo para imprimir.");
+        if (page.total !== firstPage.total) throw new Error("El listado cambió mientras se preparaba el PDF. Vuelve a intentarlo.");
+        if (!page.items?.length) throw new Error("El listado cambió mientras se preparaba el PDF. Vuelve a intentarlo.");
+        allItems.push(...page.items);
+      }
+      if (allItems.length !== firstPage.total) throw new Error("No se pudo recuperar el listado completo para imprimir. Vuelve a intentarlo.");
+      const sellerLabel = selectedFilters.vendedor === "todos"
+        ? "Todos los vendedores visibles"
+        : firstPage.vendedores.find((seller) => seller.id === selectedFilters.vendedor)?.nombre_completo
+          || firstPage.vendedores.find((seller) => seller.id === selectedFilters.vendedor)?.correo
+          || "Vendedor seleccionado";
+      printSalesReport(firstPage.resumen, firstPage.serie, allItems as SalesReportPrintItem[], firstPage.total, selectedFilters, sellerLabel, printBrand, printWindow);
+    } catch (failure) {
+      printWindow.close();
+      setPrintError(failure instanceof Error ? failure.message : "No se pudo preparar el reporte para imprimir.");
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <section aria-label="Filtros del reporte" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
@@ -291,9 +345,16 @@ export function SalesReport() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div><CardTitle>Ventas</CardTitle><CardDescription>{report.total.toLocaleString("es-MX")} resultados para los filtros seleccionados.</CardDescription></div>
-          {loading ? <span className="text-xs text-muted-foreground">Actualizando…</span> : null}
+          <div className="flex items-center gap-3">
+            {loading ? <span className="text-xs text-muted-foreground">Actualizando…</span> : null}
+            <Button type="button" variant="outline" size="sm" aria-label="PDF del reporte de ventas" onClick={() => void printFilteredReport()} disabled={loading || printing}>
+              {printing ? <span aria-label="Preparando PDF">…</span> : "PDF"}
+            </Button>
+            {printing ? <span role="status" className="text-xs text-muted-foreground">Preparando PDF…</span> : null}
+          </div>
         </CardHeader>
         <CardContent>
+          {printError ? <p role="alert" className="mb-3 text-sm text-destructive">{printError}</p> : null}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow>
