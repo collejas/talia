@@ -89,7 +89,7 @@ import {
 } from "./advanced-denue-search-modal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
-import { ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
+import { ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsPagination, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 import {
   Table,
   TableBody,
@@ -2560,33 +2560,16 @@ export function DenueBusquedaView() {
                   })
                 )}
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handlePrevPage}
-                  disabled={isLoadingResultados || !hasPrevPage}
-                >
-                  Anterior
-                </Button>
-                <span>
-                  {effectiveTotal === 0
-                    ? "No hay registros"
-                    : `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(
-                        pageEnd,
-                      )} de ${numberFormatter.format(effectiveTotal)}`}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleNextPage}
-                  disabled={isLoadingResultados || !hasNextPage}
-                >
-                  Siguiente
-                </Button>
-              </div>
+              <ProspeccionResultsPagination
+                loading={isLoadingResultados}
+                hasPrevious={hasPrevPage}
+                hasNext={hasNextPage}
+                total={effectiveTotal}
+                pageStart={pageStart}
+                pageEnd={pageEnd}
+                onPrevious={handlePrevPage}
+                onNext={handleNextPage}
+              />
           </CardContent>
         </Card>
 	        <ProspeccionResultsMapCard

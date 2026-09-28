@@ -104,6 +104,44 @@ export function ProspeccionResultsMapCard({ description, onHelp, children }: Pro
   )
 }
 
+type ProspeccionResultsPaginationProps = {
+  loading: boolean
+  hasPrevious: boolean
+  hasNext: boolean
+  total: number
+  pageStart: number
+  pageEnd: number
+  onPrevious: () => void
+  onNext: () => void
+}
+
+export function ProspeccionResultsPagination({
+  loading,
+  hasPrevious,
+  hasNext,
+  total,
+  pageStart,
+  pageEnd,
+  onPrevious,
+  onNext,
+}: ProspeccionResultsPaginationProps) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
+      <Button type="button" variant="ghost" size="sm" onClick={onPrevious} disabled={loading || !hasPrevious}>
+        Anterior
+      </Button>
+      <span>
+        {total === 0
+          ? "No hay registros"
+          : `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(pageEnd)} de ${numberFormatter.format(total)}`}
+      </span>
+      <Button type="button" variant="ghost" size="sm" onClick={onNext} disabled={loading || !hasNext}>
+        Siguiente
+      </Button>
+    </div>
+  )
+}
+
 export function ProspeccionResultsSelectionSummary({
   selectedCount,
   selectedVisibleCount,

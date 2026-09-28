@@ -101,7 +101,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/use-permissions";
-import { ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
+import { ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsPagination, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -2053,33 +2053,16 @@ export function GoogleBusquedaView() {
                 })
               )}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handlePrevPage}
-                disabled={isLoadingResultados || currentPage === 0 || !totalFiltered}
-              >
-                Anterior
-              </Button>
-              <span>
-                {totalFiltered === 0
-                  ? "No hay registros"
-                  : `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(
-                      pageEnd,
-                    )} de ${numberFormatter.format(totalFiltered)}`}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleNextPage}
-                disabled={isLoadingResultados || currentPage >= totalPages - 1 || !totalFiltered}
-              >
-                Siguiente
-              </Button>
-            </div>
+            <ProspeccionResultsPagination
+              loading={isLoadingResultados}
+              hasPrevious={currentPage > 0 && Boolean(totalFiltered)}
+              hasNext={currentPage < totalPages - 1 && Boolean(totalFiltered)}
+              total={totalFiltered}
+              pageStart={pageStart}
+              pageEnd={pageEnd}
+              onPrevious={handlePrevPage}
+              onNext={handleNextPage}
+            />
           </CardContent>
         </Card>
 
