@@ -11,7 +11,6 @@ import {
   Info,
   ListChecks,
   Mail,
-  MapPin,
   Phone,
   RefreshCw,
   Search,
@@ -102,7 +101,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/use-permissions";
-import { ProspeccionResultsActions, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
+import { ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -2084,39 +2083,26 @@ export function GoogleBusquedaView() {
           </CardContent>
         </Card>
 
-        <Card className="flex flex-col overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-base">Mapa de resultados</CardTitle>
-              <CardDescription>
-                Mueve el marcador para actualizar el centro.
-                {mapTruncated ? <span className="mt-1 block">Demasiados puntos en esta vista: acerca el zoom.</span> : null}
-              </CardDescription>
-            </div>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              onClick={() => {
-                setFeedback({ type: "info", message: "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda." });
-              }}
-            >
-              <MapPin className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="flex-1 p-0">
-            <div className="h-full min-h-[460px]">
-              <GoogleResultsMap
-                center={{ lat: formValues.lat, lng: formValues.lng }}
-                radius={formValues.radio_m}
-                results={mapResults}
-                highlightIds={selectedIds}
-                onCenterChange={handleCenterChange}
-                onViewportChange={setMapViewport}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <ProspeccionResultsMapCard
+          description={
+            <>
+              Mueve el marcador para actualizar el centro.
+              {mapTruncated ? <span className="mt-1 block">Demasiados puntos en esta vista: acerca el zoom.</span> : null}
+            </>
+          }
+          onHelp={() => {
+            setFeedback({ type: "info", message: "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda." });
+          }}
+        >
+          <GoogleResultsMap
+            center={{ lat: formValues.lat, lng: formValues.lng }}
+            radius={formValues.radio_m}
+            results={mapResults}
+            highlightIds={selectedIds}
+            onCenterChange={handleCenterChange}
+            onViewportChange={setMapViewport}
+          />
+        </ProspeccionResultsMapCard>
       </div>
 
       <Card>

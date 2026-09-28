@@ -10,7 +10,6 @@ import {
   Info,
   ListChecks,
   Mail,
-  MapPin,
   Phone,
   RefreshCw,
   Search,
@@ -90,7 +89,7 @@ import {
 } from "./advanced-denue-search-modal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
-import { ProspeccionResultsActions, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
+import { ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 import {
   Table,
   TableBody,
@@ -2590,48 +2589,35 @@ export function DenueBusquedaView() {
               </div>
           </CardContent>
         </Card>
-	        <Card className="flex flex-col overflow-hidden">
-	          <CardHeader className="flex flex-row items-center justify-between gap-4">
-	            <div>
-	              <CardTitle className="text-base">Mapa de resultados</CardTitle>
-	              <CardDescription>
-	                {mapCenterLocked ? "Se centra automáticamente en los resultados encontrados." : "Mueve el marcador para actualizar el centro."}
-	                {mapTruncated ? <span className="mt-1 block">Demasiados puntos en esta vista: acerca el zoom.</span> : null}
-	              </CardDescription>
-	            </div>
-	            <Button
-	              type="button"
-	              size="icon"
-	              variant="ghost"
-	              onClick={() => {
-	                setFeedback({
-	                  type: "info",
-	                  message: mapCenterLocked
-	                    ? "El mapa se ajusta automáticamente a los resultados de la búsqueda avanzada."
-	                    : "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda.",
-	                });
-	              }}
-	            >
-	              <MapPin className="h-4 w-4" />
-	            </Button>
-	          </CardHeader>
-	          <CardContent className="flex-1 p-0">
-	            <div className="h-full min-h-[460px]">
-	              <ProspeccionResultsMap
-	                center={{ lat: formValues.lat, lng: formValues.lng }}
-	                radius={formValues.radio_m}
-	                results={mapResults}
-	                highlightIds={selectedIds}
-	                onCenterChange={mapCenterLocked ? undefined : handleCenterChange}
-	                onViewportChange={setMapViewport}
-	                fitBounds={uiIsAdvanced && mapIsAdvanced ? mapFitBounds : null}
-	                fitBoundsKey={`${activeBusquedaId ?? ""}:${filtersKey}`}
-	                showSearchCircle={!mapCenterLocked}
-	                enableCenterControls={!mapCenterLocked}
-	              />
-	            </div>
-	          </CardContent>
-	        </Card>
+	        <ProspeccionResultsMapCard
+	          description={
+	            <>
+	              {mapCenterLocked ? "Se centra automáticamente en los resultados encontrados." : "Mueve el marcador para actualizar el centro."}
+	              {mapTruncated ? <span className="mt-1 block">Demasiados puntos en esta vista: acerca el zoom.</span> : null}
+	            </>
+	          }
+	          onHelp={() => {
+	            setFeedback({
+	              type: "info",
+	              message: mapCenterLocked
+	                ? "El mapa se ajusta automáticamente a los resultados de la búsqueda avanzada."
+	                : "Haz clic en el mapa o arrastra el marcador azul para ajustar la búsqueda.",
+            });
+	          }}
+	        >
+	          <ProspeccionResultsMap
+	            center={{ lat: formValues.lat, lng: formValues.lng }}
+	            radius={formValues.radio_m}
+	            results={mapResults}
+	            highlightIds={selectedIds}
+	            onCenterChange={mapCenterLocked ? undefined : handleCenterChange}
+	            onViewportChange={setMapViewport}
+	            fitBounds={uiIsAdvanced && mapIsAdvanced ? mapFitBounds : null}
+	            fitBoundsKey={`${activeBusquedaId ?? ""}:${filtersKey}`}
+	            showSearchCircle={!mapCenterLocked}
+	            enableCenterControls={!mapCenterLocked}
+	          />
+	        </ProspeccionResultsMapCard>
 	      </div>
 
       <Card>

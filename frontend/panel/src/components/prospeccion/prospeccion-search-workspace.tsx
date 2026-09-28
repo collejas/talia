@@ -1,9 +1,10 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
-import { IconBuildingStore, IconCircleCheck, IconMapSearch, IconRefresh, IconTrash } from "@tabler/icons-react"
+import { IconBuildingStore, IconCircleCheck, IconMapPin, IconMapSearch, IconRefresh, IconTrash } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export type ProspeccionSearchSource = "google" | "denue"
 
@@ -76,6 +77,31 @@ type ProspeccionResultsSelectionSummaryProps = {
   totalPages: number
   onSelectPage: () => void
   onClearPage: () => void
+}
+
+type ProspeccionResultsMapCardProps = {
+  description: ReactNode
+  onHelp: () => void
+  children: ReactNode
+}
+
+export function ProspeccionResultsMapCard({ description, onHelp, children }: ProspeccionResultsMapCardProps) {
+  return (
+    <Card className="flex flex-col overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <div>
+          <CardTitle className="text-base">Mapa de resultados</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </div>
+        <Button type="button" size="icon" variant="ghost" onClick={onHelp} aria-label="Ayuda del mapa">
+          <IconMapPin className="size-4" />
+        </Button>
+      </CardHeader>
+      <CardContent className="flex-1 p-0">
+        <div className="h-full min-h-[460px]">{children}</div>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function ProspeccionResultsSelectionSummary({
