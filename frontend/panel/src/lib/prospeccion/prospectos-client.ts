@@ -879,6 +879,7 @@ type ListProspectosParams = {
   websitePresent?: boolean
   metadataQueries?: string[]
   actividades?: string[]
+  tipoNegocio?: string[]
   dateFrom?: string
   dateTo?: string
   geoEstado?: string
@@ -923,6 +924,12 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
     for (const value of params.segmentos) {
       const trimmed = value?.trim()
       if (trimmed) url.searchParams.append("segmentos", trimmed)
+    }
+  }
+  if (params.tipoNegocio?.length) {
+    for (const value of params.tipoNegocio) {
+      const trimmed = value?.trim()
+      if (trimmed) url.searchParams.append("tipo_negocio", trimmed)
     }
   }
   if (params.carrierType) url.searchParams.set("carrier_type", params.carrierType)

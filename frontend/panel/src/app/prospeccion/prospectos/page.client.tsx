@@ -164,6 +164,7 @@ type Filters = {
   conScraper: ConScraperFilter
   segmento: string
   segmentoFilters: string[]
+  tipoNegocioFilters: string[]
   geoEstado: string
   geoMunicipio: string
   minRating: MinRatingFilter
@@ -321,6 +322,7 @@ const initialFilters: Filters = {
   conScraper: "",
   segmento: "",
   segmentoFilters: [],
+  tipoNegocioFilters: [],
   geoEstado: "",
   geoMunicipio: "",
   minRating: "",
@@ -837,6 +839,9 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
       : typeof filtersObj["segmento"] === "string" && filtersObj["segmento"]
         ? [filtersObj["segmento"]]
         : [],
+    tipoNegocioFilters: Array.isArray(filtersObj["tipoNegocioFilters"])
+      ? (filtersObj["tipoNegocioFilters"] as unknown[]).filter((value): value is string => typeof value === "string")
+      : [],
     geoEstado: typeof filtersObj["geoEstado"] === "string" ? filtersObj["geoEstado"] : "",
     geoMunicipio: typeof filtersObj["geoMunicipio"] === "string" ? filtersObj["geoMunicipio"] : "",
     minRating:
@@ -1056,10 +1061,12 @@ function ProspectosView() {
   const [queryOptions, setQueryOptions] = useState<ProspectoQueryOption[]>([])
   const [activityOptions, setActivityOptions] = useState<string[]>([])
   const [segmentoOptions, setSegmentoOptions] = useState<string[]>([])
+  const [tipoNegocioOptions, setTipoNegocioOptions] = useState<string[]>([])
   const [queryOptionsLoading, setQueryOptionsLoading] = useState(false)
   const [queryFilterSearch, setQueryFilterSearch] = useState("")
   const [activityFilterSearch, setActivityFilterSearch] = useState("")
   const [segmentoFilterSearch, setSegmentoFilterSearch] = useState("")
+  const [tipoNegocioFilterSearch, setTipoNegocioFilterSearch] = useState("")
   const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
   const [stageSummary, setStageSummary] = useState<Partial<Record<FlowStepKey, number>>>({})
   const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
@@ -1277,7 +1284,8 @@ function ProspectosView() {
       filters.contactFilters.length === 0 &&
       filters.whatsappOptOut === "" &&
       filters.actividadFilters.length === 0 &&
-      filters.queryFilters.length === 0,
+      filters.queryFilters.length === 0 &&
+      filters.tipoNegocioFilters.length === 0,
     [filters]
   )
   const scopedConsolidatedQueryOptions = useMemo(
@@ -1304,6 +1312,11 @@ function ProspectosView() {
     if (!needle) return segmentoOptions
     return segmentoOptions.filter((option) => option.toLocaleLowerCase("es-MX").includes(needle))
   }, [segmentoFilterSearch, segmentoOptions])
+  const filteredTipoNegocioOptions = useMemo(() => {
+    const needle = tipoNegocioFilterSearch.trim().toLocaleLowerCase("es-MX")
+    if (!needle) return tipoNegocioOptions
+    return tipoNegocioOptions.filter((option) => option.toLocaleLowerCase("es-MX").includes(needle))
+  }, [tipoNegocioFilterSearch, tipoNegocioOptions])
   const queryLabelMap = useMemo(() => {
     const map = new Map<string, string>()
     for (const option of scopedConsolidatedQueryOptions) {
@@ -1755,6 +1768,9 @@ function ProspectosView() {
     if (filters.actividadFilters.length) {
       chips.push(`Actividad: ${filters.actividadFilters.join(", ")}`)
     }
+    if (filters.tipoNegocioFilters.length) {
+      chips.push(`Tipo de negocio (Google): ${filters.tipoNegocioFilters.join(", ")}`)
+    }
     const dateChip = getDateFilterChipLabel(filters.dateOption, filters.customDateFrom, filters.customDateTo)
     if (dateChip) {
       chips.push(`Fecha: ${dateChip}`)
@@ -1806,6 +1822,7 @@ function ProspectosView() {
           includeScraperStatus: false,
           segmento: filters.segmento || undefined,
           segmentos: filters.segmentoFilters.length ? filters.segmentoFilters : undefined,
+          tipoNegocio: filters.tipoNegocioFilters.length ? filters.tipoNegocioFilters : undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
           minRating: filters.minRating ? Number(filters.minRating) : undefined,
@@ -1890,6 +1907,7 @@ function ProspectosView() {
           includeScraperStatus: false,
           segmento: filters.segmento || undefined,
           segmentos: filters.segmentoFilters.length ? filters.segmentoFilters : undefined,
+          tipoNegocio: filters.tipoNegocioFilters.length ? filters.tipoNegocioFilters : undefined,
           geoEstado: filters.geoEstado || undefined,
           geoMunicipio: filters.geoMunicipio || undefined,
           minRating: filters.minRating ? Number(filters.minRating) : undefined,
@@ -2015,22 +2033,27 @@ function ProspectosView() {
       const queries = response.queries ?? []
       const activities = response.activities ?? []
       const segmentos = response.segmentos ?? []
+      const tiposNegocio = response.tipos_negocio ?? []
       setQueryOptions(queries)
       baseActivityOptionsRef.current = activities
       setActivityOptions(activities)
       setSegmentoOptions(segmentos)
+      setTipoNegocioOptions(tiposNegocio)
       const queryValues = new Set(queries.map((item) => item.value))
       const segmentoValues = new Set(segmentos)
+      const tipoNegocioValues = new Set(tiposNegocio)
       setFilters((prev) => {
         const nextQueryFilters = prev.queryFilters.filter((value) => queryValues.has(value))
         const nextActividadFilters = prev.actividadFilters.filter((value) => activities.includes(value))
         const nextSegmentoFilters = prev.segmentoFilters.filter((value) => segmentoValues.has(value))
+        const nextTipoNegocioFilters = prev.tipoNegocioFilters.filter((value) => tipoNegocioValues.has(value))
         const nextSegmento = nextSegmentoFilters.length === 1 ? nextSegmentoFilters[0] : ""
         if (
           arraysEqual(nextQueryFilters, prev.queryFilters) &&
           arraysEqual(nextActividadFilters, prev.actividadFilters) &&
           nextSegmento === prev.segmento &&
-          arraysEqual(nextSegmentoFilters, prev.segmentoFilters)
+          arraysEqual(nextSegmentoFilters, prev.segmentoFilters) &&
+          arraysEqual(nextTipoNegocioFilters, prev.tipoNegocioFilters)
         ) {
           return prev
         }
@@ -2040,6 +2063,7 @@ function ProspectosView() {
           actividadFilters: nextActividadFilters,
           segmento: nextSegmento,
           segmentoFilters: nextSegmentoFilters,
+          tipoNegocioFilters: nextTipoNegocioFilters,
         }
       })
     } catch {
@@ -2049,8 +2073,9 @@ function ProspectosView() {
       setQueryOptions([])
       setActivityOptions([])
       setSegmentoOptions([])
+      setTipoNegocioOptions([])
       setFilters((prev) => {
-        if (!prev.queryFilters.length && !prev.actividadFilters.length && !prev.segmento) {
+        if (!prev.queryFilters.length && !prev.actividadFilters.length && !prev.segmento && !prev.tipoNegocioFilters.length) {
           return prev
         }
         return {
@@ -2059,6 +2084,7 @@ function ProspectosView() {
           actividadFilters: [],
           segmento: "",
           segmentoFilters: [],
+          tipoNegocioFilters: [],
         }
       })
     } finally {
@@ -3891,12 +3917,23 @@ function ProspectosView() {
               emailDomainRelation={filters.emailDomainRelation}
               minRating={filters.minRating}
               estratoGroup={filters.estratoGroup}
+              tipoNegocioOptions={filteredTipoNegocioOptions}
+              tipoNegocioValues={filters.tipoNegocioFilters}
+              tipoNegocioSearch={tipoNegocioFilterSearch}
               dateOption={filters.dateOption}
               customDateFrom={filters.customDateFrom}
               customDateTo={filters.customDateTo}
               onEmailDomainRelationChange={(value) => setFilters((prev) => ({ ...prev, emailDomainRelation: value === "all" ? "" : value as EmailDomainRelationFilter }))}
               onMinRatingChange={(value) => setFilters((prev) => ({ ...prev, minRating: value === "all" ? "" : value as MinRatingFilter }))}
               onEstratoGroupChange={(value) => setFilters((prev) => ({ ...prev, estratoGroup: value === "all" ? "" : value as EstratoGroupFilter }))}
+              onTipoNegocioSearchChange={setTipoNegocioFilterSearch}
+              onTipoNegocioToggle={(value, checked) => setFilters((prev) => {
+                const next = new Set(prev.tipoNegocioFilters)
+                if (checked) next.add(value)
+                else next.delete(value)
+                return { ...prev, tipoNegocioFilters: orderSelectedByOptions(next, tipoNegocioOptions) }
+              })}
+              onClearTipoNegocio={() => setFilters((prev) => ({ ...prev, tipoNegocioFilters: [] }))}
               onDateOptionChange={(value) => setFilters((prev) => {
                 const nextOption = value === "all" ? "" : value as DateRangeOption
                 return { ...prev, dateOption: nextOption, customDateFrom: nextOption === "custom" ? prev.customDateFrom : "", customDateTo: nextOption === "custom" ? prev.customDateTo : "" }

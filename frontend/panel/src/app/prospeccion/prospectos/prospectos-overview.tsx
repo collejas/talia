@@ -331,12 +331,18 @@ type ProspectosClassificationFiltersProps = {
   emailDomainRelation: string
   minRating: string
   estratoGroup: string
+  tipoNegocioOptions: string[]
+  tipoNegocioValues: string[]
+  tipoNegocioSearch: string
   dateOption: string
   customDateFrom: string
   customDateTo: string
   onEmailDomainRelationChange: (value: string) => void
   onMinRatingChange: (value: string) => void
   onEstratoGroupChange: (value: string) => void
+  onTipoNegocioSearchChange: (value: string) => void
+  onTipoNegocioToggle: (value: string, checked: boolean) => void
+  onClearTipoNegocio: () => void
   onDateOptionChange: (value: string) => void
   onCustomDateChange: (bound: "from" | "to", value: string) => void
 }
@@ -345,17 +351,23 @@ export function ProspectosClassificationFilters({
   emailDomainRelation,
   minRating,
   estratoGroup,
+  tipoNegocioOptions,
+  tipoNegocioValues,
+  tipoNegocioSearch,
   dateOption,
   customDateFrom,
   customDateTo,
   onEmailDomainRelationChange,
   onMinRatingChange,
   onEstratoGroupChange,
+  onTipoNegocioSearchChange,
+  onTipoNegocioToggle,
+  onClearTipoNegocio,
   onDateOptionChange,
   onCustomDateChange,
 }: ProspectosClassificationFiltersProps) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <FilterSelect label="Dominio correo/sitio" value={emailDomainRelation} onChange={onEmailDomainRelationChange} options={[
         ["same_as_website", "Igual al sitio web"], ["different_from_website", "Diferente al sitio web"],
         ["no_website", "Sin sitio web"], ["no_email", "Sin correo"],
@@ -364,6 +376,31 @@ export function ProspectosClassificationFilters({
       <FilterSelect label="Tamaño de empresa" value={estratoGroup} onChange={onEstratoGroupChange} options={[
         ["micro", "Micro (0-10)"], ["pequena", "Pequeña (11-50)"], ["mediana", "Mediana (51-250)"], ["grande", "Grande (250+)"],
       ]} allLabel="Todos los tamaños" />
+      <div className="space-y-1">
+        <Label>Tipo de negocio (Google)</Label>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="w-full justify-between text-left font-normal">
+              <span className="truncate">{tipoNegocioValues.length ? tipoNegocioValues.join(", ") : "Todos los tipos"}</span>
+              <IconChevronDown className="size-4 shrink-0 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[280px]">
+            <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
+              <Input value={tipoNegocioSearch} onChange={(event) => onTipoNegocioSearchChange(event.target.value)} placeholder="Buscar tipo…" className="h-8 text-xs" />
+            </div>
+            <DropdownMenuCheckboxItem checked={!tipoNegocioValues.length} onCheckedChange={(checked) => { if (checked) onClearTipoNegocio() }} onSelect={(event) => event.preventDefault()}>
+              Todos
+            </DropdownMenuCheckboxItem>
+            {tipoNegocioOptions.map((option) => (
+              <DropdownMenuCheckboxItem key={option} checked={tipoNegocioValues.includes(option)} onCheckedChange={(checked) => onTipoNegocioToggle(option, Boolean(checked))} onSelect={(event) => event.preventDefault()}>
+                {option}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {!tipoNegocioOptions.length ? <div className="px-2 py-2 text-xs text-muted-foreground">No hay tipos disponibles para esta fuente.</div> : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       <div className="space-y-1">
         <Label className="flex items-center gap-1"><IconCalendar className="size-3" />Fecha</Label>
         <div className="flex flex-wrap items-center gap-2">

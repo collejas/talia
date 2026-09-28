@@ -36490,6 +36490,7 @@ async def listar_prospectos(
                 email_domain_relation=params.email_domain_relation or None,
                 segmento=params.segmento,
                 segmentos=segmentos,
+                tipo_negocio=params.tipo_negocio,
                 carrier_type=params.carrier_type or None,
                 order=order_value,
                 stage=params.stage or None,
