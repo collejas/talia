@@ -67,6 +67,50 @@ type ProspeccionResultsActionsProps = {
   children?: ReactNode
 }
 
+type ProspeccionResultsSelectionSummaryProps = {
+  selectedCount: number
+  selectedVisibleCount: number
+  hasVisibleResults: boolean
+  totalCount: number
+  currentPage: number
+  totalPages: number
+  onSelectPage: () => void
+  onClearPage: () => void
+}
+
+export function ProspeccionResultsSelectionSummary({
+  selectedCount,
+  selectedVisibleCount,
+  hasVisibleResults,
+  totalCount,
+  currentPage,
+  totalPages,
+  onSelectPage,
+  onClearPage,
+}: ProspeccionResultsSelectionSummaryProps) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2">
+        <span>
+          Seleccionados: {numberFormatter.format(selectedCount)}{" "}
+          {selectedVisibleCount && selectedVisibleCount !== selectedCount
+            ? `(en vista: ${selectedVisibleCount})`
+            : null}
+        </span>
+        <Button type="button" size="sm" variant="ghost" onClick={onSelectPage} disabled={!hasVisibleResults}>
+          Seleccionar página
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onClearPage} disabled={!hasVisibleResults}>
+          Quitar selección
+        </Button>
+      </div>
+      <p>
+        {numberFormatter.format(totalCount)} registros · página {currentPage + 1} de {totalPages}
+      </p>
+    </div>
+  )
+}
+
 export function ProspeccionResultsActions({
   canSave,
   canDelete,

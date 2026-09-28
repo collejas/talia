@@ -102,7 +102,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/use-permissions";
-import { ProspeccionResultsActions, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
+import { ProspeccionResultsActions, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -1920,37 +1920,16 @@ export function GoogleBusquedaView() {
                 />
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-              <div className="flex flex-wrap items-center gap-2">
-                <span>
-                  Seleccionados: {numberFormatter.format(selectedIds.size)}{" "}
-                  {selectedVisibleCount && selectedVisibleCount !== selectedIds.size
-                    ? `(en vista: ${selectedVisibleCount})`
-                    : null}
-                </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleSelectAllVisible(true)}
-                  disabled={!paginatedResults.length}
-                >
-                  Seleccionar página
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleSelectAllVisible(false)}
-                  disabled={!paginatedResults.length}
-                >
-                  Quitar selección
-                </Button>
-              </div>
-              <p>
-                {numberFormatter.format(totalFiltered)} registros · página {currentPage + 1} de {totalPages}
-              </p>
-            </div>
+            <ProspeccionResultsSelectionSummary
+              selectedCount={selectedIds.size}
+              selectedVisibleCount={selectedVisibleCount}
+              hasVisibleResults={Boolean(paginatedResults.length)}
+              totalCount={totalFiltered}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onSelectPage={() => handleSelectAllVisible(true)}
+              onClearPage={() => handleSelectAllVisible(false)}
+            />
           </CardHeader>
           <CardContent className="space-y-4">
             <ProspeccionResultsActions
