@@ -321,12 +321,12 @@ export function ProspeccionSearchWorkspace({ activeSource }: ProspeccionSearchWo
         </div>
         <nav className="flex flex-wrap gap-2" aria-label="Fuentes de búsqueda">
           <Button asChild variant={activeSource === "google" ? "secondary" : "outline"} size="sm">
-            <Link href="/prospeccion/google-busqueda">
+            <Link href="/prospeccion/busqueda?fuente=google">
               <IconBuildingStore className="mr-1.5 size-4" /> Google Places
             </Link>
           </Button>
           <Button asChild variant={activeSource === "denue" ? "secondary" : "outline"} size="sm">
-            <Link href="/prospeccion/denue-busqueda">
+            <Link href="/prospeccion/busqueda?fuente=denue">
               <IconBuildingStore className="mr-1.5 size-4" /> GobMX / DENUE
             </Link>
           </Button>

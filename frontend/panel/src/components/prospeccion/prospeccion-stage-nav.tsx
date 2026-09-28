@@ -22,8 +22,8 @@ const STAGES: StageConfig[] = [
     key: "descubre",
     label: "Descubre",
     description: `Búsquedas en Google, ${PROSPECCION_SOURCE_LABELS.denue} y webscraper.`,
-    href: "/prospeccion/google-busqueda",
-    matches: ["/prospeccion/google-busqueda", "/prospeccion/denue-busqueda", "/prospeccion/buscador"],
+    href: "/prospeccion/busqueda",
+    matches: ["/prospeccion/busqueda", "/prospeccion/google-busqueda", "/prospeccion/denue-busqueda", "/prospeccion/buscador"],
   },
   {
     key: "enriquecer",
