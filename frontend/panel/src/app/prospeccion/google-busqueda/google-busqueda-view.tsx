@@ -103,6 +103,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/use-permissions";
+import { ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -1735,33 +1736,17 @@ export function GoogleBusquedaView() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Resultados almacenados</CardTitle>
-                <CardDescription className="space-y-0.5">
-                  <span>
-                    {isLoadingResultados
-                      ? "Descargando datos…"
-                      : totalFiltered
-                        ? `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(pageEnd)} de ${numberFormatter.format(
-                            totalFiltered,
-                          )} coincidencias`
-                        : "0 coincidencias"}
-                  </span>
-                  {busquedaDescriptor ? (
-                    <span className="block text-muted-foreground/80">Búsqueda: {busquedaDescriptor}</span>
-                  ) : null}
-                </CardDescription>
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => activeBusquedaId && loadResultadosForBusqueda(activeBusquedaId)}
-                disabled={!activeBusquedaId || isLoadingResultados}
-              >
-                <RefreshCw className={cn("h-4 w-4", isLoadingResultados && "animate-spin")} />
-              </Button>
-            </div>
+            <ProspeccionResultsSummary
+              loading={isLoadingResultados}
+              total={totalFiltered}
+              pageStart={pageStart}
+              pageEnd={pageEnd}
+              descriptor={busquedaDescriptor}
+              hasActiveSearch={Boolean(activeBusquedaId)}
+              onRefresh={() => {
+                if (activeBusquedaId) void loadResultadosForBusqueda(activeBusquedaId)
+              }}
+            />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
               <div className="space-y-1">
                 <Label className="text-xs font-normal">Rating</Label>

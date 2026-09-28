@@ -91,6 +91,7 @@ import {
 } from "./advanced-denue-search-modal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
+import { ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 import {
   Table,
   TableBody,
@@ -2181,33 +2182,15 @@ export function DenueBusquedaView() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">Resultados almacenados</CardTitle>
-                  <CardDescription className="space-y-0.5">
-                    <span>
-                      {isLoadingResultados
-                        ? "Descargando datos…"
-                        : effectiveTotal
-                          ? `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(pageEnd)} de ${numberFormatter.format(
-                              effectiveTotal,
-                            )} coincidencias`
-                          : "0 coincidencias"}
-                    </span>
-                    {busquedaDescriptor ? (
-                      <span className="block text-muted-foreground/80">Búsqueda: {busquedaDescriptor}</span>
-                    ) : null}
-                  </CardDescription>
-                </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => void refreshResultados({ resetOffset: true })}
-                  disabled={!activeBusquedaId || isLoadingResultados}
-                >
-                  <RefreshCw className={cn("h-4 w-4", isLoadingResultados && "animate-spin")} />
-                </Button>
-              </div>
+            <ProspeccionResultsSummary
+              loading={isLoadingResultados}
+              total={effectiveTotal}
+              pageStart={pageStart}
+              pageEnd={pageEnd}
+              descriptor={busquedaDescriptor}
+              hasActiveSearch={Boolean(activeBusquedaId)}
+              onRefresh={() => void refreshResultados({ resetOffset: true })}
+            />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
               <div className="space-y-1">
                 <Label className="text-xs font-normal" htmlFor="estrato-filter">

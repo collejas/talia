@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { IconBuildingStore, IconMapSearch } from "@tabler/icons-react"
+import { IconBuildingStore, IconMapSearch, IconRefresh } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,6 +8,49 @@ export type ProspeccionSearchSource = "google" | "denue"
 
 type ProspeccionSearchWorkspaceProps = {
   activeSource: ProspeccionSearchSource
+}
+
+type ProspeccionResultsSummaryProps = {
+  loading: boolean
+  total: number
+  pageStart: number
+  pageEnd: number
+  descriptor?: string | null
+  hasActiveSearch: boolean
+  onRefresh: () => void
+}
+
+const numberFormatter = new Intl.NumberFormat("es-MX")
+
+export function ProspeccionResultsSummary({
+  loading,
+  total,
+  pageStart,
+  pageEnd,
+  descriptor,
+  hasActiveSearch,
+  onRefresh,
+}: ProspeccionResultsSummaryProps) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-base font-semibold">Resultados almacenados</p>
+        <p className="space-y-0.5 text-sm text-muted-foreground">
+          <span className="block">
+            {loading
+              ? "Descargando datos…"
+              : total
+                ? `Mostrando ${numberFormatter.format(pageStart)}-${numberFormatter.format(pageEnd)} de ${numberFormatter.format(total)} coincidencias`
+                : "0 coincidencias"}
+          </span>
+          {descriptor ? <span className="block text-muted-foreground/80">Búsqueda: {descriptor}</span> : null}
+        </p>
+      </div>
+      <Button size="icon" variant="ghost" onClick={onRefresh} disabled={!hasActiveSearch || loading} aria-label="Actualizar resultados">
+        <IconRefresh className={loading ? "size-4 animate-spin" : "size-4"} />
+      </Button>
+    </div>
+  )
 }
 
 const SOURCE_CONFIG: Record<ProspeccionSearchSource, { label: string; description: string }> = {
