@@ -3880,7 +3880,19 @@ function ProspectosView() {
               lookupStatus={filters.lookupStatus}
               emailLookupStatus={filters.emailLookupStatus}
               websiteLookupStatus={filters.websiteLookupStatus}
-              onFuenteChange={(value) => setFilters((prev) => ({ ...prev, fuente: value === "all" ? "" : value as FuenteFilter }))}
+                onFuenteChange={(value) => setFilters((prev) => {
+                  const nextFuente = value === "all" ? "" : value as FuenteFilter
+                  if (nextFuente === "google_places") {
+                    return { ...prev, fuente: nextFuente, estratoGroup: "", actividadFilters: [] }
+                  }
+                  if (nextFuente === "denue") {
+                    return { ...prev, fuente: nextFuente, minRating: "", tipoNegocioFilters: [] }
+                  }
+                  if (nextFuente === "usuario") {
+                    return { ...prev, fuente: nextFuente, minRating: "", estratoGroup: "", actividadFilters: [], tipoNegocioFilters: [] }
+                  }
+                  return { ...prev, fuente: nextFuente }
+                })}
               onLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, lookupStatus: value === "all" ? "" : value as LookupFilter }))}
               onEmailLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, emailLookupStatus: value === "all" ? "" : value as EmailLookupFilter }))}
               onWebsiteLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, websiteLookupStatus: value === "all" ? "" : value as WebsiteLookupFilter }))}
@@ -3922,6 +3934,7 @@ function ProspectosView() {
             </ProspectosFilterSection>
             <ProspectosFilterSection title="Clasificación y fecha" description="Segmento, actividad económica, tipo de negocio y atributos de la fuente.">
               <ProspectosClassificationFilters
+                fuente={filters.fuente}
               emailDomainRelation={filters.emailDomainRelation}
               minRating={filters.minRating}
               estratoGroup={filters.estratoGroup}
@@ -3951,6 +3964,7 @@ function ProspectosView() {
             </ProspectosFilterSection>
             <ProspectosFilterSection title="Actividad, búsqueda y ubicación" description="Localiza prospectos por consulta de origen, actividad, contacto y territorio.">
               <ProspectosOperationalFilters
+              fuente={filters.fuente}
               queryOptions={filteredQueryOptions}
               queryValues={effectiveMetadataQueries ?? []}
               queryLoading={queryOptionsLoading}

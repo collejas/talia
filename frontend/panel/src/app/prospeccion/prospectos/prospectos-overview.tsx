@@ -346,6 +346,7 @@ function FilterSelect({
 }
 
 type ProspectosClassificationFiltersProps = {
+  fuente: string
   emailDomainRelation: string
   minRating: string
   estratoGroup: string
@@ -366,6 +367,7 @@ type ProspectosClassificationFiltersProps = {
 }
 
 export function ProspectosClassificationFilters({
+  fuente,
   emailDomainRelation,
   minRating,
   estratoGroup,
@@ -384,41 +386,45 @@ export function ProspectosClassificationFilters({
   onDateOptionChange,
   onCustomDateChange,
 }: ProspectosClassificationFiltersProps) {
+  const showGoogleClassification = !fuente || fuente === "google_places"
+  const showDenueClassification = !fuente || fuente === "denue"
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <FilterSelect label="Dominio correo/sitio" value={emailDomainRelation} onChange={onEmailDomainRelationChange} options={[
         ["same_as_website", "Igual al sitio web"], ["different_from_website", "Diferente al sitio web"],
         ["no_website", "Sin sitio web"], ["no_email", "Sin correo"],
       ]} />
-      <FilterSelect label="Calificación de Google" value={minRating} onChange={onMinRatingChange} options={[["3", "3+"], ["4", "4+"], ["4.5", "4.5+"]]} />
-      <FilterSelect label="Tamaño de empresa" value={estratoGroup} onChange={onEstratoGroupChange} options={[
-        ["micro", "Micro (0-10)"], ["pequena", "Pequeña (11-50)"], ["mediana", "Mediana (51-250)"], ["grande", "Grande (250+)"],
-      ]} allLabel="Todos los tamaños" />
-      <div className="space-y-1">
-        <Label>Tipo de negocio (Google)</Label>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="w-full justify-between text-left font-normal">
-              <span className="truncate">{tipoNegocioValues.length ? tipoNegocioValues.join(", ") : "Todos los tipos"}</span>
-              <IconChevronDown className="size-4 shrink-0 opacity-70" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[280px]">
-            <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
-              <Input value={tipoNegocioSearch} onChange={(event) => onTipoNegocioSearchChange(event.target.value)} placeholder="Buscar tipo…" className="h-8 text-xs" />
-            </div>
-            <DropdownMenuCheckboxItem checked={!tipoNegocioValues.length} onCheckedChange={(checked) => { if (checked) onClearTipoNegocio() }} onSelect={(event) => event.preventDefault()}>
-              Todos
-            </DropdownMenuCheckboxItem>
-            {tipoNegocioOptions.map((option) => (
-              <DropdownMenuCheckboxItem key={option} checked={tipoNegocioValues.includes(option)} onCheckedChange={(checked) => onTipoNegocioToggle(option, Boolean(checked))} onSelect={(event) => event.preventDefault()}>
-                {option}
+      {showGoogleClassification ? <>
+        <FilterSelect label="Calificación de Google" value={minRating} onChange={onMinRatingChange} options={[["3", "3+"], ["4", "4+"], ["4.5", "4.5+"]]} />
+        <div className="space-y-1">
+          <Label>Tipo de negocio (Google)</Label>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="w-full justify-between text-left font-normal">
+                <span className="truncate">{tipoNegocioValues.length ? tipoNegocioValues.join(", ") : "Todos los tipos"}</span>
+                <IconChevronDown className="size-4 shrink-0 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[280px]">
+              <div className="border-b p-2" onKeyDown={(event) => event.stopPropagation()}>
+                <Input value={tipoNegocioSearch} onChange={(event) => onTipoNegocioSearchChange(event.target.value)} placeholder="Buscar tipo…" className="h-8 text-xs" />
+              </div>
+              <DropdownMenuCheckboxItem checked={!tipoNegocioValues.length} onCheckedChange={(checked) => { if (checked) onClearTipoNegocio() }} onSelect={(event) => event.preventDefault()}>
+                Todos
               </DropdownMenuCheckboxItem>
-            ))}
-            {!tipoNegocioOptions.length ? <div className="px-2 py-2 text-xs text-muted-foreground">No hay tipos disponibles para esta fuente.</div> : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              {tipoNegocioOptions.map((option) => (
+                <DropdownMenuCheckboxItem key={option} checked={tipoNegocioValues.includes(option)} onCheckedChange={(checked) => onTipoNegocioToggle(option, Boolean(checked))} onSelect={(event) => event.preventDefault()}>
+                  {option}
+                </DropdownMenuCheckboxItem>
+              ))}
+              {!tipoNegocioOptions.length ? <div className="px-2 py-2 text-xs text-muted-foreground">No hay tipos disponibles para esta fuente.</div> : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </> : null}
+      {showDenueClassification ? <FilterSelect label="Tamaño de empresa" value={estratoGroup} onChange={onEstratoGroupChange} options={[
+        ["micro", "Micro (0-10)"], ["pequena", "Pequeña (11-50)"], ["mediana", "Mediana (51-250)"], ["grande", "Grande (250+)"],
+      ]} allLabel="Todos los tamaños" /> : null}
       <div className="space-y-1">
         <Label className="flex items-center gap-1"><IconCalendar className="size-3" />Fecha</Label>
         <div className="flex flex-wrap items-center gap-2">
@@ -447,6 +453,7 @@ export function ProspectosClassificationFilters({
 
 type OperationalQueryOption = { value: string; label: string; values: string[]; count?: number }
 type ProspectosOperationalFiltersProps = {
+  fuente: string
   queryOptions: OperationalQueryOption[]
   queryValues: string[]
   queryLoading: boolean
@@ -474,6 +481,7 @@ type ProspectosOperationalFiltersProps = {
 }
 
 export function ProspectosOperationalFilters({
+  fuente,
   queryOptions,
   queryValues,
   queryLoading,
@@ -499,6 +507,7 @@ export function ProspectosOperationalFilters({
   onSegmentToggle,
   onClearSegments,
 }: ProspectosOperationalFiltersProps) {
+  const showDenueActivity = !fuente || fuente === "denue"
   const multiSelect = (label: string, value: string, placeholder: string, search: string, onSearchChange: (value: string) => void, options: string[], selected: string[], loading: boolean, onToggle: (value: string, checked: boolean) => void) => (
     <div className="space-y-1">
       <Label>{label}</Label>
@@ -540,7 +549,7 @@ export function ProspectosOperationalFilters({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {multiSelect("Actividad", activityValues.join(", "), "Todas las actividades", activitySearch, onActivitySearchChange, activityOptions, activityValues, activityLoading, onActivityToggle)}
+      {showDenueActivity ? multiSelect("Actividad económica (DENUE)", activityValues.join(", "), "Todas las actividades", activitySearch, onActivitySearchChange, activityOptions, activityValues, activityLoading, onActivityToggle) : null}
       <div className="space-y-1">
         <Label>Datos de contacto</Label>
         <DropdownMenu>
