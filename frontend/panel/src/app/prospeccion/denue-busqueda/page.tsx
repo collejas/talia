@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
+import { redirect } from "next/navigation"
 
 export const metadata: Metadata = {
   title: "GobMX búsqueda · Prospección",
 }
 
-export const dynamic = "force-dynamic"
-export const revalidate = 0
-
-export { default } from "./page.client"
+export default function DenueBusquedaLegacyPage() {
+  redirect("/prospeccion/busqueda?fuente=denue")
+}

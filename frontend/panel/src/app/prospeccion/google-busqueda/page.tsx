@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
+import { redirect } from "next/navigation"
 
 export const metadata: Metadata = {
   title: "Google busqueda · Prospección",
 }
 
-export const dynamic = "force-dynamic"
-export const revalidate = 0
-
-export { default } from "./page.client"
+export default function GoogleBusquedaLegacyPage() {
+  redirect("/prospeccion/busqueda?fuente=google")
+}
