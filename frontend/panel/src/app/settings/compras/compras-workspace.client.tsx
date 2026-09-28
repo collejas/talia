@@ -22,6 +22,7 @@ import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contacto
 import { getActiveTimeZone } from "@/lib/timezone"
 import { PedimentosImportacionPanel } from "./pedimentos-importacion-panel.client"
 import { ProveedorCreateModal } from "./proveedor-create-modal.client"
+import { printPurchaseOrder, type PurchaseOrderPrintBrand } from "@/components/compras/purchase-order-print"
 
 import {
   createAlmacenAction,
@@ -53,6 +54,7 @@ type ComprasWorkspaceProps = {
   personas: AnyRecord[]
   catalogItems: AnyRecord[]
   ordenes: AnyRecord[]
+  comprasPrintBrand: AnyRecord | null
   recepciones: AnyRecord[]
   existencias: AnyRecord[]
   incoterms: AnyRecord[]
@@ -992,6 +994,7 @@ export function ComprasWorkspace({
   personas: initialPersonas,
   catalogItems: initialCatalogItems,
   ordenes: initialOrdenes,
+  comprasPrintBrand,
   recepciones: initialRecepciones,
   existencias: initialExistencias,
   incoterms: initialIncoterms,
@@ -1092,6 +1095,8 @@ export function ComprasWorkspace({
   const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false)
   const [isOrderPaymentsModalOpen, setIsOrderPaymentsModalOpen] = useState(false)
   const [orderSaveErrorMessage, setOrderSaveErrorMessage] = useState("")
+  const [printingOrderId, setPrintingOrderId] = useState<string | null>(null)
+  const [printOrderError, setPrintOrderError] = useState("")
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(defaultWarehouseId)
   const [lines, setLines] = useState<ReceptionLine[]>(() => buildLinesFromOrder(initialOrder))
   const [receptionNumber, setReceptionNumber] = useState<string>(defaultReceptionNumber || createSuggestedReceptionNumber())
@@ -2185,6 +2190,37 @@ export function ComprasWorkspace({
       setIsOrderDetailOpen(true)
     },
     [ensureOrderDetail],
+  )
+
+  const printOrder = useCallback(
+    async (orden: AnyRecord) => {
+      setPrintOrderError("")
+      const printWindow = window.open("", "_blank")
+      if (!printWindow) {
+        setPrintOrderError("Permite las ventanas emergentes para imprimir o guardar la orden como PDF.")
+        return
+      }
+      printWindow.document.write("<!doctype html><html lang=\"es\"><head><meta charset=\"utf-8\"><title>Preparando orden</title></head><body>Preparando orden de compra…</body></html>")
+      setPrintingOrderId(String(orden.id ?? ""))
+      try {
+        const fullOrder = await ensureOrderDetail(orden)
+        if (!fullOrder) throw new Error("orden_compra_not_found")
+        const brandRecord = comprasPrintBrand ?? {}
+        const brand: PurchaseOrderPrintBrand = {
+          organization_name: asString(brandRecord.organization_name, "Empresa"),
+          logo_url: asString(brandRecord.logo_url, ""),
+          primary_color: asString(brandRecord.primary_color, "#0f172a"),
+          accent_color: asString(brandRecord.accent_color, "#14b8a6"),
+        }
+        if (!printPurchaseOrder(fullOrder, brand, printWindow)) throw new Error("print_window_unavailable")
+      } catch {
+        printWindow.close()
+        setPrintOrderError("No se pudo preparar la orden de compra para imprimir.")
+      } finally {
+        setPrintingOrderId(null)
+      }
+    },
+    [comprasPrintBrand, ensureOrderDetail],
   )
 
   useEffect(() => {
@@ -4224,9 +4260,21 @@ export function ComprasWorkspace({
                     <CardTitle>Detalle de O.C.</CardTitle>
                     <CardDescription>Información completa de la orden seleccionada.</CardDescription>
                   </div>
-                  <Button type="button" variant="ghost" onClick={() => handleOrderDetailOpenChange(false)}>
-                    Cerrar
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label={`PDF de la orden ${asString(selectedOrderRecord.folio)}`}
+                      onClick={() => { void printOrder(selectedOrderRecord) }}
+                      disabled={printingOrderId === String(selectedOrderRecord.id)}
+                    >
+                      {printingOrderId === String(selectedOrderRecord.id) ? "…" : "PDF"}
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => handleOrderDetailOpenChange(false)}>
+                      Cerrar
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -5651,6 +5699,7 @@ export function ComprasWorkspace({
             </div>
           </CardHeader>
           <CardContent>
+            {printOrderError ? <p role="alert" className="mb-3 text-sm text-destructive">{printOrderError}</p> : null}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -5733,6 +5782,16 @@ export function ComprasWorkspace({
                             </Button>
                             <Button
                               type="button"
+                              variant="outline"
+                              size="sm"
+                              aria-label={`PDF de la orden ${asString(orden.folio)}`}
+                              onClick={() => { void printOrder(orden) }}
+                              disabled={printingOrderId === orderId}
+                            >
+                              {printingOrderId === orderId ? "…" : "PDF"}
+                            </Button>
+                            <Button
+                              type="button"
                               size="sm"
                               onClick={() => { void openOrderDetail(orden) }}
                             >
@@ -5776,6 +5835,7 @@ export function ComprasWorkspace({
           monedas={monedas}
           selectedPedimento={selectedPedimento}
           selectedPedimentoId={selectedPedimentoId}
+          printBrand={comprasPrintBrand}
         />
       ) : null}
 
@@ -5788,6 +5848,7 @@ export function ComprasWorkspace({
           monedas={monedas}
           selectedPedimento={selectedPedimento}
           selectedPedimentoId={selectedPedimentoId}
+          printBrand={comprasPrintBrand}
         />
       ) : null}
 

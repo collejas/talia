@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
@@ -12,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { printImportPedimento, type PurchaseOrderPrintBrand } from "@/components/compras/purchase-order-print"
 
 import {
   createAgenteAduanalAction,
@@ -36,6 +36,7 @@ type PedimentosImportacionPanelProps = {
   monedas: AnyRecord[]
   selectedPedimento: AnyRecord | null
   selectedPedimentoId: string
+  printBrand: AnyRecord | null
 }
 
 function asString(value: unknown, fallback = ""): string {
@@ -200,6 +201,7 @@ export function PedimentosImportacionPanel({
   monedas,
   selectedPedimento,
   selectedPedimentoId,
+  printBrand,
 }: PedimentosImportacionPanelProps) {
   const router = useRouter()
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null)
@@ -217,6 +219,8 @@ export function PedimentosImportacionPanel({
   const [gastoForm, setGastoForm] = useState(() => buildGastoFormState())
   const [editingGastoMonto, setEditingGastoMonto] = useState(false)
   const [gastoPedimentoId, setGastoPedimentoId] = useState<string>(() => selectedPedimentoId || String(pedimentos[0]?.id ?? ""))
+  const [printingPedimentoId, setPrintingPedimentoId] = useState<string | null>(null)
+  const [printError, setPrintError] = useState("")
 
   useEffect(() => {
     if (editingAgentId) {
@@ -297,6 +301,41 @@ export function PedimentosImportacionPanel({
       }, 0),
     [selectedPedimentoForActionsGastos],
   )
+  const printPedimento = async (pedimento: AnyRecord) => {
+    setPrintError("")
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) {
+      setPrintError("Permite ventanas emergentes para guardar el PDF.")
+      return
+    }
+    printWindow.document.write("<!doctype html><html lang=\"es\"><body>Preparando pedimento…</body></html>")
+    const pedimentoId = asString(pedimento.id)
+    setPrintingPedimentoId(pedimentoId)
+    try {
+      const fullPedimento = String(selectedPedimento?.id ?? "") === pedimentoId
+        ? selectedPedimento
+        : await fetch(`/api/compras/pedimentos/${encodeURIComponent(pedimentoId)}`, { cache: "no-store" })
+          .then(async (response) => {
+            const payload = await response.json().catch(() => null)
+            if (!response.ok || !payload || typeof payload !== "object") throw new Error("pedimento_not_found")
+            return payload as AnyRecord
+          })
+      if (!fullPedimento) throw new Error("pedimento_not_found")
+      const brandRecord = printBrand ?? {}
+      const brand: PurchaseOrderPrintBrand = {
+        organization_name: asString(brandRecord.organization_name, "Empresa"),
+        logo_url: asString(brandRecord.logo_url),
+        primary_color: asString(brandRecord.primary_color, "#0f172a"),
+        accent_color: asString(brandRecord.accent_color, "#14b8a6"),
+      }
+      if (!printImportPedimento(fullPedimento, brand, printWindow)) throw new Error("print_window_unavailable")
+    } catch {
+      printWindow.close()
+      setPrintError("No se pudo preparar el pedimento para guardar como PDF.")
+    } finally {
+      setPrintingPedimentoId(null)
+    }
+  }
   const gastoMonto = asNumber(gastoForm.monto, 0)
   const gastoTipoCambio = asNumber(gastoForm.tipo_cambio, 1) || 1
   const gastoMontoMxn = gastoMonto * gastoTipoCambio
@@ -1117,6 +1156,7 @@ export function PedimentosImportacionPanel({
           </div>
         </CardHeader>
         <CardContent>
+          {printError ? <p role="alert" className="mb-3 text-sm text-destructive">{printError}</p> : null}
           <div className="overflow-hidden rounded-lg border">
             <Table>
               <TableHeader>
@@ -1151,6 +1191,16 @@ export function PedimentosImportacionPanel({
                         <TableCell className="text-right">{formatMoney(pedimento.costo_total_prorrateable, asString(pedimento.moneda, "MXN"))}</TableCell>
                         <TableCell className="text-right">
                           <div className="inline-flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              aria-label={`PDF del pedimento ${asString(pedimento.numero_pedimento)}`}
+                              onClick={() => { void printPedimento(pedimento) }}
+                              disabled={printingPedimentoId === currentId}
+                            >
+                              {printingPedimentoId === currentId ? "…" : "PDF"}
+                            </Button>
                             <Button type="button" variant="outline" size="sm" onClick={() => setSelectedPedimentoRowId(currentId)}>
                               Seleccionar
                             </Button>
@@ -1184,6 +1234,15 @@ export function PedimentosImportacionPanel({
                     </DialogDescription>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { void printPedimento(selectedPedimento) }}
+                      disabled={printingPedimentoId === String(selectedPedimento.id)}
+                    >
+                      {printingPedimentoId === String(selectedPedimento.id) ? "…" : "PDF"}
+                    </Button>
                     <Button type="button" variant="outline" onClick={() => openEditPedimentoModal(selectedPedimento)}>
                       Editar
                     </Button>

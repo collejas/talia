@@ -125,6 +125,7 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
   let personas: AnyRecord[] = []
   let catalogItems: AnyRecord[] = []
   let ordenes: AnyRecord[] = []
+  let comprasPrintBrand: AnyRecord | null = null
   let recepciones: AnyRecord[] = []
   let existencias: AnyRecord[] = []
   const incoterms: AnyRecord[] = []
@@ -148,15 +149,17 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
       fetchList("/crm/personas/list", { limit: 500 }),
     ])
   } else if (isOrdenesView) {
-    ;[ordenes] = await Promise.all([
+    ;[ordenes, comprasPrintBrand] = await Promise.all([
       fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 50, lite: true }),
+      fetchOne("/crm/catalogo-precios/branding"),
     ])
   } else if (isPedimentosView || isAgentesView) {
-    ;[ordenes, monedas, agentesAduanales, pedimentosImportacion] = await Promise.all([
+    ;[ordenes, monedas, agentesAduanales, pedimentosImportacion, comprasPrintBrand] = await Promise.all([
       fetchList("/crm/compras/ordenes", { solo_abiertas: false, limit: 100 }),
       fetchList("/crm/compras/catalogos/monedas", { limit: 200 }),
       fetchList("/crm/compras/agentes-aduanales", { incluir_inactivos: true, limit: 200 }),
       fetchList("/crm/compras/pedimentos", { incluir_cancelados: true, limit: 200 }),
+      fetchOne("/crm/catalogo-precios/branding"),
     ])
   } else if (isInventarioView) {
     ;[almacenes, catalogItems, existencias] = await Promise.all([
@@ -255,6 +258,7 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
           personas={personas}
           catalogItems={inventoryCatalogItems}
           ordenes={ordenes}
+          comprasPrintBrand={comprasPrintBrand}
           recepciones={recepciones}
           existencias={existencias}
           incoterms={incoterms}
