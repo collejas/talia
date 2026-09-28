@@ -1,10 +1,13 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
+import { ArrowUpRight, Globe, Mail, Phone } from "lucide-react"
 import { IconBuildingStore, IconCircleCheck, IconMapPin, IconMapSearch, IconRefresh, IconTrash } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import { cn } from "@/lib/utils"
 
 export type ProspeccionSearchSource = "google" | "denue"
 
@@ -113,6 +116,81 @@ type ProspeccionResultsPaginationProps = {
   pageEnd: number
   onPrevious: () => void
   onNext: () => void
+}
+
+type ProspeccionResultCardProps = {
+  selected: boolean
+  activityLabel?: string | null
+  descriptor?: string | null
+  displayName: string
+  address?: string | null
+  phone?: string | null
+  email?: string | null
+  website?: string | null
+  websiteHref?: string | null
+  distanceMeters?: number | null
+  onToggle: (selected: boolean) => void
+  headerAside?: ReactNode
+  children?: ReactNode
+}
+
+export function ProspeccionResultCard({
+  selected,
+  activityLabel,
+  descriptor,
+  displayName,
+  address,
+  phone,
+  email,
+  website,
+  websiteHref,
+  distanceMeters,
+  onToggle,
+  headerAside,
+  children,
+}: ProspeccionResultCardProps) {
+  const visibleActivity = activityLabel?.trim() || descriptor?.trim()
+
+  return (
+    <div className={cn("rounded-xl border p-3 text-sm transition", selected ? "border-primary bg-primary/5" : "border-border/60")}>
+      <div className="flex items-start gap-3">
+        <Checkbox checked={selected} onCheckedChange={(checked) => onToggle(Boolean(checked))} />
+        <div className="flex-1 space-y-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              {visibleActivity ? <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">{visibleActivity}</p> : null}
+              <p className="font-semibold">{displayName}</p>
+              <p className="text-xs text-muted-foreground">{address ?? "Sin dirección"}</p>
+            </div>
+            {headerAside}
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {phone ? (
+              <span className="inline-flex items-center gap-1">
+                <Phone className="size-3" />
+                {phone}
+              </span>
+            ) : null}
+            {email ? (
+              <span className="inline-flex items-center gap-1">
+                <Mail className="size-3" />
+                {email}
+              </span>
+            ) : null}
+            {website ? (
+              <a className="inline-flex items-center gap-1 text-primary" href={websiteHref ?? website} target="_blank" rel="noreferrer">
+                <Globe className="size-3" />
+                Sitio web
+                <ArrowUpRight className="size-3" />
+              </a>
+            ) : null}
+            {typeof distanceMeters === "number" ? <span>{(distanceMeters / 1000).toFixed(2)} km</span> : null}
+          </div>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function ProspeccionResultsPagination({

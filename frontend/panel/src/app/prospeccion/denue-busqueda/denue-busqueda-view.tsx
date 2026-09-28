@@ -4,9 +4,7 @@ import dynamic from "next/dynamic"
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   AlertTriangle,
-  ArrowUpRight,
   CheckCircle2,
-  Globe,
   Info,
   ListChecks,
   Mail,
@@ -89,7 +87,7 @@ import {
 } from "./advanced-denue-search-modal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
-import { ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsPagination, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
+import { ProspeccionResultCard, ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsPagination, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 import {
   Table,
   TableBody,
@@ -2489,73 +2487,22 @@ export function DenueBusquedaView() {
                           : "";
                     const isSelected = selectedIds.has(item.resultado_id);
                     return (
-                      <div
+                      <ProspeccionResultCard
                         key={item.resultado_id}
-                        className={cn(
-                          "rounded-xl border p-3 text-sm transition",
-                          isSelected ? "border-primary bg-primary/5" : "border-border/60",
-                        )}
+                        selected={isSelected}
+                        activityLabel={actividadTexto}
+                        descriptor={busquedaDescriptor}
+                        displayName={item.display_name ?? item.actividad ?? "Sin nombre"}
+                        address={item.address}
+                        phone={item.telefono_principal_e164 ?? item.phone}
+                        email={item.correo_principal ?? item.correo_secundario ?? item.email}
+                        website={item.website}
+                        websiteHref={item.website ? formatWebsiteUrl(item.website) : null}
+                        distanceMeters={item.distancia_m}
+                        onToggle={(checked) => handleToggleSelection(item.resultado_id, checked)}
                       >
-                        <div className="flex items-start gap-3">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) =>
-                              handleToggleSelection(item.resultado_id, Boolean(checked))
-                            }
-                          />
-                          <div className="flex-1 space-y-1">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div>
-                                {((actividadTexto && actividadTexto.trim().length) || busquedaDescriptor) && (
-                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                                    {actividadTexto && actividadTexto.trim().length
-                                      ? actividadTexto.trim()
-                                      : busquedaDescriptor}
-                                  </p>
-                                )}
-                                <p className="font-semibold">
-                                  {item.display_name ?? item.actividad ?? "Sin nombre"}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {item.address ?? "Sin dirección"}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                              {(item.telefono_principal_e164 ?? item.phone) ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />
-                                  {item.telefono_principal_e164 ?? item.phone}
-                                </span>
-                              ) : null}
-                              {(item.correo_principal ?? item.correo_secundario ?? item.email) ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <Mail className="h-3 w-3" />
-                                  {item.correo_principal ?? item.correo_secundario ?? item.email}
-                                </span>
-                              ) : null}
-                              {item.website ? (
-                                <a
-                                  className="inline-flex items-center gap-1 text-primary"
-                                  href={formatWebsiteUrl(item.website)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <Globe className="h-3 w-3" />
-                                  Sitio web
-                                  <ArrowUpRight className="h-3 w-3" />
-                                </a>
-                              ) : null}
-                              {typeof item.distancia_m === "number" ? (
-                                <span>{(item.distancia_m / 1000).toFixed(2)} km</span>
-                              ) : null}
-                            </div>
-                            {item.estrato ? (
-                              <p className="text-xs text-muted-foreground">Tamaño: {item.estrato}</p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
+                        {item.estrato ? <p className="text-xs text-muted-foreground">Tamaño: {item.estrato}</p> : null}
+                      </ProspeccionResultCard>
                     );
                   })
                 )}

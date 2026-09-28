@@ -4,10 +4,8 @@ import dynamic from "next/dynamic"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ArrowUpRight,
   CheckCircle2,
   ChevronDown,
-  Globe,
   Info,
   ListChecks,
   Mail,
@@ -101,7 +99,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/use-permissions";
-import { ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsPagination, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
+import { ProspeccionResultCard, ProspeccionResultsActions, ProspeccionResultsMapCard, ProspeccionResultsPagination, ProspeccionResultsSelectionSummary, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -1973,82 +1971,37 @@ export function GoogleBusquedaView() {
                         : "";
                   const isSelected = selectedIds.has(item.resultado_id);
                   return (
-                    <div
+                    <ProspeccionResultCard
                       key={item.resultado_id}
-                      className={cn(
-                        "rounded-xl border p-3 text-sm transition",
-                        isSelected ? "border-primary bg-primary/5" : "border-border/60",
-                      )}
+                      selected={isSelected}
+                      activityLabel={actividadTexto}
+                      descriptor={busquedaDescriptor}
+                      displayName={item.display_name ?? item.actividad ?? "Sin nombre"}
+                      address={item.address}
+                      phone={item.telefono_principal_e164 ?? item.phone}
+                      website={item.website}
+                      distanceMeters={item.distancia_m}
+                      onToggle={(checked) => handleToggleSelection(item.resultado_id, checked)}
+                      headerAside={
+                        typeof item.rating === "number" ? (
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <Star className="h-3 w-3 text-amber-500" />
+                            {item.rating.toFixed(1)}
+                          </Badge>
+                        ) : null
+                      }
                     >
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={(checked) =>
-                            handleToggleSelection(item.resultado_id, Boolean(checked))
-                          }
-                        />
-                        <div className="flex-1 space-y-1">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                              {((actividadTexto && actividadTexto.trim().length) || busquedaDescriptor) && (
-                                <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                                  {actividadTexto && actividadTexto.trim().length
-                                    ? actividadTexto.trim()
-                                    : busquedaDescriptor}
-                                </p>
-                              )}
-                              <p className="font-semibold">
-                                {item.display_name ?? item.actividad ?? "Sin nombre"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {item.address ?? "Sin dirección"}
-                              </p>
-                            </div>
-                            {typeof item.rating === "number" ? (
-                              <Badge variant="secondary" className="flex items-center gap-1">
-                                <Star className="h-3 w-3 text-amber-500" />
-                                {item.rating.toFixed(1)}
-                              </Badge>
-                            ) : null}
-                          </div>
-                          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                            {(item.telefono_principal_e164 ?? item.phone) ? (
-                              <span className="inline-flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                {item.telefono_principal_e164 ?? item.phone}
-                              </span>
-                            ) : null}
-                            {item.website ? (
-                              <a
-                                className="inline-flex items-center gap-1 text-primary"
-                                href={item.website}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                <Globe className="h-3 w-3" />
-                                Sitio web
-                                <ArrowUpRight className="h-3 w-3" />
-                              </a>
-                            ) : null}
-                            {typeof item.distancia_m === "number" ? (
-                              <span>{(item.distancia_m / 1000).toFixed(2)} km</span>
-                            ) : null}
-                          </div>
-                          {Array.isArray(item.google_types) && item.google_types.length ? (
-                            <div className="flex flex-wrap gap-1 pt-1">
-                              {item.google_types.slice(0, 4).map((type) => (
-                                <Badge key={type} variant="outline" className="text-[11px]">
-                                  {type}
-                                </Badge>
-                              ))}
-                              {item.google_types.length > 4 ? (
-                                <Badge variant="outline">+{item.google_types.length - 4}</Badge>
-                              ) : null}
-                            </div>
-                          ) : null}
+                      {Array.isArray(item.google_types) && item.google_types.length ? (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {item.google_types.slice(0, 4).map((type) => (
+                            <Badge key={type} variant="outline" className="text-[11px]">
+                              {type}
+                            </Badge>
+                          ))}
+                          {item.google_types.length > 4 ? <Badge variant="outline">+{item.google_types.length - 4}</Badge> : null}
                         </div>
-                      </div>
-                    </div>
+                      ) : null}
+                    </ProspeccionResultCard>
                   );
                 })
               )}
