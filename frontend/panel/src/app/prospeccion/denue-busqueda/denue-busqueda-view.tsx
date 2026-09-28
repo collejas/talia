@@ -101,7 +101,8 @@ const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 5_000;
-const LIST_PAGE_SIZE = 1000;
+const LIST_PAGE_SIZE = 250;
+const LIST_PAGE_MAX = 1000;
 const BUSQUEDAS_PAGE_SIZE = 100;
 const JOB_POLL_INTERVAL_MS = 2000;
 const SAVE_PROSPECTOS_FETCH_BATCH = 2000;
@@ -1252,7 +1253,7 @@ export function DenueBusquedaView() {
     if (!Number.isFinite(nextValue)) {
       return;
     }
-    const nextLimit = Math.max(1, Math.min(5000, Math.trunc(nextValue)));
+    const nextLimit = Math.max(50, Math.min(LIST_PAGE_MAX, Math.trunc(nextValue)));
     setResultadosPagination((prev) => ({ ...prev, limit: nextLimit, offset: 0 }));
   }, []);
 
@@ -2424,8 +2425,8 @@ export function DenueBusquedaView() {
                 <Label className="text-xs font-normal">Resultados por página</Label>
                 <Input
                   type="number"
-                  min={1}
-                  max={5000}
+                  min={50}
+                  max={LIST_PAGE_MAX}
                   step={50}
                   value={resultadosPagination.limit}
                   onChange={handleLimitChange}

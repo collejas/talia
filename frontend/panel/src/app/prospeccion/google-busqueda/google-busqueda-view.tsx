@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -106,7 +106,8 @@ const numberFormatter = new Intl.NumberFormat("es-MX");
 const RADIUS_MIN = 100;
 const RADIUS_MAX = 5_000;
 const DEFAULT_TYPES = "restaurant,store";
-const LIST_PAGE_SIZE = 1000;
+const LIST_PAGE_SIZE = 250;
+const LIST_PAGE_MAX = 1000;
 const MAP_RESULTS_LIMIT = 1000;
 const BUSQUEDAS_PAGE_SIZE = 100;
 const SAVE_PROSPECTOS_FETCH_BATCH = 2000;
@@ -996,8 +997,13 @@ export function GoogleBusquedaView() {
     setResultadosPagination((prev) => ({ ...prev, limit: LIST_PAGE_SIZE, offset: 0 }));
   }, []);
 
-  const handleLimitChange = useCallback(() => {
-    setResultadosPagination((prev) => ({ ...prev, limit: LIST_PAGE_SIZE, offset: 0 }));
+  const handleLimitChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = Number(event.target.value);
+    if (!Number.isFinite(nextValue)) {
+      return;
+    }
+    const nextLimit = Math.max(50, Math.min(LIST_PAGE_MAX, Math.trunc(nextValue)));
+    setResultadosPagination((prev) => ({ ...prev, limit: nextLimit, offset: 0 }));
   }, []);
 
   const handleDeleteBusqueda = useCallback(
@@ -1908,9 +1914,9 @@ export function GoogleBusquedaView() {
                 <Label className="text-xs font-normal">Resultados por página</Label>
                 <Input
                   type="number"
-                  min={5000}
-                  max={5000}
-                  step={5000}
+                  min={50}
+                  max={LIST_PAGE_MAX}
+                  step={50}
                   value={resultadosPagination.limit}
                   onChange={handleLimitChange}
                   className="h-8 text-sm"
