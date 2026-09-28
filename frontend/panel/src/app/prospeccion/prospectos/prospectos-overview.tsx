@@ -29,6 +29,24 @@ export type ProspectosFlowStep = {
   isCurrent?: boolean
 }
 
+type ProspectosFilterSectionProps = {
+  title: string
+  description?: string
+  children: ReactNode
+}
+
+export function ProspectosFilterSection({ title, description, children }: ProspectosFilterSectionProps) {
+  return (
+    <section className="rounded-xl border bg-background/60 p-3" aria-label={title}>
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  )
+}
+
 type ProspectosFlowProps = {
   steps: ProspectosFlowStep[]
   loading: boolean

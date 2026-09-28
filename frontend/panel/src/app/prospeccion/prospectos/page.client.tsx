@@ -27,6 +27,7 @@ import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/compo
 import { ProspectosImportador } from "@/components/prospeccion/prospectos-importador"
 import {
   ProspectosFlow,
+  ProspectosFilterSection,
   ProspectosRecentBatches,
   ProspectosSavedViews,
   ProspectosSourceVerification,
@@ -3873,7 +3874,8 @@ function ProspectosView() {
             onDelete={() => void handleDeleteSavedView()}
           />
           <div className="space-y-4">
-            <ProspectosSourceVerification
+            <ProspectosFilterSection title="Origen y verificación" description="Define de dónde provienen los prospectos y el estado de sus datos.">
+              <ProspectosSourceVerification
               fuente={filters.fuente}
               lookupStatus={filters.lookupStatus}
               emailLookupStatus={filters.emailLookupStatus}
@@ -3882,8 +3884,10 @@ function ProspectosView() {
               onLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, lookupStatus: value === "all" ? "" : value as LookupFilter }))}
               onEmailLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, emailLookupStatus: value === "all" ? "" : value as EmailLookupFilter }))}
               onWebsiteLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, websiteLookupStatus: value === "all" ? "" : value as WebsiteLookupFilter }))}
-            />
-            <ProspectosCampaignFilters
+              />
+            </ProspectosFilterSection>
+            <ProspectosFilterSection title="Campañas y contacto" description="Filtra por campañas, envíos realizados y tipo de línea.">
+              <ProspectosCampaignFilters
               campaignId={filters.campanaId}
               templateId={filters.plantillaId}
               campaignOptions={campaignFilterOptions}
@@ -3898,8 +3902,9 @@ function ProspectosView() {
               onEnvioModoChange={(value) => setFilters((prev) => ({ ...prev, conEnvioModo: value === "si" || value === "no" ? value : "" }))}
               onEnvioCanalesChange={(canales) => setFilters((prev) => ({ ...prev, conEnvioCanales: canales, conEnvioModo: canales.length && prev.conEnvioModo === "" ? "si" : prev.conEnvioModo }))}
               onScraperChange={(value) => setFilters((prev) => ({ ...prev, conScraper: value === "all" ? "" : value as ConScraperFilter }))}
-            />
-            <ProspectosContactCounts
+              />
+              <div className="mt-3">
+                <ProspectosContactCounts
               counts={{
                 correo: { min: filters.enviosCorreoMin, max: filters.enviosCorreoMax },
                 whatsapp: { min: filters.enviosWhatsappMin, max: filters.enviosWhatsappMax },
@@ -3912,8 +3917,11 @@ function ProspectosView() {
                 setFilters((prev) => ({ ...prev, [config[bound]]: value }))
               }}
               onCarrierChange={(value) => setFilters((prev) => ({ ...prev, carrierType: value === "all" ? "" : value as "mobile" | "landline" | "voip" }))}
-            />
-            <ProspectosClassificationFilters
+                />
+              </div>
+            </ProspectosFilterSection>
+            <ProspectosFilterSection title="Clasificación y fecha" description="Segmento, actividad económica, tipo de negocio y atributos de la fuente.">
+              <ProspectosClassificationFilters
               emailDomainRelation={filters.emailDomainRelation}
               minRating={filters.minRating}
               estratoGroup={filters.estratoGroup}
@@ -3939,8 +3947,10 @@ function ProspectosView() {
                 return { ...prev, dateOption: nextOption, customDateFrom: nextOption === "custom" ? prev.customDateFrom : "", customDateTo: nextOption === "custom" ? prev.customDateTo : "" }
               })}
               onCustomDateChange={(bound, value) => setFilters((prev) => ({ ...prev, [bound === "from" ? "customDateFrom" : "customDateTo"]: value }))}
-            />
-            <ProspectosOperationalFilters
+              />
+            </ProspectosFilterSection>
+            <ProspectosFilterSection title="Actividad, búsqueda y ubicación" description="Localiza prospectos por consulta de origen, actividad, contacto y territorio.">
+              <ProspectosOperationalFilters
               queryOptions={filteredQueryOptions}
               queryValues={effectiveMetadataQueries ?? []}
               queryLoading={queryOptionsLoading}
@@ -3970,8 +3980,9 @@ function ProspectosView() {
                 return { ...prev, segmento: next.size === 1 ? Array.from(next)[0] : "", segmentoFilters: Array.from(next) }
               })}
               onClearSegments={() => setFilters((prev) => ({ ...prev, segmento: "", segmentoFilters: [] }))}
-            />
-            <ProspectosSearchFilters
+              />
+              <div className="mt-3">
+                <ProspectosSearchFilters
               search={searchInput}
               geoEstado={filters.geoEstado}
               geoMunicipio={filters.geoMunicipio}
@@ -3988,7 +3999,9 @@ function ProspectosView() {
                 setTableSort(nextOrder === "nombre" ? { key: "prospecto", direction: "asc" } : nextOrder === "diverso" ? { key: "diverso", direction: "asc" } : { key: "creado", direction: "desc" })
               }}
               onClear={handleClearFilters}
-            />
+                />
+              </div>
+            </ProspectosFilterSection>
           </div>
         </form>
       </section>
