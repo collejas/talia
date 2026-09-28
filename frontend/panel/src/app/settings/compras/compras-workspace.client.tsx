@@ -22,7 +22,7 @@ import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contacto
 import { getActiveTimeZone } from "@/lib/timezone"
 import { PedimentosImportacionPanel } from "./pedimentos-importacion-panel.client"
 import { ProveedorCreateModal } from "./proveedor-create-modal.client"
-import { printPurchaseOrder, type PurchaseOrderPrintBrand } from "@/components/compras/purchase-order-print"
+import { printInventoryExistences, printPurchaseOrder, type PurchaseOrderPrintBrand } from "@/components/compras/purchase-order-print"
 
 import {
   createAlmacenAction,
@@ -1097,6 +1097,7 @@ export function ComprasWorkspace({
   const [orderSaveErrorMessage, setOrderSaveErrorMessage] = useState("")
   const [printingOrderId, setPrintingOrderId] = useState<string | null>(null)
   const [printOrderError, setPrintOrderError] = useState("")
+  const [printInventoryError, setPrintInventoryError] = useState("")
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(defaultWarehouseId)
   const [lines, setLines] = useState<ReceptionLine[]>(() => buildLinesFromOrder(initialOrder))
   const [receptionNumber, setReceptionNumber] = useState<string>(defaultReceptionNumber || createSuggestedReceptionNumber())
@@ -1681,6 +1682,23 @@ export function ComprasWorkspace({
     () => filteredExistencias.reduce((sum, row) => sum + asNumber(row.stock_disponible), 0),
     [filteredExistencias],
   )
+  const handlePrintInventory = () => {
+    setPrintInventoryError("")
+    const brandRecord = comprasPrintBrand ?? {}
+    const brand: PurchaseOrderPrintBrand = {
+      organization_name: asString(brandRecord.organization_name, "Empresa"),
+      logo_url: asString(brandRecord.logo_url),
+      primary_color: asString(brandRecord.primary_color, "#0f172a"),
+      accent_color: asString(brandRecord.accent_color, "#14b8a6"),
+    }
+    const warehouse = almacenes.find((entry) => String(entry.id) === selectedExistenceWarehouseId)
+    const warehouseLabel = warehouse
+      ? `${asString(warehouse.codigo)} · ${asString(warehouse.nombre, "Almacén")}`
+      : "Todos los almacenes"
+    if (!printInventoryExistences(filteredExistencias, warehouseLabel, brand)) {
+      setPrintInventoryError("Permite ventanas emergentes para imprimir o guardar las existencias como PDF.")
+    }
+  }
   const orderDocumentDefinitions = useMemo(() => getOrderDocumentDefinitions(orderType), [orderType])
   const resetOrderDocumentUploadSlots = useCallback(() => {
     const nextSlots = Object.fromEntries(
@@ -5516,10 +5534,18 @@ export function ComprasWorkspace({
       {showInventario ? (
       <Card>
         <CardHeader>
-          <CardTitle>Existencias por almacén</CardTitle>
-          <CardDescription>Consulta rápida del stock real disponible para cada almacén.</CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>Existencias por almacén</CardTitle>
+              <CardDescription>Consulta rápida del stock real disponible para cada almacén.</CardDescription>
+            </div>
+            <Button type="button" variant="outline" size="sm" aria-label="PDF de existencias" onClick={handlePrintInventory}>
+              PDF
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {printInventoryError ? <p role="alert" className="text-sm text-destructive">{printInventoryError}</p> : null}
           <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="existencias-almacen">

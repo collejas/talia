@@ -162,10 +162,11 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
       fetchOne("/crm/catalogo-precios/branding"),
     ])
   } else if (isInventarioView) {
-    ;[almacenes, catalogItems, existencias] = await Promise.all([
+    ;[almacenes, catalogItems, existencias, comprasPrintBrand] = await Promise.all([
       fetchList("/crm/compras/almacenes", { include_inactive: false, limit: 100 }),
       fetchList("/crm/catalog/items", { include_inactive: false, limit: 1000 }),
       fetchList("/crm/compras/existencias", { limit: 200 }),
+      fetchOne("/crm/catalogo-precios/branding"),
     ])
   } else if (isRecepcionesView) {
     ;[almacenes, ordenes, recepciones] = await Promise.all([

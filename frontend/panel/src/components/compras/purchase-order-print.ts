@@ -164,3 +164,43 @@ export function printImportPedimento(pedimento: AnyRecord, brand: PurchaseOrderP
   void images.then(() => { printWindow.focus(); printWindow.print() })
   return true
 }
+
+export function printInventoryExistences(
+  existences: AnyRecord[],
+  warehouseLabel: string,
+  brand: PurchaseOrderPrintBrand,
+  targetWindow?: Window,
+) {
+  const printWindow = targetWindow ?? window.open("", "_blank")
+  if (!printWindow) return false
+  printWindow.opener = null
+  const primary = /^#[\da-f]{6}$/i.test(brand.primary_color) ? brand.primary_color : "#0f172a"
+  const accent = /^#[\da-f]{6}$/i.test(brand.accent_color) ? brand.accent_color : "#14b8a6"
+  const logoUrl = brand.logo_url
+  const safeLogo = (logoUrl.startsWith("/") && !logoUrl.startsWith("//")) || /^https?:\/\//i.test(logoUrl) ? logoUrl : ""
+  const logo = safeLogo ? `<img class="logo" src="${escapeHtml(safeLogo)}" alt="">` : ""
+  const totalActual = existences.reduce((sum, row) => sum + (Number(row.stock_actual) || 0), 0)
+  const totalReserved = existences.reduce((sum, row) => sum + (Number(row.stock_reservado) || 0), 0)
+  const totalAvailable = existences.reduce((sum, row) => sum + (Number(row.stock_disponible) || 0), 0)
+  const alertCount = existences.filter((row) => Number(row.stock_minimo) > 0 && Number(row.stock_disponible) <= Number(row.stock_minimo)).length
+  const rows = existences.map((row) => {
+    const product = (row.catalog_item && typeof row.catalog_item === "object" ? row.catalog_item : {}) as AnyRecord
+    const warehouse = (row.almacen && typeof row.almacen === "object" ? row.almacen : {}) as AnyRecord
+    const minimum = Number(row.stock_minimo)
+    const available = Number(row.stock_disponible) || 0
+    const alert = Number.isFinite(minimum) && minimum > 0 && available <= minimum
+    return `<tr><td>${escapeHtml(product.codigo ?? product.slug)}</td><td><strong>${escapeHtml(product.nombre ?? "Producto")}</strong></td><td>${escapeHtml(warehouse.nombre ?? warehouseLabel)}</td><td class="num">${escapeHtml((Number(row.stock_actual) || 0).toFixed(3))}</td><td class="num">${escapeHtml((Number(row.stock_reservado) || 0).toFixed(3))}</td><td class="num ${alert ? "alert" : ""}">${escapeHtml(available.toFixed(3))}</td><td class="num">${escapeHtml(minimum > 0 ? minimum.toFixed(3) : "—")}</td><td class="num">${escapeHtml(Number(row.stock_objetivo) > 0 ? Number(row.stock_objetivo).toFixed(3) : "—")}</td><td class="num">${escapeHtml(money(row.costo_ultimo, "MXN"))}</td></tr>`
+  }).join("")
+  const title = `Existencias · ${warehouseLabel}`
+  const content = `<header>${logo}<div><h1>${escapeHtml(brand.organization_name)}</h1><h2>Existencias por almacén</h2><p>${escapeHtml(warehouseLabel)}</p></div></header><section class="summary"><div><span>Líneas de inventario</span><strong>${existences.length}</strong></div><div><span>Stock actual</span><strong>${totalActual.toFixed(3)}</strong></div><div><span>Reservado</span><strong>${totalReserved.toFixed(3)}</strong></div><div><span>Disponible</span><strong>${totalAvailable.toFixed(3)}</strong></div><div><span>Alertas de mínimo</span><strong>${alertCount}</strong></div></section><table><thead><tr><th>Código</th><th>Producto</th><th>Almacén</th><th class="num">Actual</th><th class="num">Reservado</th><th class="num">Disponible</th><th class="num">Mínimo</th><th class="num">Objetivo</th><th class="num">Costo último</th></tr></thead><tbody>${rows || "<tr><td colspan=\"9\">No hay existencias para el filtro seleccionado.</td></tr>"}</tbody></table><footer>Generado desde Tal-IA · ${escapeHtml(new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" }).format(new Date()))}</footer>`
+  printWindow.document.open()
+  printWindow.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{color:#172033;font:10px/1.45 Arial,sans-serif;margin:0}header{align-items:center;border-bottom:3px solid ${accent};display:flex;gap:14px;margin-bottom:16px;padding-bottom:10px}.logo{max-height:50px;max-width:135px;object-fit:contain}h1{color:${primary};font-size:18px;margin:0 0 3px}h2{color:${accent};font-size:13px;margin:0}header p{color:#64748b;margin:4px 0 0}.summary{display:flex;gap:8px;margin:12px 0}.summary div{border:1px solid #d8dee8;border-radius:6px;display:flex;flex:1;flex-direction:column;padding:8px}.summary span{color:#64748b;font-size:9px}.summary strong{font-size:12px}table{border-collapse:collapse;width:100%}th{background:${primary};color:#fff;text-align:left}th,td{border:1px solid #d8dee8;padding:6px;vertical-align:top}td.num,th.num{text-align:right;white-space:nowrap}.alert{color:#be123c;font-weight:700}footer{border-top:1px solid #d8dee8;color:#64748b;font-size:8px;margin-top:14px;padding-top:6px}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}tr{break-inside:avoid;page-break-inside:avoid}}</style></head><body>${content}</body></html>`)
+  printWindow.document.close()
+  const images = Promise.all(Array.from(printWindow.document.images).map((image) => image.complete ? Promise.resolve() : new Promise<void>((resolve) => {
+    image.onload = () => resolve()
+    image.onerror = () => resolve()
+    window.setTimeout(resolve, 2500)
+  })))
+  void images.then(() => { printWindow.focus(); printWindow.print() })
+  return true
+}
