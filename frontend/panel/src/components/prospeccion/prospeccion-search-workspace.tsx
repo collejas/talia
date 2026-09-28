@@ -296,7 +296,7 @@ const SOURCE_CONFIG: Record<ProspeccionSearchSource, { label: string; descriptio
     description: "Busca por texto, ubicación, tipos de negocio y calificación.",
   },
   denue: {
-    label: "GobMX / DENUE",
+    label: "GobMX",
     description: "Busca por actividad económica, tamaño de empresa y geografía.",
   },
 }
@@ -327,7 +327,7 @@ export function ProspeccionSearchWorkspace({ activeSource }: ProspeccionSearchWo
           </Button>
           <Button asChild variant={activeSource === "denue" ? "secondary" : "outline"} size="sm">
             <Link href="/prospeccion/busqueda?fuente=denue">
-              <IconBuildingStore className="mr-1.5 size-4" /> GobMX / DENUE
+              <IconBuildingStore className="mr-1.5 size-4" /> GobMX
             </Link>
           </Button>
         </nav>

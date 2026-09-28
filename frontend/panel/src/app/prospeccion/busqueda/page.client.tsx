@@ -19,7 +19,7 @@ const DenueBusquedaView = dynamic(
 
 function BusquedaClientContent() {
   const searchParams = useSearchParams()
-  const activeSource: ProspeccionSearchSource = searchParams.get("fuente") === "denue" ? "denue" : "google"
+  const activeSource: ProspeccionSearchSource = searchParams.get("fuente") === "google" ? "google" : "denue"
 
   return (
     <ProspeccionViewLayout title="Prospección · Buscar empresas">
