@@ -14,7 +14,6 @@ import {
   MapPin,
   Phone,
   RefreshCw,
-  Save,
   Search,
   Star,
   Target,
@@ -103,7 +102,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/use-permissions";
-import { ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
+import { ProspeccionResultsActions, ProspeccionResultsSummary } from "@/components/prospeccion/prospeccion-search-workspace";
 
 const DEFAULT_CENTER = { lat: 19.432608, lng: -99.133209 };
 const numberFormatter = new Intl.NumberFormat("es-MX");
@@ -1954,57 +1953,17 @@ export function GoogleBusquedaView() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              {canSaveProspectos ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleOpenGuardarSeleccion}
-                  disabled={!selectedIds.size || isSavingProspectos}
-                  className="flex items-center gap-2"
-                >
-                  {isSavingProspectos ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  Guardar como prospectos
-                </Button>
-              ) : null}
-              {canSaveProspectos ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={handleOpenGuardarFiltrados}
-                  disabled={totalFiltered <= 0 || isSavingProspectos}
-                  className="flex items-center gap-2"
-                >
-                  {isSavingProspectos ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  Guardar filtrados (todas las páginas)
-                </Button>
-              ) : null}
-              {canDeleteBusquedas ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive"
-                  onClick={handleDeleteSelectedResultados}
-                  disabled={!selectedIds.size || isDeletingResultados}
-                  className="flex items-center gap-2"
-                >
-                  {isDeletingResultados ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                  Eliminar seleccionados
-                </Button>
-              ) : null}
+            <ProspeccionResultsActions
+              canSave={canSaveProspectos}
+              canDelete={canDeleteBusquedas}
+              selectedCount={selectedIds.size}
+              totalCount={totalFiltered}
+              saving={isSavingProspectos}
+              deleting={isDeletingResultados}
+              onSaveSelected={handleOpenGuardarSeleccion}
+              onSaveFiltered={handleOpenGuardarFiltrados}
+              onDelete={handleDeleteSelectedResultados}
+            >
               {ACTIONS.map((action) => (
                 <Button
                   key={action.key}
@@ -2018,7 +1977,7 @@ export function GoogleBusquedaView() {
                   {action.label}
                 </Button>
               ))}
-            </div>
+            </ProspeccionResultsActions>
             <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
               {!totalFiltered ? (
                 <p className="text-sm text-muted-foreground">

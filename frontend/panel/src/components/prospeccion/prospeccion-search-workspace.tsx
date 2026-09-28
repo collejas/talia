@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { IconBuildingStore, IconMapSearch, IconRefresh } from "@tabler/icons-react"
+import type { ReactNode } from "react"
+import { IconBuildingStore, IconCircleCheck, IconMapSearch, IconRefresh, IconTrash } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -49,6 +50,56 @@ export function ProspeccionResultsSummary({
       <Button size="icon" variant="ghost" onClick={onRefresh} disabled={!hasActiveSearch || loading} aria-label="Actualizar resultados">
         <IconRefresh className={loading ? "size-4 animate-spin" : "size-4"} />
       </Button>
+    </div>
+  )
+}
+
+type ProspeccionResultsActionsProps = {
+  canSave: boolean
+  canDelete: boolean
+  selectedCount: number
+  totalCount: number
+  saving: boolean
+  deleting: boolean
+  onSaveSelected: () => void
+  onSaveFiltered: () => void
+  onDelete: () => void
+  children?: ReactNode
+}
+
+export function ProspeccionResultsActions({
+  canSave,
+  canDelete,
+  selectedCount,
+  totalCount,
+  saving,
+  deleting,
+  onSaveSelected,
+  onSaveFiltered,
+  onDelete,
+  children,
+}: ProspeccionResultsActionsProps) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {canSave ? (
+        <Button type="button" size="sm" onClick={onSaveSelected} disabled={!selectedCount || saving} className="flex items-center gap-2">
+          {saving ? <IconRefresh className="size-4 animate-spin" /> : <IconCircleCheck className="size-4" />}
+          Guardar como prospectos
+        </Button>
+      ) : null}
+      {canSave ? (
+        <Button type="button" size="sm" variant="secondary" onClick={onSaveFiltered} disabled={totalCount <= 0 || saving} className="flex items-center gap-2">
+          {saving ? <IconRefresh className="size-4 animate-spin" /> : <IconCircleCheck className="size-4" />}
+          Guardar filtrados (todas las páginas)
+        </Button>
+      ) : null}
+      {canDelete ? (
+        <Button type="button" size="sm" variant="destructive" onClick={onDelete} disabled={!selectedCount || deleting} className="flex items-center gap-2">
+          {deleting ? <IconRefresh className="size-4 animate-spin" /> : <IconTrash className="size-4" />}
+          Eliminar seleccionados
+        </Button>
+      ) : null}
+      {children}
     </div>
   )
 }
