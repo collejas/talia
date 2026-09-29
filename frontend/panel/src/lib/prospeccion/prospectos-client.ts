@@ -1424,9 +1424,14 @@ export async function ejecutarChecklistScraper(payload: {
 /**
  * Schedule outbound contact (correo, WhatsApp o llamada) for the selected prospects.
  */
-export async function contactarProspectos(payload: ContactarProspectosPayload): Promise<ProspectoContactarResponse> {
+export async function contactarProspectos(
+  payload: ContactarProspectosPayload,
+  idempotencyKey?: string,
+): Promise<ProspectoContactarResponse> {
+  const key = idempotencyKey?.trim() || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
   return requestJson<ProspectoContactarResponse>("/api/prospeccion/prospectos/contactar", {
     method: "POST",
+    headers: { "Idempotency-Key": key },
     body: JSON.stringify(payload),
   })
 }

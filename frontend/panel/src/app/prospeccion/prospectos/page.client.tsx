@@ -1057,6 +1057,7 @@ function ProspectosView() {
     llamada: string[]
   }>({ correo: [], whatsapp: [], llamada: [] })
   const [plannerExecuting, setPlannerExecuting] = useState(false)
+  const plannerIdempotencyKeyRef = useRef<string | null>(null)
   const [plannerError, setPlannerError] = useState<string | null>(null)
   const [plannerEmailCapacity, setPlannerEmailCapacity] = useState<EmailCapacitySnapshot | null>(null)
   const [plannerEmailCapacityLoading, setPlannerEmailCapacityLoading] = useState(false)
@@ -3255,6 +3256,9 @@ function ProspectosView() {
       return
     }
     setPlannerExecuting(true)
+    const requestIdempotencyKey =
+      (plannerIdempotencyKeyRef.current ??=
+        globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`)
     try {
       const templates = plannerTemplates
       const scheduleValue =
@@ -3315,7 +3319,7 @@ function ProspectosView() {
               intervalo_entre_lotes_segundos: intervaloEntreLotes,
             }
           : {}),
-      })
+      }, requestIdempotencyKey)
       const enrichedResults = (response.contactos ?? []).map((resumen) => ({
         ...resumen,
         display_name: nameMap.get(resumen.prospecto_id) ?? resumen.display_name ?? null,
@@ -3342,6 +3346,7 @@ function ProspectosView() {
       setPlannerError(message)
     } finally {
       setPlannerExecuting(false)
+      plannerIdempotencyKeyRef.current = null
     }
   }, [
     fetchProspectos,

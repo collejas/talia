@@ -11742,6 +11742,7 @@ def _build_contact_batch_payload(
     canales_config: dict[str, dict[str, Any]] | None,
     programacion: dict[str, str] | None,
     metadata_extra: dict[str, Any] | None = None,
+    solicitud_idempotencia: str | None = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "iniciado_por": str(usuario_id) if usuario_id else None,
@@ -11753,6 +11754,8 @@ def _build_contact_batch_payload(
     }
     if payload.campana_id:
         body["campana_id"] = str(payload.campana_id)
+    if solicitud_idempotencia:
+        body["solicitud_idempotencia"] = solicitud_idempotencia
     if payload.lista_id:
         body["lista_id"] = str(payload.lista_id)
     if payload.batch_titulo:
@@ -42287,12 +42290,34 @@ async def contactar_prospectos_legacy(
     user_token: str = Depends(require_user_token),
     usuario_id: UUID | None = Depends(optional_usuario_id),
     organizacion_id: UUID = Depends(require_organizacion_id),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     payload: ProspectoContactarPayload,
 ) -> dict[str, Any]:
     """Envía correos, WhatsApps o llamadas registrando lotes y envíos individuales."""
 
     if payload.campana_id is None:
         raise HTTPException(status_code=400, detail="campana_id_required")
+    request_idempotency_key = (idempotency_key or "").strip()
+    if len(request_idempotency_key) > 160:
+        raise HTTPException(status_code=400, detail="idempotency_key_too_long")
+    if request_idempotency_key:
+        try:
+            existing_batch = await repo.get_contact_batch_by_idempotency_key(
+                usuario_token=user_token,
+                organizacion_id=organizacion_id,
+                idempotency_key=request_idempotency_key,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if existing_batch:
+            return {
+                "ok": True,
+                "batch_id": str(existing_batch.get("id")),
+                "contactos": [],
+                "total_contactos": 0,
+                "contactos_truncados": False,
+                "idempotent_replay": True,
+            }
     if not payload.canales:
         raise HTTPException(status_code=400, detail="contact_templates_required")
     for channel in payload.canales:
@@ -42627,6 +42652,7 @@ async def contactar_prospectos_legacy(
                     canales_config=canales_config,
                     programacion=programacion,
                     metadata_extra=metadata_extra,
+                    solicitud_idempotencia=request_idempotency_key or None,
                 ),
             ),
             retries=1,
@@ -42660,6 +42686,28 @@ async def contactar_prospectos_legacy(
                     extra={"quota_day_utc": reserved_date.isoformat()},
                 )
         raise HTTPException(status_code=502, detail="contact_batch_invalid")
+
+    if batch.get("_idempotent_reused"):
+        for reserved_date, reserved_count in brevo_quota_reservations:
+            try:
+                await repo.release_brevo_daily_quota(
+                    organizacion_id=organizacion_id,
+                    quota_date=reserved_date,
+                    released_count=reserved_count,
+                )
+            except CRMRepositoryError:
+                logger.exception(
+                    "prospeccion.contactar.idempotent_replay_reservation_release_failed",
+                    extra={"quota_day_utc": reserved_date.isoformat()},
+                )
+        return {
+            "ok": True,
+            "batch_id": str(batch_id),
+            "contactos": [],
+            "total_contactos": 0,
+            "contactos_truncados": False,
+            "idempotent_replay": True,
+        }
 
     envios_entries, suppressed_by_channel = _build_contact_envios_entries(
         batch_id=batch_id,

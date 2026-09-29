@@ -23558,19 +23558,74 @@ class CRMRepository:
         """Inserta un lote de contacto y devuelve el registro."""
 
         body = [payload]
+        idempotency_key = str(payload.get("solicitud_idempotencia") or "").strip()
         resp = await self._request_with_user(
             "POST",
             "/rest/v1/prospeccion_contacto_batch",
             token=usuario_token,
+            params=(
+                {"on_conflict": "organizacion_id,solicitud_idempotencia"}
+                if idempotency_key
+                else None
+            ),
             json=body,
-            prefer="return=representation",
+            prefer=(
+                "resolution=ignore-duplicates,return=representation"
+                if idempotency_key
+                else "return=representation"
+            ),
         )
         data = resp.json() or []
+        if not data and idempotency_key:
+            existing_resp = await self._request_with_user(
+                "GET",
+                "/rest/v1/prospeccion_contacto_batch",
+                token=usuario_token,
+                params={
+                    "select": "*",
+                    "organizacion_id": f"eq.{payload.get('organizacion_id')}",
+                    "solicitud_idempotencia": f"eq.{idempotency_key}",
+                    "limit": "1",
+                },
+            )
+            data = existing_resp.json() or []
+            if isinstance(data, list) and data and isinstance(data[0], dict):
+                data[0]["_idempotent_reused"] = True
         if not isinstance(data, list) or not data:
             raise CRMRepositoryError("contact_batch_create_failed")
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"contact_batch_invalid:{row!r}")
+        row.setdefault("_idempotent_reused", False)
+        return row
+
+    async def get_contact_batch_by_idempotency_key(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        """Obtiene el lote ya creado para un reintento de la misma acción."""
+
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_batch",
+            token=usuario_token,
+            params={
+                "select": "*",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "solicitud_idempotencia": f"eq.{idempotency_key}",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("contact_batch_idempotency_invalid")
+        row["_idempotent_reused"] = True
         return row
 
     async def list_contact_batches(

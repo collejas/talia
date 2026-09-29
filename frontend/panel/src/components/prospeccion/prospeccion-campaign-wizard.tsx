@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconTargetArrow } from "@tabler/icons-react"
 
@@ -194,6 +194,7 @@ export function ProspeccionCampaignWizard({
   const [channelState, setChannelState] = useState<ChannelState>(() => buildChannelState())
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const submitIdempotencyKeyRef = useRef<string | null>(null)
 
   const selectedList = useMemo(() => listas.find((lista) => lista.id === selectedListaId), [listas, selectedListaId])
 
@@ -511,6 +512,9 @@ export function ProspeccionCampaignWizard({
     }
 
     setSubmitting(true)
+    const requestIdempotencyKey = editCampanaId
+      ? undefined
+      : (submitIdempotencyKeyRef.current ??= globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`)
     try {
       const response = editCampanaId
         ? await updateProspeccionCampana(editCampanaId, {
@@ -521,7 +525,7 @@ export function ProspeccionCampaignWizard({
             canales: payload.canales,
             separacion_segundos: separacionParsed,
           })
-        : await contactarProspectos(payload)
+        : await contactarProspectos(payload, requestIdempotencyKey)
       onCompleted?.({
         batchId: response.batch_id,
         total: response.contactos?.length,
@@ -534,6 +538,7 @@ export function ProspeccionCampaignWizard({
       setError(message)
     } finally {
       setSubmitting(false)
+      submitIdempotencyKeyRef.current = null
     }
   }
 
