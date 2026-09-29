@@ -1,6 +1,10 @@
 # Avance de base de datos para ordenes de compra
 
-Fecha: 2026-05-25
+Fecha de origen: 2026-05-25
+
+Última alineación: 2026-09-29. Ver
+`2026-09-29_alineacion_estado_actual.md` para el estado contrastado con el
+frontend, backend y Supabase remoto.
 
 ## Estado actual
 
@@ -59,6 +63,14 @@ La migracion de base de datos para soportar ordenes de compra locales e internac
 - los campos internacionales se activan segun `tipo_operacion`
 - los snapshots historicos de la orden no dependen de cambios futuros en catalogos
 - los paises se toman desde `geo_paises`
+
+## Estado actualizado
+
+La base, el backend y la UI descritos en este documento ya cuentan con
+implementación para órdenes, pagos, documentos, recepción, proveedores,
+pedimentos y prorrateos. Permanecen abiertos la validación autenticada por
+rol/tenant, la reconciliación del historial de migraciones y la protección de
+lectura completa de cuentas bancarias.
 
 ## Lo que sigue
 

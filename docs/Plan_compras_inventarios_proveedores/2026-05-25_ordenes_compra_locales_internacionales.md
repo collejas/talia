@@ -928,6 +928,11 @@ Eso mantiene el modulo simple, util y escalable.
 
 ## Estado de implementacion
 
+> Alineación vigente: 2026-09-29. Este documento conserva el diseño y el
+> historial de decisiones. Para saber qué está realmente implementado en
+> frontend, backend y Supabase, consultar
+> `2026-09-29_alineacion_estado_actual.md`.
+
 ### Base de datos
 
 Ya se aplicaron las migraciones principales para soportar el flujo de compras y pagos:
