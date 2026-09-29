@@ -596,6 +596,76 @@ async def test_list_prospectos_scopes_request_to_organizacion_id(monkeypatch: py
 
 
 @pytest.mark.asyncio
+async def test_list_prospectos_status_filters_require_the_corresponding_contact_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        captured["params"] = kwargs.get("params")
+        return DummyResponse([])
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    await repo.list_prospectos(
+        usuario_token="token",
+        lookup_status="pendiente",
+        email_lookup_status="sin_email",
+        website_lookup_status="valido",
+        limit=10,
+        offset=0,
+    )
+
+    params = captured["params"]
+    assert isinstance(params, dict)
+    and_clause = params.get("and")
+    assert isinstance(and_clause, str)
+    assert "and(phone.not.is.null,phone.neq.)" in and_clause
+    assert "or(email.is.null,email.eq.)" in and_clause
+    assert "and(website.not.is.null,website.neq.)" in and_clause
+
+
+@pytest.mark.asyncio
+async def test_list_prospectos_missing_status_filters_allow_missing_contact_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        captured["params"] = kwargs.get("params")
+        return DummyResponse([])
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    await repo.list_prospectos(
+        usuario_token="token",
+        lookup_status="sin_numero",
+        email_lookup_status="sin_email",
+        website_lookup_status="sin_sitio",
+        limit=10,
+        offset=0,
+    )
+
+    params = captured["params"]
+    assert isinstance(params, dict)
+    and_clause = params.get("and")
+    assert isinstance(and_clause, str)
+    assert "or(phone.is.null,phone.eq.)" in and_clause
+    assert "or(email.is.null,email.eq.)" in and_clause
+    assert "or(website.is.null,website.eq.)" in and_clause
+
+
+@pytest.mark.asyncio
 async def test_list_prospecto_query_metadata_supplements_manual_import_taxonomy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

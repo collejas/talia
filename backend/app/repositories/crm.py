@@ -497,6 +497,13 @@ def _postgrest_presence_clause(fields: Sequence[str], present: bool) -> str:
     return f"{joiner}({','.join(parts)})"
 
 
+def _postgrest_single_field_presence_clause(field: str, present: bool) -> str:
+    """Filter one text field while treating NULL and empty text as missing."""
+    if present:
+        return f"and({field}.not.is.null,{field}.neq.)"
+    return f"or({field}.is.null,{field}.eq.)"
+
+
 def _resolve_timezone_zone(value: str | None) -> ZoneInfo:
     tz_name = (value or settings.webchat_calendar_timezone or "America/Mexico_City").strip()
     if not tz_name:
@@ -21283,10 +21290,19 @@ class CRMRepository:
             params["fuente"] = f"eq.{fuente}"
         if lookup_status:
             params["lookup_status"] = f"eq.{lookup_status}"
+            and_filters.append(
+                _postgrest_single_field_presence_clause("phone", lookup_status != "sin_numero")
+            )
         if email_lookup_status:
             params["email_lookup_status"] = f"eq.{email_lookup_status}"
+            and_filters.append(
+                _postgrest_single_field_presence_clause("email", email_lookup_status != "sin_email")
+            )
         if website_lookup_status:
             params["website_lookup_status"] = f"eq.{website_lookup_status}"
+            and_filters.append(
+                _postgrest_single_field_presence_clause("website", website_lookup_status != "sin_sitio")
+            )
         if email_domain_relation:
             params["email_domain_relation"] = f"eq.{email_domain_relation}"
         if segmento:
