@@ -123,3 +123,29 @@ Definir la mejora sobre este estado real: módulo, rol ejecutor, regla de
 negocio, entidades afectadas, permisos y evidencia de aceptación. La
 implementación debe ser incremental y limitarse a las capas realmente
 necesarias.
+
+## Decisión funcional: almacén de tránsito y recepción de compras
+
+La mejora acordada queda documentada en `PLAN_DESARROLLO.md`, Fase 6. El
+criterio es mantenerla simple:
+
+- cada tenant debe tener un único `ALMACEN EN TRANSITO`, creado de forma
+  idempotente al provisionarse y regularizado para tenants existentes;
+- una orden nueva usa ese almacén como destino predeterminado;
+- `aprobada` significa compromiso firme y pendiente de recibir;
+- `en_transito` significa embarque confirmado;
+- `parcial` y `recibida` reflejan las cantidades efectivamente recibidas;
+- aprobar o marcar en tránsito no crea stock físico ni movimientos;
+- al recibir, el tenant puede conservar la mercancía en tránsito o seleccionar
+  cualquier otro almacén activo de su organización;
+- el almacén de recepción de cada recepción es la fuente del movimiento y de
+  la existencia física, por lo que no debe ser obligatorio que coincida con el
+  destino predeterminado de la orden;
+- las existencias en almacenes de tipo `transito` no deben contar como
+  disponibles para venta o reserva.
+
+Esta decisión aún no se considera implementada. La orden aprobada observada
+en la revisión apunta al almacén de tránsito, pero no genera inventario, lo
+cual es correcto; falta hacer explícitos el estado de embarque, el valor
+predeterminado por tenant y la selección del almacén real al registrar la
+recepción.

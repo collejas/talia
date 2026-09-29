@@ -26,6 +26,11 @@ estados de implementación que pueden haber cambiado.
 - Incluye la regla de prorrateo global de gastos del pedimento y gastos asociados a las ordenes ligadas.
 - Incluye tambien el catalogo y la vista de `agentes_aduanales`.
 
+La siguiente mejora operativa de ordenes de compra queda documentada en la
+seccion **Almacen de transito y recepcion de compras** de este plan. Debe
+implementarse de forma incremental sobre el flujo actual y no debe generar
+existencias fisicas al aprobar una orden.
+
 ## Principios de diseno
 
 - Usar columnas reales para los datos operativos mas importantes.
@@ -558,6 +563,98 @@ Tareas:
 - bloquear edicion en estados `recibida`, `cerrada` y `cancelada`,
 - recalcular importes al guardar cambios,
 - mantener la recepcion posterior consistente con las lineas actualizadas.
+
+### Fase 6: almacen de transito y recepcion de compras
+
+Objetivo:
+
+- hacer visible el compromiso de una orden aprobada sin confundirlo con stock
+  fisico disponible;
+- usar un almacen de transito comun para el seguimiento de compras nacionales
+  e internacionales;
+- permitir que la mercancia recibida entre al almacen que el tenant decida.
+
+#### Almacen predeterminado por tenant
+
+Cada tenant debe tener un almacen operativo creado automaticamente durante su
+alta:
+
+- nombre: `ALMACEN EN TRANSITO`;
+- codigo: `TRANSITO`;
+- tipo: `transito`;
+- `activo = true`;
+- `es_principal = false`;
+- no participa en stock disponible para venta.
+
+La creacion debe ser idempotente y ejecutarse en el flujo central de
+provisionamiento/bootstrap del tenant. Tambien debe existir un backfill para
+tenants existentes, sin duplicar un almacen de tipo `transito` ya existente.
+La identificacion del almacen debe usar columnas reales y una restriccion o
+regla equivalente que impida duplicados por organizacion.
+
+#### Estados operativos de la orden
+
+Se conservan los estados administrativos que sigan siendo necesarios, como
+`borrador`, `cancelada` y `cerrada`. El flujo de compra queda definido asi:
+
+| Estado | Significado |
+| --- | --- |
+| `aprobada` | Compromiso firme; la mercancia esta pendiente de recibir. |
+| `en_transito` | El proveedor confirmo el embarque. |
+| `parcial` | Se recibio una parte de la orden. |
+| `recibida` | Se recibio la totalidad de la orden. |
+
+El flujo esperado es `borrador` -> `aprobada` -> `en_transito` -> `parcial` /
+`recibida`. El paso `enviada` puede conservarse como paso interno de envio y
+revision si el flujo actual lo necesita, pero no debe confundirse con el
+embarque confirmado.
+
+#### Almacen de la orden y almacen de recepcion
+
+Al crear una orden, `ordenes_compra.almacen_destino_id` debe apuntar por
+defecto al almacen `TRANSITO` del tenant. Este campo representa el almacen
+predeterminado o logico de la orden; no significa que ya exista stock.
+
+Al registrar una recepcion, `recepciones_compra.almacen_id` representa el
+almacen real donde entra la mercancia. El usuario puede dejarlo en
+`ALMACEN EN TRANSITO` o elegir cualquier otro almacen activo del mismo tenant.
+Una orden puede tener recepciones parciales en distintos almacenes, por lo que
+la base no debe obligar a que `recepciones_compra.almacen_id` sea igual a
+`ordenes_compra.almacen_destino_id`.
+
+La recepcion es la unica operacion que genera la entrada fisica: movimiento
+`entrada_compra`, incremento de `inventario_existencias` y actualizacion de
+cantidades recibidas. Aprobar o marcar una orden como `en_transito` no debe
+crear movimientos ni permitir la venta de mercancia aun no recibida.
+
+#### Cambios previstos por capa
+
+- **Base de datos:** provision idempotente del almacen de transito; estado
+  `en_transito`; validacion tenant-safe del almacen de recepcion; eliminacion
+  de la igualdad obligatoria entre almacen destino de la orden y almacen real
+  de recepcion; exclusion del tipo `transito` del stock disponible para venta.
+- **Backend:** resolver el almacen de transito en servidor al crear la orden,
+  validar pertenencia al tenant y permitir recepciones en cualquier almacen
+  activo autorizado; no depender solamente del valor enviado por el panel.
+- **Frontend:** mostrar `ALMACEN EN TRANSITO` como valor inicial, presentar
+  estados y cantidades pendientes, y en la recepcion mostrar el campo
+  `Almacen donde entra la mercancia` con el almacen de transito seleccionado
+  inicialmente.
+- **Auditoria:** conservar usuario, fecha, orden, recepcion, almacen elegido,
+  cantidades y movimiento generado.
+
+#### Criterios de aceptacion
+
+- Al crear un tenant nuevo aparece exactamente un almacen de transito.
+- Los tenants existentes pueden regularizarse sin duplicados.
+- Una orden nueva inicia con `ALMACEN EN TRANSITO` como destino predeterminado.
+- Aprobar una orden no aumenta `stock_actual` ni `stock_disponible`.
+- Marcar `en_transito` solo comunica embarque confirmado.
+- Una recepcion parcial puede entrar a un almacen distinto al predeterminado.
+- Una recepcion total actualiza la orden a `recibida`.
+- El stock ubicado en un almacen de tipo `transito` no se puede reservar ni
+  vender como disponible.
+- Todas las operaciones permanecen aisladas por `organizacion_id` y permisos.
 
 ## Reglas de negocio recomendadas
 
