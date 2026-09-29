@@ -29,6 +29,13 @@ export type ProspectosFlowStep = {
   isCurrent?: boolean
 }
 
+export type ProspectosValidationSummary = {
+  total_prospectos: number
+  telefonos_pendientes: number
+  correos_pendientes: number
+  sitios_web_pendientes: number
+}
+
 type ProspectosFilterSectionProps = {
   title: string
   description?: string
@@ -51,6 +58,49 @@ export function ProspectosFilterSection({ title, description, tone, children }: 
         {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
       </div>
       {children}
+    </section>
+  )
+}
+
+type ProspectosValidationSummaryProps = {
+  summary: ProspectosValidationSummary | null
+  loading: boolean
+}
+
+export function ProspectosValidationSummary({ summary, loading }: ProspectosValidationSummaryProps) {
+  const metrics = [
+    { label: "teléfonos por verificar", value: summary?.telefonos_pendientes },
+    { label: "correos por validar", value: summary?.correos_pendientes },
+    { label: "sitios web por verificar", value: summary?.sitios_web_pendientes },
+  ]
+
+  return (
+    <section className="rounded-2xl border bg-card/80 p-4 shadow-sm" aria-label="Validación de datos" aria-live="polite">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Validación de datos</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Resumen global de todos tus prospectos. Los registros sin ese dato no se cuentan como pendientes.
+          </p>
+        </div>
+        <div className="rounded-lg border bg-background/70 px-3 py-2 text-right">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total de prospectos</p>
+          <p className="text-lg font-semibold tabular-nums">
+            {loading ? "…" : summary ? summary.total_prospectos.toLocaleString("es-MX") : "—"}
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-xl border bg-background/70 p-3">
+            <p className="text-sm text-muted-foreground">Faltan</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">
+              {loading ? "…" : typeof metric.value === "number" ? metric.value.toLocaleString("es-MX") : "—"}
+            </p>
+            <p className="text-xs font-medium text-foreground/75">{metric.label}</p>
+          </div>
+        ))}
+      </div>
     </section>
   )
 }

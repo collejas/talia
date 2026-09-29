@@ -12,12 +12,10 @@ import {
   IconPhoneCheck,
   IconPlus,
   IconRefresh,
-  IconSearch,
   IconSparkles,
   IconTrash,
   IconMail,
   IconTargetArrow,
-  IconPhone,
   IconUsersGroup,
   IconWorldSearch,
 } from "@tabler/icons-react"
@@ -26,7 +24,7 @@ import { ProspeccionViewLayout } from "@/components/layouts/prospeccion-view-lay
 import { ProspeccionContactDrawer, type ProspeccionContactResult } from "@/components/prospeccion/prospeccion-contact-drawer"
 import { ProspectosImportador } from "@/components/prospeccion/prospectos-importador"
 import {
-  ProspectosFlow,
+  ProspectosValidationSummary,
   ProspectosFilterSection,
   ProspectosRecentBatches,
   ProspectosSavedViews,
@@ -37,7 +35,7 @@ import {
   ProspectosOperationalFilters,
   ProspectosSearchFilters,
   ProspectosResultsHeader,
-  type ProspectosFlowStep,
+  type ProspectosValidationSummary as ProspectosValidationSummaryData,
 } from "./prospectos-overview"
 import { getActiveTimeZone } from "@/lib/timezone"
 import { Badge } from "@/components/ui/badge"
@@ -932,43 +930,6 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-MX", {
   timeZone: getActiveTimeZone(),
 })
 
-type FlowStepKey = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
-type FlowStepDefinition = {
-  key: FlowStepKey
-  title: string
-  description: string
-  icon: typeof IconSearch
-  meta?: string
-  isCurrent?: boolean
-}
-
-const PROSPECCION_FLOW_DEFINITIONS: FlowStepDefinition[] = [
-  {
-    key: "discover",
-    title: "1. Selecciona prospectos",
-    description: "Marca los prospectos a los que quieres contactar.",
-    icon: IconSearch,
-  },
-  {
-    key: "prepare",
-    title: "2. Elige canal y mensaje",
-    description: "Selecciona campaña, plantilla y canal: correo, WhatsApp o voz.",
-    icon: IconUsersGroup,
-  },
-  {
-    key: "launch",
-    title: "3. Programa o envía",
-    description: "Define la fecha y separación, o ejecuta el lote de inmediato.",
-    icon: IconTargetArrow,
-  },
-  {
-    key: "evaluate",
-    title: "4. Monitorea resultados",
-    description: "Revisa estados, entregas y respuestas en Contactos.",
-    icon: IconPhone,
-  },
-]
-
 export default function ProspectosClientPage() {
   return (
     <ProspeccionViewLayout title="Prospección · Prospectos">
@@ -1069,8 +1030,8 @@ function ProspectosView() {
   const [segmentoFilterSearch, setSegmentoFilterSearch] = useState("")
   const [tipoNegocioFilterSearch, setTipoNegocioFilterSearch] = useState("")
   const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
-  const [stageSummary, setStageSummary] = useState<Partial<Record<FlowStepKey, number>>>({})
-  const [stageSummaryLoading, setStageSummaryLoading] = useState(false)
+  const [validationSummary, setValidationSummary] = useState<ProspectosValidationSummaryData | null>(null)
+  const [validationSummaryLoading, setValidationSummaryLoading] = useState(false)
   const [geoEstadoOptions, setGeoEstadoOptions] = useState<LocationOption[]>([])
   const [geoMunicipioOptions, setGeoMunicipioOptions] = useState<LocationOption[]>([])
   const [geoLoading, setGeoLoading] = useState(false)
@@ -2309,32 +2270,37 @@ function ProspectosView() {
     }
   }, [])
 
-  const fetchStageSummary = useCallback(async () => {
-    setStageSummaryLoading(true)
+  const fetchValidationSummary = useCallback(async () => {
+    setValidationSummaryLoading(true)
     try {
-      const response = await fetch("/api/prospeccion/stage-resumen", { cache: "no-store" })
+      const response = await fetch("/api/prospeccion/prospectos/checklist", { cache: "no-store" })
       if (!response.ok) {
-        throw new Error("stage_summary_failed")
+        throw new Error("validation_summary_failed")
       }
-      const data = (await response.json()) as { stages?: Record<string, number> }
-      const stages = data?.stages ?? {}
-      setStageSummary({
-        discover: Number(stages["descubre"]) || 0,
-        enrich: Number(stages["enriquecer"]) || 0,
-        prepare: Number(stages["preparar"]) || 0,
-        launch: Number(stages["lanzar"]) || 0,
-        evaluate: Number(stages["evaluar"]) || 0,
+      const data = (await response.json()) as {
+        checklist?: Partial<ProspectosValidationSummaryData>
+      }
+      const checklist = data.checklist ?? {}
+      setValidationSummary({
+        total_prospectos: Number(checklist.total_prospectos) || 0,
+        telefonos_pendientes: Number(checklist.telefonos_pendientes) || 0,
+        correos_pendientes: Number(checklist.correos_pendientes) || 0,
+        sitios_web_pendientes: Number(checklist.sitios_web_pendientes) || 0,
       })
     } catch {
-      setStageSummary({})
+      setValidationSummary(null)
     } finally {
-      setStageSummaryLoading(false)
+      setValidationSummaryLoading(false)
     }
   }, [])
 
+  const refreshProspectosSummaries = useCallback(() => {
+    void fetchValidationSummary()
+  }, [fetchValidationSummary])
+
   useEffect(() => {
-    void fetchStageSummary()
-  }, [fetchStageSummary])
+    refreshProspectosSummaries()
+  }, [refreshProspectosSummaries])
 
   useEffect(() => {
     void fetchRecentBatches()
@@ -2359,7 +2325,7 @@ function ProspectosView() {
         await Promise.all([
           fetchProspectos(0),
           loadQueryOptions({ fuente: filters.fuente || undefined, dateFrom, dateTo }),
-          fetchStageSummary(),
+          fetchValidationSummary(),
         ])
       } finally {
         prospectosStreamRefreshInFlightRef.current = false
@@ -2403,7 +2369,7 @@ function ProspectosView() {
     }
   }, [
     fetchProspectos,
-    fetchStageSummary,
+    fetchValidationSummary,
     filters.customDateFrom,
     filters.customDateTo,
     filters.dateOption,
@@ -2600,24 +2566,6 @@ function ProspectosView() {
   useEffect(() => {
     setLimitInput(String(limit))
   }, [limit])
-  const flowSteps = useMemo<ProspectosFlowStep[]>(() => {
-    const steps = PROSPECCION_FLOW_DEFINITIONS.map((step) => {
-      let meta = ""
-      if (step.key === "discover") {
-        meta = effectiveTotal ? `${effectiveTotal.toLocaleString("es-MX")} disponibles` : "Sin prospectos"
-      } else if (step.key === "prepare") {
-        meta = selectedCount ? `${selectedCount} seleccionados` : "Selecciona registros"
-      } else if (step.key === "launch") {
-        meta = `${stageSummary.launch ?? 0} lotes activos`
-      } else if (step.key === "evaluate") {
-        meta = `${stageSummary.evaluate ?? 0} lotes completados`
-      }
-      const isCurrent = step.key === "discover" ? !selectedCount : step.key === "prepare" && selectedCount > 0
-      return { ...step, meta, isCurrent }
-    })
-    return steps
-  }, [effectiveTotal, selectedCount, stageSummary])
-
   const handleToggleRow = (id: string, checked: boolean) => {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -2886,7 +2834,7 @@ function ProspectosView() {
         message: `Verificación de teléfonos: se actualizaron ${response.procesados} prospectos.`,
       })
       await fetchProspectos(offset)
-      void fetchStageSummary()
+      refreshProspectosSummaries()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo verificar los teléfonos."
       setVerificationDialog({
@@ -2898,7 +2846,7 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [applyLookupUpdates, fetchProspectos, fetchStageSummary, offset, selectedIds])
+  }, [applyLookupUpdates, fetchProspectos, offset, refreshProspectosSummaries, selectedIds])
 
   const handleVerifyEmails = useCallback(async () => {
     if (!selectedIds.length) return
@@ -2930,7 +2878,7 @@ function ProspectosView() {
         message: `Validación de correos: se validaron ${response.procesados} registros.`,
       })
       await fetchProspectos(offset)
-      void fetchStageSummary()
+      refreshProspectosSummaries()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron validar los correos."
       setVerificationDialog({
@@ -2942,7 +2890,7 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [applyLookupUpdates, fetchProspectos, fetchStageSummary, offset, selectedIds])
+  }, [applyLookupUpdates, fetchProspectos, offset, refreshProspectosSummaries, selectedIds])
 
   const handleVerifyWebsites = useCallback(async () => {
     if (!selectedIds.length) return
@@ -2973,7 +2921,7 @@ function ProspectosView() {
         message: `Verificación de sitios web: se validaron ${response.procesados} registros.`,
       })
       await fetchProspectos(offset)
-      void fetchStageSummary()
+      refreshProspectosSummaries()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron validar los sitios web."
       setVerificationDialog({
@@ -2985,7 +2933,7 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [applyLookupUpdates, fetchProspectos, fetchStageSummary, offset, selectedIds])
+  }, [applyLookupUpdates, fetchProspectos, offset, refreshProspectosSummaries, selectedIds])
 
   const handleVerifyFull = useCallback(async () => {
     if (!selectedIds.length) return
@@ -3034,7 +2982,7 @@ function ProspectosView() {
         message: `${prefix} Teléfonos: ${phones}, Sitios: ${websites}, Correos: ${emails}.`,
       })
       await fetchProspectos(offset)
-      void fetchStageSummary()
+      refreshProspectosSummaries()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo ejecutar la validación completa."
       setVerificationDialog({
@@ -3046,7 +2994,7 @@ function ProspectosView() {
     } finally {
       setAction(null)
     }
-  }, [applyLookupUpdates, fetchProspectos, fetchStageSummary, offset, selectedIds])
+  }, [applyLookupUpdates, fetchProspectos, offset, refreshProspectosSummaries, selectedIds])
 
   const loadCampaignFilterOptions = useCallback(async () => {
     setCampaignFilterLoading(true)
@@ -3371,7 +3319,7 @@ function ProspectosView() {
       handlePlannerOpenChange(false)
       await fetchProspectos(offset)
       void fetchRecentBatches()
-      void fetchStageSummary()
+      refreshProspectosSummaries()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo ejecutar el lote."
       setPlannerError(message)
@@ -3381,7 +3329,7 @@ function ProspectosView() {
   }, [
     fetchProspectos,
     fetchRecentBatches,
-    fetchStageSummary,
+    refreshProspectosSummaries,
     handlePlannerOpenChange,
     items,
     offset,
@@ -3528,14 +3476,14 @@ function ProspectosView() {
       })
       setConvertDialogOpen(false)
       await fetchProspectos(offset)
-      void fetchStageSummary()
+      refreshProspectosSummaries()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo convertir el prospecto."
       setConvertError(message)
     } finally {
       setConvertSubmitting(false)
     }
-  }, [convertForm, convertProspect, fetchProspectos, fetchStageSummary, offset])
+  }, [convertForm, convertProspect, fetchProspectos, offset, refreshProspectosSummaries])
 
   const handleOpenCreateDialog = () => {
     setFormMode("create")
@@ -3752,14 +3700,14 @@ function ProspectosView() {
       })
       setDeleteDialogOpen(false)
       await refreshProspectosAndMetadata(offset)
-      void fetchStageSummary()
+      refreshProspectosSummaries()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudo eliminar el prospecto."
       setDeleteError(message)
     } finally {
       setDeleteLoading(false)
     }
-  }, [appendProspectos, deleteTarget, fetchStageSummary, items, limit, offset, refreshProspectosAndMetadata, total])
+  }, [appendProspectos, deleteTarget, items, limit, offset, refreshProspectosAndMetadata, refreshProspectosSummaries, total])
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (!selectedIds.length) return
@@ -3789,14 +3737,14 @@ function ProspectosView() {
       })
       setBulkDeleteDialogOpen(false)
       await refreshProspectosAndMetadata(offset)
-      void fetchStageSummary()
+      refreshProspectosSummaries()
     } catch (err) {
       const message = err instanceof Error ? err.message : "No se pudieron eliminar los prospectos."
       setBulkDeleteError(message)
     } finally {
       setBulkDeleteLoading(false)
     }
-  }, [appendProspectos, fetchStageSummary, items, limit, offset, refreshProspectosAndMetadata, selectedIds, total])
+  }, [appendProspectos, items, limit, offset, refreshProspectosAndMetadata, refreshProspectosSummaries, selectedIds, total])
 
   const handleGroupDeleteConfirm = useCallback(async () => {
     if (!selectedGroupQueryValues.length) return
@@ -3810,7 +3758,7 @@ function ProspectosView() {
       setProspectosViewMode("grupos")
       setOffset(0)
       await refreshProspectosAndMetadata(0)
-      void fetchStageSummary()
+      refreshProspectosSummaries()
       setBanner({
         type: "success",
         message: `Se eliminaron ${deletedTotal.toLocaleString("es-MX")} prospecto${deletedTotal === 1 ? "" : "s"} de ${selectedGroupValues.length} grupo${selectedGroupValues.length === 1 ? "" : "s"}.`,
@@ -3822,7 +3770,7 @@ function ProspectosView() {
     } finally {
       setGroupDeleteLoading(false)
     }
-  }, [fetchStageSummary, refreshProspectosAndMetadata, selectedGroupQueryValues, selectedGroupValues])
+  }, [refreshProspectosAndMetadata, refreshProspectosSummaries, selectedGroupQueryValues, selectedGroupValues])
 
   if (!mounted) {
     return null
@@ -3851,7 +3799,7 @@ function ProspectosView() {
         </div>
       ) : null}
 
-      <ProspectosFlow steps={flowSteps} loading={stageSummaryLoading} onPrepare={handlePlannerOpen} />
+      <ProspectosValidationSummary summary={validationSummary} loading={validationSummaryLoading} />
       <ProspectosRecentBatches
         batches={recentBatches}
         loading={recentBatchLoading}
