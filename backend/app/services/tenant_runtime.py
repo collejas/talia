@@ -1077,9 +1077,14 @@ class BrevoRuntimeSettings:
 async def get_brevo_runtime_settings(
     *,
     organizacion_id: UUID | None = None,
+    allow_global_fallback: bool = True,
 ) -> BrevoRuntimeSettings:
     settings_payload = BrevoRuntimeSettings(
-        api_key=settings.brevo_api_key,
+        api_key=(
+            settings.brevo_api_key
+            if allow_global_fallback or organizacion_id is None
+            else None
+        ),
         base_url=(settings.brevo_base_url or "https://api.brevo.com/v3").strip().rstrip("/"),
     )
     if organizacion_id is None:

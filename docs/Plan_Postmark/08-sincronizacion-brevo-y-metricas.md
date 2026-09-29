@@ -58,3 +58,13 @@ Brevo documenta eventos transaccionales de entrega, apertura, clic, rebote,
 spam, bloqueo y baja, además del endpoint histórico de actividad SMTP. La vista
 de métricas reutiliza el contrato existente y no crea una pantalla separada por
 proveedor.
+
+## Regla de separación histórica
+
+La conciliación histórica de Brevo no puede reutilizar la transición operativa
+del webhook en vivo: no debe modificar `procesado_en`, estado del envío,
+promoción del prospecto, progreso del lote ni contadores en memoria. Solo debe
+persistir el evento y la bitácora idempotente. Además, únicamente se ejecuta
+para tenants que no tengan la migración Postmark activa (`feature_enabled=true`).
+La ficha interna de servidor puede existir en estado `pending` para cualquier
+tenant y no basta, por sí sola, para identificar al proveedor operativo.

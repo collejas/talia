@@ -142,9 +142,9 @@ function formatDateInput(date: Date) {
 }
 
 function getPeriodDates(preset: Exclude<PeriodPreset, "personalizado">) {
-  if (preset === "actual") return { from: "", to: "" }
   const today = new Date()
   const to = formatDateInput(today)
+  if (preset === "actual") return { from: to, to }
   const fromDate = new Date(today)
   if (preset === "mes") {
     fromDate.setDate(1)
@@ -167,8 +167,8 @@ export default function ProspeccionMetricasPageClient() {
 
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
 
-  const [dateFrom, setDateFrom] = useState("")
-  const [dateTo, setDateTo] = useState("")
+  const [dateFrom, setDateFrom] = useState(() => getPeriodDates("actual").from)
+  const [dateTo, setDateTo] = useState(() => getPeriodDates("actual").to)
   const [canal, setCanal] = useState<"todos" | "correo" | "whatsapp" | "llamada">("todos")
   const [tableSort, setTableSort] = useState<{ key: string; dir: "asc" | "desc" }>({
     key: "envios_totales",
@@ -959,7 +959,7 @@ export default function ProspeccionMetricasPageClient() {
                 <SelectValue placeholder="Periodo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="actual">Periodo actual</SelectItem>
+                <SelectItem value="actual">Hoy</SelectItem>
                 <SelectItem value="7">Últimos 7 días</SelectItem>
                 <SelectItem value="30">Últimos 30 días</SelectItem>
                 <SelectItem value="90">Últimos 90 días</SelectItem>

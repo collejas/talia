@@ -24,7 +24,7 @@ class RepoStub:
         self.synced: list[uuid.UUID] = []
         self.duplicate_keys: set[tuple[str, str, str, str, str | None]] = set()
 
-    async def worker_get_envio_by_mensaje(self, mensaje_id: str):
+    async def worker_get_envio_by_mensaje(self, mensaje_id: str, organizacion_id=None):
         return self.envios.get(mensaje_id)
 
     async def worker_complete_envio(self, *, envio_id: uuid.UUID, payload: dict):
@@ -122,6 +122,28 @@ async def test_process_brevo_events_deferred_does_not_requeue(monkeypatch):
 
     assert processed == 1
     assert repo.updates[0][1]["estado"] == "enviado"
+    assert repo.logs[0]["estado"] == "enviado"
+
+
+@pytest.mark.anyio
+async def test_process_brevo_events_historical_does_not_change_processing_timestamp(monkeypatch):
+    repo = RepoStub()
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(brevo_service.progress_hub, "publish", _noop)
+    monkeypatch.setattr(brevo_service.metrics, "increment", lambda *args, **kwargs: None)
+
+    processed = await brevo_service.process_brevo_events(
+        repo=repo,
+        events=[{"event": "delivered", "message-id": "brevo-1", "email": "demo@example.com"}],
+        organizacion_id=uuid.uuid4(),
+        historical=True,
+    )
+
+    assert processed == 1
+    assert not repo.updates
     assert repo.logs[0]["estado"] == "enviado"
 
 

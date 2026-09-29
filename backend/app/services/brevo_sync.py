@@ -69,7 +69,10 @@ async def synchronize_brevo_organization(
     organizacion_id: UUID,
     days: int,
 ) -> int:
-    runtime = await tenant_runtime.get_brevo_runtime_settings(organizacion_id=organizacion_id)
+    runtime = await tenant_runtime.get_brevo_runtime_settings(
+        organizacion_id=organizacion_id,
+        allow_global_fallback=False,
+    )
     if not runtime.api_key:
         return 0
     end_date = date.today()
@@ -92,6 +95,7 @@ async def synchronize_brevo_organization(
             repo=repo,
             events=events,
             organizacion_id=organizacion_id,
+            historical=True,
         )
         if len(events) < page_size:
             break

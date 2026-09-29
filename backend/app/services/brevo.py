@@ -709,8 +709,9 @@ async def process_brevo_events(
     repo: CRMRepository,
     events: Sequence[dict[str, Any]],
     organizacion_id: UUID | None = None,
+    historical: bool = False,
 ) -> int:
-    """Actualiza envíos de correo con base en los webhooks de Brevo."""
+    """Procesa eventos Brevo en vivo o los registra sin mutar envíos históricos."""
 
     processed = 0
     for event in events:
@@ -775,7 +776,11 @@ async def process_brevo_events(
                 continue
 
             current_state = _clean_text(envio.get("estado"))
-            apply_state = _should_apply_brevo_state(current_state=current_state, incoming_state=estado)
+            apply_state = (
+                False
+                if historical
+                else _should_apply_brevo_state(current_state=current_state, incoming_state=estado)
+            )
             event_at = _brevo_event_at(event)
             record_event = getattr(repo, "worker_record_brevo_event", None)
             if record_event is not None and envio.get("organizacion_id"):
@@ -868,9 +873,10 @@ async def process_brevo_events(
                             error=str(exc),
                             email=suppression_email,
                         )
-            metrics.increment("correo", estado)
+            if not historical:
+                metrics.increment("correo", estado)
             batch_id_value = envio.get("batch_id")
-            if batch_id_value:
+            if batch_id_value and not historical:
                 await progress_hub.publish(
                     str(batch_id_value),
                     {
@@ -895,13 +901,14 @@ async def process_brevo_events(
             except CRMRepositoryError as exc:
                 log_event(logger, "brevo.webhook_log_failed", error=str(exc))
             else:
-                await auto_promote_prospecto(
-                    prospecto_id=envio.get("prospecto_id"),
-                    canal="correo",
-                    estado=estado,
-                    repo=repo,
-                )
-            if batch_id_value and apply_state:
+                if not historical:
+                    await auto_promote_prospecto(
+                        prospecto_id=envio.get("prospecto_id"),
+                        canal="correo",
+                        estado=estado,
+                        repo=repo,
+                    )
+            if batch_id_value and apply_state and not historical:
                 try:
                     batch_state = await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id_value)))
                 except (ValueError, CRMRepositoryError) as exc:

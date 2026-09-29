@@ -26468,16 +26468,28 @@ class CRMRepository:
         rows = response.json() or []
         if not isinstance(rows, list):
             raise CRMRepositoryError("Respuesta inesperada al listar organizaciones Brevo")
+        postmark_response = await self._request_service_role(
+            "GET",
+            "/rest/v1/tenant_email_migrations",
+            params={"select": "organizacion_id", "feature_enabled": "eq.true", "limit": "1000"},
+        )
+        postmark_rows = postmark_response.json() or []
+        postmark_ids = {
+            str(item.get("organizacion_id"))
+            for item in postmark_rows
+            if isinstance(item, dict) and item.get("organizacion_id")
+        }
         result: list[UUID] = []
         for row in rows:
             if not isinstance(row, dict):
                 continue
             config = row.get("config") if isinstance(row.get("config"), dict) else {}
             brevo_config = config.get("brevo") if isinstance(config.get("brevo"), dict) else {}
-            if not brevo_config:
+            organization_id = str(row.get("id")) if row.get("id") else ""
+            if not brevo_config or organization_id in postmark_ids:
                 continue
             try:
-                result.append(UUID(str(row.get("id"))))
+                result.append(UUID(organization_id))
             except (TypeError, ValueError):
                 continue
         return result
