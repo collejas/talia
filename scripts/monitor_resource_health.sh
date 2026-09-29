@@ -55,7 +55,12 @@ top_snapshot() {
 }
 
 oom_snapshot() {
-  dmesg -T 2>/dev/null | rg -i "killed process|out of memory|oom|oom-killer" | tail -n 5 || true
+  if command -v journalctl >/dev/null 2>&1; then
+    journalctl -k --since "10 minutes ago" --no-pager -o short-iso 2>/dev/null \
+      | rg -i "killed process|out of memory|oom|oom-killer" | tail -n 5 || true
+  else
+    dmesg -T 2>/dev/null | rg -i "killed process|out of memory|oom|oom-killer" | tail -n 5 || true
+  fi
 }
 
 main() {

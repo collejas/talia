@@ -7,12 +7,17 @@ KEEP_PROD_RELEASES="${KEEP_PROD_RELEASES:-1}"
 KEEP_STG_RELEASES="${KEEP_STG_RELEASES:-1}"
 KEEP_BACKUPS="${KEEP_BACKUPS:-2}"
 JOURNAL_VACUUM_TIME="${JOURNAL_VACUUM_TIME:-2d}"
+JOURNAL_VACUUM_SIZE="${JOURNAL_VACUUM_SIZE:-200M}"
 KEEP_LOG_DAYS="${KEEP_LOG_DAYS:-2}"
 TRUNCATE_LOGS_OVER_MB="${TRUNCATE_LOGS_OVER_MB:-5}"
+SYSTEM_LOG_DIR="${SYSTEM_LOG_DIR:-/var/log}"
+SYSTEM_LOG_KEEP_DAYS="${SYSTEM_LOG_KEEP_DAYS:-7}"
+SYSTEM_LOG_TRUNCATE_OVER_MB="${SYSTEM_LOG_TRUNCATE_OVER_MB:-500}"
 
 DRY_RUN="${DRY_RUN:-0}"
 RUN_LOGS_PURGE="${RUN_LOGS_PURGE:-0}"
 KEEP_CURRENT_LOGS="${KEEP_CURRENT_LOGS:-1}"
+RUN_SYSTEM_LOG_CLEAN="${RUN_SYSTEM_LOG_CLEAN:-1}"
 
 RUN_NPM_CACHE_CLEAN="${RUN_NPM_CACHE_CLEAN:-1}"
 RUN_GIT_GC="${RUN_GIT_GC:-1}"
@@ -482,12 +487,47 @@ cleanup_git_objects() {
 }
 
 cleanup_system_logs() {
+  if [[ "${RUN_SYSTEM_LOG_CLEAN}" == "1" && -d "${SYSTEM_LOG_DIR}" ]]; then
+    local system_log
+    local system_log_mb="${SYSTEM_LOG_TRUNCATE_OVER_MB}"
+    local system_log_names=(syslog kern.log auth.log ufw.log mail.log user.log cron.log)
+
+    if [[ "${system_log_mb}" =~ ^[0-9]+$ ]]; then
+      for system_log in "${system_log_names[@]}"; do
+        system_log="${SYSTEM_LOG_DIR}/${system_log}"
+        [[ -f "${system_log}" ]] || continue
+        if [[ "${DRY_RUN}" == "1" ]]; then
+          if find "${system_log}" -maxdepth 0 -type f -size "+${system_log_mb}M" -print -quit 2>/dev/null | grep -q .; then
+            log "DRY_RUN truncate system log ${system_log} over_mb=${system_log_mb}"
+          fi
+        elif find "${system_log}" -maxdepth 0 -type f -size "+${system_log_mb}M" -print -quit 2>/dev/null | grep -q .; then
+          truncate -s 0 "${system_log}" 2>/dev/null || true
+          log "truncated system log ${system_log} over_mb=${system_log_mb}"
+        fi
+      done
+    fi
+
+    if [[ "${SYSTEM_LOG_KEEP_DAYS}" =~ ^[0-9]+$ ]]; then
+      for system_log in "${system_log_names[@]}"; do
+        if [[ "${DRY_RUN}" == "1" ]]; then
+          log "DRY_RUN prune rotated system logs name=${system_log} keep_days=${SYSTEM_LOG_KEEP_DAYS}"
+        else
+          find "${SYSTEM_LOG_DIR}" -maxdepth 1 -type f \
+            \( -name "${system_log}.[0-9]*" -o -name "${system_log}.[0-9]*.gz" \) \
+            -mtime "+${SYSTEM_LOG_KEEP_DAYS}" -delete 2>/dev/null || true
+        fi
+      done
+      log "rotated system logs pruned keep_days=${SYSTEM_LOG_KEEP_DAYS}"
+    fi
+  fi
+
   if command -v journalctl >/dev/null 2>&1; then
     if [[ "${DRY_RUN}" == "1" ]]; then
-      log "DRY_RUN journalctl --vacuum-time=${JOURNAL_VACUUM_TIME}"
+      log "DRY_RUN journalctl --vacuum-time=${JOURNAL_VACUUM_TIME} --vacuum-size=${JOURNAL_VACUUM_SIZE}"
     else
       journalctl --vacuum-time="${JOURNAL_VACUUM_TIME}" >/dev/null 2>&1 || true
-      log "journal vacuum ${JOURNAL_VACUUM_TIME}"
+      journalctl --vacuum-size="${JOURNAL_VACUUM_SIZE}" >/dev/null 2>&1 || true
+      log "journal vacuum time=${JOURNAL_VACUUM_TIME} size=${JOURNAL_VACUUM_SIZE}"
     fi
   fi
 

@@ -4678,12 +4678,13 @@ function ProspectosView() {
                                     metadataLocation.municipio
                                   ),
                                 ].filter((value): value is string => Boolean(value && value.length))
+                                const postalCode = prospecto.codigo_postal?.trim()
                                 const countryName = pickLocationText(
                                   prospecto.country_name,
                                   prospecto.pais_nombre,
                                   metadataLocation.country
                                 ) || (prospecto.fuente === "denue" ? "México" : null)
-                                const locationLabel = [...locationBits, countryName]
+                                const locationLabel = [...locationBits, postalCode ? `CP ${postalCode}` : null, countryName]
                                   .filter((value): value is string => Boolean(value && value.length))
                                   .join(" · ")
                                 const personName = composeProspectoDisplayName({

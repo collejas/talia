@@ -40,6 +40,8 @@ set -euo pipefail
 #   RUN_AS_USER=jorge
 #   PANEL_LOG_FILE=/var/www/talia/logs/panel.log
 #   PANEL_ERROR_LOG_FILE=/var/www/talia/logs/panel-error.log
+#   BUILD_MAX_OLD_SPACE_MB=1280
+#   BUILD_MIN_AVAILABLE_MB=1800
 
 PANEL_SOURCE_DIR="${PANEL_SOURCE_DIR:-/var/www/talia/frontend/panel}"
 PANEL_RELEASES_DIR="${PANEL_RELEASES_DIR:-/var/www/talia/releases/panel}"
@@ -63,6 +65,8 @@ PANEL_LOG_FILE="${PANEL_LOG_FILE:-/var/www/talia/logs/panel.log}"
 PANEL_ERROR_LOG_FILE="${PANEL_ERROR_LOG_FILE:-/var/www/talia/logs/panel-error.log}"
 API_HEALTH_URL="${API_HEALTH_URL:-http://127.0.0.1:8004/api/health}"
 API_HEALTH_TIMEOUT_SECONDS="${API_HEALTH_TIMEOUT_SECONDS:-45}"
+BUILD_MAX_OLD_SPACE_MB="${BUILD_MAX_OLD_SPACE_MB:-1280}"
+BUILD_MIN_AVAILABLE_MB="${BUILD_MIN_AVAILABLE_MB:-1800}"
 
 NOW_UTC="$(date -u +%Y%m%d_%H%M%S)"
 NEW_RELEASE="${PANEL_RELEASES_DIR}/${NOW_UTC}"
@@ -147,6 +151,21 @@ ensure_free_space() {
     return 1
   fi
   echo "[deploy] Espacio libre OK: ${avail_gb}G"
+}
+
+ensure_build_memory() {
+  if [[ "${SKIP_BUILD}" == "1" ]]; then
+    return 0
+  fi
+
+  local available_mb
+  available_mb="$(free -m | awk 'NR==2 {print $7}')"
+  if [[ "${available_mb}" =~ ^[0-9]+$ ]] && (( available_mb < BUILD_MIN_AVAILABLE_MB )); then
+    echo "[deploy] Memoria disponible insuficiente para build: ${available_mb}MB; minimo=${BUILD_MIN_AVAILABLE_MB}MB" >&2
+    echo "[deploy] Cierra procesos pesados (por ejemplo VS Code remoto) o libera memoria y reintenta" >&2
+    return 1
+  fi
+  echo "[deploy] Memoria disponible para build: ${available_mb}MB"
 }
 
 preflight_restart_permissions() {
@@ -245,6 +264,7 @@ fi
 
 cleanup_old_releases
 ensure_free_space
+ensure_build_memory
 preflight_restart_permissions
 
 rm -rf "${TMP_RELEASE}" "${PACKED_RELEASE}"
@@ -282,7 +302,10 @@ if [[ "${SKIP_LINT}" != "1" ]]; then
 fi
 
 if [[ "${SKIP_BUILD}" != "1" ]]; then
-  export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1536}"
+  available_mb="$(free -m | awk 'NR==2 {print $7}')"
+  export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=${BUILD_MAX_OLD_SPACE_MB}}"
+  export NEXT_TELEMETRY_DISABLED="${NEXT_TELEMETRY_DISABLED:-1}"
+  echo "[deploy] Memoria disponible antes del build: ${available_mb}MB; NODE_OPTIONS=${NODE_OPTIONS}"
   echo "[deploy] npm run build"
   npm run build
 fi
