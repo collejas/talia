@@ -656,6 +656,12 @@ crear movimientos ni permitir la venta de mercancia aun no recibida.
   vender como disponible.
 - Todas las operaciones permanecen aisladas por `organizacion_id` y permisos.
 
+Estado de implementación inicial (2026-09-29): las migraciones de
+provisionamiento del almacén de tránsito, estado `en_transito` y bloqueo de
+reservas en tránsito ya fueron aplicadas en Supabase. El backend y el panel
+quedaron modificados en el repositorio; falta desplegarlos y validar el flujo
+con sesión autenticada por tenant y rol.
+
 ## Reglas de negocio recomendadas
 
 - No actualizar directamente `inventario_existencias` sin generar un movimiento.

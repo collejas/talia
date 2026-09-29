@@ -144,8 +144,14 @@ criterio es mantenerla simple:
 - las existencias en almacenes de tipo `transito` no deben contar como
   disponibles para venta o reserva.
 
-Esta decisión aún no se considera implementada. La orden aprobada observada
-en la revisión apunta al almacén de tránsito, pero no genera inventario, lo
-cual es correcto; falta hacer explícitos el estado de embarque, el valor
-predeterminado por tenant y la selección del almacén real al registrar la
-recepción.
+Estado de implementación al 2026-09-29:
+
+- las migraciones de provisionamiento, estado `en_transito` y bloqueo de
+  reservas en tránsito ya están aplicadas en Supabase;
+- el backend resuelve el almacén de tránsito cuando la creación no recibe un
+  destino y expone el paso para marcar la orden como `en_transito`;
+- el panel usa tránsito como valor inicial, muestra el estado y permite marcar
+  el embarque;
+- falta desplegar backend/panel y validar el flujo autenticado por tenant y
+  rol, incluida una recepción parcial en un almacén distinto al destino
+  predeterminado.

@@ -1289,6 +1289,16 @@ export async function approveOrdenCompraAction(ordenId: string): Promise<void> {
   revalidatePath(SETTINGS_PATH)
 }
 
+export async function markOrdenCompraEnTransitoAction(ordenId: string): Promise<void> {
+  const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/en-transito`, {
+    method: "POST",
+  })
+  if (!response.ok) {
+    throw new Error(response.error)
+  }
+  revalidatePath(SETTINGS_PATH)
+}
+
 export async function closeOrdenCompraAction(ordenId: string): Promise<void> {
   const response = await callCrmApi(`/crm/compras/ordenes/${ordenId}/cerrar`, {
     method: "POST",

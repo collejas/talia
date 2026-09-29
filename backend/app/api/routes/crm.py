@@ -16406,7 +16406,7 @@ class CRMOrdenCompraPagoProgramadoInput(BaseModel):
 class CRMOrdenCompraCreate(BaseModel):
     folio: str = Field(..., min_length=1, max_length=80)
     proveedor_id: UUID
-    almacen_destino_id: UUID
+    almacen_destino_id: UUID | None = None
     fecha_emision: datetime | None = None
     fecha_entrega_estimada: date | None = None
     moneda: str = Field(default="MXN", min_length=3, max_length=3)
@@ -23695,6 +23695,16 @@ async def create_compras_orden(
     pagos_programados = body.pop("pagos_programados", None)
     if usuario_id:
         body.setdefault("solicitado_por_usuario_id", str(usuario_id))
+    if not body.get("almacen_destino_id"):
+        try:
+            almacen_transito = await repo.get_almacen_transito(
+                organizacion_id=organizacion_id,
+            )
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        if almacen_transito is None:
+            raise HTTPException(status_code=409, detail="almacen_transito_not_configured")
+        body["almacen_destino_id"] = str(almacen_transito["id"])
     fecha_emision = body.get("fecha_emision")
     if not _clean_text(body.get("moneda")):
         body["moneda"] = "MXN"
@@ -24383,6 +24393,27 @@ async def approve_compras_orden(
         orden_id=orden_id,
         estado_objetivo="aprobada",
         estados_permitidos={"enviada"},
+        usuario_id=usuario_id,
+    )
+
+
+@router.post("/compras/ordenes/{orden_id}/en-transito", response_model=CRMOrdenCompraRecepcion)
+async def mark_compras_orden_en_transito(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    orden_id: UUID,
+) -> CRMOrdenCompraRecepcion:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="usuario_no_autenticado")
+    return await _update_compras_orden_estado(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        orden_id=orden_id,
+        estado_objetivo="en_transito",
+        estados_permitidos={"aprobada"},
         usuario_id=usuario_id,
     )
 

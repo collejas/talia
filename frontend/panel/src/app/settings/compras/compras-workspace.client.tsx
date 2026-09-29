@@ -38,6 +38,7 @@ import {
   deleteAlmacenAction,
   deleteOrdenCompraAction,
   deleteProveedorAction,
+  markOrdenCompraEnTransitoAction,
   sendOrdenCompraAction,
   updateAlmacenAction,
   updateOrdenCompraAction,
@@ -503,6 +504,12 @@ function getOrderStatusBadge(estado: unknown): { label: string; className: strin
   }
   if (normalized === "aprobada") {
     return { label: "Aprobada", className: "border-violet-200 bg-violet-50 text-violet-700" }
+  }
+  if (normalized === "en_transito") {
+    return { label: "En tránsito", className: "border-sky-200 bg-sky-50 text-sky-700" }
+  }
+  if (normalized === "parcial") {
+    return { label: "Parcial", className: "border-amber-200 bg-amber-50 text-amber-700" }
   }
   if (normalized === "recibida") {
     return { label: "Recibida", className: "border-emerald-200 bg-emerald-50 text-emerald-700" }
@@ -1082,7 +1089,7 @@ export function ComprasWorkspace({
   const openOrders = useMemo(
     () =>
       ordenes.filter((orden) =>
-        ["borrador", "enviada", "aprobada", "parcial"].includes(String(orden.estado ?? "").toLowerCase()),
+        ["borrador", "enviada", "aprobada", "en_transito", "parcial"].includes(String(orden.estado ?? "").toLowerCase()),
       ),
     [ordenes],
   )
@@ -2936,6 +2943,9 @@ export function ComprasWorkspace({
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-muted-foreground">
+                  Por defecto, la orden queda en <span className="font-medium text-foreground">ALMACEN EN TRANSITO</span> hasta registrar la recepción.
+                </p>
               </div>
               <div className="space-y-2 md:col-span-3">
                 <label className="text-sm font-medium" htmlFor="orden-ref">
@@ -5707,6 +5717,17 @@ export function ComprasWorkspace({
                   ) : (
                     <Button type="button" variant="secondary" disabled>
                       Aprobar
+                    </Button>
+                  )}
+                  {selectedOrderRecord && selectedOrderStatus === "aprobada" ? (
+                    <form action={markOrdenCompraEnTransitoAction.bind(null, String(selectedOrderRecord.id))}>
+                      <Button type="submit" variant="secondary">
+                        Marcar en tránsito
+                      </Button>
+                    </form>
+                  ) : (
+                    <Button type="button" variant="secondary" disabled>
+                      Marcar en tránsito
                     </Button>
                   )}
                   {selectedOrderRecord ? (

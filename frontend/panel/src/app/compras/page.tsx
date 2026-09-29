@@ -178,7 +178,11 @@ export default async function ComprasPage({ searchParams }: ComprasPageProps) {
 
   const inventoryCatalogItems = catalogItems.filter(isInventoryCatalogItem)
 
-  const principalWarehouse = almacenes.find((almacen) => Boolean(almacen.es_principal)) ?? almacenes[0] ?? null
+  const principalWarehouse =
+    almacenes.find((almacen) => String(almacen.tipo ?? "").toLowerCase() === "transito")
+    ?? almacenes.find((almacen) => Boolean(almacen.es_principal))
+    ?? almacenes[0]
+    ?? null
   const firstOrder = ordenes[0] ?? null
   const defaultWarehouseId = principalWarehouse
     ? asString(principalWarehouse.id)

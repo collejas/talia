@@ -15410,6 +15410,24 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar almacenes: {data!r}")
         return data
 
+    async def get_almacen_transito(
+        self,
+        *,
+        organizacion_id: UUID,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "tipo": "eq.transito",
+            "activo": "eq.true",
+            "order": "codigo.asc",
+            "limit": "1",
+        }
+        resp = await self._request("GET", "/rest/v1/almacenes", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar almacen de transito: {data!r}")
+        return data[0] if data else None
+
     async def count_almacenes(
         self,
         *,
