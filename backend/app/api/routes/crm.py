@@ -461,6 +461,12 @@ CONTACT_INDICATORS_CACHE_TTL_SECONDS = 20.0
 CONTACT_INDICATORS_CACHE_MAX_ENTRIES = 1024
 _CONTACT_INDICATORS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _CONTACT_INDICATORS_CACHE_LOCK = asyncio.Lock()
+PROSPECCION_METRICAS_LITE_CACHE_TTL_SECONDS = 20.0
+PROSPECCION_METRICAS_LITE_CACHE_MAX_ENTRIES = 128
+_PROSPECCION_METRICAS_LITE_CACHE: dict[
+    str, tuple[float, list[dict[str, Any]]]
+] = {}
+_PROSPECCION_METRICAS_LITE_CACHE_LOCK = asyncio.Lock()
 PROSPECTO_QUERIES_CACHE_TTL_SECONDS = 600.0
 PROSPECTO_QUERIES_CACHE_MAX_ENTRIES = 512
 _PROSPECTO_QUERIES_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -39153,8 +39159,8 @@ async def prospeccion_metricas_dashboard(
     if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
         raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
 
-    campaign_rows: list[dict[str, Any]] = []
-    try:
+    async def _load_campaign_rows() -> list[dict[str, Any]]:
+        campaign_rows: list[dict[str, Any]] = []
         campaign_page_size = max(1, min(params.limit, 1000))
         campaign_offset = 0
         while True:
@@ -39170,11 +39176,41 @@ async def prospeccion_metricas_dashboard(
             if not page_rows:
                 break
             campaign_rows.extend(page_rows)
-            if params.lite:
-                break
-            if len(page_rows) < campaign_page_size:
+            if params.lite or len(page_rows) < campaign_page_size:
                 break
             campaign_offset += len(page_rows)
+        return campaign_rows
+
+    try:
+        if not params.lite:
+            campaign_rows = await _load_campaign_rows()
+        else:
+            cache_key = ":".join(
+                [
+                    str(organizacion_id),
+                    str(params.campana_id or ""),
+                    date_from_dt.isoformat() if date_from_dt else "",
+                    date_to_dt.isoformat() if date_to_dt else "",
+                    str(params.limit),
+                ]
+            )
+            async with _PROSPECCION_METRICAS_LITE_CACHE_LOCK:
+                now = time.monotonic()
+                cached = _PROSPECCION_METRICAS_LITE_CACHE.get(cache_key)
+                if cached and now - cached[0] < PROSPECCION_METRICAS_LITE_CACHE_TTL_SECONDS:
+                    campaign_rows = [dict(row) for row in cached[1]]
+                else:
+                    campaign_rows = await _load_campaign_rows()
+                    _PROSPECCION_METRICAS_LITE_CACHE[cache_key] = (
+                        now,
+                        [dict(row) for row in campaign_rows],
+                    )
+                    if len(_PROSPECCION_METRICAS_LITE_CACHE) > PROSPECCION_METRICAS_LITE_CACHE_MAX_ENTRIES:
+                        oldest_key = min(
+                            _PROSPECCION_METRICAS_LITE_CACHE,
+                            key=lambda key: _PROSPECCION_METRICAS_LITE_CACHE[key][0],
+                        )
+                        _PROSPECCION_METRICAS_LITE_CACHE.pop(oldest_key, None)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

@@ -25589,24 +25589,25 @@ class CRMRepository:
 
         if not prospecto_ids:
             return []
-        # Fuente de verdad para UI: vista materializada por query en tiempo real.
-        # Evitamos el RPC cacheado aquí porque puede quedar desfasado por canal.
-        ids_param = ",".join(str(value) for value in prospecto_ids)
-        params = {
-            "select": "prospecto_id,canales,total_envios,ultimo_contacto_en,total_respuestas,respondio,ultima_respuesta_en",
-            "prospecto_id": f"in.({ids_param})",
-            "order": "prospecto_id.asc",
-        }
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/prospeccion_prospecto_contacto_stats",
-            token=usuario_token,
-            params=params,
-        )
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"contact_indicator_list_invalid:{data!r}")
-        return data
+        # La vista agregada recalcula todos los envios y logs del tenant aunque
+        # el panel solo necesite los prospectos de la pagina actual. La RPC
+        # filtra primero por tenant e IDs y evita URLs in(...) grandes.
+        normalized_ids = list(dict.fromkeys(str(value) for value in prospecto_ids))
+        rows: list[dict[str, Any]] = []
+        chunk_size = 100
+        for start in range(0, len(normalized_ids), chunk_size):
+            chunk = normalized_ids[start : start + chunk_size]
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/rpc/prospeccion_contacto_indicadores_por_ids",
+                token=usuario_token,
+                json={"p_prospecto_ids": chunk},
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"contact_indicator_list_invalid:{data!r}")
+            rows.extend(row for row in data if isinstance(row, dict))
+        return rows
 
     async def list_prospecto_audit(
         self,
