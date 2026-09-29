@@ -1689,6 +1689,10 @@ export function ComprasWorkspace({
     () => filteredExistencias.reduce((sum, row) => sum + asNumber(row.stock_disponible), 0),
     [filteredExistencias],
   )
+  const totalStockEnTransito = useMemo(
+    () => filteredExistencias.reduce((sum, row) => sum + asNumber(row.stock_en_transito), 0),
+    [filteredExistencias],
+  )
   const handlePrintInventory = () => {
     setPrintInventoryError("")
     const brandRecord = comprasPrintBrand ?? {}
@@ -5556,7 +5560,7 @@ export function ComprasWorkspace({
         </CardHeader>
         <CardContent className="space-y-4">
           {printInventoryError ? <p role="alert" className="text-sm text-destructive">{printInventoryError}</p> : null}
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-5">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="existencias-almacen">
                 Almacén
@@ -5583,6 +5587,10 @@ export function ComprasWorkspace({
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Stock actual</div>
               <div className="mt-1 text-2xl font-semibold">{totalStockActual.toFixed(3)}</div>
             </div>
+            <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4 dark:border-sky-900 dark:bg-sky-950/30">
+              <div className="text-xs uppercase tracking-wide text-sky-700 dark:text-sky-300">En tránsito</div>
+              <div className="mt-1 text-2xl font-semibold text-sky-800 dark:text-sky-200">{totalStockEnTransito.toFixed(3)}</div>
+            </div>
             <div className="rounded-lg border bg-muted/30 p-4">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Alertas</div>
               <div className="mt-1 text-2xl font-semibold">{alertasStock}</div>
@@ -5597,6 +5605,7 @@ export function ComprasWorkspace({
                   <TableHead>Producto</TableHead>
                   <TableHead>Almacén</TableHead>
                   <TableHead>Actual</TableHead>
+                  <TableHead>En tránsito</TableHead>
                   <TableHead>Reservado</TableHead>
                   <TableHead>Disponible</TableHead>
                   <TableHead>Mínimo</TableHead>
@@ -5607,7 +5616,7 @@ export function ComprasWorkspace({
               <TableBody>
                 {!filteredExistencias.length ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
                       Todavía no hay existencias registradas para este almacén.
                     </TableCell>
                   </TableRow>
@@ -5619,7 +5628,7 @@ export function ComprasWorkspace({
                     const minimo = asNumber(existencia.stock_minimo)
                     const esAlerta = Number.isFinite(minimo) && minimo > 0 && disponible <= minimo
                     return (
-                      <TableRow key={String(existencia.id)}>
+                      <TableRow key={`${String(existencia.almacen_id)}-${String(existencia.catalog_item_id)}`}>
                         <TableCell>
                           <div className="space-y-1">
                             <div className="font-medium">{asString(catalogItem.nombre, "Producto")}</div>
@@ -5628,6 +5637,7 @@ export function ComprasWorkspace({
                         </TableCell>
                         <TableCell>{asString(almacen.nombre, "Almacén")}</TableCell>
                         <TableCell>{asNumber(existencia.stock_actual).toFixed(3)}</TableCell>
+                        <TableCell className="font-medium text-sky-700 dark:text-sky-300">{asNumber(existencia.stock_en_transito).toFixed(3)}</TableCell>
                         <TableCell>{asNumber(existencia.stock_reservado).toFixed(3)}</TableCell>
                         <TableCell>
                           <span className={esAlerta ? "font-semibold text-rose-600" : "font-medium"}>

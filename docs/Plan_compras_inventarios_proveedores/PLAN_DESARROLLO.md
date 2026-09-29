@@ -627,6 +627,15 @@ La recepcion es la unica operacion que genera la entrada fisica: movimiento
 cantidades recibidas. Aprobar o marcar una orden como `en_transito` no debe
 crear movimientos ni permitir la venta de mercancia aun no recibida.
 
+Para que el tenant pueda dar seguimiento desde Inventario, las vistas de
+existencias y las listas de catalogo muestran una columna calculada
+`stock_en_transito`. Esta cantidad se obtiene de las partidas de ordenes en
+estado `aprobada`, `en_transito` o `parcial`, restando lo ya recibido, y solo
+considera `catalog_items.maneja_inventario = true`. No se almacena como
+`stock_actual`, no incrementa `stock_disponible` y no participa en reservas o
+ventas. Cuando se registra una recepcion, la cantidad pendiente disminuye y el
+stock fisico se actualiza por el flujo normal de recepciones.
+
 #### Cambios previstos por capa
 
 - **Base de datos:** provision idempotente del almacen de transito; estado

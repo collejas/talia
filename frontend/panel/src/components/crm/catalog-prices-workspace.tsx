@@ -62,14 +62,16 @@ type CatalogColumnId =
   | "precio_base"
   | "precios_lista"
   | "stock_actual"
+  | "stock_en_transito"
   | "stock_reservado"
   | "stock_disponible";
 
-type Warehouse = { id: string; codigo: string | null; nombre: string; es_principal: boolean };
+type Warehouse = { id: string; codigo: string | null; nombre: string; tipo?: string | null; es_principal: boolean };
 type StockRow = {
   catalog_item_id: string;
   almacen_id: string;
   stock_actual: number;
+  stock_en_transito: number;
   stock_reservado: number;
   stock_disponible: number;
 };
@@ -100,6 +102,7 @@ const COLUMNS: Array<{ id: CatalogColumnId; label: string; initialWidth: number;
   { id: "precio_base", label: "Precio base", initialWidth: 145, minWidth: 120 },
   { id: "precios_lista", label: "Precios por lista", initialWidth: 250, minWidth: 180 },
   { id: "stock_actual", label: "Actual", initialWidth: 115, minWidth: 100 },
+  { id: "stock_en_transito", label: "En tránsito", initialWidth: 125, minWidth: 105 },
   { id: "stock_reservado", label: "Reservado", initialWidth: 125, minWidth: 105 },
   { id: "stock_disponible", label: "Disponible", initialWidth: 125, minWidth: 105 },
 ];
@@ -114,6 +117,7 @@ const DEFAULT_VISIBILITY: Record<CatalogColumnId, boolean> = {
   precio_base: true,
   precios_lista: true,
   stock_actual: true,
+  stock_en_transito: true,
   stock_reservado: true,
   stock_disponible: true,
 };
@@ -409,6 +413,8 @@ function ProductTable({
                   {visibleColumns.map((column) => {
                     const stockValue = column.id === "stock_actual"
                       ? stock?.stock_actual
+                      : column.id === "stock_en_transito"
+                        ? stock?.stock_en_transito
                       : column.id === "stock_reservado"
                         ? stock?.stock_reservado
                         : column.id === "stock_disponible"
@@ -658,6 +664,8 @@ export function CatalogPricesWorkspace({
             if (!item.manejaInventario || !selectedWarehouseId) return ["—"];
             const quantity = column.id === "stock_actual"
               ? stock?.stock_actual
+              : column.id === "stock_en_transito"
+                ? stock?.stock_en_transito
               : column.id === "stock_reservado"
                 ? stock?.stock_reservado
                 : stock?.stock_disponible;
@@ -706,6 +714,8 @@ export function CatalogPricesWorkspace({
         if (!item.manejaInventario || !selectedWarehouseId) return ["—"];
         const quantity = column.id === "stock_actual"
           ? stock?.stock_actual
+          : column.id === "stock_en_transito"
+            ? stock?.stock_en_transito
           : column.id === "stock_reservado"
             ? stock?.stock_reservado
             : stock?.stock_disponible;

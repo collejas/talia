@@ -15822,7 +15822,116 @@ class CRMRepository:
         data = resp.json()
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar existencias: {data!r}")
-        return data
+        incoming = await self.list_inventario_en_transito(
+            organizacion_id=organizacion_id,
+            almacen_id=almacen_id,
+        )
+        return self._merge_inventario_en_transito(data, incoming, organizacion_id=organizacion_id, limit=limit)
+
+    async def list_inventario_en_transito(
+        self,
+        *,
+        organizacion_id: UUID,
+        almacen_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        """Calcula las cantidades pendientes de recibir en el almacén en tránsito."""
+        transit_warehouse = await self.get_almacen_transito(organizacion_id=organizacion_id)
+        if not transit_warehouse:
+            return []
+        transit_id = UUID(str(transit_warehouse["id"]))
+        if almacen_id is not None and almacen_id != transit_id:
+            return []
+
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "almacen_destino_id": f"eq.{transit_id}",
+            "estado": "in.(aprobada,en_transito,parcial)",
+            "order": "fecha_emision.asc",
+            "limit": "5000",
+            "select": (
+                "id,folio,estado,almacen_destino_id,"
+                "items:ordenes_compra_items(catalog_item_id,cantidad_solicitada,cantidad_recibida,"
+                "catalog_item:catalog_items(id,slug,nombre,codigo,unidad,activo,maneja_inventario,activo_compra))"
+            ),
+        }
+        resp = await self._request("GET", "/rest/v1/ordenes_compra", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar compras en tránsito: {data!r}")
+
+        pending_by_item: dict[str, Decimal] = defaultdict(Decimal)
+        catalog_by_item: dict[str, dict[str, Any]] = {}
+        for order in data:
+            if not isinstance(order, dict):
+                continue
+            for item in order.get("items") or []:
+                if not isinstance(item, dict):
+                    continue
+                catalog_item = item.get("catalog_item")
+                if not isinstance(catalog_item, dict) or not catalog_item.get("maneja_inventario"):
+                    continue
+                catalog_item_id = item.get("catalog_item_id")
+                if not catalog_item_id:
+                    continue
+                pending = Decimal(str(item.get("cantidad_solicitada") or 0)) - Decimal(str(item.get("cantidad_recibida") or 0))
+                if pending <= 0:
+                    continue
+                item_key = str(catalog_item_id)
+                pending_by_item[item_key] += pending
+                catalog_by_item[item_key] = catalog_item
+
+        return [
+            {
+                "catalog_item_id": UUID(item_id),
+                "almacen_id": transit_id,
+                "stock_en_transito": float(quantity),
+                "catalog_item": catalog_by_item[item_id],
+                "almacen": transit_warehouse,
+            }
+            for item_id, quantity in pending_by_item.items()
+            if quantity > 0
+        ]
+
+    @staticmethod
+    def _merge_inventario_en_transito(
+        rows: list[dict[str, Any]],
+        incoming: list[dict[str, Any]],
+        *,
+        organizacion_id: UUID,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        incoming_by_key = {
+            (str(row.get("catalog_item_id")), str(row.get("almacen_id"))): row
+            for row in incoming
+        }
+        merged: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for row in rows:
+            current = dict(row)
+            key = (str(current.get("catalog_item_id")), str(current.get("almacen_id")))
+            current["stock_en_transito"] = float((incoming_by_key.pop(key, {}) or {}).get("stock_en_transito") or 0)
+            merged.append(current)
+            seen.add(key)
+        for key, row in incoming_by_key.items():
+            merged.append({
+                "id": None,
+                "organizacion_id": organizacion_id,
+                "catalog_item_id": row["catalog_item_id"],
+                "almacen_id": row["almacen_id"],
+                "stock_actual": 0,
+                "stock_reservado": 0,
+                "stock_disponible": 0,
+                "stock_en_transito": row["stock_en_transito"],
+                "stock_minimo": None,
+                "stock_objetivo": None,
+                "costo_ultimo": None,
+                "costo_promedio": None,
+                "creado_en": None,
+                "actualizado_en": None,
+                "catalog_item": row.get("catalog_item"),
+                "almacen": row.get("almacen"),
+            })
+        return merged[: max(1, min(limit, 5000))]
 
     async def list_catalog_price_inventory(
         self,
@@ -15854,7 +15963,11 @@ class CRMRepository:
             if len(data) < current_limit:
                 break
             offset += len(data)
-        return rows
+        incoming = await self.list_inventario_en_transito(
+            organizacion_id=organizacion_id,
+            almacen_id=almacen_id,
+        )
+        return self._merge_inventario_en_transito(rows, incoming, organizacion_id=organizacion_id, limit=limit)
 
     async def get_inventario_existencia(
         self,

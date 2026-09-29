@@ -16328,19 +16328,20 @@ class CRMAgenteAduanalUpdate(BaseModel):
 
 
 class CRMInventarioExistencia(BaseModel):
-    id: UUID
+    id: UUID | None = None
     organizacion_id: UUID
     catalog_item_id: UUID
     almacen_id: UUID
     stock_actual: float
     stock_reservado: float
     stock_disponible: float
+    stock_en_transito: float = 0
     stock_minimo: float | None = None
     stock_objetivo: float | None = None
     costo_ultimo: float | None = None
     costo_promedio: float | None = None
-    creado_en: datetime
-    actualizado_en: datetime
+    creado_en: datetime | None = None
+    actualizado_en: datetime | None = None
     catalog_item: dict[str, Any] | None = None
     almacen: dict[str, Any] | None = None
 
@@ -22620,8 +22621,11 @@ async def listar_existencias_catalogo_precios(
                 raise HTTPException(status_code=404, detail="almacen_no_encontrado")
         else:
             selected_warehouse = next(
-                (warehouse for warehouse in warehouses if warehouse.get("es_principal")),
-                warehouses[0] if warehouses else None,
+                (warehouse for warehouse in warehouses if warehouse.get("tipo") == "transito"),
+                next(
+                    (warehouse for warehouse in warehouses if warehouse.get("es_principal")),
+                    warehouses[0] if warehouses else None,
+                ),
             )
         stock_rows = await repo.list_catalog_price_inventory(
             organizacion_id=organizacion_id,
@@ -22638,6 +22642,7 @@ async def listar_existencias_catalogo_precios(
                 "id": warehouse.get("id"),
                 "codigo": warehouse.get("codigo"),
                 "nombre": warehouse.get("nombre"),
+                "tipo": warehouse.get("tipo"),
                 "es_principal": bool(warehouse.get("es_principal")),
             }
             for warehouse in warehouses
@@ -22650,6 +22655,7 @@ async def listar_existencias_catalogo_precios(
                 "stock_actual": float(row.get("stock_actual") or 0),
                 "stock_reservado": float(row.get("stock_reservado") or 0),
                 "stock_disponible": float(row.get("stock_disponible") or 0),
+                "stock_en_transito": float(row.get("stock_en_transito") or 0),
             }
             for row in stock_rows
         ],
