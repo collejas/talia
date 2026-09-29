@@ -11,7 +11,6 @@ import type { EmbudoCard, EmbudoStage } from "@/lib/embudo/data";
 import { buildWhatsappCtaTooltip, resolveWhatsappCtaAttribution } from "@/lib/embudo/helpers";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   Drawer,
   DrawerContent,
@@ -21,6 +20,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { DateTimeCalendarPicker } from "@/components/ui/datetime-calendar-picker";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -53,7 +53,6 @@ import { NoteAttachments } from "@/components/crm/note-attachments";
 import { uploadNoteAttachment } from "@/lib/crm/note-attachments";
 import {
   DEFAULT_QUOTE_VENDOR_SETTINGS,
-  buildQuoteVendorSettingsPayload,
   extractQuoteVendorSettings,
   type QuoteVendorSettings,
 } from "@/lib/settings/quote-vendors";
@@ -76,7 +75,6 @@ import {
   IconMail,
   IconMessageCircle,
   IconPaperclip,
-  IconPlus,
   IconRobot,
   IconSearch,
   IconTargetArrow,
@@ -300,13 +298,6 @@ type LeadQuoteEntry = {
   subtotal: number | null;
   taxes: number | null;
   validUntil: string | null;
-  paymentCondition: string | null;
-  creditDays: number | null;
-  advancePercent: number | null;
-  allowsPartialDelivery: boolean;
-  promisedDeliveryDate: string | null;
-  deliveryAddress: string | null;
-  commercialNotes: string | null;
   metadata: Record<string, unknown> | null;
   items: LeadQuoteItemEntry[] | null;
   pedido: LeadQuoteSalesOrder | null;
@@ -1095,13 +1086,6 @@ export function LeadDrawer({
   const [quoteValidoHasta, setQuoteValidoHasta] = useState<string>(() =>
     formatDateInput(addDays(new Date(), DEFAULT_QUOTE_VENDOR_SETTINGS.validityDays)),
   );
-  const [quotePaymentCondition, setQuotePaymentCondition] = useState("contado");
-  const [quoteCreditDays, setQuoteCreditDays] = useState("");
-  const [quoteAdvancePercent, setQuoteAdvancePercent] = useState("");
-  const [quotePartialDelivery, setQuotePartialDelivery] = useState(false);
-  const [quoteDeliveryDate, setQuoteDeliveryDate] = useState("");
-  const [quoteDeliveryAddress, setQuoteDeliveryAddress] = useState("");
-  const [quoteCommercialNotes, setQuoteCommercialNotes] = useState("");
   const [quoteFolio, setQuoteFolio] = useState("");
   const [quoteItems, setQuoteItems] = useState<QuoteItemForm[]>(() => []);
   const computedQuoteTotals = useMemo(() => computeQuoteTotals(quoteItems), [quoteItems]);
@@ -1361,13 +1345,6 @@ export function LeadDrawer({
   useEffect(() => {
     setQuoteItems([createQuoteItemForm({ moneda: card?.moneda ?? "MXN" })]);
     setCatalogSearch("");
-    setQuotePaymentCondition("contado");
-    setQuoteCreditDays("");
-    setQuoteAdvancePercent("");
-    setQuotePartialDelivery(false);
-    setQuoteDeliveryDate("");
-    setQuoteDeliveryAddress("");
-    setQuoteCommercialNotes("");
   }, [card?.oportunidadId, card?.moneda]);
 
   useEffect(() => {
@@ -2619,9 +2596,6 @@ export function LeadDrawer({
         latestQuote?.taxes != null && Number.isFinite(latestQuote.taxes) ? String(latestQuote.taxes) : "";
       const validUntil = formatDateInput(addDays(new Date(), quoteValidityDays));
       const initialItems = quoteEntryToItemForms(latestQuote, defaultDescription, defaultMoneda);
-      const latestQuoteVendorSettings = isRecord(latestQuote?.metadata)
-        ? latestQuote.metadata.quote_vendedores ?? null
-        : null;
       setQuoteChannel(channel);
       setQuoteTitle(defaultTitle);
       setQuoteDescription(defaultDescription);
@@ -2635,9 +2609,6 @@ export function LeadDrawer({
       setQuoteMoneda(defaultMoneda);
       setQuoteValidoHasta(validUntil);
       setQuoteFolio("");
-      if (isRecord(latestQuoteVendorSettings)) {
-        setQuoteVendorSettings(extractQuoteVendorSettings(latestQuoteVendorSettings));
-      }
       setQuoteItems(initialItems);
       setCatalogSearch("");
       setQuoteCatalogPickerOpen(false);
@@ -2662,9 +2633,6 @@ export function LeadDrawer({
               if (typeof draft.quoteTotal === "string") setQuoteTotal(draft.quoteTotal);
               if (typeof draft.quoteMoneda === "string") setQuoteMoneda(draft.quoteMoneda);
               if (typeof draft.quoteValidoHasta === "string") setQuoteValidoHasta(draft.quoteValidoHasta);
-              if (isRecord(draft.quoteVendorSettings)) {
-                setQuoteVendorSettings(extractQuoteVendorSettings(draft.quoteVendorSettings));
-              }
               if (Array.isArray(draft.quoteItems)) {
                 const restoredItems = draft.quoteItems
                   .filter(isRecord)
@@ -2874,51 +2842,7 @@ export function LeadDrawer({
   const quoteRecentHistory = quotesState.data.slice(0, 4);
   const quoteCompactInputClass =
     "h-8 border-0 bg-muted/35 px-2 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
-  const quoteCompactTextareaClass =
-    "min-h-[88px] border-0 bg-muted/35 px-2 py-1.5 shadow-none ring-0 focus-visible:ring-0 focus-visible:border-0";
-  const quoteVendorSettingsSnapshot = useMemo(
-    () => buildQuoteVendorSettingsPayload(quoteVendorSettings),
-    [quoteVendorSettings],
-  );
   const quoteActionsDisabled = quotePending || quoteVendorSettingsLoading || Boolean(quoteDiscountWarning);
-
-  const handleQuoteVendorConditionChange = (
-    index: number,
-    field: "subtitle" | "description",
-    value: string,
-  ) => {
-    setQuoteVendorSettings((current) => ({
-      ...current,
-      conditions: current.conditions.map((item, position) =>
-        position === index ? { ...item, [field]: value } : item,
-      ),
-    }));
-  };
-
-  const handleAddQuoteVendorCondition = () => {
-    setQuoteVendorSettings((current) => ({
-      ...current,
-      conditions: [
-        ...current.conditions,
-        { subtitle: "", description: "" },
-      ],
-    }));
-  };
-
-  const handleRemoveQuoteVendorCondition = (index: number) => {
-    setQuoteVendorSettings((current) => {
-      if (current.conditions.length <= 1) {
-        return {
-          ...current,
-          conditions: [{ subtitle: "", description: "" }],
-        };
-      }
-      return {
-        ...current,
-        conditions: current.conditions.filter((_, position) => position !== index),
-      };
-    });
-  };
 
   const buildQuoteBasePayload = useCallback((folioOverride?: string | null) => {
     const subtotalValue = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
@@ -2965,17 +2889,7 @@ export function LeadDrawer({
       total: totalValue ?? null,
       moneda: (quoteMoneda || "MXN").trim().toUpperCase(),
       valido_hasta: quoteValidoHasta?.trim() || null,
-      condicion_pago: quotePaymentCondition,
-      dias_credito: quotePaymentCondition === "credito" ? parseNumberInput(quoteCreditDays) : null,
-      anticipo_porcentaje: parseNumberInput(quoteAdvancePercent),
-      permite_entrega_parcial: quotePartialDelivery,
-      fecha_entrega_comprometida: quoteDeliveryDate || null,
-      domicilio_entrega: quoteDeliveryAddress.trim() || null,
-      observaciones_comerciales: quoteCommercialNotes.trim() || null,
       folio: (folioOverride ?? quoteFolio).trim() || null,
-      metadatos: {
-        quote_vendedores: quoteVendorSettingsSnapshot,
-      },
     };
   }, [
     computedQuoteTotals?.subtotal,
@@ -2989,15 +2903,7 @@ export function LeadDrawer({
     quoteTitle,
     quoteTotal,
     quoteValidoHasta,
-    quotePaymentCondition,
-    quoteCreditDays,
-    quoteAdvancePercent,
-    quotePartialDelivery,
-    quoteDeliveryDate,
-    quoteDeliveryAddress,
-    quoteCommercialNotes,
     quoteFolio,
-    quoteVendorSettingsSnapshot,
   ]);
 
   const buildQuotePayload = (folioOverride?: string | null) => {
@@ -5023,26 +4929,6 @@ export function LeadDrawer({
                     </div>
                   </div>
 
-                  <div className="space-y-2 rounded-md border border-border/50 p-3">
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground">Condiciones comerciales</h4>
-                      <p className="text-[11px] text-muted-foreground">Quedarán guardadas en la cotización y copiadas al pedido confirmado.</p>
-                    </div>
-                    <div className="grid gap-2 md:grid-cols-4">
-                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">Condición de pago
-                        <select value={quotePaymentCondition} onChange={(event) => setQuotePaymentCondition(event.target.value)} disabled={quotePending} className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground">
-                          <option value="contado">Contado</option><option value="credito">Crédito</option><option value="anticipo_y_saldo">Anticipo y saldo</option><option value="parcialidades">Parcialidades</option><option value="otro">Otra</option>
-                        </select>
-                      </label>
-                      {quotePaymentCondition === "credito" ? <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">Días de crédito<Input type="number" min="1" max="365" value={quoteCreditDays} onChange={(event) => setQuoteCreditDays(event.target.value)} disabled={quotePending} className={quoteCompactInputClass} /></label> : null}
-                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">Anticipo (%)<Input type="number" min="0" max="100" step="0.01" value={quoteAdvancePercent} onChange={(event) => setQuoteAdvancePercent(event.target.value)} disabled={quotePending} placeholder="Opcional" className={quoteCompactInputClass} /></label>
-                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">Fecha prometida de entrega<Input type="date" value={quoteDeliveryDate} onChange={(event) => setQuoteDeliveryDate(event.target.value)} disabled={quotePending} className={quoteCompactInputClass} /></label>
-                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground md:col-span-2">Domicilio de entrega<Input value={quoteDeliveryAddress} onChange={(event) => setQuoteDeliveryAddress(event.target.value)} disabled={quotePending} maxLength={2000} placeholder="Domicilio acordado para esta cotización" className={quoteCompactInputClass} /></label>
-                      <label className="flex items-center gap-2 pt-5 text-xs text-foreground"><input type="checkbox" checked={quotePartialDelivery} onChange={(event) => setQuotePartialDelivery(event.target.checked)} disabled={quotePending} />Se permiten entregas parciales</label>
-                      <label className="grid gap-1 text-[11px] font-medium text-muted-foreground md:col-span-4">Observaciones comerciales<Input value={quoteCommercialNotes} onChange={(event) => setQuoteCommercialNotes(event.target.value)} disabled={quotePending} maxLength={4000} placeholder="Instrucciones acordadas sobre pago o entrega" className={quoteCompactInputClass} /></label>
-                    </div>
-                  </div>
-
                   <div className="grid gap-3 lg:grid-cols-2">
                     <div className="rounded-md bg-muted/20 p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
@@ -5379,149 +5265,11 @@ export function LeadDrawer({
                   </div>
 
                   <div className="space-y-3 pb-2">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <h4 className="text-sm font-semibold text-foreground">Condiciones comerciales</h4>
-                          <p className="text-[11px] text-muted-foreground">
-                            Define la base estructurada que se guardará en la cotización.
-                          </p>
-                        </div>
-                        {quoteVendorSettingsLoading ? (
-                          <span className="text-[11px] text-muted-foreground">Cargando base...</span>
-                        ) : null}
-                      </div>
-                      <div className="space-y-3 rounded-md border border-border/40 bg-muted/20 p-3">
-                        <div className="space-y-2">
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Título del bloque
-                          </Label>
-                          <Input
-                            value={quoteVendorSettings.conditionsTitle}
-                            onChange={(event) =>
-                              setQuoteVendorSettings((current) => ({
-                                ...current,
-                                conditionsTitle: event.target.value,
-                              }))
-                            }
-                            disabled={quotePending || quoteVendorSettingsLoading}
-                            className={quoteCompactInputClass}
-                            placeholder="Condiciones comerciales"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                              Subtítulos y descripciones
-                            </Label>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-7 gap-1 px-2 text-[11px]"
-                              onClick={handleAddQuoteVendorCondition}
-                              disabled={quotePending || quoteVendorSettingsLoading}
-                            >
-                              <IconPlus className="size-3.5" />
-                              Agregar
-                            </Button>
-                          </div>
-                          <div className="space-y-2">
-                            {quoteVendorSettings.conditions.map((item, index) => (
-                              <div
-                                key={`quote-vendor-condition-${index}`}
-                                className="grid gap-2 rounded-md border border-border/30 bg-background p-2 md:grid-cols-[180px_minmax(0,1fr)_auto]"
-                              >
-                                <div className="space-y-1.5">
-                                  <Label className="text-[11px] text-muted-foreground">Subtítulo</Label>
-                                  <Input
-                                    value={item.subtitle}
-                                    onChange={(event) =>
-                                      handleQuoteVendorConditionChange(index, "subtitle", event.target.value)
-                                    }
-                                    disabled={quotePending || quoteVendorSettingsLoading}
-                                    placeholder="Vigencia"
-                                    className={quoteCompactInputClass}
-                                  />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <Label className="text-[11px] text-muted-foreground">Descripción</Label>
-                                  <Textarea
-                                    value={item.description}
-                                    onChange={(event) =>
-                                      handleQuoteVendorConditionChange(index, "description", event.target.value)
-                                    }
-                                    disabled={quotePending || quoteVendorSettingsLoading}
-                                    rows={2}
-                                    placeholder="Detalle de la condición."
-                                    className={quoteCompactTextareaClass}
-                                  />
-                                </div>
-                                <div className="flex items-end md:justify-end">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-8"
-                                    onClick={() => handleRemoveQuoteVendorCondition(index)}
-                                    disabled={quotePending || quoteVendorSettingsLoading}
-                                  >
-                                    <IconTrash className="size-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                    <div className="rounded-md border border-border/40 bg-muted/20 p-3 text-xs text-muted-foreground">
+                      Las condiciones comerciales, notas y vigencia se toman de la configuración de
+                      <span className="font-medium text-foreground"> Ajustes de cuenta → Cotizaciones Vendedores</span>.
+                      Para modificarlas, actualiza esa sección antes de generar la cotización.
                     </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <h4 className="text-sm font-semibold text-foreground">Notas y anexos</h4>
-                          <p className="text-[11px] text-muted-foreground">
-                            La nota se guarda junto con la cotización y los anexos siguen disponibles.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-3">
-                        <div className="space-y-2">
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Título de notas
-                          </Label>
-                          <Input
-                            value={quoteVendorSettings.notesTitle}
-                            onChange={(event) =>
-                              setQuoteVendorSettings((current) => ({
-                                ...current,
-                                notesTitle: event.target.value,
-                              }))
-                            }
-                            disabled={quotePending || quoteVendorSettingsLoading}
-                            className={quoteCompactInputClass}
-                            placeholder="Notas"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Descripción de notas
-                          </Label>
-                          <Textarea
-                            value={quoteVendorSettings.notesBody}
-                            onChange={(event) =>
-                              setQuoteVendorSettings((current) => ({
-                                ...current,
-                                notesBody: event.target.value,
-                              }))
-                            }
-                            disabled={quotePending || quoteVendorSettingsLoading}
-                            rows={3}
-                            placeholder="Captura aquí las notas de apoyo."
-                            className={quoteCompactTextareaClass}
-                          />
-                        </div>
-                      </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
                           type="button"
@@ -5580,7 +5328,6 @@ export function LeadDrawer({
                       ) : null}
                     </div>
                   </div>
-                </div>
               </ScrollArea>
 
               <aside className="border-t border-border/40 bg-muted/15 lg:border-l lg:border-t-0">
@@ -6966,13 +6713,6 @@ function mapQuoteEntry(input: unknown): LeadQuoteEntry {
     subtotal: toNumber(row.subtotal),
     taxes: toNumber(row.impuestos),
     validUntil: typeof row.valido_hasta === "string" ? row.valido_hasta : null,
-    paymentCondition: typeof row.condicion_pago === "string" ? row.condicion_pago : null,
-    creditDays: typeof row.dias_credito === "number" ? row.dias_credito : null,
-    advancePercent: toNumber(row.anticipo_porcentaje),
-    allowsPartialDelivery: row.permite_entrega_parcial === true,
-    promisedDeliveryDate: typeof row.fecha_entrega_comprometida === "string" ? row.fecha_entrega_comprometida : null,
-    deliveryAddress: typeof row.domicilio_entrega === "string" ? row.domicilio_entrega : null,
-    commercialNotes: typeof row.observaciones_comerciales === "string" ? row.observaciones_comerciales : null,
     metadata: metadataRecord,
     items: Array.isArray(row.items)
       ? (row.items as unknown[])

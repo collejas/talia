@@ -495,8 +495,11 @@ La primera version del traspaso por areas se implemento y desplego el
    permite entrega parcial; de otro modo bloquea liberar.
 4. **Almacen — Surtidos:** recibe solo pedidos aprobados y liberados; registra
    entregas parciales o totales.
-5. **Implementado — condiciones y evidencia:** las cotizaciones guardan
-   condiciones comerciales estructuradas y el pedido conserva su snapshot. La
+5. **Implementado — configuración de cotización y evidencia:** las cotizaciones
+   usan la base de condiciones comerciales, notas y vigencia configurada en
+   `settings/account` → **Cotizaciones Vendedores**; ya no capturan datos
+   operativos de pago o entrega. Los datos operativos que correspondan al
+   compromiso se conservan en el pedido para su revisión administrativa. La
    evidencia admite OC, cotizacion firmada, correo, WhatsApp, contrato,
    confirmacion verbal u otro medio; puede guardar referencia/observaciones y
    adjuntar PDF, JPG o PNG. Solo la OC validada activa reserva anticipada.

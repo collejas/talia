@@ -4346,7 +4346,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "oportunidad_id": f"eq.{oportunidad_id}",
             "order": "creado_en.desc",
-            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
             "items.order": "orden.asc,id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
@@ -4408,7 +4408,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "id": f"eq.{quote_id}",
             "limit": "1",
-            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
             "items.order": "orden.asc,id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
@@ -5063,13 +5063,6 @@ class CRMRepository:
         total: float | None,
         moneda: str,
         valida_hasta: str | None,
-        condicion_pago: str | None,
-        dias_credito: int | None,
-        anticipo_porcentaje: float | None,
-        permite_entrega_parcial: bool,
-        fecha_entrega_comprometida: str | None,
-        domicilio_entrega: str | None,
-        observaciones_comerciales: str | None,
         metadata: dict[str, Any],
         items: list[dict[str, Any]],
         usuario_id: UUID | None = None,
@@ -5084,13 +5077,6 @@ class CRMRepository:
             "total": total,
             "moneda": moneda,
             "valida_hasta": valida_hasta,
-            "condicion_pago": condicion_pago,
-            "dias_credito": dias_credito,
-            "anticipo_porcentaje": anticipo_porcentaje,
-            "permite_entrega_parcial": permite_entrega_parcial,
-            "fecha_entrega_comprometida": fecha_entrega_comprometida,
-            "domicilio_entrega": domicilio_entrega,
-            "observaciones_comerciales": observaciones_comerciales,
             "metadata": metadata,
         }
         if usuario_id:

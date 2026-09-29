@@ -1,5 +1,28 @@
 # Changelog — Clientes y vendedores
 
+## 2026-09-29 — Cotización simplificada y corrección de envío
+
+- Se retiraron del flujo y del contrato de `cotizaciones` los campos
+  `condicion_pago`, `dias_credito`, `anticipo_porcentaje`,
+  `permite_entrega_parcial`, `fecha_entrega_comprometida`, `domicilio_entrega`
+  y `observaciones_comerciales`.
+- El formulario del vendedor ya no solicita esos datos ni los envía al crear o
+  enviar una cotización. La vista también dejó de permitir editar dentro de la
+  cotización las condiciones/notas de plantilla.
+- El PDF conserva la vigencia y toma condiciones comerciales y notas desde
+  `settings/account` → **Cotizaciones Vendedores**. Ya no agrega el bloque
+  estructurado con datos operativos capturados en la cotización.
+- Se conservaron las columnas homónimas de `pedidos_venta` para la revisión
+  administrativa y se ajustó el trigger para que ya no intente copiar datos
+  desde `cotizaciones`.
+- Se aplicó en Supabase la migración
+  `20260929_220000_remove_quote_operational_fields.sql`. La cotización del
+  tenant `00000000-0000-0000-0000-000000000001` quedó sin esas columnas; existen
+  24 cotizaciones en el tenant y los pedidos conservaron su estructura.
+- Validaciones: `py_compile`, `git diff --check`, ESLint y `tsc --noEmit` sin
+  errores. API y panel quedaron activos; `/api/health` respondió HTTP 200 y el
+  panel quedó apuntando al release `20260929_220450`.
+
 ## 2026-09-27 — Consulta e impresión de pedidos autorizados
 
 - Se agregó una pestaña **Órdenes autorizadas** a `Ventas > Órdenes de venta`, con paginación,
