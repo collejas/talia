@@ -2283,9 +2283,22 @@ function ProspectosView() {
       const checklist = data.checklist ?? {}
       setValidationSummary({
         total_prospectos: Number(checklist.total_prospectos) || 0,
+        telefonos_verificados: Number(checklist.telefonos_verificados) || 0,
         telefonos_pendientes: Number(checklist.telefonos_pendientes) || 0,
+        telefonos_errores: Number(checklist.telefonos_errores) || 0,
+        telefonos_sin_numero: Number(checklist.telefonos_sin_numero) || 0,
+        correos_validos: Number(checklist.correos_validos) || 0,
+        correos_invalidos: Number(checklist.correos_invalidos) || 0,
+        correos_dudosos: Number(checklist.correos_dudosos) || 0,
         correos_pendientes: Number(checklist.correos_pendientes) || 0,
+        correos_errores: Number(checklist.correos_errores) || 0,
+        correos_sin_email: Number(checklist.correos_sin_email) || 0,
+        sitios_web_validos: Number(checklist.sitios_web_validos) || 0,
+        sitios_web_invalidos: Number(checklist.sitios_web_invalidos) || 0,
+        sitios_web_dudosos: Number(checklist.sitios_web_dudosos) || 0,
         sitios_web_pendientes: Number(checklist.sitios_web_pendientes) || 0,
+        sitios_web_errores: Number(checklist.sitios_web_errores) || 0,
+        sitios_web_sin_sitio: Number(checklist.sitios_web_sin_sitio) || 0,
       })
     } catch {
       setValidationSummary(null)

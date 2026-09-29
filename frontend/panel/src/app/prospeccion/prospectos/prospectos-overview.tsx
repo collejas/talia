@@ -31,9 +31,22 @@ export type ProspectosFlowStep = {
 
 export type ProspectosValidationSummary = {
   total_prospectos: number
+  telefonos_verificados: number
   telefonos_pendientes: number
+  telefonos_errores: number
+  telefonos_sin_numero: number
+  correos_validos: number
+  correos_invalidos: number
+  correos_dudosos: number
   correos_pendientes: number
+  correos_errores: number
+  correos_sin_email: number
+  sitios_web_validos: number
+  sitios_web_invalidos: number
+  sitios_web_dudosos: number
   sitios_web_pendientes: number
+  sitios_web_errores: number
+  sitios_web_sin_sitio: number
 }
 
 type ProspectosFilterSectionProps = {
@@ -69,9 +82,37 @@ type ProspectosValidationSummaryProps = {
 
 export function ProspectosValidationSummary({ summary, loading }: ProspectosValidationSummaryProps) {
   const metrics = [
-    { label: "teléfonos por verificar", value: summary?.telefonos_pendientes },
-    { label: "correos por validar", value: summary?.correos_pendientes },
-    { label: "sitios web por verificar", value: summary?.sitios_web_pendientes },
+    {
+      title: "Teléfonos",
+      counts: [
+        { label: "Verificados", value: summary?.telefonos_verificados, tone: "text-emerald-700 dark:text-emerald-300" },
+        { label: "Pendientes", value: summary?.telefonos_pendientes, tone: "text-amber-700 dark:text-amber-300" },
+        { label: "Errores", value: summary?.telefonos_errores, tone: "text-rose-700 dark:text-rose-300" },
+        { label: "Sin dato", value: summary?.telefonos_sin_numero, tone: "text-muted-foreground" },
+      ],
+    },
+    {
+      title: "Correos",
+      counts: [
+        { label: "Válidos", value: summary?.correos_validos, tone: "text-emerald-700 dark:text-emerald-300" },
+        { label: "Pendientes", value: summary?.correos_pendientes, tone: "text-amber-700 dark:text-amber-300" },
+        { label: "Inválidos", value: summary?.correos_invalidos, tone: "text-rose-700 dark:text-rose-300" },
+        { label: "Dudosos", value: summary?.correos_dudosos, tone: "text-orange-700 dark:text-orange-300" },
+        { label: "Errores", value: summary?.correos_errores, tone: "text-rose-700 dark:text-rose-300" },
+        { label: "Sin dato", value: summary?.correos_sin_email, tone: "text-muted-foreground" },
+      ],
+    },
+    {
+      title: "Sitios web",
+      counts: [
+        { label: "Válidos", value: summary?.sitios_web_validos, tone: "text-emerald-700 dark:text-emerald-300" },
+        { label: "Pendientes", value: summary?.sitios_web_pendientes, tone: "text-amber-700 dark:text-amber-300" },
+        { label: "Inválidos", value: summary?.sitios_web_invalidos, tone: "text-rose-700 dark:text-rose-300" },
+        { label: "Dudosos", value: summary?.sitios_web_dudosos, tone: "text-orange-700 dark:text-orange-300" },
+        { label: "Errores", value: summary?.sitios_web_errores, tone: "text-rose-700 dark:text-rose-300" },
+        { label: "Sin dato", value: summary?.sitios_web_sin_sitio, tone: "text-muted-foreground" },
+      ],
+    },
   ]
 
   return (
@@ -92,12 +133,23 @@ export function ProspectosValidationSummary({ summary, loading }: ProspectosVali
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-3">
         {metrics.map((metric) => (
-          <div key={metric.label} className="rounded-xl border bg-background/70 p-3">
-            <p className="text-sm text-muted-foreground">Faltan</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">
-              {loading ? "…" : typeof metric.value === "number" ? metric.value.toLocaleString("es-MX") : "—"}
-            </p>
-            <p className="text-xs font-medium text-foreground/75">{metric.label}</p>
+          <div key={metric.title} className="rounded-xl border bg-background/70 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/80">{metric.title}</p>
+              <span className="text-[9px] text-muted-foreground">Por estado</span>
+            </div>
+            <div className="mt-1 grid grid-cols-3 gap-0.5">
+              {metric.counts.map((count) => (
+                <div key={count.label} className="min-w-0 rounded-md border bg-card/70 px-1 py-0.5 text-center">
+                  <p className={cn("text-[11px] font-semibold leading-3 tabular-nums", count.tone)}>
+                    {loading ? "…" : typeof count.value === "number" ? count.value.toLocaleString("es-MX") : "—"}
+                  </p>
+                  <p className="truncate text-[8px] leading-3 text-muted-foreground" title={count.label}>
+                    {count.label}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
