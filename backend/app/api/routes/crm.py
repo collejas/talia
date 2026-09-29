@@ -9247,7 +9247,7 @@ async def _run_prospecto_website_lookup(
         raw_website = _clean_text(prospecto.get("website"))
         normalized_target = _normalize_scraper_target(raw_website)
         checked_at = datetime.now(UTC).isoformat()
-        if not normalized_target:
+        if not raw_website:
             updates = {
                 "website_lookup_status": "sin_sitio",
                 "website_lookup_error": None,
@@ -9269,6 +9269,43 @@ async def _run_prospecto_website_lookup(
                 "prospecto_id": str(prospecto_id),
                 "website": raw_website,
                 "website_lookup_status": updated.get("website_lookup_status") or "sin_sitio",
+            }
+
+        if not normalized_target:
+            updates = {
+                "website_lookup_status": "invalido",
+                "website_lookup_error": "url_invalida",
+                "website_lookup_checked_en": checked_at,
+                "website_http_status": None,
+                "website_final_url": None,
+                "website_dns_ok": False,
+                "website_reachable": False,
+                "website_functional": False,
+                "website_tls_ok": None,
+            }
+            try:
+                updated = await repo.update_prospecto(
+                    usuario_token=user_token,
+                    prospecto_id=UUID(str(prospecto_id)),
+                    payload=updates,
+                )
+            except Exception as exc:  # pragma: no cover - depende de red/BD
+                logger.exception(
+                    "prospeccion.website_lookup.invalid_url_persist_failed",
+                    extra={"prospecto_id": str(prospecto_id)},
+                )
+                return {
+                    "kind": "failed",
+                    "prospecto_id": str(prospecto_id),
+                    "error": f"persist_failed: {exc}",
+                }
+            return {
+                "kind": "processed",
+                "prospecto_id": str(prospecto_id),
+                "website": raw_website,
+                "website_lookup_status": updated.get("website_lookup_status") or "invalido",
+                "website_http_status": updated.get("website_http_status"),
+                "website_final_url": updated.get("website_final_url"),
             }
 
         base_url, host = normalized_target
@@ -9410,12 +9447,26 @@ def _normalize_scraper_target(value: Any) -> tuple[str, str] | None:
         parsed = urlparse(candidate)
     except ValueError:
         return None
-    host = parsed.netloc or ""
+    host = parsed.hostname or ""
     if not host:
+        return None
+    # Evita enviar a DNS/HTTP valores que no son hosts válidos. En particular,
+    # algunos resultados de prospección contienen nombres comerciales con
+    # espacios o dominios con etiquetas vacías (por ejemplo `dominio..mx`).
+    # Esos valores deben quedar como `invalido` y no romper la tarea completa.
+    host = host.strip().lower()
+    if (
+        any(char.isspace() or ord(char) < 32 for char in host)
+        or ".." in host
+        or host.startswith(".")
+        or host.endswith(".")
+        or any(not label or len(label) > 63 for label in host.split("."))
+        or not re.fullmatch(r"[a-z0-9.-]+", host)
+    ):
         return None
     scheme = parsed.scheme if parsed.scheme in {"http", "https"} else "https"
     base_url = f"{scheme}://{host}"
-    return base_url, host.lower()
+    return base_url, host
 
 
 def _describe_prospeccion_source(row: Mapping[str, Any]) -> str:

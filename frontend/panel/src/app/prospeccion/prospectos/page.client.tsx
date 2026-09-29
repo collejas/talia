@@ -2825,6 +2825,7 @@ function ProspectosView() {
     try {
       const response = await verificarProspectos({
         prospecto_ids: selectedIds,
+        reintentar: true,
       })
       applyLookupUpdates(response.detalles ?? [])
       setVerificationDialog({
@@ -2861,6 +2862,7 @@ function ProspectosView() {
     try {
       const response = await verificarCorreosProspectos({
         prospecto_ids: selectedIds,
+        reintentar: true,
         check_smtp: true,
       })
       applyLookupUpdates(
@@ -2905,6 +2907,7 @@ function ProspectosView() {
     try {
       const response = await verificarSitiosWebProspectos({
         prospecto_ids: selectedIds,
+        reintentar: true,
       })
       applyLookupUpdates(
         (response.detalles ?? []).map((item) => ({
@@ -2948,6 +2951,7 @@ function ProspectosView() {
     try {
       const response = await verificarCompletoProspectos({
         prospecto_ids: selectedIds,
+        reintentar: true,
         check_smtp: true,
       })
       applyLookupUpdates(
