@@ -32,12 +32,20 @@ export type ProspectosFlowStep = {
 type ProspectosFilterSectionProps = {
   title: string
   description?: string
+  tone: "primary" | "secondary" | "accent" | "muted"
   children: ReactNode
 }
 
-export function ProspectosFilterSection({ title, description, children }: ProspectosFilterSectionProps) {
+const filterSectionToneClasses: Record<ProspectosFilterSectionProps["tone"], string> = {
+  primary: "border-primary/25 bg-primary/5",
+  secondary: "border-secondary/40 bg-secondary/35",
+  accent: "border-accent/50 bg-accent/45",
+  muted: "border-border/80 bg-muted/45",
+}
+
+export function ProspectosFilterSection({ title, description, tone, children }: ProspectosFilterSectionProps) {
   return (
-    <section className="rounded-xl border bg-background/60 p-3" aria-label={title}>
+    <section className={cn("rounded-xl border p-3", filterSectionToneClasses[tone])} aria-label={title}>
       <div className="mb-3">
         <h3 className="text-sm font-semibold">{title}</h3>
         {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}

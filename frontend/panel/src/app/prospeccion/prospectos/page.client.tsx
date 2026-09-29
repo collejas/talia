@@ -3859,7 +3859,7 @@ function ProspectosView() {
         onRefresh={() => void fetchRecentBatches()}
       />
 
-      <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-6">
+      <section className="rounded-lg border bg-muted/25 p-4 shadow-sm sm:p-6">
         <h2 className="mb-4 text-base font-semibold">Filtros</h2>
         <form onSubmit={handleSearchSubmit} className="space-y-4">
           <ProspectosSavedViews
@@ -3874,7 +3874,7 @@ function ProspectosView() {
             onDelete={() => void handleDeleteSavedView()}
           />
           <div className="space-y-4">
-            <ProspectosFilterSection title="Origen y verificación" description="Define de dónde provienen los prospectos y el estado de sus datos.">
+            <ProspectosFilterSection tone="primary" title="Origen y verificación" description="Define de dónde provienen los prospectos y el estado de sus datos.">
               <ProspectosSourceVerification
               fuente={filters.fuente}
               lookupStatus={filters.lookupStatus}
@@ -3898,7 +3898,7 @@ function ProspectosView() {
               onWebsiteLookupStatusChange={(value) => setFilters((prev) => ({ ...prev, websiteLookupStatus: value === "all" ? "" : value as WebsiteLookupFilter }))}
               />
             </ProspectosFilterSection>
-            <ProspectosFilterSection title="Campañas y contacto" description="Filtra por campañas, envíos realizados y tipo de línea.">
+            <ProspectosFilterSection tone="secondary" title="Campañas y contacto" description="Filtra por campañas, envíos realizados y tipo de línea.">
               <ProspectosCampaignFilters
               campaignId={filters.campanaId}
               templateId={filters.plantillaId}
@@ -3932,7 +3932,7 @@ function ProspectosView() {
                 />
               </div>
             </ProspectosFilterSection>
-            <ProspectosFilterSection title="Clasificación y fecha" description="Segmento, actividad económica, tipo de negocio y atributos de la fuente.">
+            <ProspectosFilterSection tone="accent" title="Clasificación y fecha" description="Segmento, actividad económica, tipo de negocio y atributos de la fuente.">
               <ProspectosClassificationFilters
                 fuente={filters.fuente}
               emailDomainRelation={filters.emailDomainRelation}
@@ -3962,7 +3962,7 @@ function ProspectosView() {
               onCustomDateChange={(bound, value) => setFilters((prev) => ({ ...prev, [bound === "from" ? "customDateFrom" : "customDateTo"]: value }))}
               />
             </ProspectosFilterSection>
-            <ProspectosFilterSection title="Actividad, búsqueda y ubicación" description="Localiza prospectos por consulta de origen, actividad, contacto y territorio.">
+            <ProspectosFilterSection tone="muted" title="Actividad, búsqueda y ubicación" description="Localiza prospectos por consulta de origen, actividad, contacto y territorio.">
               <ProspectosOperationalFilters
               fuente={filters.fuente}
               queryOptions={filteredQueryOptions}
@@ -4355,6 +4355,17 @@ function ProspectosView() {
           onViewModeChange={setProspectosViewMode}
           onBackToGroups={handleBackToQueryGroups}
         >
+	          {prospectosViewMode === "prospectos" && selectedCount ? (
+	            <Button
+	              type="button"
+	              variant="outline"
+	              size="sm"
+	              className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
+	              onClick={() => setSelected(new Set<string>())}
+	            >
+	              Limpiar selección
+	            </Button>
+	          ) : null}
 	              <Button size="sm" onClick={handleOpenCreateDialog}>
 	                <IconPlus className="mr-1.5 size-4" />
 	                Agregar prospecto
