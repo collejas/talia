@@ -1814,6 +1814,7 @@ export async function listContactoTemplates(params: {
   canal?: "correo" | "whatsapp" | "llamada"
   campana_id?: string
   approvedWhatsAppOnly?: boolean
+  includeArchived?: boolean
 } = {}) {
   const shouldIncludeWhatsApp = !params.canal || params.canal === "whatsapp"
   const shouldIncludeLegacy = !params.canal || params.canal === "correo" || params.canal === "llamada"
@@ -1846,7 +1847,7 @@ export async function listContactoTemplates(params: {
   const selectable = merged.filter(
     (item) =>
       item.activo !== false &&
-      item.template_status !== "archived" &&
+      (params.includeArchived || item.template_status !== "archived") &&
       (!params.approvedWhatsAppOnly || item.canal !== "whatsapp" || item.template_status === "approved"),
   )
   const metaWhatsAppNames = new Set(
