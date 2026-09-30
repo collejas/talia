@@ -42,11 +42,11 @@ BEGIN
     IF TG_OP = 'UPDATE' THEN
         IF ROW(NEW.condicion_pago, NEW.dias_credito, NEW.anticipo_porcentaje,
                NEW.permite_entrega_parcial, NEW.fecha_entrega_comprometida,
-               NEW.domicilio_entrega, NEW.observaciones_comerciales)
+               NEW.observaciones_comerciales)
            IS DISTINCT FROM
            ROW(OLD.condicion_pago, OLD.dias_credito, OLD.anticipo_porcentaje,
                OLD.permite_entrega_parcial, OLD.fecha_entrega_comprometida,
-               OLD.domicilio_entrega, OLD.observaciones_comerciales) THEN
+               OLD.observaciones_comerciales) THEN
             RAISE EXCEPTION 'sales_order_commercial_conditions_immutable'
                 USING ERRCODE = 'P0001';
         END IF;

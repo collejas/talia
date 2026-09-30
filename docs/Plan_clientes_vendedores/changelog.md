@@ -16,6 +16,9 @@
   únicamente de la interfaz. Los pedidos pendientes existentes fueron recalculados
   y muestran la falta de dirección cuando corresponde.
 - Migración aplicada: `20260930_120000_delivery_address_company_order_snapshot.sql`.
+- Se corrigió el backfill de pedidos pendientes cuyo snapshot se creó vacío:
+  ahora puede llenarse una sola vez desde la empresa, manteniendo inmutables los
+  snapshots que ya tenían dirección.
 
 ## 2026-09-29 — Cotización simplificada y corrección de envío
 
