@@ -1,5 +1,15 @@
 # Changelog — Clientes y vendedores
 
+## 2026-09-30 — Bandeja compacta de revisión de pedidos
+
+- `ventas/pedidos` ahora muestra las órdenes en una lista compacta y desplegable,
+  con una sola orden abierta a la vez, búsqueda por folio/cliente y filtros por
+  faltantes o listas para aprobar.
+- La revisión visible se redujo a cuatro puntos: **Cliente y facturación**,
+  **OC confirmada y evidencias**, **Datos de entrega** y **Productos y cantidades**.
+- Se conserva la validación operativa existente; inventario, diferencias de
+  partidas y faltantes aparecen como contexto o bloqueo dentro del punto relevante.
+
 ## 2026-09-30 — Dirección de envío de empresa en revisión de pedidos
 
 - Se agregó el tipo de dirección **Envío** en la ficha de la empresa, reutilizando

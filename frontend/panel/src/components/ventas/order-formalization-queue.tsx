@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { IconPrinter } from "@tabler/icons-react";
+import { IconAlertTriangle, IconChevronDown, IconCircleCheck, IconPrinter, IconSearch } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,34 +45,41 @@ type ApprovedOrder = ApprovedOrderForPrint & {
   cotizacion_id: string;
 };
 
-function ReviewBlock({
+function ReviewRow({
   title,
-  label,
+  summary,
   checked,
   onCheckedChange,
   disabled,
   children,
 }: {
   title: string;
-  label: string;
+  summary: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   disabled: boolean;
   children: ReactNode;
 }) {
   return (
-    <fieldset className="space-y-2 rounded-lg border bg-muted/20 p-3">
-      <legend className="px-1 text-sm font-medium">{title}</legend>
-      <div className="space-y-1 text-sm">{children}</div>
-      <label className="flex items-start gap-2 border-t pt-2 text-sm">
-        <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} disabled={disabled} />
-        <span>{label}</span>
+    <div className="grid gap-2 border-b px-3 py-2.5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          {checked ? <IconCircleCheck className="size-4 shrink-0 text-emerald-600" /> : <IconAlertTriangle className="size-4 shrink-0 text-amber-600" />}
+          <span>{title}</span>
+        </div>
+        <p className="truncate pl-6 text-xs text-muted-foreground">{summary}</p>
+        <div className="mt-1 space-y-1 pl-6 text-xs">{children}</div>
+      </div>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground sm:justify-end">
+        <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} disabled={disabled} aria-label={`Marcar ${title} como revisado`} />
+        Revisado
       </label>
-    </fieldset>
+    </div>
   );
 }
 
-type ReviewChecklist = { cliente: boolean; evidencia: boolean; partidas: boolean; inventario: boolean; condiciones: boolean; riesgos: boolean };
+type ReviewChecklist = { cliente: boolean; evidencia: boolean; entrega: boolean; productos: boolean };
+const EMPTY_REVIEW: ReviewChecklist = { cliente: false, evidencia: false, entrega: false, productos: false };
 
 const RETURN_REASONS = [
   ["falta_evidencia", "Falta evidencia de aceptación"],
@@ -201,6 +208,9 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
   const [returnReason, setReturnReason] = useState("");
   const [returnCode, setReturnCode] = useState<(typeof RETURN_REASONS)[number][0]>("otro");
   const [reviews, setReviews] = useState<Record<string, ReviewChecklist>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [queueFilter, setQueueFilter] = useState<"todas" | "faltantes" | "listas">("todas");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -371,9 +381,9 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
       setError("El pedido tiene un bloqueo visible. Devuélvelo a Comercial para corregir la cotización o revisa el inventario.");
       return;
     }
-    const review = reviews[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false };
+    const review = reviews[item.id] ?? EMPTY_REVIEW;
     if (Object.values(review).some((checked) => !checked)) {
-      setError("Completa las seis revisiones antes de aprobar y liberar el pedido.");
+      setError("Completa las cuatro revisiones antes de aprobar y liberar el pedido.");
       return;
     }
     setPendingId(item.id);
@@ -386,10 +396,10 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
         body: JSON.stringify({
           revision_cliente_validada: review.cliente,
           revision_evidencia_validada: review.evidencia,
-          revision_partidas_validada: review.partidas,
-          revision_inventario_validada: review.inventario,
-          revision_condiciones_validada: review.condiciones,
-          revision_riesgos_validada: review.riesgos,
+          revision_partidas_validada: review.productos,
+          revision_inventario_validada: review.productos,
+          revision_condiciones_validada: review.entrega,
+          revision_riesgos_validada: review.cliente && review.evidencia && review.entrega && review.productos,
         }),
       });
       const body = await response.json().catch(() => ({}));
@@ -433,11 +443,25 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
     }
   };
 
+  const reviewCount = (item: QueueItem) => Object.values(reviews[item.id] ?? EMPTY_REVIEW).filter(Boolean).length;
+  const needsAttention = (item: QueueItem) => hasBlockingIssues(item) || reviewCount(item) < 4;
+  const visibleItems = items
+    .filter((item) => {
+      const needle = search.trim().toLowerCase();
+      const matchesSearch = !needle || [item.folio, item.cliente, item.contacto, item.oportunidad_titulo].some((value) => value?.toLowerCase().includes(needle));
+      const matchesFilter = queueFilter === "todas" || (queueFilter === "faltantes" ? needsAttention(item) : !needsAttention(item));
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
+  const updateReview = (itemId: string, key: keyof ReviewChecklist, checked: boolean) => {
+    setReviews((current) => ({ ...current, [itemId]: { ...(current[itemId] ?? EMPTY_REVIEW), [key]: checked } }));
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-muted-foreground">Revisa cliente, aceptación, partidas, inventario, condiciones y alertas. La aprobación formaliza la venta y la cuenta por cobrar y libera lo reservado a Surtidos.</p>
+          <p className="text-sm text-muted-foreground">Revisa los cuatro puntos esenciales antes de liberar la orden.</p>
         </div>
         {activeTab === "revision" ? <Button type="button" variant="outline" onClick={() => void loadQueue()} disabled={loading}>
           {loading ? "Actualizando…" : "Actualizar"}
@@ -462,98 +486,92 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
           <p className="mt-1 text-sm text-muted-foreground">Los pedidos que Comercial envíe aparecerán aquí para revisión.</p>
         </div>
       ) : null}
-      <div className="space-y-3">
-        {items.map((item) => (
-          <article key={item.id} className="space-y-4 rounded-xl border bg-card p-4 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="font-semibold">{item.folio || item.oportunidad_titulo || "Pedido por formalizar"}</h2>
-                <p className="text-sm text-muted-foreground">{item.cliente || item.contacto || "Cliente sin nombre"}</p>
-                {item.contacto && item.cliente ? <p className="text-xs text-muted-foreground">Contacto: {item.contacto}</p> : null}
-              </div>
-              <div className="text-right">
-                <p className="font-semibold">{formatMoney(item.total, item.moneda)}</p>
-                <Badge variant="secondary">Pendiente de revisión</Badge>
-              </div>
-            </div>
-            <div className="grid gap-3 text-sm lg:grid-cols-2">
-              <ReviewBlock title="1. Cliente" label="Revisé la identidad y los datos disponibles del cliente" checked={reviews[item.id]?.cliente ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), cliente: checked } }))} disabled={pendingId === item.id}>
-                <p>{item.cliente || item.contacto || "Sin nombre registrado"}</p>
-                {!item.cuenta_crm_asociada ? <p className="font-medium text-destructive">Bloqueante: no hay una cuenta CRM asociada. Devuelve el pedido a Comercial para vincular la cuenta real del cliente.</p> : null}
-                <p className="text-muted-foreground">Razón social: {item.cliente_datos.razon_social || "No registrada"} · RFC: {item.cliente_datos.rfc || "No registrado"}</p>
-                <p className="text-muted-foreground">Correo de facturación: {item.cliente_datos.correo_facturacion || "No registrado"} · C.P.: {item.cliente_datos.codigo_postal || "No registrado"}</p>
-              </ReviewBlock>
-              <ReviewBlock title="2. Confirmación y evidencia" label="Revisé la forma de aceptación y su evidencia" checked={reviews[item.id]?.evidencia ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), evidencia: checked } }))} disabled={pendingId === item.id}>
-                <p>{CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada"} · {item.fecha_confirmacion_cliente || "Fecha no registrada"}</p>
-                {item.referencia_pedido_cliente ? <p>OC: {item.referencia_pedido_cliente} {item.fecha_orden_cliente ? `· ${item.fecha_orden_cliente}` : ""}</p> : null}
-                {item.documentos.length ? item.documentos.map((document) => <p key={document.id}>Evidencia ({CONFIRMATION_LABELS[document.tipo_documento] || "Otro"}): {document.referencia || document.observaciones || "Archivo adjunto"}{document.nombre_original ? <a className="ml-2 text-primary underline underline-offset-4" href={`/api/embudo/quotes/${item.cotizacion_id}/pedido/orden-compra?documento_id=${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer">Ver {document.nombre_original}</a> : null}</p>) : <p className="text-muted-foreground">No hay archivo adjunto; puede ser una confirmación sin OC.</p>}
-                {item.observaciones_confirmacion ? <p className="text-muted-foreground">Nota: {item.observaciones_confirmacion}</p> : null}
-              </ReviewBlock>
-              <ReviewBlock title="3. Partidas del pedido" label="Verifiqué partidas, cantidades y precios contra la cotización aceptada" checked={reviews[item.id]?.partidas ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), partidas: checked } }))} disabled={pendingId === item.id}>
-                {item.items.map((line) => <div key={line.id} className="border-b pb-1 last:border-0"><p>{line.descripcion} · {line.cantidad} × {formatMoney(line.precio_unitario, line.moneda)} = {formatMoney(line.subtotal, line.moneda)}</p><p className="text-muted-foreground">Cotización aceptada: {line.cotizacion_cantidad ?? "—"} × {formatMoney(line.cotizacion_precio_unitario, line.cotizacion_moneda)} {line.cotizacion_descuento_porcentaje != null ? `· Descuento ${line.cotizacion_descuento_porcentaje}% (límite ${line.cotizacion_limite_descuento_porcentaje ?? "no registrado"}%)` : ""}{differsFromAcceptedQuote(line) ? <span className="ml-2 font-medium text-destructive">No coincide con el pedido</span> : null}</p></div>)}
-                <p className="font-medium">Total de la cotización: {formatMoney(item.total, item.moneda)}</p>
-              </ReviewBlock>
-              <ReviewBlock title="4. Inventario" label="Revisé la disponibilidad y el efecto estimado de aprobar" checked={reviews[item.id]?.inventario ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), inventario: checked } }))} disabled={pendingId === item.id}>
-                {getInventoryProjection(item).length ? <div className="space-y-3">{getInventoryProjection(item).map((product) => <div key={product.key} className="rounded-md border bg-background p-2.5">
-                  <p className="font-medium">{product.descripcion}</p>
-                  <dl className="mt-1 grid gap-x-4 gap-y-1 text-muted-foreground sm:grid-cols-2">
-                    <div className="flex justify-between gap-2"><dt>Pedido</dt><dd className="font-medium text-foreground">{formatQuantity(product.solicitado)}</dd></div>
-                    <div className="flex justify-between gap-2"><dt>Disponible ahora</dt><dd className="font-medium text-foreground">{formatQuantity(product.disponibleAhora)}</dd></div>
-                    <div className="flex justify-between gap-2"><dt>Ya reservado para este pedido</dt><dd>{formatQuantity(product.reservado)}</dd></div>
-                    <div className="flex justify-between gap-2"><dt>Reserva adicional estimada</dt><dd className="font-medium text-foreground">{formatQuantity(product.reservaAdicional)}</dd></div>
-                    <div className="flex justify-between gap-2"><dt>Reservado después de aprobar</dt><dd>{formatQuantity(product.reservadoDespues)}</dd></div>
-                    <div className="flex justify-between gap-2"><dt>Disponible después de aprobar</dt><dd>{formatQuantity(product.disponibleDespues)}</dd></div>
-                  </dl>
-                  {product.pendienteDespues > 0 ? <p className="mt-2 font-medium text-amber-700">Quedarían {formatQuantity(product.pendienteDespues)} pendientes de inventario.</p> : null}
-                  {product.pendienteDespues > 0 && !item.permite_entrega_parcial ? <p className="mt-1 font-medium text-destructive">Bloqueante: no se puede aprobar porque no se permiten entregas parciales.</p> : null}
-                </div>)}</div> : null}
-                {item.items.filter((line) => !line.maneja_inventario).map((line) => <div key={`sin-inventario-${line.id}`} className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-amber-950">
-                  <p className="font-medium">{line.descripcion} · {line.cantidad}</p>
-                  {line.tipo_catalogo === "servicio" ? <p>Es un servicio; no requiere reserva de inventario.</p> : line.tipo_catalogo === "producto" ? <p>El producto tiene desactivado “Maneja inventario”</p> : line.catalog_item_id ? <p>El artículo de catálogo no tiene control de inventario habilitado; no se consultará ni reservará stock.</p> : <p>Esta partida no está vinculada a un artículo de catálogo; no se puede consultar ni reservar stock.</p>}
-                </div>)}
-                {!getInventoryProjection(item).length && !item.items.some((line) => !line.maneja_inventario) ? <p>No hay partidas de inventario que revisar.</p> : null}
-                {getInventoryProjection(item).length ? <p className="text-muted-foreground">{item.permite_entrega_parcial ? "La cotización permite entrega parcial." : "La cotización no permite entrega parcial."} Estimación con el stock consultado del almacén principal; al aprobar se valida de nuevo y la reserva puede variar si cambió la existencia.</p> : null}
-              </ReviewBlock>
-              <ReviewBlock title="5. Condiciones comerciales y entrega" label="Revisé las condiciones de la cotización y los datos de entrega" checked={reviews[item.id]?.condiciones ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), condiciones: checked } }))} disabled={pendingId === item.id}>
-                <p>Condiciones comerciales: registradas en la cotización aceptada.</p>
-                <p>Datos de entrega: {item.domicilio_entrega_completo ? item.domicilio_entrega : "Incompletos"}</p>
-                {item.domicilio_entrega_referencias ? <p className="text-muted-foreground">Referencias: {item.domicilio_entrega_referencias}</p> : null}
-                {!item.domicilio_entrega_completo && item.items.some((line) => line.maneja_inventario) ? <p className="font-medium text-destructive">Bloqueante: falta completar en la empresa la dirección de envío{item.domicilio_entrega_faltantes.length ? ` (${item.domicilio_entrega_faltantes.join(", ")})` : ""}.</p> : null}
-                {!item.domicilio_entrega_completo && !item.items.some((line) => line.maneja_inventario) ? <p className="text-muted-foreground">No aplica validación de domicilio para estas partidas.</p> : null}
-              </ReviewBlock>
-              <ReviewBlock title="6. Alertas y riesgos" label="Revisé las alertas y riesgos visibles antes de liberar" checked={reviews[item.id]?.riesgos ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), riesgos: checked } }))} disabled={pendingId === item.id}>
-                {getInventoryProjection(item).some((product) => product.pendienteDespues > 0) ? <p className="text-amber-700">Alerta: con el stock consultado quedarían partidas pendientes de inventario después de la reserva estimada.</p> : null}
-                {item.items.some((line) => line.tipo_catalogo === "producto" && !line.maneja_inventario) ? <p className="text-amber-700">Alerta: hay productos sin control de inventario; esos renglones no se reservarán al aprobar.</p> : null}
-                {item.items.some((line) => !line.catalog_item_id) ? <p className="text-amber-700">Alerta: hay partidas sin producto de catálogo asociado; no se puede validar ni reservar su inventario.</p> : null}
-                {item.items.some((line) => differsFromAcceptedQuote(line)) ? <p className="font-medium text-destructive">Bloqueante: las partidas o sus precios no coinciden con la cotización aceptada. Regresa el pedido a Comercial.</p> : null}
-                {item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje)) ? <p className="font-medium text-destructive">Bloqueante: existe un descuento superior al límite registrado.</p> : null}
-                {!item.permite_entrega_parcial && getInventoryProjection(item).some((product) => product.pendienteDespues > 0) ? <p className="font-medium text-destructive">Bloqueante: no hay inventario suficiente y la cotización no permite entregas parciales.</p> : null}
-                {!item.cliente_datos.rfc || !item.cliente_datos.codigo_postal ? <p className="text-muted-foreground">Datos fiscales incompletos; confirma si aplican a esta operación.</p> : null}
-                {!getInventoryProjection(item).some((product) => product.pendienteDespues > 0) && !item.items.some((line) => (line.tipo_catalogo === "producto" && !line.maneja_inventario) || !line.catalog_item_id) && !(item.items.some((line) => line.maneja_inventario) && !item.domicilio_entrega_completo) && item.cliente_datos.rfc && item.cliente_datos.codigo_postal && !item.items.some((line) => differsFromAcceptedQuote(line)) ? <p>No se detectan alertas con los datos disponibles.</p> : null}
-              </ReviewBlock>
-            </div>
-            <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
-              <Button type="button" variant="outline" onClick={() => printPendingOrder(item)} disabled={!printBrand}><IconPrinter className="mr-2 size-4" />Imprimir para autorización</Button>
-              {returningId === item.id ? (
-                <div className="flex w-full flex-col gap-2 sm:flex-row">
-                  <select className="h-10 rounded-md border bg-background px-3 text-sm" value={returnCode} onChange={(event) => setReturnCode(event.target.value as typeof returnCode)} aria-label="Causa de devolución">
-                    {RETURN_REASONS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
-                  </select>
-                  <Input value={returnReason} onChange={(event) => setReturnReason(event.target.value)} maxLength={2000} placeholder="Indica qué debe corregir Comercial" />
-                  <Button type="button" variant="outline" onClick={() => void returnOrder(item)} disabled={pendingId === item.id}>Devolver</Button>
-                  <Button type="button" variant="ghost" onClick={() => { setReturningId(null); setReturnReason(""); }}>Cancelar</Button>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[240px] flex-1">
+            <IconSearch className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por folio o cliente" className="pl-8" />
+          </div>
+          <select className="h-10 rounded-md border bg-background px-3 text-sm" value={queueFilter} onChange={(event) => setQueueFilter(event.target.value as typeof queueFilter)} aria-label="Filtrar pedidos">
+            <option value="todas">Todas</option>
+            <option value="faltantes">Con faltantes</option>
+            <option value="listas">Listas para aprobar</option>
+          </select>
+        </div>
+        <p className="text-xs text-muted-foreground">{items.length} órdenes pendientes · {items.filter(needsAttention).length} con faltantes · {items.filter((item) => !needsAttention(item)).length} listas</p>
+      </div>
+      <div className="overflow-hidden rounded-lg border bg-card">
+        {visibleItems.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No hay órdenes que coincidan con el filtro.</p> : visibleItems.map((item) => {
+          const review = reviews[item.id] ?? EMPTY_REVIEW;
+          const progress = reviewCount(item);
+          const expanded = expandedId === item.id;
+          const inventoryProjection = getInventoryProjection(item);
+          const productMismatch = item.items.some((line) => differsFromAcceptedQuote(line));
+          const deliveryRequired = item.items.some((line) => line.maneja_inventario);
+          const statusText = hasBlockingIssues(item) ? "Bloqueada" : progress === 4 ? "Lista" : "Pendiente";
+          const statusClass = hasBlockingIssues(item) ? "text-destructive" : progress === 4 ? "text-emerald-600" : "text-amber-600";
+          return (
+            <article key={item.id} className="border-b last:border-b-0">
+              <button type="button" className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/40" onClick={() => setExpandedId(expanded ? null : item.id)} aria-expanded={expanded}>
+                <IconChevronDown className={"size-4 shrink-0 text-muted-foreground transition-transform " + (expanded ? "rotate-180" : "")} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="font-medium">{item.folio || item.oportunidad_titulo || "Pedido por formalizar"}</span>
+                    <span className="truncate text-sm text-muted-foreground">{item.cliente || item.contacto || "Cliente sin nombre"}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{item.items.length} partidas · {formatMoney(item.total, item.moneda)}{item.contacto && item.cliente ? " · " + item.contacto : ""}</p>
                 </div>
-              ) : (
-                <>
-                  <Button type="button" variant="outline" onClick={() => { setReturningId(item.id); setError(null); setReturnCode(item.cuenta_crm_asociada ? "otro" : "datos_cliente_incompletos"); setReturnReason(item.cuenta_crm_asociada ? "" : "Falta vincular la cuenta CRM real del cliente a la oportunidad."); }} disabled={pendingId === item.id}>Devolver para corrección</Button>
-                  <Button type="button" onClick={() => void confirmOrder(item)} disabled={pendingId === item.id || hasBlockingIssues(item)}>
-                    {pendingId === item.id ? "Aprobando…" : "Aprobar y liberar a surtido"}
-                  </Button>
-                </>
-              )}
-            </div>
-          </article>
-        ))}
+                <span className="hidden text-xs text-muted-foreground sm:inline">{progress}/4</span>
+                <Badge variant="outline" className={statusClass}>{statusText}</Badge>
+              </button>
+              {expanded ? (
+                <div className="border-t bg-muted/10">
+                  <div className="divide-y">
+                    <ReviewRow title="Cliente y facturación" summary={(item.cliente || item.contacto || "Cliente sin nombre") + " · " + (item.cliente_datos.rfc ? "RFC " + item.cliente_datos.rfc : "RFC pendiente") + " · " + (item.cliente_datos.codigo_postal ? "C.P. " + item.cliente_datos.codigo_postal : "C.P. pendiente")} checked={review.cliente} onCheckedChange={(checked) => updateReview(item.id, "cliente", checked)} disabled={pendingId === item.id}>
+                      {!item.cuenta_crm_asociada ? <p className="font-medium text-destructive">Bloqueante: no hay una cuenta CRM asociada.</p> : null}
+                      {!item.cliente_datos.rfc || !item.cliente_datos.codigo_postal ? <p className="text-amber-700">Faltan datos de facturación disponibles.</p> : null}
+                    </ReviewRow>
+                    <ReviewRow title="OC confirmada y evidencias" summary={(item.referencia_pedido_cliente ? "OC " + item.referencia_pedido_cliente : "Sin OC") + " · " + item.documentos.length + " evidencia" + (item.documentos.length === 1 ? "" : "s") + " · " + (CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada")} checked={review.evidencia} onCheckedChange={(checked) => updateReview(item.id, "evidencia", checked)} disabled={pendingId === item.id}>
+                      {item.documentos.length ? item.documentos.map((document) => <p key={document.id}>Evidencia: {CONFIRMATION_LABELS[document.tipo_documento] || "Otro"}{document.nombre_original ? <a className="ml-2 text-primary underline underline-offset-4" href={"/api/embudo/quotes/" + item.cotizacion_id + "/pedido/orden-compra?documento_id=" + encodeURIComponent(document.id)} target="_blank" rel="noreferrer">Ver archivo</a> : null}</p>) : <p className="text-amber-700">No hay evidencias adjuntas; confirma la compra registrada.</p>}
+                    </ReviewRow>
+                    <ReviewRow title="Datos de entrega" summary={deliveryRequired ? (item.domicilio_entrega_completo ? item.domicilio_entrega || "Dirección completa" : "Faltan datos de entrega") : "No aplica a estas partidas"} checked={review.entrega} onCheckedChange={(checked) => updateReview(item.id, "entrega", checked)} disabled={pendingId === item.id}>
+                      {deliveryRequired && !item.domicilio_entrega_completo ? <p className="font-medium text-destructive">Bloqueante: falta completar la dirección de envío{item.domicilio_entrega_faltantes.length ? " (" + item.domicilio_entrega_faltantes.join(", ") + ")" : ""}.</p> : null}
+                      {item.domicilio_entrega_referencias ? <p className="text-muted-foreground">Referencias: {item.domicilio_entrega_referencias}</p> : null}
+                    </ReviewRow>
+                    <ReviewRow title="Productos y cantidades" summary={item.items.length + " partida" + (item.items.length === 1 ? "" : "s") + " · " + (productMismatch ? "Hay diferencias contra la cotización" : "Coinciden con la cotización aceptada")} checked={review.productos} onCheckedChange={(checked) => updateReview(item.id, "productos", checked)} disabled={pendingId === item.id}>
+                      {productMismatch ? <p className="font-medium text-destructive">Bloqueante: las partidas, cantidades, productos o precios no coinciden.</p> : null}
+                      {item.items.length === 0 ? <p className="font-medium text-destructive">Bloqueante: la orden no tiene productos.</p> : null}
+                      {inventoryProjection.some((product) => product.pendienteDespues > 0) ? <p className="text-amber-700">Faltante de inventario: {inventoryProjection.filter((product) => product.pendienteDespues > 0).length} producto(s); se valida al aprobar.</p> : null}
+                      {item.items.slice(0, 3).map((line) => <p key={line.id} className="text-muted-foreground">{line.descripcion} · {line.cantidad}</p>)}
+                      {item.items.length > 3 ? <p className="text-muted-foreground">y {item.items.length - 3} partida(s) más</p> : null}
+                    </ReviewRow>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-3">
+                    <span className="text-xs text-muted-foreground">Revisión: {progress}/4</span>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => printPendingOrder(item)} disabled={!printBrand}><IconPrinter className="mr-2 size-4" />Imprimir</Button>
+                      {returningId === item.id ? (
+                        <div className="flex w-full flex-col gap-2 sm:flex-row">
+                          <select className="h-9 rounded-md border bg-background px-2 text-sm" value={returnCode} onChange={(event) => setReturnCode(event.target.value as typeof returnCode)} aria-label="Causa de devolución">
+                            {RETURN_REASONS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                          </select>
+                          <Input value={returnReason} onChange={(event) => setReturnReason(event.target.value)} maxLength={2000} placeholder="Indica qué debe corregir Comercial" />
+                          <Button type="button" variant="outline" size="sm" onClick={() => void returnOrder(item)} disabled={pendingId === item.id}>Devolver</Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => { setReturningId(null); setReturnReason(""); }}>Cancelar</Button>
+                        </div>
+                      ) : (
+                        <>
+                          <Button type="button" variant="outline" size="sm" onClick={() => { setReturningId(item.id); setError(null); setReturnCode(item.cuenta_crm_asociada ? "otro" : "datos_cliente_incompletos"); setReturnReason(item.cuenta_crm_asociada ? "" : "Falta vincular la cuenta CRM real del cliente a la oportunidad."); }} disabled={pendingId === item.id}>Devolver</Button>
+                          <Button type="button" size="sm" onClick={() => void confirmOrder(item)} disabled={pendingId === item.id || hasBlockingIssues(item)}>{pendingId === item.id ? "Aprobando…" : "Aprobar y liberar"}</Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
       </div>
         </TabsContent>
         <TabsContent value="autorizados" className="space-y-4">
