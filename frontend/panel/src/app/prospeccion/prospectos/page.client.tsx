@@ -3168,7 +3168,7 @@ function ProspectosView() {
   const fetchPlannerTemplates = useCallback(async (campanaId: string) => {
     setPlannerTemplatesLoading(true)
     try {
-      const response = await listContactoTemplates({ campana_id: campanaId })
+      const response = await listContactoTemplates({ campana_id: campanaId, approvedWhatsAppOnly: true })
       const items = (response.items ?? []) as ContactoTemplate[]
       setPlannerTemplates(items)
       const byCanal = (canal: "correo" | "whatsapp" | "llamada") =>

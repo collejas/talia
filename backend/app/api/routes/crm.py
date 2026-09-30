@@ -42311,6 +42311,15 @@ async def contactar_prospectos_legacy(
                 )
             except CRMRepositoryError as exc:
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
+            for template_id, template in template_map.items():
+                if not _is_whats_prosp_meta_template_row(template):
+                    continue
+                template_status = _clean_text(template.get("template_status")).lower()
+                if template_status != "approved":
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"whatsapp_template_not_approved:{template_id}",
+                    )
             campana_key = str(payload.campana_id)
             for template_id, template in template_map.items():
                 if not _should_enforce_template_campaign_binding(template):

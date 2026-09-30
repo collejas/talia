@@ -1813,6 +1813,7 @@ export async function listProspectoAudit(
 export async function listContactoTemplates(params: {
   canal?: "correo" | "whatsapp" | "llamada"
   campana_id?: string
+  approvedWhatsAppOnly?: boolean
 } = {}) {
   const shouldIncludeWhatsApp = !params.canal || params.canal === "whatsapp"
   const shouldIncludeLegacy = !params.canal || params.canal === "correo" || params.canal === "llamada"
@@ -1829,6 +1830,7 @@ export async function listContactoTemplates(params: {
     url.searchParams.set("page", "1")
     url.searchParams.set("page_size", "100")
     url.searchParams.set("active", "true")
+    if (params.approvedWhatsAppOnly) url.searchParams.set("template_status", "approved")
     requests.push(requestJson<{ ok: boolean; items: ContactoTemplate[] }>(url.toString()))
   }
   const responses = await Promise.all(requests)
@@ -1842,7 +1844,10 @@ export async function listContactoTemplates(params: {
   })
 
   const selectable = merged.filter(
-    (item) => item.activo !== false && item.template_status !== "archived",
+    (item) =>
+      item.activo !== false &&
+      item.template_status !== "archived" &&
+      (!params.approvedWhatsAppOnly || item.canal !== "whatsapp" || item.template_status === "approved"),
   )
   const metaWhatsAppNames = new Set(
     selectable
