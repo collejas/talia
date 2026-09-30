@@ -31,6 +31,9 @@ type QueueItem = {
   permite_entrega_parcial: boolean;
   fecha_entrega_comprometida: string | null;
   domicilio_entrega: string | null;
+  domicilio_entrega_completo: boolean;
+  domicilio_entrega_faltantes: string[];
+  domicilio_entrega_referencias: string | null;
   observaciones_comerciales: string | null;
   cliente_datos: Record<string, string | null>;
   items: { id: string; catalog_item_id: string | null; tipo_catalogo: string | null; descripcion: string; cantidad: number | string; precio_unitario: number | string | null; subtotal: number | string | null; moneda: string | null; maneja_inventario: boolean; stock_disponible: number | string | null; stock_reservado_pedido: number | string | null; cotizacion_cantidad: number | string | null; cotizacion_precio_unitario: number | string | null; cotizacion_descuento_porcentaje: number | string | null; cotizacion_limite_descuento_porcentaje: number | string | null; cotizacion_moneda: string | null; cotizacion_catalog_item_id: string | null }[];
@@ -176,6 +179,7 @@ function formatQuantity(value: number) {
 
 function hasBlockingIssues(item: QueueItem) {
   return !item.cuenta_crm_asociada
+    || (item.items.some((line) => line.maneja_inventario) && !item.domicilio_entrega_completo)
     || item.items.some((line) => differsFromAcceptedQuote(line)
     || (line.cotizacion_descuento_porcentaje != null
       && line.cotizacion_limite_descuento_porcentaje != null
@@ -510,22 +514,22 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
                 {!getInventoryProjection(item).length && !item.items.some((line) => !line.maneja_inventario) ? <p>No hay partidas de inventario que revisar.</p> : null}
                 {getInventoryProjection(item).length ? <p className="text-muted-foreground">{item.permite_entrega_parcial ? "La cotización permite entrega parcial." : "La cotización no permite entrega parcial."} Estimación con el stock consultado del almacén principal; al aprobar se valida de nuevo y la reserva puede variar si cambió la existencia.</p> : null}
               </ReviewBlock>
-              <ReviewBlock title="5. Condiciones comerciales y entrega" label="Revisé las condiciones registradas y la fecha/domicilio de entrega" checked={reviews[item.id]?.condiciones ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), condiciones: checked } }))} disabled={pendingId === item.id}>
-                <p>Pago: {item.condicion_pago || "No especificado"}{item.dias_credito ? ` · ${item.dias_credito} días de crédito` : ""}{item.anticipo_porcentaje != null ? ` · Anticipo ${item.anticipo_porcentaje}%` : ""}</p>
-                <p>Entrega comprometida: {item.fecha_entrega_comprometida || "No especificada"} · Domicilio: {item.domicilio_entrega || "No especificado"}</p>
-                {item.observaciones_comerciales ? <p className="text-muted-foreground">Notas: {item.observaciones_comerciales}</p> : null}
+              <ReviewBlock title="5. Condiciones comerciales y entrega" label="Revisé las condiciones de la cotización y los datos de entrega" checked={reviews[item.id]?.condiciones ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), condiciones: checked } }))} disabled={pendingId === item.id}>
+                <p>Condiciones comerciales: registradas en la cotización aceptada.</p>
+                <p>Datos de entrega: {item.domicilio_entrega_completo ? item.domicilio_entrega : "Incompletos"}</p>
+                {item.domicilio_entrega_referencias ? <p className="text-muted-foreground">Referencias: {item.domicilio_entrega_referencias}</p> : null}
+                {!item.domicilio_entrega_completo && item.items.some((line) => line.maneja_inventario) ? <p className="font-medium text-destructive">Bloqueante: falta completar en la empresa la dirección de envío{item.domicilio_entrega_faltantes.length ? ` (${item.domicilio_entrega_faltantes.join(", ")})` : ""}.</p> : null}
+                {!item.domicilio_entrega_completo && !item.items.some((line) => line.maneja_inventario) ? <p className="text-muted-foreground">No aplica validación de domicilio para estas partidas.</p> : null}
               </ReviewBlock>
               <ReviewBlock title="6. Alertas y riesgos" label="Revisé las alertas y riesgos visibles antes de liberar" checked={reviews[item.id]?.riesgos ?? false} onCheckedChange={(checked) => setReviews((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? { cliente: false, evidencia: false, partidas: false, inventario: false, condiciones: false, riesgos: false }), riesgos: checked } }))} disabled={pendingId === item.id}>
                 {getInventoryProjection(item).some((product) => product.pendienteDespues > 0) ? <p className="text-amber-700">Alerta: con el stock consultado quedarían partidas pendientes de inventario después de la reserva estimada.</p> : null}
                 {item.items.some((line) => line.tipo_catalogo === "producto" && !line.maneja_inventario) ? <p className="text-amber-700">Alerta: hay productos sin control de inventario; esos renglones no se reservarán al aprobar.</p> : null}
                 {item.items.some((line) => !line.catalog_item_id) ? <p className="text-amber-700">Alerta: hay partidas sin producto de catálogo asociado; no se puede validar ni reservar su inventario.</p> : null}
-                {item.items.some((line) => line.maneja_inventario) && !item.domicilio_entrega ? <p className="text-amber-700">Alerta: no hay domicilio de entrega registrado.</p> : null}
-                {!item.condicion_pago ? <p className="text-amber-700">Alerta: no se especificó condición de pago.</p> : null}
                 {item.items.some((line) => differsFromAcceptedQuote(line)) ? <p className="font-medium text-destructive">Bloqueante: las partidas o sus precios no coinciden con la cotización aceptada. Regresa el pedido a Comercial.</p> : null}
                 {item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje)) ? <p className="font-medium text-destructive">Bloqueante: existe un descuento superior al límite registrado.</p> : null}
                 {!item.permite_entrega_parcial && getInventoryProjection(item).some((product) => product.pendienteDespues > 0) ? <p className="font-medium text-destructive">Bloqueante: no hay inventario suficiente y la cotización no permite entregas parciales.</p> : null}
                 {!item.cliente_datos.rfc || !item.cliente_datos.codigo_postal ? <p className="text-muted-foreground">Datos fiscales incompletos; confirma si aplican a esta operación.</p> : null}
-                {!getInventoryProjection(item).some((product) => product.pendienteDespues > 0) && !item.items.some((line) => (line.tipo_catalogo === "producto" && !line.maneja_inventario) || !line.catalog_item_id) && !(item.items.some((line) => line.maneja_inventario) && !item.domicilio_entrega) && item.condicion_pago && item.cliente_datos.rfc && item.cliente_datos.codigo_postal && !item.items.some((line) => differsFromAcceptedQuote(line)) ? <p>No se detectan alertas con los datos disponibles.</p> : null}
+                {!getInventoryProjection(item).some((product) => product.pendienteDespues > 0) && !item.items.some((line) => (line.tipo_catalogo === "producto" && !line.maneja_inventario) || !line.catalog_item_id) && !(item.items.some((line) => line.maneja_inventario) && !item.domicilio_entrega_completo) && item.cliente_datos.rfc && item.cliente_datos.codigo_postal && !item.items.some((line) => differsFromAcceptedQuote(line)) ? <p>No se detectan alertas con los datos disponibles.</p> : null}
               </ReviewBlock>
             </div>
             <div className="flex flex-wrap justify-end gap-2 border-t pt-3">

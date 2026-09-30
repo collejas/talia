@@ -498,8 +498,10 @@ La primera version del traspaso por areas se implemento y desplego el
 5. **Implementado — configuración de cotización y evidencia:** las cotizaciones
    usan la base de condiciones comerciales, notas y vigencia configurada en
    `settings/account` → **Cotizaciones Vendedores**; ya no capturan datos
-   operativos de pago o entrega. Los datos operativos que correspondan al
-   compromiso se conservan en el pedido para su revisión administrativa. La
+   operativos de pago o entrega. La dirección de envío se captura como relación
+   **Envío** en la ficha de la empresa y se congela en el pedido para su revisión
+   administrativa dentro del bloque 5. Los faltantes solo bloquean la aprobación
+   de pedidos con partidas físicas; no bloquean crear o enviar cotizaciones. La
    evidencia admite OC, cotizacion firmada, correo, WhatsApp, contrato,
    confirmacion verbal u otro medio; puede guardar referencia/observaciones y
    adjuntar PDF, JPG o PNG. Solo la OC validada activa reserva anticipada.

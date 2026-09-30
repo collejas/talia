@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 
-export type AccountDirectionType = "fiscal" | "principal" | "sucursal" | "fiscal_principal";
-export type AccountDirectionPrimaryType = "fiscal" | "principal" | "sucursal" | "fiscal_principal";
+export type AccountDirectionType = "fiscal" | "principal" | "envio" | "sucursal" | "fiscal_principal";
+export type AccountDirectionPrimaryType = "fiscal" | "principal" | "envio" | "sucursal" | "fiscal_principal";
 
 export type AccountDirectionDraft = {
   key: string;
@@ -81,6 +81,9 @@ export function normalizeDirectionType(value: string | null | undefined): Accoun
   if (normalized === "principal" || normalized === "operativa") {
     return "principal";
   }
+  if (normalized === "envio" || normalized === "entrega") {
+    return "envio";
+  }
   return "sucursal";
 }
 
@@ -92,14 +95,14 @@ export function directionTypeIncludesPrincipal(value: AccountDirectionType): boo
   return value === "principal" || value === "fiscal_principal";
 }
 
-export function expandDirectionRelationTypes(value: AccountDirectionType): Array<"fiscal" | "principal" | "sucursal"> {
+export function expandDirectionRelationTypes(value: AccountDirectionType): Array<"fiscal" | "principal" | "envio" | "sucursal"> {
   if (value === "fiscal_principal") {
     return ["fiscal", "principal"];
   }
-  return [value === "fiscal" || value === "principal" || value === "sucursal" ? value : "sucursal"];
+  return [value === "fiscal" || value === "principal" || value === "envio" || value === "sucursal" ? value : "sucursal"];
 }
 
-export function buildDirectionPayload(direction: AccountDirectionDraft, relationType?: "fiscal" | "principal" | "sucursal") {
+export function buildDirectionPayload(direction: AccountDirectionDraft, relationType?: "fiscal" | "principal" | "envio" | "sucursal") {
   const tipo = relationType ?? (direction.tipo === "fiscal_principal" ? "fiscal" : direction.tipo);
   return {
     tipo,
@@ -135,6 +138,8 @@ function directionTypeLabel(type: AccountDirectionType): string {
       return "Fiscal";
     case "principal":
       return "Principal";
+    case "envio":
+      return "Envío";
     case "fiscal_principal":
       return "Fiscal + principal";
     default:
@@ -192,6 +197,7 @@ export function AccountDirectionCard({
                 Fiscal
               </SelectItem>
               <SelectItem value="principal">Principal</SelectItem>
+              <SelectItem value="envio">Envío</SelectItem>
               <SelectItem value="sucursal">Sucursal</SelectItem>
               <SelectItem value="fiscal_principal" disabled={!canPickFiscal}>
                 Fiscal + principal

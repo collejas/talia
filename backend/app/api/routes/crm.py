@@ -14223,11 +14223,11 @@ def _normalize_account_direction_relation_type(value: Any) -> str:
         "fiscal": "fiscal",
         "facturacion": "fiscal",
         "sucursal": "sucursal",
-        "envio": "sucursal",
+        "envio": "envio",
         "historial": "sucursal",
         "otro": "sucursal",
     }
-    return alias_map.get(normalized, normalized if normalized in {"fiscal", "principal", "sucursal"} else "sucursal")
+    return alias_map.get(normalized, normalized if normalized in {"fiscal", "principal", "envio", "sucursal"} else "sucursal")
 
 
 def _normalize_account_direction_relation_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -33118,6 +33118,10 @@ async def listar_pedidos_pendientes_formalizacion(
             "permite_entrega_parcial": bool(row.get("permite_entrega_parcial")),
             "fecha_entrega_comprometida": row.get("fecha_entrega_comprometida"),
             "domicilio_entrega": row.get("domicilio_entrega"),
+            "domicilio_entrega_completo": bool(row.get("domicilio_entrega_completo")),
+            "domicilio_entrega_faltantes": row.get("domicilio_entrega_faltantes") or [],
+            "domicilio_entrega_direccion_id": row.get("domicilio_entrega_direccion_id"),
+            "domicilio_entrega_referencias": row.get("domicilio_entrega_referencias"),
             "observaciones_comerciales": row.get("observaciones_comerciales"),
             "motivo_devolucion_codigo": row.get("motivo_devolucion_codigo"),
             "items": order_items,

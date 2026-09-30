@@ -1,5 +1,22 @@
 # Changelog — Clientes y vendedores
 
+## 2026-09-30 — Dirección de envío de empresa en revisión de pedidos
+
+- Se agregó el tipo de dirección **Envío** en la ficha de la empresa, reutilizando
+  el catálogo existente de direcciones y sin guardar datos estructurales en metadata.
+- Al crear un `pedido_venta`, la dirección de envío de la empresa se congela en
+  columnas explícitas del pedido, incluyendo los campos faltantes y su estado de
+  completitud. Esto evita que una modificación posterior de la empresa cambie un
+  pedido ya enviado a revisión.
+- El bloque existente **5. Condiciones comerciales y entrega** en
+  `ventas/pedidos` ahora muestra el domicilio, referencias y faltantes. Solo
+  bloquea la aprobación de pedidos con partidas físicas cuando falta la dirección;
+  la creación y el envío de cotizaciones no se bloquean.
+- La validación también quedó en `crm_aprobar_pedido_venta`, por lo que no depende
+  únicamente de la interfaz. Los pedidos pendientes existentes fueron recalculados
+  y muestran la falta de dirección cuando corresponde.
+- Migración aplicada: `20260930_120000_delivery_address_company_order_snapshot.sql`.
+
 ## 2026-09-29 — Cotización simplificada y corrección de envío
 
 - Se retiraron del flujo y del contrato de `cotizaciones` los campos

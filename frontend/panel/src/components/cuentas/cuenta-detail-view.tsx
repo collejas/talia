@@ -204,7 +204,7 @@ async function syncAccountDirections(
     }
   }
 
-  const directionsToCreate: Array<{ tipo_relacion: "fiscal" | "principal" | "sucursal"; direccion: ReturnType<typeof buildDirectionPayload> }> = [];
+  const directionsToCreate: Array<{ tipo_relacion: "fiscal" | "principal" | "envio" | "sucursal"; direccion: ReturnType<typeof buildDirectionPayload> }> = [];
   for (const relationType of expandDirectionRelationTypes(primaryType)) {
     directionsToCreate.push({ tipo_relacion: relationType, direccion: buildDirectionPayload(primaryDraft, relationType) });
   }
@@ -221,7 +221,7 @@ async function syncAccountDirections(
       body: JSON.stringify({
         tipo_relacion: entry.tipo_relacion,
         activo: true,
-        es_principal: entry.tipo_relacion === "principal",
+        es_principal: entry.tipo_relacion === "principal" || entry.tipo_relacion === "envio",
         direccion: entry.direccion,
       }),
     });
