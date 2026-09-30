@@ -33,6 +33,16 @@ type QueueItem = {
   domicilio_entrega: string | null;
   domicilio_entrega_completo: boolean;
   domicilio_entrega_faltantes: string[];
+  domicilio_entrega_pais: string | null;
+  domicilio_entrega_entidad: string | null;
+  domicilio_entrega_municipio: string | null;
+  domicilio_entrega_localidad: string | null;
+  domicilio_entrega_tipo_vialidad: string | null;
+  domicilio_entrega_nombre_vialidad: string | null;
+  domicilio_entrega_numero_exterior: string | null;
+  domicilio_entrega_numero_interior: string | null;
+  domicilio_entrega_colonia: string | null;
+  domicilio_entrega_codigo_postal: string | null;
   domicilio_entrega_referencias: string | null;
   observaciones_comerciales: string | null;
   cliente_datos: Record<string, string | null>;
@@ -182,6 +192,17 @@ function getInventoryProjection(item: QueueItem): InventoryProjection[] {
 
 function formatQuantity(value: number) {
   return new Intl.NumberFormat("es-MX", { maximumFractionDigits: 3 }).format(value);
+}
+
+function FieldStatus({ label, value, warning = false }: { label: string; value: string | number | null | undefined; warning?: boolean }) {
+  const present = value !== null && value !== undefined && String(value).trim() !== "";
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      {present && !warning ? <IconCircleCheck className="size-3.5 shrink-0 text-emerald-600" /> : <IconAlertTriangle className="size-3.5 shrink-0 text-amber-600" />}
+      <span className="text-muted-foreground">{label}:</span>
+      <span className={present && !warning ? "text-foreground" : "font-medium text-amber-700"}>{present ? String(value) : "Faltante"}</span>
+    </div>
+  );
 }
 
 function hasBlockingIssues(item: QueueItem) {
@@ -528,17 +549,36 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
                 <div className="border-t bg-muted/10">
                   <div className="divide-y">
                     <ReviewRow title="Cliente y facturación" summary={(item.cliente || item.contacto || "Cliente sin nombre") + " · " + (item.cliente_datos.rfc ? "RFC " + item.cliente_datos.rfc : "RFC pendiente") + " · " + (item.cliente_datos.codigo_postal ? "C.P. " + item.cliente_datos.codigo_postal : "C.P. pendiente")} checked={review.cliente} onCheckedChange={(checked) => updateReview(item.id, "cliente", checked)} disabled={pendingId === item.id}>
+                      <FieldStatus label="Cuenta CRM" value={item.cuenta_crm_asociada ? "Asociada" : null} />
+                      <FieldStatus label="Razón social" value={item.cliente_datos.razon_social} />
+                      <FieldStatus label="RFC" value={item.cliente_datos.rfc} />
+                      <FieldStatus label="Correo de facturación" value={item.cliente_datos.correo_facturacion} />
+                      <FieldStatus label="Código postal" value={item.cliente_datos.codigo_postal} />
                       {!item.cuenta_crm_asociada ? <p className="font-medium text-destructive">Bloqueante: no hay una cuenta CRM asociada.</p> : null}
-                      {!item.cliente_datos.rfc || !item.cliente_datos.codigo_postal ? <p className="text-amber-700">Faltan datos de facturación disponibles.</p> : null}
                     </ReviewRow>
                     <ReviewRow title="OC confirmada y evidencias" summary={(item.referencia_pedido_cliente ? "OC " + item.referencia_pedido_cliente : "Sin OC") + " · " + item.documentos.length + " evidencia" + (item.documentos.length === 1 ? "" : "s") + " · " + (CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada")} checked={review.evidencia} onCheckedChange={(checked) => updateReview(item.id, "evidencia", checked)} disabled={pendingId === item.id}>
-                      {item.documentos.length ? item.documentos.map((document) => <p key={document.id}>Evidencia: {CONFIRMATION_LABELS[document.tipo_documento] || "Otro"}{document.nombre_original ? <a className="ml-2 text-primary underline underline-offset-4" href={"/api/embudo/quotes/" + item.cotizacion_id + "/pedido/orden-compra?documento_id=" + encodeURIComponent(document.id)} target="_blank" rel="noreferrer">Ver archivo</a> : null}</p>) : <p className="text-amber-700">No hay evidencias adjuntas; confirma la compra registrada.</p>}
+                      <FieldStatus label="Forma de confirmación" value={CONFIRMATION_LABELS[item.forma_confirmacion || ""] || null} />
+                      <FieldStatus label="Referencia OC" value={item.referencia_pedido_cliente} />
+                      <FieldStatus label="Fecha de confirmación" value={item.fecha_confirmacion_cliente} />
+                      <FieldStatus label="Evidencias" value={item.documentos.length ? `${item.documentos.length} archivo(s)` : null} />
+                      {item.documentos.map((document) => <p key={document.id} className="text-muted-foreground">{CONFIRMATION_LABELS[document.tipo_documento] || "Otro"}{document.nombre_original ? <a className="ml-2 text-primary underline underline-offset-4" href={"/api/embudo/quotes/" + item.cotizacion_id + "/pedido/orden-compra?documento_id=" + encodeURIComponent(document.id)} target="_blank" rel="noreferrer">Ver archivo</a> : null}</p>)}
                     </ReviewRow>
                     <ReviewRow title="Datos de entrega" summary={deliveryRequired ? (item.domicilio_entrega_completo ? item.domicilio_entrega || "Dirección completa" : "Faltan datos de entrega") : "No aplica a estas partidas"} checked={review.entrega} onCheckedChange={(checked) => updateReview(item.id, "entrega", checked)} disabled={pendingId === item.id}>
-                      {deliveryRequired && !item.domicilio_entrega_completo ? <p className="font-medium text-destructive">Bloqueante: falta completar la dirección de envío{item.domicilio_entrega_faltantes.length ? " (" + item.domicilio_entrega_faltantes.join(", ") + ")" : ""}.</p> : null}
+                      <FieldStatus label="País" value={deliveryRequired ? item.domicilio_entrega_pais : "No aplica"} />
+                      <FieldStatus label="Estado" value={deliveryRequired ? item.domicilio_entrega_entidad : "No aplica"} />
+                      <FieldStatus label="Municipio" value={deliveryRequired ? item.domicilio_entrega_municipio : "No aplica"} />
+                      <FieldStatus label="Vialidad" value={deliveryRequired ? item.domicilio_entrega_nombre_vialidad : "No aplica"} />
+                      <FieldStatus label="Número exterior" value={deliveryRequired ? item.domicilio_entrega_numero_exterior : "No aplica"} />
+                      <FieldStatus label="Número interior" value={deliveryRequired ? item.domicilio_entrega_numero_interior || "No especificado" : "No aplica"} />
+                      <FieldStatus label="Colonia" value={deliveryRequired ? item.domicilio_entrega_colonia : "No aplica"} />
+                      <FieldStatus label="Código postal" value={deliveryRequired ? item.domicilio_entrega_codigo_postal : "No aplica"} />
+                      {deliveryRequired && !item.domicilio_entrega_completo ? <p className="font-medium text-destructive">Bloqueante: faltan {item.domicilio_entrega_faltantes.join(", ") || "datos de entrega"}.</p> : null}
                       {item.domicilio_entrega_referencias ? <p className="text-muted-foreground">Referencias: {item.domicilio_entrega_referencias}</p> : null}
                     </ReviewRow>
                     <ReviewRow title="Productos y cantidades" summary={item.items.length + " partida" + (item.items.length === 1 ? "" : "s") + " · " + (productMismatch ? "Hay diferencias contra la cotización" : "Coinciden con la cotización aceptada")} checked={review.productos} onCheckedChange={(checked) => updateReview(item.id, "productos", checked)} disabled={pendingId === item.id}>
+                      <FieldStatus label="Productos" value={item.items.length ? `${item.items.length} partida(s)` : null} />
+                      <FieldStatus label="Cantidades y precios" value={productMismatch ? "No coinciden con la cotización" : item.items.length ? "Coinciden con la cotización aceptada" : null} warning={productMismatch} />
+                      <FieldStatus label="Descuentos" value={item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje)) ? "Superan el límite" : "Dentro del límite"} warning={item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje))} />
                       {productMismatch ? <p className="font-medium text-destructive">Bloqueante: las partidas, cantidades, productos o precios no coinciden.</p> : null}
                       {item.items.length === 0 ? <p className="font-medium text-destructive">Bloqueante: la orden no tiene productos.</p> : null}
                       {inventoryProjection.some((product) => product.pendienteDespues > 0) ? <p className="text-amber-700">Faltante de inventario: {inventoryProjection.filter((product) => product.pendienteDespues > 0).length} producto(s); se valida al aprobar.</p> : null}
