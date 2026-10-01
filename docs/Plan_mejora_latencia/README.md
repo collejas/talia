@@ -4,6 +4,7 @@
 - [Plan transversal de consolidación de métricas](../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md)
 - [Auditoría de separación de envíos de prospección](../Prospeccion/envios_y_separacion.md)
 - [Incidente Supabase/Prospección y actualización del plan](07_incidente_supabase_prospeccion_20261001.md)
+- [Changelog de mejoras de latencia](changelog.md)
 
 Documentación generada para diagnóstico y plan de mejora de rendimiento en backend CRM.
 
@@ -42,6 +43,9 @@ separación debe auditarse con los timestamps del worker y del proveedor.
   - Evidencia reciente de `PGRST002`, `57014`, latencia de Prospección y relación
     con los workers de Brevo/WhatsApp.
   - Correcciones propuestas para manejo de errores, indicadores y refreshes.
+
+- `changelog.md`
+  - Registro cronológico de los tres puntos prioritarios de mejora.
 
 ## Orden recomendado
 
