@@ -3,6 +3,17 @@
 Registro de hallazgos, decisiones y mejoras propuestas para reducir la latencia
 en Supabase, Prospección y los workers de comunicación.
 
+## [2026-10-01] — Mapa de Conversión y exportaciones
+
+Se confirmó un cuello independiente de `/prospeccion/metricas`: las
+exportaciones de `mapa-de-conversion` reutilizan
+`prospeccion_campana_template_atribucion_rango` y pueden terminar en `502`
+cuando Supabase cancela la consulta con `57014`.
+
+La mejora documentada consiste en separar la lectura de atribución/conversión
+del agregado de ejecución de campañas, aplicar filtros de organización y fecha
+antes de agregar, paginar HTML/XLSX y registrar tiempos por etapa.
+
 ## [2026-10-01] — Métricas y consultas de envíos
 
 Estado: implementación aplicada; pendiente de despliegue y medición en producción.

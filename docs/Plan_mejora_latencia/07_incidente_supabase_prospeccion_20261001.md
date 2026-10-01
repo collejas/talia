@@ -169,3 +169,24 @@ Pendiente:
 - Medir nuevamente los timeouts después del despliegue del panel.
 - Rediseñar el refresh de la MV como proceso programado independiente o tabla
   resumen incremental; el refresh normal sigue siendo una operación pesada.
+
+## Relación con Mapa de Conversión (2026-10-01)
+
+La verificación posterior al redeploy confirmó que los errores observados al
+navegar por `mapa-de-conversion` no correspondían al listado de prospectos ni
+al refresh nuevo del API. Los endpoints principales del mapa y
+`/prospeccion/metricas` respondieron `200 OK`.
+
+Los `502` se concentraron en las exportaciones del mapa porque el backend
+reutiliza `prospeccion_campana_template_atribucion_rango`, una RPC pesada de
+métricas de ejecución. Esta RPC procesa envíos y logs de campañas antes de
+devolver resultados y alcanzó `57014` bajo la carga de exportaciones.
+
+La acción queda documentada en:
+
+- `docs/Plan_mapa_conversion/plan_latencia_mapa_conversion.md`, sección 17.
+- `docs/Plan_mapa_conversion/changelog_maestro_mapa_conversion.md`.
+
+La solución debe ser una lectura específica para atribución/conversión del
+mapa, con filtros tempranos, paginación y degradación independiente por
+bloque; no se debe elevar globalmente `statement_timeout`.

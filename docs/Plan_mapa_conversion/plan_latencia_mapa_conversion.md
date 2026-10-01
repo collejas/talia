@@ -318,6 +318,69 @@ En logs recientes se observó:
   - `total_ms` quedó en rangos de aproximadamente `454 ms` a `1267 ms`.
 - `crm.demografia.mapa_v2.cache_miss`
   - `total_ms` quedó en aproximadamente `1.4 s` a `2.4 s`.
+
+## 17) Incidente confirmado después del redeploy · Exportaciones del mapa
+
+Fecha: 2026-10-01
+
+### Síntoma
+
+Al navegar por `mapa-de-conversion` se observaron retrasos y respuestas `502`
+en las exportaciones HTML y XLSX:
+
+- `/api/crm/demografia/mapa-v2/export/html`
+- `/api/crm/demografia/mapa-v2/export/xlsx`
+
+### Evidencia
+
+Después del redeploy, los endpoints principales respondieron correctamente:
+
+- `/api/crm/demografia/resumen-v2`: `200 OK`.
+- `/api/crm/demografia/mapa-v2`: `200 OK`.
+- `/api/crm/prospeccion/metricas`: `200 OK`.
+
+Los errores se concentraron en las exportaciones. El backend registró que
+`demografia/resumen_v2` falló al ejecutar `load_campaign_conversion_rows`, que
+invoca la RPC `prospeccion_campana_template_atribucion_rango`. Supabase
+canceló esa RPC con `57014` (`canceling statement due to statement timeout`).
+
+### Causa técnica
+
+`mapa-de-conversion` está reutilizando una RPC diseñada para métricas de
+ejecución de campañas. La RPC procesa envíos, estados, logs, respuestas,
+aperturas, clics y señales de atribución antes de aplicar el límite. Las
+exportaciones la ejecutan con un contexto más pesado y el trabajo puede
+superar el timeout de Supabase.
+
+Esto viola parcialmente la separación definida en este plan:
+
+- `prospeccion/metricas` debe medir ejecución de campañas.
+- `mapa-de-conversion` debe medir adquisición, atribución y conversión.
+
+### Qué se debe hacer
+
+1. Crear una lectura específica para `mapa-de-conversion` que devuelva solo
+   las columnas necesarias para atribución y conversión.
+2. No reutilizar directamente `prospeccion_campana_template_atribucion_rango`
+   desde las exportaciones.
+3. Separar la carga de campañas, conversaciones y conversiones en bloques
+   independientes y degradables.
+4. Aplicar filtros de fecha y organización antes de agregar logs o envíos.
+5. Mantener las exportaciones limitadas y paginadas; no construir un payload
+   completo de la vista para cada archivo.
+6. Registrar duración por etapa: campañas, conversaciones, oportunidades y
+   generación del archivo.
+7. Si la lectura específica continúa siendo costosa, crear un agregado
+   incremental del mapa, respetando columnas explícitas, tenant scope, RLS e
+   índices justificados.
+
+### Criterio de cierre
+
+- El mapa y su resumen siguen respondiendo `200 OK`.
+- Las exportaciones no dependen de una RPC de métricas operativas pesada.
+- HTML y XLSX responden sin `57014` bajo el rango normal de la vista.
+- Un fallo de campañas no bloquea tráfico web, conversaciones ni el mapa.
+- Los tiempos de cada etapa quedan registrados para p50/p95/p99.
 - `crm.demografia.resumen_v2.cache_miss`
   - `total_ms` quedó en aproximadamente `2.6 s` a `3.3 s`.
 

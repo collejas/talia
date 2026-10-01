@@ -14,6 +14,22 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - frontend,
 - o contratos de integracion.
 
+## 2026-10-01 · Timeout en exportaciones de Mapa de Conversión
+
+- Se confirmó que los retrasos posteriores al redeploy ocurrieron al navegar
+  por `mapa-de-conversion`, específicamente en sus exportaciones HTML/XLSX.
+- `demografia/resumen-v2`, `demografia/mapa-v2` y
+  `prospeccion/metricas` respondieron `200 OK` en la misma ventana.
+- Las exportaciones devolvieron `502` porque `load_campaign_conversion_rows`
+  reutiliza `prospeccion_campana_template_atribucion_rango`.
+- Supabase canceló esa RPC con `57014` por procesar envíos, logs, respuestas y
+  atribución antes de aplicar el límite.
+- Se documentó que el mapa necesita una lectura específica, limitada y
+  separada de la RPC de ejecución de campañas.
+- La siguiente implementación debe separar campañas, conversaciones y
+  conversiones, aplicar filtros antes de agregar, paginar exportaciones y
+  medir cada etapa.
+
 ## 2026-08-22 · Estados acumulativos de entrega WhatsApp
 
 - Se agregó una RPC aditiva para que los mensajes leídos también cuenten como
