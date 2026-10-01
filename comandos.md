@@ -88,6 +88,7 @@ npm run build
 sudo systemctl restart talia-api.service
 sudo systemctl restart talia-panel.service
 
+sudo systemctl restart talia-api.service
 sudo systemctl restart talia-postmark-preparer.service
 sudo systemctl restart talia-email-worker.service
 sudo systemctl restart talia-mailbox-worker.service

@@ -13,6 +13,7 @@ class DummySalesRepo:
         self.metadata = metadata or {}
         self.updated_payload: dict | None = None
         self.audit_calls: list[dict[str, Any]] = []
+        self.notification_claimed = False
 
     async def get_pipeline_opportunity(self, **_: object) -> dict:
         return {
@@ -30,6 +31,15 @@ class DummySalesRepo:
 
     async def insert_sales_assignment_audit(self, **kwargs: object) -> None:
         self.audit_calls.append(kwargs)
+
+    async def claim_whatsapp_customer_seller_notification(self, **_: object) -> dict:
+        if self.notification_claimed:
+            return None
+        self.notification_claimed = True
+        return {"id": "00000000-0000-0000-0000-0000000000dd"}
+
+    async def mark_whatsapp_customer_seller_notification(self, **_: object) -> dict:
+        return {"id": "00000000-0000-0000-0000-0000000000dd"}
 
 
 @pytest.mark.asyncio
@@ -91,6 +101,11 @@ async def test_notify_sales_rep_sends_message(monkeypatch: pytest.MonkeyPatch) -
         return None
 
     monkeypatch.setattr(tools.storage, "register_whatsapp_message", fake_register_whatsapp_message)
+
+    async def fake_fetch_recent_messages(**_: object):
+        return []
+
+    monkeypatch.setattr(tools.storage, "fetch_recent_messages", fake_fetch_recent_messages)
 
     async def fake_fetch_recent_messages(**_: object):
         return []
@@ -180,7 +195,7 @@ async def test_notify_customer_assigned_seller_when_tenant_enabled(
         "telefono_e164": "+529991112233",
     }
     context = ToolRuntimeContext(
-        conversation_id="conv-customer-seller",
+        conversation_id="00000000-0000-0000-0000-0000000000ee",
         persona_id="contact-test",
         channel="whatsapp",
     )
@@ -198,6 +213,7 @@ async def test_notify_customer_assigned_seller_when_tenant_enabled(
     assert "+521234567890" in str(sent["body"])
     assert sent["registered"]
     assert dummy_repo.updated_payload["metadata"]["customer_seller_data_notifications"]["close_lead"]
+    assert dummy_repo.updated_payload["metadata"]["customer_seller_data_sent"]["seller_id"] == "00000000-0000-0000-0000-0000000000aa"
 
 
 @pytest.mark.asyncio
@@ -776,6 +792,13 @@ async def test_handle_close_lead_triggers_notification(
         return {"id": "job-1"}
 
     monkeypatch.setattr(tools, "enqueue_webchat_sales_notification", fake_enqueue)
+    customer_seller_notifications: list[str] = []
+
+    async def fake_notify_customer_seller(**kwargs: Any) -> bool:
+        customer_seller_notifications.append(str(kwargs.get("trigger")))
+        return True
+
+    monkeypatch.setattr(tools, "_notify_customer_assigned_seller", fake_notify_customer_seller)
 
     context = ToolRuntimeContext(
         conversation_id="conv-1",
@@ -801,6 +824,7 @@ async def test_handle_close_lead_triggers_notification(
     assert len(scheduled) == 1
     await scheduled[0]
     assert enqueued == ["close_lead"]
+    assert customer_seller_notifications == ["close_lead"]
     assert scored.get("called") is True
     assert scored["payload"]["profiling_statuses"]["purchase_timeline"] == "unknown"
     assert scored["payload"]["profiling_reprompt_counts"]["financing_type"] == 1

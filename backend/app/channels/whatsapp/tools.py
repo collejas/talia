@@ -3656,6 +3656,12 @@ async def _notify_customer_assigned_seller(
     if sent_by_trigger.get(trigger):
         return True
 
+    # Marca canónica compartida por todos los disparadores. El trigger se
+    # conserva para auditoría, pero nunca debe permitir un segundo envío.
+    canonical_notification = _ensure_dict(metadata.get("customer_seller_data_sent"))
+    if str(canonical_notification.get("seller_id") or "").strip() == seller_id:
+        return True
+
     # El aviso es único por vendedor, aunque se origine en distintos flujos.
     if any(
         isinstance(notification, dict)
@@ -3699,6 +3705,37 @@ async def _notify_customer_assigned_seller(
         ):
             return True
 
+    try:
+        reservation = await repo.claim_whatsapp_customer_seller_notification(
+            organizacion_id=org_uuid,
+            conversacion_id=UUID(str(context.conversation_id)),
+            oportunidad_id=opp_uuid,
+            seller_id=UUID(seller_id),
+            trigger=trigger,
+        )
+    except (ValueError, CRMRepositoryError) as exc:
+        logger.warning(
+            "whatsapp.customer_seller_data.idempotency_reservation_failed",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger, "error": str(exc)},
+        )
+        return False
+    if not reservation:
+        logger.info(
+            "whatsapp.customer_seller_data.already_reserved",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger, "seller_id": seller_id},
+        )
+        return True
+    try:
+        reservation_id = UUID(str(reservation.get("id")))
+    except (TypeError, ValueError):
+        reservation_id = None
+    if not reservation_id:
+        logger.warning(
+            "whatsapp.customer_seller_data.reservation_missing_id",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger},
+        )
+        return False
+
     lines = [f"Tu asesor asignado es {seller_name}."]
     if seller_phone:
         lines.append(f"Teléfono: {seller_phone}")
@@ -3716,6 +3753,14 @@ async def _notify_customer_assigned_seller(
             organizacion_id=org_uuid,
         )
     except Exception as exc:  # pragma: no cover - proveedor externo
+        try:
+            await repo.mark_whatsapp_customer_seller_notification(
+                notification_id=reservation_id,
+                estado="fallido",
+                error=str(exc),
+            )
+        except CRMRepositoryError:
+            pass
         logger.warning(
             "whatsapp.customer_seller_data.send_failed",
             extra={"conversation_id": context.conversation_id, "trigger": trigger, "error": str(exc)},
@@ -3725,6 +3770,14 @@ async def _notify_customer_assigned_seller(
     send_error = getattr(send_result, "error", None) if send_result else None
     message_sid = getattr(send_result, "sid", None) if send_result else None
     if send_error or not message_sid:
+        try:
+            await repo.mark_whatsapp_customer_seller_notification(
+                notification_id=reservation_id,
+                estado="fallido",
+                error=str(send_error or "provider_message_id_missing"),
+            )
+        except CRMRepositoryError:
+            pass
         logger.warning(
             "whatsapp.customer_seller_data.send_rejected",
             extra={
@@ -3759,12 +3812,30 @@ async def _notify_customer_assigned_seller(
             extra={"conversation_id": context.conversation_id, "trigger": trigger, "error": str(exc)},
         )
 
+    try:
+        await repo.mark_whatsapp_customer_seller_notification(
+            notification_id=reservation_id,
+            estado="enviado",
+            provider_message_id=str(message_sid),
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.customer_seller_data.idempotency_mark_failed",
+            extra={"conversation_id": context.conversation_id, "trigger": trigger, "error": str(exc)},
+        )
+
     sent_by_trigger[trigger] = {
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "message_sid": message_sid,
         "seller_id": seller_id,
     }
     metadata["customer_seller_data_notifications"] = sent_by_trigger
+    metadata["customer_seller_data_sent"] = {
+        "sent_at": sent_by_trigger[trigger]["sent_at"],
+        "message_sid": message_sid,
+        "seller_id": seller_id,
+        "trigger": trigger,
+    }
     try:
         await repo.update_opportunity(
             organizacion_id=org_uuid,

@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead cuando ya existen nombre, teléfono de WhatsApp, necesidad/interés y notas. El correo y la empresa son opcionales y nunca deben bloquear este cierre. Puede usarse para guardar avances sin depender de que ya exista cita confirmada.",
+  "description": "Cerrar y consolidar el lead cuando ya existen nombre, teléfono de WhatsApp, necesidad/interés y notas. El correo y la empresa son opcionales y nunca deben bloquear este cierre. Puede usarse para guardar avances sin depender de que ya exista cita confirmada. Si WhatsApp tiene habilitado el envío de datos del asesor, el backend lo realiza una sola vez y no debe repetirse en el escalamiento.",
   "strict": true,
   "parameters": {
     "type": "object",
