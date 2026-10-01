@@ -1,7 +1,7 @@
 # Incidente de latencia y disponibilidad: Supabase, Prospección y workers
 
 Fecha del diagnóstico: 2026-10-01 (UTC)
-Estado: diagnóstico documentado; correcciones pendientes de implementación.
+Estado: diagnóstico documentado; implementación inicial aplicada, pendiente de despliegue y medición.
 
 ## Resumen ejecutivo
 

@@ -45,6 +45,9 @@ from app.services.opportunity_followup_jobs import opportunity_followup_state_ru
 from app.services.sales_notification_jobs import sales_notification_jobs_runner
 from app.services.meta_delivery_reconciliation_jobs import meta_delivery_reconciliation_runner
 from app.services.message_billing_alert_jobs import message_billing_alert_runner
+from app.services.prospeccion_query_daily_mv_refresh import (
+    prospeccion_query_daily_mv_refresh_runner,
+)
 from app.services.webchat_followups import (
     closure_rescue_runner as webchat_closure_rescue_runner,
 )
@@ -93,6 +96,7 @@ async def app_lifespan(_: FastAPI):
     if settings.meta_delivery_reconciliation_in_api:
         await meta_delivery_reconciliation_runner.start()
     await message_billing_alert_runner.start()
+    await prospeccion_query_daily_mv_refresh_runner.start()
     try:
         yield
     finally:
@@ -116,6 +120,10 @@ async def app_lifespan(_: FastAPI):
             _shutdown_with_timeout(
                 name="message_billing_alert_runner",
                 coro=message_billing_alert_runner.shutdown(),
+            ),
+            _shutdown_with_timeout(
+                name="prospeccion_query_daily_mv_refresh_runner",
+                coro=prospeccion_query_daily_mv_refresh_runner.shutdown(),
             ),
             _shutdown_with_timeout(
                 name="high_demand_mode_runner",

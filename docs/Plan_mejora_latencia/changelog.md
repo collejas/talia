@@ -7,6 +7,30 @@ en Supabase, Prospección y los workers de comunicación.
 
 Estado: propuesta documentada; implementación pendiente.
 
+## [2026-10-01] — Implementación inicial del plan
+
+Estado: implementado en backend y Supabase; despliegue del servicio pendiente.
+
+- Corregido el logging de errores de zona horaria para no generar `TypeError`.
+- La zona horaria solo se resuelve desde Supabase cuando existen filtros de
+  fecha.
+- Los indicadores detallados ya no se cargan dentro del listado por defecto.
+  La UI los solicita mediante el endpoint separado existente.
+- Si se solicitan indicadores de forma explícita y fallan, el listado puede
+  responder degradado con `contact_indicators_degraded=true`.
+- Eliminados los cinco refreshes síncronos de la MV desde endpoints de guardar
+  y eliminar prospectos.
+- Creado un runner periódico configurable cada 300 segundos para actualizar la
+  MV fuera de las peticiones del usuario.
+- Aplicado en Supabase un lock transaccional para evitar refreshes concurrentes.
+
+Pendiente:
+
+- Desplegar y reiniciar `talia-api.service`.
+- Verificar en logs `prospeccion.query_daily_mv.refresh_ok` y la duración.
+- Medir p50/p95/p99 de `/prospeccion/prospectos` antes y después.
+- Confirmar que no reaparecen `57014` ni `TypeError` en la ruta.
+
 ### 1. Corrección del manejo de errores de `/prospeccion/prospectos`
 
 #### Problema

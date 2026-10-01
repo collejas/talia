@@ -4793,6 +4793,10 @@ class ProspectoListQuery(BaseModel):
     envios_whatsapp_max: int | None = Field(default=None, ge=0, le=1_000_000)
     envios_voz_min: int | None = Field(default=None, ge=0, le=1_000_000)
     envios_voz_max: int | None = Field(default=None, ge=0, le=1_000_000)
+    include_contact_indicators: bool = Field(
+        default=False,
+        description="Incluye indicadores detallados; la UI los carga por separado.",
+    )
     include_scraper_status: bool = Field(default=False)
 
     @model_validator(mode="after")
@@ -8057,7 +8061,10 @@ async def _resolve_effective_timezone_name(
         )
         organization_timezone = (calendar_settings.timezone or "").strip() or None
     except Exception as exc:  # pragma: no cover - defensivo
-        logger.warning("crm.timezone.organization_lookup_failed", error=str(exc))
+        logger.warning(
+            "crm.timezone.organization_lookup_failed",
+            extra={"error": str(exc)},
+        )
 
     current_usuario_id = usuario_id
     if current_usuario_id is None:
@@ -8065,7 +8072,10 @@ async def _resolve_effective_timezone_name(
             context = await repo.get_permission_context()
             current_usuario_id = _safe_uuid(context.get("usuario_id")) if isinstance(context, dict) else None
         except Exception as exc:  # pragma: no cover - defensivo
-            logger.warning("crm.timezone.permission_context_failed", error=str(exc))
+            logger.warning(
+                "crm.timezone.permission_context_failed",
+                extra={"error": str(exc)},
+            )
 
     if current_usuario_id:
         cache_key = str(current_usuario_id)
@@ -8079,7 +8089,10 @@ async def _resolve_effective_timezone_name(
                 if isinstance(profile, dict):
                     user_timezone = _clean_text(profile.get("timezone"))
             except Exception as exc:  # pragma: no cover - defensivo
-                logger.warning("crm.timezone.user_lookup_failed", error=str(exc))
+                logger.warning(
+                    "crm.timezone.user_lookup_failed",
+                    extra={"error": str(exc)},
+                )
             _USER_TIMEZONE_CACHE[cache_key] = (
                 user_timezone,
                 now_monotonic + TIMEZONE_CACHE_TTL_SECONDS,
@@ -36504,6 +36517,7 @@ async def listar_prospectos(
     rows: list[dict[str, Any]] = []
     total = 0
     request_failed = False
+    contact_indicators_degraded = False
     con_envio_canales_values = sorted(
         set((con_envio_canal or []) + _parse_con_envio_canales_param(con_envio_canales))
     )
@@ -36515,11 +36529,13 @@ async def listar_prospectos(
             if params.order == "diverso"
             else None
         )
-        effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
-            repo=repo,
-            organizacion_id=organizacion_id,
-            usuario_id=usuario_id,
-        )
+        effective_timezone: str | None = None
+        if params.date_from or params.date_to:
+            effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                usuario_id=usuario_id,
+            )
         try:
             rows, total = await repo.list_prospectos(
                 usuario_token=user_token,
@@ -36572,7 +36588,7 @@ async def listar_prospectos(
         if rows:
             prospecto_ids = [str(row.get("id") or "").strip() for row in rows if str(row.get("id") or "").strip()]
             contact_indicator_map: dict[str, dict[str, Any]] = {}
-            if prospecto_ids:
+            if prospecto_ids and params.include_contact_indicators:
                 valid_ids: list[UUID] = []
                 for value in prospecto_ids:
                     try:
@@ -36586,7 +36602,15 @@ async def listar_prospectos(
                             prospecto_ids=valid_ids,
                         )
                     except CRMRepositoryError as exc:
-                        raise HTTPException(status_code=502, detail=str(exc)) from exc
+                        contact_indicators_degraded = True
+                        logger.warning(
+                            "crm.prospectos.contact_indicadores.degraded",
+                            extra={
+                                "requested_ids": len(valid_ids),
+                                "error": str(exc),
+                            },
+                        )
+                        indicator_rows = []
                     normalized_indicator_rows = _normalize_total_envios_without_cancelled(
                         [row for row in indicator_rows if isinstance(row, dict)]
                     )
@@ -36619,6 +36643,7 @@ async def listar_prospectos(
             "total": total,
             "limit": params.limit,
             "offset": params.offset,
+            "contact_indicators_degraded": contact_indicators_degraded,
         }
     except Exception:
         request_failed = True
@@ -36690,11 +36715,13 @@ async def listar_prospectos_query_metadata(
     query_signature = hashlib.sha1(
         json.dumps(normalized_query_filters, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()[:12]
-    effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
-        repo=repo,
-        organizacion_id=organizacion_id,
-        usuario_id=usuario_id,
-    )
+    effective_timezone: str | None = None
+    if date_from or date_to:
+        effective_timezone, _timezone_source = await _resolve_effective_timezone_name(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+        )
     envio_canales_values = sorted(_parse_con_envio_canales_param(con_envio_canales))
     envio_ids: set[str] | None = None
     # Los filtros generales de envío se resuelven con los contadores columnarizados
@@ -41472,10 +41499,6 @@ async def guardar_prospectos(
 
         prospectos = result.get("prospectos")
         saved_total = int(result.get("nuevos_guardados") or 0)
-        try:
-            await repo.refresh_prospeccion_query_daily_mv()
-        except CRMRepositoryError as exc:  # pragma: no cover - no bloquea guardado
-            logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
         await _clear_prospecto_queries_cache()
         await _publish_prospectos_ui_event(
             organizacion_id=organizacion_id,
@@ -41560,10 +41583,6 @@ async def guardar_prospectos(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    try:
-        await repo.refresh_prospeccion_query_daily_mv()
-    except CRMRepositoryError as exc:  # pragma: no cover - no bloquea guardado
-        logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
     await _clear_prospecto_queries_cache()
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,
@@ -41772,10 +41791,6 @@ async def eliminar_prospecto(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    try:
-        await repo.refresh_prospeccion_query_daily_mv()
-    except CRMRepositoryError as exc:  # pragma: no cover - no bloquea flujo principal
-        logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
     await _clear_prospecto_queries_cache()
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,
@@ -41804,10 +41819,6 @@ async def eliminar_prospectos(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    try:
-        await repo.refresh_prospeccion_query_daily_mv()
-    except CRMRepositoryError as exc:  # pragma: no cover - no bloquea flujo principal
-        logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
     await _clear_prospecto_queries_cache()
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,
@@ -41876,10 +41887,6 @@ async def eliminar_grupos_prospectos(
             if len(ids_batch) < page_limit:
                 break
 
-    try:
-        await repo.refresh_prospeccion_query_daily_mv()
-    except CRMRepositoryError as exc:  # pragma: no cover - no bloquea flujo principal
-        logger.warning("prospeccion.query_daily_mv_refresh_failed", extra={"error": str(exc)})
     await _clear_prospecto_queries_cache()
     await _publish_prospectos_ui_event(
         organizacion_id=organizacion_id,

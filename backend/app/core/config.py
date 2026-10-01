@@ -1158,6 +1158,24 @@ class Settings(BaseSettings):
             "TALIA_ACTIVITY_REMINDER_RUNNER_INTERVAL_SECONDS",
         ),
     )
+    prospeccion_query_mv_refresh_enabled: bool = Field(
+        default=True,
+        description="Activa el refresh periódico de la MV de consultas de Prospección fuera de las peticiones.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_QUERY_MV_REFRESH_ENABLED",
+            "TALIA_PROSPECCION_QUERY_MV_REFRESH_ENABLED",
+        ),
+    )
+    prospeccion_query_mv_refresh_interval_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Intervalo del refresh de la MV de consultas de Prospección.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_QUERY_MV_REFRESH_INTERVAL_SECONDS",
+            "TALIA_PROSPECCION_QUERY_MV_REFRESH_INTERVAL_SECONDS",
+        ),
+    )
     opportunity_followup_state_queue_enabled: bool = Field(
         default=True,
         description="Activa la evaluación automática de estados de seguimiento de oportunidades.",
