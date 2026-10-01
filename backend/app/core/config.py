@@ -1167,10 +1167,10 @@ class Settings(BaseSettings):
         ),
     )
     prospeccion_query_mv_refresh_interval_seconds: int = Field(
-        default=300,
+        default=900,
         ge=60,
         le=3600,
-        description="Intervalo del refresh de la MV de consultas de Prospección.",
+        description="Intervalo base del refresh de la MV; los fallos aplican backoff hasta 1 hora.",
         validation_alias=AliasChoices(
             "PROSPECCION_QUERY_MV_REFRESH_INTERVAL_SECONDS",
             "TALIA_PROSPECCION_QUERY_MV_REFRESH_INTERVAL_SECONDS",

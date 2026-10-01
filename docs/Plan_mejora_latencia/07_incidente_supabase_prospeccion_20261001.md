@@ -1,7 +1,7 @@
 # Incidente de latencia y disponibilidad: Supabase, Prospección y workers
 
 Fecha del diagnóstico: 2026-10-01 (UTC)
-Estado: diagnóstico documentado; implementación inicial aplicada, pendiente de despliegue y medición.
+Estado: diagnóstico documentado; implementación incremental aplicada y pendiente de despliegue/medición en producción.
 
 ## Resumen ejecutivo
 
@@ -138,3 +138,34 @@ de dependencias sean degradables.
 - Los errores `PGRST002` se registran con ruta, operación y duración, sin datos
   sensibles.
 - Brevo y WhatsApp pueden continuar sus reintentos sin duplicar despachos.
+
+## Hallazgos posteriores y acciones aplicadas (2026-10-01)
+
+La vista `/prospeccion/metricas` estaba iniciando en paralelo la carga del
+resumen y la serie diaria. Ambas rutas terminan consultando agregados de
+envíos/logs; esto aumentaba la concurrencia al entrar al panel. La serie ahora
+se carga de forma diferida después del resumen principal.
+
+En la ventana revisada se registraron 21 timeouts de
+`prospeccion_campana_template_atribucion_rango`, 29 del refresh de
+`prospeccion_query_daily_mv`, 1 de `prospeccion_enriquecimiento_resumen` y 2
+consultas lentas de `prospeccion_contactos_log`.
+
+Aplicado:
+
+- Índice `prospeccion_contacto_envio_org_event_ts_idx` para filtrar por
+  organización y fecha efectiva del envío.
+- Carga diferida de la serie de métricas para evitar dos RPC pesadas
+  simultáneas al abrir la vista.
+- La prueba de `REFRESH MATERIALIZED VIEW CONCURRENTLY` fue revertida porque
+  el índice único actual de la MV usa expresiones, requisito incompatible con
+  PostgreSQL para ese modo concurrente.
+- El runner ahora espera antes del primer refresh y aplica backoff progresivo
+  hasta una hora cuando la actualización falla; evita reintentos continuos
+  cada cinco minutos durante una degradación de Supabase.
+
+Pendiente:
+
+- Medir nuevamente los timeouts después del despliegue del panel.
+- Rediseñar el refresh de la MV como proceso programado independiente o tabla
+  resumen incremental; el refresh normal sigue siendo una operación pesada.

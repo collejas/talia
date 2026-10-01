@@ -279,8 +279,15 @@ export default function ProspeccionMetricasPageClient() {
 
   useEffect(() => {
     setCampaignTimeseries([])
-    void loadCampaignTimeseries()
-  }, [loadCampaignTimeseries])
+    if (!data) return
+
+    // La serie diaria es secundaria: esperar a que el resumen principal
+    // termine evita ejecutar dos RPC pesadas de métricas al mismo tiempo.
+    const timeoutId = window.setTimeout(() => {
+      void loadCampaignTimeseries()
+    }, 500)
+    return () => window.clearTimeout(timeoutId)
+  }, [data, loadCampaignTimeseries])
 
   const campaignItems = useMemo(
     () => data?.campanas_correo?.items ?? data?.campanas.items ?? [],

@@ -3,6 +3,22 @@
 Registro de hallazgos, decisiones y mejoras propuestas para reducir la latencia
 en Supabase, Prospección y los workers de comunicación.
 
+## [2026-10-01] — Métricas y consultas de envíos
+
+Estado: implementación aplicada; pendiente de despliegue y medición en producción.
+
+- La serie diaria de `/prospeccion/metricas` ahora se carga después del
+  resumen principal para evitar dos RPC pesadas simultáneas al abrir la vista.
+- Aplicado el índice `prospeccion_contacto_envio_org_event_ts_idx` para los
+  filtros por organización y fecha efectiva del envío.
+- Se probó `REFRESH MATERIALIZED VIEW CONCURRENTLY`, pero se restauró el
+  refresh normal porque el índice único de la MV usa expresiones y PostgreSQL
+  no lo acepta como soporte para el modo concurrente.
+- El siguiente trabajo pendiente es separar el refresh en un proceso
+  programado independiente o reemplazarlo por una proyección incremental.
+- El runner del refresh ahora espera antes de la primera ejecución y aplica
+  backoff progresivo hasta una hora después de errores consecutivos.
+
 ## [2026-10-01] — Tres mejoras prioritarias para Prospección y Supabase
 
 Estado: propuesta documentada; implementación pendiente.

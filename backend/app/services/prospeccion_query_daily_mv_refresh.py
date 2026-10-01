@@ -48,10 +48,26 @@ class ProspeccionQueryDailyMVRefreshRunner:
         logger.info("prospeccion.query_daily_mv.runner_stopped")
 
     async def _run_loop(self) -> None:
+        failure_streak = 0
         while not self._stop.is_set():
+            interval_seconds = max(60, settings.prospeccion_query_mv_refresh_interval_seconds)
+            retry_delay_seconds = min(
+                interval_seconds * (2**failure_streak),
+                3600,
+            )
+            try:
+                await asyncio.wait_for(
+                    self._stop.wait(),
+                    timeout=retry_delay_seconds,
+                )
+                return
+            except asyncio.TimeoutError:
+                pass
+
             started = time.perf_counter()
             try:
                 await CRMRepository().refresh_prospeccion_query_daily_mv()
+                failure_streak = 0
                 logger.info(
                     "prospeccion.query_daily_mv.refresh_ok",
                     extra={
@@ -59,20 +75,19 @@ class ProspeccionQueryDailyMVRefreshRunner:
                     },
                 )
             except Exception as exc:  # pragma: no cover - protección del worker
+                failure_streak += 1
                 logger.warning(
                     "prospeccion.query_daily_mv.refresh_failed",
                     extra={
                         "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                        "failure_streak": failure_streak,
+                        "next_retry_seconds": min(
+                            interval_seconds * (2**failure_streak),
+                            3600,
+                        ),
                         "error": str(exc),
                     },
                 )
-            try:
-                await asyncio.wait_for(
-                    self._stop.wait(),
-                    timeout=max(60, settings.prospeccion_query_mv_refresh_interval_seconds),
-                )
-            except asyncio.TimeoutError:
-                continue
 
 
 prospeccion_query_daily_mv_refresh_runner = ProspeccionQueryDailyMVRefreshRunner()
