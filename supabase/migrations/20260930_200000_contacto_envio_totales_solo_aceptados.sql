@@ -132,3 +132,11 @@ SELECT
     r.ultima_respuesta_en
 FROM grouped g
 LEFT JOIN respuestas r ON r.prospecto_id = g.prospecto_id;
+
+-- La vista debe respetar el RLS de las tablas base y ser solo de lectura.
+ALTER VIEW public.prospeccion_prospecto_contacto_stats
+    SET (security_invoker = true);
+
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+    ON public.prospeccion_prospecto_contacto_stats FROM authenticated;
+GRANT SELECT ON public.prospeccion_prospecto_contacto_stats TO authenticated;
