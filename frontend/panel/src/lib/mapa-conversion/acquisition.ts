@@ -53,6 +53,7 @@ export type AcquisitionMetrics = {
 export type DeferredCampaignAttribution = {
   campaign_rows?: Array<Record<string, unknown>>;
   whatsapp_rows?: Array<Record<string, unknown>>;
+  warnings?: string[];
 };
 
 function toNumber(value: unknown): number {

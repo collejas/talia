@@ -30,6 +30,22 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
   conversiones, aplicar filtros antes de agregar, paginar exportaciones y
   medir cada etapa.
 
+## 2026-10-01 · Degradación controlada de atribución diferida
+
+- `/demografia/campanas-atribucion` ya no convierte un fallo de una RPC de
+  atribución en un `502` de toda la pestaña.
+- Correo y WhatsApp se procesan como bloques independientes con
+  `return_exceptions=True`; si uno excede el tiempo, el otro puede seguir
+  mostrando resultados.
+- La carga inicial se limitó a 200 filas por bloque y el fallback histórico a
+  200 filas, evitando que la petición diferida se comporte como una exportación
+  sin límite.
+- `resumen-v2` limita su bloque opcional de atribución a 600 filas y devuelve
+  un conjunto parcial cuando la RPC falla, manteniendo disponibles el mapa y
+  los indicadores principales.
+- La respuesta diferida incluye `warnings` para distinguir datos parciales de
+  una ausencia real de conversiones.
+
 ## 2026-08-22 · Estados acumulativos de entrega WhatsApp
 
 - Se agregó una RPC aditiva para que los mensajes leídos también cuenten como

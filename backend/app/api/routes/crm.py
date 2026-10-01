@@ -48729,15 +48729,19 @@ async def demografia_campanas_atribucion(
         timezone_name=effective_timezone,
     )
     effective_user_token = _normalize_reports_user_token(user_token)
+    attribution_warnings: list[str] = []
     try:
-        campaign_rows, whatsapp_rows = await asyncio.gather(
+        campaign_rows_result, whatsapp_rows_result = await asyncio.gather(
             repo.get_prospeccion_campana_template_atribucion_rango(
                 usuario_token=effective_user_token,
                 organizacion_id=organizacion_id,
                 campana_id=campana_uuid,
                 date_from_iso=date_from.isoformat() if date_from else None,
                 date_to_iso=date_to.isoformat() if date_to else None,
-                limit=1000,
+                # La vista carga este bloque de forma diferida. Mantener la
+                # primera página acotada evita convertir una consulta de
+                # atribución histórica en una exportación implícita.
+                limit=200,
                 offset=0,
             ),
             repo.get_prospeccion_campana_whatsapp_template_metricas_rango(
@@ -48746,12 +48750,53 @@ async def demografia_campanas_atribucion(
                 campana_id=campana_uuid,
                 date_from_iso=date_from.isoformat() if date_from else None,
                 date_to_iso=date_to.isoformat() if date_to else None,
-                limit=1000,
+                limit=200,
                 offset=0,
             ),
+            return_exceptions=True,
         )
-    except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        # Las excepciones de transporte pueden no ser CRMRepositoryError
+        # (por ejemplo, un timeout de httpx). No deben derribar la otra
+        # sección ni convertir el endpoint diferido en un 502 general.
+        if isinstance(campaign_rows_result, Exception):
+            attribution_warnings.append("email_attribution_unavailable")
+            campaign_rows = []
+            logger.warning(
+                "crm.demografia.campanas_atribucion.email_block_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "error_type": type(campaign_rows_result).__name__,
+                },
+            )
+        else:
+            campaign_rows = campaign_rows_result
+        if isinstance(whatsapp_rows_result, Exception):
+            attribution_warnings.append("whatsapp_attribution_unavailable")
+            whatsapp_rows = []
+            logger.warning(
+                "crm.demografia.campanas_atribucion.whatsapp_block_failed",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "error_type": type(whatsapp_rows_result).__name__,
+                },
+            )
+        else:
+            whatsapp_rows = whatsapp_rows_result
+
+    except Exception as exc:  # pragma: no cover - defensa ante cambios del cliente HTTP
+        attribution_warnings.extend(
+            ["email_attribution_unavailable", "whatsapp_attribution_unavailable"]
+        )
+        campaign_rows = []
+        whatsapp_rows = []
+        logger.warning(
+            "crm.demografia.campanas_atribucion.blocks_failed",
+            extra={
+                "organizacion_id": str(organizacion_id),
+                "error_type": type(exc).__name__,
+            },
+        )
 
     # Una conversión puede conservar campaña/oportunidad aunque se haya
     # eliminado el envío o no exista ya una atribución saliente relacionable.
@@ -48768,7 +48813,7 @@ async def demografia_campanas_atribucion(
                 campana_id=campana_uuid,
                 date_from_iso=None,
                 date_to_iso=None,
-                limit=1000,
+                limit=200,
                 offset=0,
             )
         except CRMRepositoryError:
@@ -48851,6 +48896,7 @@ async def demografia_campanas_atribucion(
         "ok": True,
         "campaign_rows": mapa_campaign_rows,
         "whatsapp_rows": mapa_whatsapp_rows,
+        "warnings": sorted(set(attribution_warnings)),
     }
 
 
@@ -49299,22 +49345,30 @@ async def demografia_resumen_v2(
                 return []
             rows: list[dict[str, Any]] = []
             offset = 0
-            while True:
-                page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
-                    usuario_token=effective_user_token,
-                    organizacion_id=organizacion_id,
-                    campana_id=campana_uuid_value,
-                    date_from_iso=date_from.isoformat() if date_from else None,
-                    date_to_iso=date_to.isoformat() if date_to else None,
-                    limit=500,
-                    offset=offset,
+            page_size = 200
+            max_rows = 600
+            try:
+                while len(rows) < max_rows:
+                    page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
+                        usuario_token=effective_user_token,
+                        organizacion_id=organizacion_id,
+                        campana_id=campana_uuid_value,
+                        date_from_iso=date_from.isoformat() if date_from else None,
+                        date_to_iso=date_to.isoformat() if date_to else None,
+                        limit=min(page_size, max_rows - len(rows)),
+                        offset=offset,
+                    )
+                    if not page_rows:
+                        break
+                    rows.extend(page_rows)
+                    if len(page_rows) < page_size:
+                        break
+                    offset += len(page_rows)
+            except CRMRepositoryError:
+                logger.warning(
+                    "crm.demografia.resumen_v2.campaign_attribution_degraded",
+                    extra={"organizacion_id": str(organizacion_id)},
                 )
-                if not page_rows:
-                    break
-                rows.extend(page_rows)
-                if len(page_rows) < 500:
-                    break
-                offset += len(page_rows)
             return rows
 
         async def load_whatsapp_conversion_rows() -> list[dict[str, Any]]:

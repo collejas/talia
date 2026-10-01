@@ -515,3 +515,22 @@ Estado: listo para deploy y medición en recarga fría. Comparar `crm.mapa_conve
 En `visitas/web-sessions`, el enriquecimiento posterior a la página base hacía en serie las lecturas de envíos, contactos y plantillas. Se cambiaron a lecturas concurrentes; la resolución de prospectos conserva su dependencia de los envíos y se ejecuta después.
 
 El loader del panel también mantiene ventanas concurrentes de páginas de 1,000 sesiones. Resultado esperado: menor tiempo acumulado para `traffic` y menor presión sobre el pool de Supabase.
+
+### Implementación de protección para atribución diferida (2026-10-01)
+
+Se aplicó la primera parte de la corrección del incidente de exportaciones y
+de la pestaña `Campañas`:
+
+- La ruta `demografia/campanas-atribucion` limita la primera página a 200
+  registros por canal.
+- Las lecturas de correo y WhatsApp son independientes; un timeout de una no
+  cancela la otra ni devuelve `502` para toda la vista.
+- La respuesta incluye `warnings` cuando un bloque no pudo cargar.
+- El resumen opcional de atribución usa páginas de 200 con un máximo de 600 y
+  degrada a resultados parciales si la RPC falla.
+
+Esto corrige el bloqueo funcional y reduce la presión por consultas repetidas,
+pero no sustituye la optimización SQL pendiente: la RPC todavía puede recorrer
+logs históricos antes de aplicar el límite. La siguiente fase debe crear una
+lectura específica del mapa con filtros de tenant/rango aplicados al inicio y
+validarla con `EXPLAIN (ANALYZE, BUFFERS)`.

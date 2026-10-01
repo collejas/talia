@@ -42,7 +42,9 @@ export function DeferredCampaignSummary({ summary, filters }: Props) {
       })
       .then(setAttribution)
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) console.error("mapa.campaign_attribution.failed", error);
+        if (!controller.signal.aborted && !(error instanceof DOMException && error.name === "AbortError")) {
+          console.error("mapa.campaign_attribution.failed", error);
+        }
       });
 
     return () => controller.abort();
@@ -58,6 +60,14 @@ export function DeferredCampaignSummary({ summary, filters }: Props) {
 
   return (
     <div className="space-y-6">
+      {attribution?.warnings?.length ? (
+        <div
+          className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200"
+          role="status"
+        >
+          La atribución se cargó parcialmente; algunos bloques tardaron más de lo permitido.
+        </div>
+      ) : null}
       <CampaignConversionSummary
         filters={{
           campanaId: filters.campanaId,
