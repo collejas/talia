@@ -546,3 +546,19 @@ validarla con `EXPLAIN (ANALYZE, BUFFERS)`.
 La RPC de atribución sigue requiriendo una reescritura específica para evitar
 el procesamiento histórico antes del límite; esta corrección reduce dos
 fuentes independientes de presión, pero no declara resuelto ese último punto.
+
+### Reescritura de RPC de atribución (2026-10-01)
+
+Se aplicó `20261001_214500_prospeccion_campana_template_atribucion_rango_scoped.sql`.
+La función conserva el contrato actual, pero cambia el orden de ejecución:
+
+1. resuelve el tenant y la campaña;
+2. obtiene los envíos candidatos y aplica el rango temporal;
+3. materializa únicamente logs relacionados y relevantes;
+4. restringe las sesiones UTM a los `envio_id` candidatos;
+5. agrega y pagina el resultado final.
+
+La prueba con un rango de un año y `p_limit=200` finalizó en aproximadamente
+2.5 segundos sin timeout. Debe hacerse una comprobación autenticada desde el
+panel para validar que los conteos del tenant continúan coincidiendo con la
+vista anterior.

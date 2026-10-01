@@ -55,6 +55,21 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - Los botones de exportación de `mapa-de-conversion` usan enlaces directos;
   Next.js ya no debe prefetchear las descargas mediante requests `_rsc`.
 
+## 2026-10-01 · RPC de atribución acotada por tenant y envíos
+
+- Se reemplazó la implementación de
+  `prospeccion_campana_template_atribucion_rango`.
+- La función ahora obtiene primero los lotes del tenant/campaña, filtra los
+  envíos por rango y solo después consulta logs asociados a esos envíos.
+- Los logs irrelevantes para respuesta/apertura/click ya no entran al CTE
+  materializado.
+- Las sesiones UTM se limitan a `eid/envio_id` presentes en los envíos
+  candidatos.
+- La función conserva la firma y columnas de salida existentes.
+- La ejecución acotada aplicada en Supabase terminó sin `57014` y usó el
+  índice tenant/envío de logs; el resultado de prueba sin contexto autenticado
+  fue vacío, como corresponde a la ausencia de tenant en esa sesión de SQL.
+
 ## 2026-08-22 · Estados acumulativos de entrega WhatsApp
 
 - Se agregó una RPC aditiva para que los mensajes leídos también cuenten como
