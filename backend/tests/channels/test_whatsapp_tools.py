@@ -201,6 +201,53 @@ async def test_notify_customer_assigned_seller_when_tenant_enabled(
 
 
 @pytest.mark.asyncio
+async def test_notify_customer_assigned_seller_deduplicates_across_triggers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dummy_repo = DummySalesRepo(
+        metadata={
+            "customer_seller_data_notifications": {
+                "close_lead": {
+                    "seller_id": "00000000-0000-0000-0000-0000000000aa",
+                    "message_sid": "CUSTOMER-MSG-1",
+                }
+            }
+        }
+    )
+    monkeypatch.setattr(tools, "CRMRepository", lambda: dummy_repo)
+    runtime = tools.tenant_runtime.WhatsappRuntimeSettings.from_settings()
+    runtime.send_seller_data_to_customer = True
+
+    async def fake_get_whatsapp_runtime_settings(**_: object):
+        return runtime
+
+    monkeypatch.setattr(tools.tenant_runtime, "get_whatsapp_runtime_settings", fake_get_whatsapp_runtime_settings)
+
+    async def fail_send_manual_message(**_: object) -> object:
+        raise AssertionError("seller data must not be sent twice")
+
+    monkeypatch.setattr("app.channels.whatsapp.service.send_manual_message", fail_send_manual_message)
+
+    result = await tools._notify_customer_assigned_seller(
+        context=ToolRuntimeContext(
+            conversation_id="conv-customer-seller",
+            persona_id="contact-test",
+            channel="whatsapp",
+        ),
+        opportunity_id="00000000-0000-0000-0000-0000000000cc",
+        persona={
+            "id": "contact-test",
+            "organizacion_id": "00000000-0000-0000-0000-0000000000bb",
+            "telefono_e164": "+529991112233",
+        },
+        trigger="followup_escalate",
+    )
+
+    assert result is True
+    assert dummy_repo.updated_payload is None
+
+
+@pytest.mark.asyncio
 async def test_notify_sales_rep_skips_when_already_sent(monkeypatch: pytest.MonkeyPatch) -> None:
     metadata = {
         "sales_primary_notifications": {

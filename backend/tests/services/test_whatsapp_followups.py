@@ -119,6 +119,30 @@ async def test_schedule_customer_followup_enqueues_reengage(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_schedule_customer_followup_skips_closed_conversation(monkeypatch):
+    repo = DummyRepo(conversation={"estado": "cerrada"})
+    monkeypatch.setattr(whatsapp_followups, "CRMRepository", lambda: repo)
+
+    async def fake_get_whatsapp_runtime_settings(**_: object):
+        return whatsapp_followups.tenant_runtime.WhatsappRuntimeSettings.from_settings()
+
+    monkeypatch.setattr(
+        whatsapp_followups.tenant_runtime,
+        "get_whatsapp_runtime_settings",
+        fake_get_whatsapp_runtime_settings,
+    )
+
+    result = await whatsapp_followups.schedule_customer_followup(
+        conversation_id=str(uuid4()),
+        persona_id=str(uuid4()),
+        organizacion_id=str(uuid4()),
+    )
+
+    assert result is None
+    assert repo.enqueued == []
+
+
+@pytest.mark.asyncio
 async def test_cancel_followup_jobs_for_inbound(monkeypatch):
     repo = DummyRepo()
     monkeypatch.setattr(whatsapp_followups, "CRMRepository", lambda: repo)

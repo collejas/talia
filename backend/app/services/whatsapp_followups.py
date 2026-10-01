@@ -80,9 +80,25 @@ async def schedule_customer_followup(
             },
         )
         return None
+    repo = CRMRepository()
+    try:
+        current_conversation = await repo.get_whatsapp_conversation_for_followup_job(
+            conversation_id=conversation_uuid,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.followup.schedule_conversation_check_failed",
+            extra={"conversation_id": str(conversation_uuid), "error": str(exc)},
+        )
+        return None
+    if current_conversation and str(current_conversation.get("estado") or "").strip().lower() == "cerrada":
+        logger.info(
+            "whatsapp.followup.schedule_skipped_closed",
+            extra={"conversation_id": str(conversation_uuid), "reason": reason},
+        )
+        return None
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
     due_at = datetime.now(timezone.utc) + timedelta(minutes=max(1, runtime.reengage_minutes))
-    repo = CRMRepository()
     return await _schedule_next_followup_job(
         repo=repo,
         organizacion_id=org_uuid,
@@ -114,12 +130,29 @@ async def schedule_conversation_close(
             extra={"conversation_id": conversation_id, "reason": reason},
         )
         return None
+    repo = CRMRepository()
+    try:
+        current_conversation = await repo.get_whatsapp_conversation_for_followup_job(
+            conversation_id=conversation_uuid,
+        )
+    except CRMRepositoryError as exc:
+        logger.warning(
+            "whatsapp.conversation_close.schedule_conversation_check_failed",
+            extra={"conversation_id": str(conversation_uuid), "error": str(exc)},
+        )
+        return None
+    if current_conversation and str(current_conversation.get("estado") or "").strip().lower() == "cerrada":
+        logger.info(
+            "whatsapp.conversation_close.schedule_skipped_closed",
+            extra={"conversation_id": str(conversation_uuid), "reason": reason},
+        )
+        return None
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)
     due_at = datetime.now(timezone.utc) + timedelta(
         minutes=max(1, runtime.close_after_lead_minutes)
     )
     return await _schedule_next_followup_job(
-        repo=CRMRepository(),
+        repo=repo,
         organizacion_id=org_uuid,
         conversation_id=conversation_uuid,
         persona_id=persona_uuid,
@@ -370,6 +403,10 @@ async def _process_claimed_job(*, repo: CRMRepository, row: dict[str, Any], refe
             job_id=job_id,
             result={"scheduled_reason": "conversation_closed"},
         )
+        await repo.worker_cancel_active_whatsapp_followup_jobs(
+            conversation_id=conversation_id,
+            reason="conversation_closed",
+        )
         logger.info(
             "whatsapp.conversation.closed_after_lead_timeout",
             extra={"conversation_id": str(conversation_id), "job_id": str(job_id)},
@@ -387,6 +424,24 @@ async def _process_claimed_job(*, repo: CRMRepository, row: dict[str, Any], refe
             result={"scheduled_reason": "context_not_actionable"},
         )
         return
+
+    # La conversación puede cerrarse entre la primera lectura y el envío al
+    # proveedor. Releerla justo antes de calcular/ejecutar la acción cubre esa
+    # condición de carrera.
+    try:
+        latest_conversation = await repo.get_whatsapp_conversation_for_followup_job(
+            conversation_id=conversation_id,
+        )
+    except CRMRepositoryError as exc:
+        await _fail_job(repo=repo, row=row, error=f"conversation_recheck_failed:{exc}")
+        return
+    if not latest_conversation or str(latest_conversation.get("estado") or "").strip().lower() == "cerrada":
+        await repo.worker_mark_whatsapp_followup_done(
+            job_id=job_id,
+            result={"scheduled_reason": "conversation_closed_before_send"},
+        )
+        return
+    context["conversation"] = latest_conversation
 
     next_due = _calculate_next_followup_due(
         conversation=context["conversation"],
@@ -517,6 +572,10 @@ async def _process_claimed_job(*, repo: CRMRepository, row: dict[str, Any], refe
         await repo.worker_mark_whatsapp_followup_done(
             job_id=job_id,
             result={"scheduled_reason": "escalated"},
+        )
+        await repo.worker_cancel_active_whatsapp_followup_jobs(
+            conversation_id=conversation_id,
+            reason="conversation_closed",
         )
         return
 

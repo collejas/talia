@@ -3656,6 +3656,49 @@ async def _notify_customer_assigned_seller(
     if sent_by_trigger.get(trigger):
         return True
 
+    # El aviso es único por vendedor, aunque se origine en distintos flujos.
+    if any(
+        isinstance(notification, dict)
+        and str(notification.get("seller_id") or "").strip() == seller_id
+        for notification in sent_by_trigger.values()
+    ):
+        logger.info(
+            "whatsapp.customer_seller_data.already_sent",
+            extra={
+                "conversation_id": context.conversation_id,
+                "trigger": trigger,
+                "seller_id": seller_id,
+            },
+        )
+        return True
+
+    # Metadata se actualiza después del envío. El historial cubre el caso en
+    # que ese update falló y evita un segundo envío por otro worker.
+    try:
+        recent_messages = await storage.fetch_recent_messages(
+            conversation_id=context.conversation_id,
+            limit=50,
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.customer_seller_data.history_check_failed",
+            extra={"conversation_id": context.conversation_id, "error": str(exc)},
+        )
+        recent_messages = []
+    for message in recent_messages:
+        message_data = message.get("datos") if isinstance(message, dict) else None
+        if isinstance(message_data, str):
+            try:
+                message_data = json.loads(message_data)
+            except json.JSONDecodeError:
+                message_data = None
+        if (
+            isinstance(message_data, dict)
+            and message_data.get("trigger") == "assigned_seller_data"
+            and str(message_data.get("seller_id") or "").strip() == seller_id
+        ):
+            return True
+
     lines = [f"Tu asesor asignado es {seller_name}."]
     if seller_phone:
         lines.append(f"Teléfono: {seller_phone}")
