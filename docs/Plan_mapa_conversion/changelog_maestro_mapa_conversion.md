@@ -367,3 +367,18 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
   `cobro_mensajes`, que conserva la fuente de verdad del costo outbound.
 - La definición de producto y el contrato de métricas quedan centralizados en
   `docs/Plan_metricas/PLAN_REFACTOR_VISTA_METRICAS.md`.
+
+## 2026-10-01 — Optimización final de atribución anual por correo
+
+- Se materializó una sola vez el conjunto de envíos del rango solicitado en
+  `prospeccion_campana_template_atribucion_rango`, evitando recalcularlo en
+  los agregados de envíos, logs y sesiones.
+- Se eliminó una agrupación innecesaria de IDs de envío.
+- Se creó el índice parcial
+  `prospeccion_contactos_log_atribucion_relevante_idx`, limitado a eventos de
+  respuesta, apertura, clic y señales entrantes que consume la métrica.
+- Validación con el tenant de producción: la RPC anual devolvió 40 filas sin
+  timeout; el plan pasó de aproximadamente 10.46 s a 3.52 s y redujo los
+  bloques compartidos de 449,031 a 290,053.
+- La vista conserva la degradación parcial: si la atribución falla, el resto
+  de la respuesta continúa disponible y se informa la advertencia.

@@ -76,7 +76,10 @@ envios_pre as (
     join public.prospeccion_contacto_envio e on e.batch_id = cs.batch_id
     where e.organizacion_id = cs.organizacion_id
 ),
-envios_base as (
+-- Este conjunto se reutiliza para los agregados de logs, envíos y sesiones.
+-- Materializarlo evita que el plan vuelva a recorrer los envíos por cada CTE
+-- cuando el rango solicitado es anual.
+envios_base as materialized (
     select *
     from envios_pre
     where (p_date_from is null or event_ts >= p_date_from)
@@ -85,7 +88,6 @@ envios_base as (
 scoped_envio_ids as (
     select envio_id
     from envios_base
-    group by envio_id
 ),
 scoped_logs as materialized (
     select l.envio_id, l.accion, l.estado, l.canal, l.detalle
