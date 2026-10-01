@@ -58,6 +58,7 @@ type ApprovedOrder = ApprovedOrderForPrint & {
 function ReviewRow({
   title,
   summary,
+  complete,
   checked,
   onCheckedChange,
   disabled,
@@ -65,6 +66,7 @@ function ReviewRow({
 }: {
   title: string;
   summary: string;
+  complete: boolean;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   disabled: boolean;
@@ -74,7 +76,7 @@ function ReviewRow({
     <div className="grid gap-2 border-b px-3 py-2.5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0">
         <div className="flex items-center gap-2 text-sm font-medium">
-          {checked ? <IconCircleCheck className="size-4 shrink-0 text-emerald-600" /> : <IconAlertTriangle className="size-4 shrink-0 text-amber-600" />}
+          {complete ? <IconCircleCheck className="size-4 shrink-0 text-emerald-600" /> : <IconAlertTriangle className="size-4 shrink-0 text-amber-600" />}
           <span>{title}</span>
         </div>
         <p className="truncate pl-6 text-xs text-muted-foreground">{summary}</p>
@@ -529,6 +531,18 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
           const inventoryProjection = getInventoryProjection(item);
           const productMismatch = item.items.some((line) => differsFromAcceptedQuote(line));
           const deliveryRequired = item.items.some((line) => line.maneja_inventario);
+          const billingComplete = Boolean(
+            item.cuenta_crm_asociada
+              && item.cliente_datos.razon_social
+              && item.cliente_datos.rfc
+              && item.cliente_datos.correo_facturacion
+              && item.cliente_datos.codigo_postal,
+          );
+          const evidenceComplete = Boolean(item.forma_confirmacion && item.referencia_pedido_cliente && item.documentos.length > 0);
+          const deliveryComplete = !deliveryRequired || item.domicilio_entrega_completo;
+          const discountOutOfLimit = item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje));
+          const inventoryPending = inventoryProjection.some((product) => product.pendienteDespues > 0);
+          const productsComplete = item.items.length > 0 && !productMismatch && !discountOutOfLimit && !inventoryPending;
           const statusText = hasBlockingIssues(item) ? "Bloqueada" : progress === 4 ? "Lista" : "Pendiente";
           const statusClass = hasBlockingIssues(item) ? "text-destructive" : progress === 4 ? "text-emerald-600" : "text-amber-600";
           return (
@@ -548,7 +562,7 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
               {expanded ? (
                 <div className="border-t bg-muted/10">
                   <div className="divide-y">
-                    <ReviewRow title="Cliente y facturación" summary={(item.cliente || item.contacto || "Cliente sin nombre") + " · " + (item.cliente_datos.rfc ? "RFC " + item.cliente_datos.rfc : "RFC pendiente") + " · " + (item.cliente_datos.codigo_postal ? "C.P. " + item.cliente_datos.codigo_postal : "C.P. pendiente")} checked={review.cliente} onCheckedChange={(checked) => updateReview(item.id, "cliente", checked)} disabled={pendingId === item.id}>
+                    <ReviewRow title="Cliente y facturación" summary={(item.cliente || item.contacto || "Cliente sin nombre") + " · " + (item.cliente_datos.rfc ? "RFC " + item.cliente_datos.rfc : "RFC pendiente") + " · " + (item.cliente_datos.codigo_postal ? "C.P. " + item.cliente_datos.codigo_postal : "C.P. pendiente")} complete={billingComplete} checked={review.cliente} onCheckedChange={(checked) => updateReview(item.id, "cliente", checked)} disabled={pendingId === item.id}>
                       <FieldStatus label="Cuenta CRM" value={item.cuenta_crm_asociada ? "Asociada" : null} />
                       <FieldStatus label="Razón social" value={item.cliente_datos.razon_social} />
                       <FieldStatus label="RFC" value={item.cliente_datos.rfc} />
@@ -556,14 +570,14 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
                       <FieldStatus label="Código postal" value={item.cliente_datos.codigo_postal} />
                       {!item.cuenta_crm_asociada ? <p className="font-medium text-destructive">Bloqueante: no hay una cuenta CRM asociada.</p> : null}
                     </ReviewRow>
-                    <ReviewRow title="OC confirmada y evidencias" summary={(item.referencia_pedido_cliente ? "OC " + item.referencia_pedido_cliente : "Sin OC") + " · " + item.documentos.length + " evidencia" + (item.documentos.length === 1 ? "" : "s") + " · " + (CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada")} checked={review.evidencia} onCheckedChange={(checked) => updateReview(item.id, "evidencia", checked)} disabled={pendingId === item.id}>
+                    <ReviewRow title="OC confirmada y evidencias" summary={(item.referencia_pedido_cliente ? "OC " + item.referencia_pedido_cliente : "Sin OC") + " · " + item.documentos.length + " evidencia" + (item.documentos.length === 1 ? "" : "s") + " · " + (CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada")} complete={evidenceComplete} checked={review.evidencia} onCheckedChange={(checked) => updateReview(item.id, "evidencia", checked)} disabled={pendingId === item.id}>
                       <FieldStatus label="Forma de confirmación" value={CONFIRMATION_LABELS[item.forma_confirmacion || ""] || null} />
                       <FieldStatus label="Referencia OC" value={item.referencia_pedido_cliente} />
                       <FieldStatus label="Fecha de confirmación" value={item.fecha_confirmacion_cliente} />
                       <FieldStatus label="Evidencias" value={item.documentos.length ? `${item.documentos.length} archivo(s)` : null} />
                       {item.documentos.map((document) => <p key={document.id} className="text-muted-foreground">{CONFIRMATION_LABELS[document.tipo_documento] || "Otro"}{document.nombre_original ? <a className="ml-2 text-primary underline underline-offset-4" href={"/api/embudo/quotes/" + item.cotizacion_id + "/pedido/orden-compra?documento_id=" + encodeURIComponent(document.id)} target="_blank" rel="noreferrer">Ver archivo</a> : null}</p>)}
                     </ReviewRow>
-                    <ReviewRow title="Datos de entrega" summary={deliveryRequired ? (item.domicilio_entrega_completo ? item.domicilio_entrega || "Dirección completa" : "Faltan datos de entrega") : "No aplica a estas partidas"} checked={review.entrega} onCheckedChange={(checked) => updateReview(item.id, "entrega", checked)} disabled={pendingId === item.id}>
+                    <ReviewRow title="Datos de entrega" summary={deliveryRequired ? (item.domicilio_entrega_completo ? item.domicilio_entrega || "Dirección completa" : "Faltan datos de entrega") : "No aplica a estas partidas"} complete={deliveryComplete} checked={review.entrega} onCheckedChange={(checked) => updateReview(item.id, "entrega", checked)} disabled={pendingId === item.id}>
                       <FieldStatus label="País" value={deliveryRequired ? item.domicilio_entrega_pais : "No aplica"} />
                       <FieldStatus label="Estado" value={deliveryRequired ? item.domicilio_entrega_entidad : "No aplica"} />
                       <FieldStatus label="Municipio" value={deliveryRequired ? item.domicilio_entrega_municipio : "No aplica"} />
@@ -575,7 +589,7 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
                       {deliveryRequired && !item.domicilio_entrega_completo ? <p className="font-medium text-destructive">Bloqueante: faltan {item.domicilio_entrega_faltantes.join(", ") || "datos de entrega"}.</p> : null}
                       {item.domicilio_entrega_referencias ? <p className="text-muted-foreground">Referencias: {item.domicilio_entrega_referencias}</p> : null}
                     </ReviewRow>
-                    <ReviewRow title="Productos y cantidades" summary={item.items.length + " partida" + (item.items.length === 1 ? "" : "s") + " · " + (productMismatch ? "Hay diferencias contra la cotización" : "Coinciden con la cotización aceptada")} checked={review.productos} onCheckedChange={(checked) => updateReview(item.id, "productos", checked)} disabled={pendingId === item.id}>
+                    <ReviewRow title="Productos y cantidades" summary={item.items.length + " partida" + (item.items.length === 1 ? "" : "s") + " · " + (productMismatch ? "Hay diferencias contra la cotización" : "Coinciden con la cotización aceptada")} complete={productsComplete} checked={review.productos} onCheckedChange={(checked) => updateReview(item.id, "productos", checked)} disabled={pendingId === item.id}>
                       <FieldStatus label="Productos" value={item.items.length ? `${item.items.length} partida(s)` : null} />
                       <FieldStatus label="Cantidades y precios" value={productMismatch ? "No coinciden con la cotización" : item.items.length ? "Coinciden con la cotización aceptada" : null} warning={productMismatch} />
                       <FieldStatus label="Descuentos" value={item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje)) ? "Superan el límite" : "Dentro del límite"} warning={item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje))} />
