@@ -91,10 +91,15 @@ async def schedule_customer_followup(
             extra={"conversation_id": str(conversation_uuid), "error": str(exc)},
         )
         return None
-    if current_conversation and str(current_conversation.get("estado") or "").strip().lower() == "cerrada":
+    current_state = str(current_conversation.get("estado") or "").strip().lower() if current_conversation else ""
+    if current_state in {"pendiente", "cerrada"}:
         logger.info(
-            "whatsapp.followup.schedule_skipped_closed",
-            extra={"conversation_id": str(conversation_uuid), "reason": reason},
+            "whatsapp.followup.schedule_skipped_terminal_state",
+            extra={
+                "conversation_id": str(conversation_uuid),
+                "reason": reason,
+                "estado": current_state,
+            },
         )
         return None
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=org_uuid)

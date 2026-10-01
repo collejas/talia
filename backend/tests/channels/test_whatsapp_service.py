@@ -47,6 +47,52 @@ def _async_return(value: Any):
     return _inner
 
 
+@pytest.mark.asyncio
+async def test_post_send_tasks_close_lead_wins_over_stale_open_state(monkeypatch) -> None:
+    conversation_id = str(UUID(int=1))
+    persona_id = str(UUID(int=2))
+    org_id = str(UUID(int=3))
+    scheduled = []
+
+    async def fake_fetch_conversation(_conversation_id: str):
+        return {"organizacion_id": org_id, "estado": "abierta"}
+
+    async def fake_schedule_close(**kwargs: Any):
+        scheduled.append(("close", kwargs))
+        return {"scheduled_reason": kwargs["reason"]}
+
+    async def fake_schedule_followup(**kwargs: Any):
+        scheduled.append(("followup", kwargs))
+        return {"scheduled_reason": kwargs["reason"]}
+
+    monkeypatch.setattr(service.storage, "fetch_conversation", fake_fetch_conversation)
+    monkeypatch.setattr(
+        "app.services.whatsapp_followups.schedule_conversation_close",
+        fake_schedule_close,
+    )
+    monkeypatch.setattr(
+        "app.services.whatsapp_followups.schedule_customer_followup",
+        fake_schedule_followup,
+    )
+
+    await service._run_post_send_tasks(
+        conversation_id=conversation_id,
+        persona_id=persona_id,
+        conversation_meta={},
+        message=_build_sample_message(),
+        whatsapp_settings=SimpleNamespace(),
+        organizacion_id=UUID(org_id),
+        resolved_persona_org=org_id,
+        inbound_message_id="inbound-1",
+        welcome_document_sent_by_tool=False,
+        ensure_opportunity=False,
+        close_lead_executed=True,
+    )
+
+    assert [kind for kind, _ in scheduled] == ["close"]
+    assert scheduled[0][1]["reason"] == "close_lead_timeout"
+
+
 def test_whatsapp_runtime_uses_global_meta_credentials(monkeypatch) -> None:
     monkeypatch.setattr(tenant_runtime.settings, "meta_system_user_access_token", "global-token")
     monkeypatch.setattr(tenant_runtime.settings, "whatsapp_meta_verify_token", "verify#token")

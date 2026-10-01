@@ -1025,6 +1025,7 @@ async def _run_post_send_tasks(
     inbound_message_id: str | None,
     welcome_document_sent_by_tool: bool,
     ensure_opportunity: bool,
+    close_lead_executed: bool = False,
 ) -> None:
     if ensure_opportunity:
         try:
@@ -1049,7 +1050,7 @@ async def _run_post_send_tasks(
             if resolved_persona_org
             else str(latest_conversation.get("organizacion_id") or "") or None
         )
-        if str(latest_conversation.get("estado") or "").strip().lower() == "pendiente":
+        if close_lead_executed or str(latest_conversation.get("estado") or "").strip().lower() == "pendiente":
             await whatsapp_followup_jobs.schedule_conversation_close(
                 conversation_id=conversation_id,
                 persona_id=persona_id,
@@ -3657,6 +3658,10 @@ async def handle_incoming_message(
                     inbound_message_id=inbound_message_id,
                     welcome_document_sent_by_tool=welcome_document_sent_by_tool,
                     ensure_opportunity=simple_greeting_fast_path,
+                    close_lead_executed=bool(
+                        assistant_reply.tools_called
+                        and "close_lead" in assistant_reply.tools_called
+                    ),
                 )
             )
         _log_trace_stage(
