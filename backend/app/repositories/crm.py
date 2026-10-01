@@ -24974,6 +24974,9 @@ class CRMRepository:
         usuario_token: str,
         batch_ids: Sequence[UUID],
         canal: str | None = None,
+        acciones: Sequence[str] | None = None,
+        date_from_iso: str | None = None,
+        date_to_iso: str | None = None,
         limit: int = 10000,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -24990,6 +24993,15 @@ class CRMRepository:
         }
         if canal:
             params["canal"] = f"eq.{canal.strip().lower()}"
+        normalized_actions = sorted({str(value).strip().lower() for value in (acciones or []) if str(value).strip()})
+        if normalized_actions:
+            params["accion"] = _postgrest_in_clause(normalized_actions)
+        if date_from_iso and date_to_iso:
+            params["and"] = f"(creado_en.gte.{date_from_iso},creado_en.lte.{date_to_iso})"
+        elif date_from_iso:
+            params["creado_en"] = f"gte.{date_from_iso}"
+        elif date_to_iso:
+            params["creado_en"] = f"lte.{date_to_iso}"
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/prospeccion_contactos_log",

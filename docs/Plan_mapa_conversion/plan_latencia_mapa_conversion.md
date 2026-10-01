@@ -534,3 +534,15 @@ pero no sustituye la optimización SQL pendiente: la RPC todavía puede recorrer
 logs históricos antes de aplicar el límite. La siguiente fase debe crear una
 lectura específica del mapa con filtros de tenant/rango aplicados al inicio y
 validarla con `EXPLAIN (ANALYZE, BUFFERS)`.
+
+### Reducción de series y prefetch de exportaciones (2026-10-01)
+
+- `list_contact_logs_for_batches` ahora aplica fecha y acciones en la consulta
+  PostgREST, en lugar de recuperar todos los logs y filtrarlos en Python.
+- Se agregó y aplicó el índice compuesto por lote, canal, acción y fecha.
+- Las descargas HTML/XLSX dejaron de usar `next/link`, evitando ejecuciones
+  automáticas durante el prefetch de navegación.
+
+La RPC de atribución sigue requiriendo una reescritura específica para evitar
+el procesamiento histórico antes del límite; esta corrección reduce dos
+fuentes independientes de presión, pero no declara resuelto ese último punto.

@@ -607,20 +607,20 @@ export default async function Page({
               </div>
               <div className="px-4 lg:px-6">
                 <div className="flex flex-wrap justify-end gap-2">
-                  <Link
+                  <a
                     href={`/api/crm/demografia/mapa-v2/export/html${exportQueryString ? `?${exportQueryString}` : ""}`}
                     className="inline-flex h-9 items-center gap-2 rounded-md border bg-card px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
                     <IconDownload className="size-4" />
                     Descargar HTML
-                  </Link>
-                  <Link
+                  </a>
+                  <a
                     href={exportHref}
                     className="inline-flex h-9 items-center gap-2 rounded-md border bg-card px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
                     <IconDownload className="size-4" />
                     Descargar XLSX
-                  </Link>
+                  </a>
                 </div>
               </div>
               <div className="px-4 lg:px-6">

@@ -39699,6 +39699,9 @@ async def prospeccion_metricas_dashboard(
                             usuario_token=user_token,
                             batch_ids=batch_chunk,
                             canal=None if params.canal == "todos" else params.canal,
+                            acciones=sorted(response_actions),
+                            date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
+                            date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
                             limit=logs_page_size,
                             offset=page_offset,
                         )

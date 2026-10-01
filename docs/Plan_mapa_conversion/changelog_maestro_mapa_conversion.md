@@ -46,6 +46,15 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
 - La respuesta diferida incluye `warnings` para distinguir datos parciales de
   una ausencia real de conversiones.
 
+## 2026-10-01 · Reducción de timeouts en series y exportaciones
+
+- La consulta de series de `/prospeccion/metricas` ahora filtra en PostgREST
+  por `creado_en` y por las acciones de respuesta antes de paginar.
+- Se aplicó el índice `prospeccion_contactos_log_batch_canal_accion_creado_idx`
+  sobre `prospeccion_contactos_log`.
+- Los botones de exportación de `mapa-de-conversion` usan enlaces directos;
+  Next.js ya no debe prefetchear las descargas mediante requests `_rsc`.
+
 ## 2026-08-22 · Estados acumulativos de entrega WhatsApp
 
 - Se agregó una RPC aditiva para que los mensajes leídos también cuenten como
