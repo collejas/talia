@@ -484,6 +484,15 @@ _WHATSAPP_LOCATION_CACHE: dict[str, tuple[float, dict[str, dict[str, Any]]]] = {
 _WHATSAPP_LOCATION_CACHE_LOCK = asyncio.Lock()
 _WHATSAPP_LOCATION_INFLIGHT_LOCK = asyncio.Lock()
 _WHATSAPP_LOCATION_INFLIGHT: dict[str, asyncio.Future[dict[str, dict[str, Any]]]] = {}
+CAMPANAS_ATRIBUCION_CACHE_TTL_SECONDS = 180.0
+CAMPANAS_ATRIBUCION_CACHE_MAX_ENTRIES = 256
+CAMPANAS_ATRIBUCION_QUERY_TIMEOUT_SECONDS = 8.0
+CAMPANAS_ATRIBUCION_FAILURE_COOLDOWN_SECONDS = 300.0
+_CAMPANAS_ATRIBUCION_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_CAMPANAS_ATRIBUCION_FAILURES: dict[str, float] = {}
+# La atribución anual es costosa. Serializar los misses evita que dos cambios
+# de rango del panel ejecuten la misma familia de agregados al mismo tiempo.
+_CAMPANAS_ATRIBUCION_CACHE_LOCK = asyncio.Lock()
 
 
 def _demografia_response_cache_ttl_seconds(
@@ -502,6 +511,108 @@ def _demografia_response_cache_ttl_seconds(
     if rango_norm == "fechas":
         return 300 if (desde or hasta) else 180
     return 180
+
+
+def _campanas_atribucion_cache_key(
+    *,
+    organizacion_id: UUID,
+    campana_id: UUID | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> str:
+    return json.dumps(
+        {
+            "organizacion_id": str(organizacion_id),
+            "campana_id": str(campana_id) if campana_id else None,
+            "date_from": date_from.isoformat() if date_from else None,
+            "date_to": date_to.isoformat() if date_to else None,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _stable_campanas_atribucion_range(
+    *,
+    rango: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    timezone_name: str,
+) -> tuple[datetime | None, datetime | None]:
+    """Usa límites estables para que el snapshot se pueda reutilizar durante el día."""
+    if date_to is None or (rango or "").strip().lower() not in {"ano_actual", "hoy", "ayer"}:
+        return date_from, date_to
+    try:
+        report_tz = ZoneInfo(timezone_name)
+    except Exception:
+        report_tz = timezone.utc
+    local_end = date_to.astimezone(report_tz).replace(
+        hour=23,
+        minute=59,
+        second=59,
+        microsecond=999999,
+    )
+    return date_from, local_end.astimezone(timezone.utc)
+
+
+async def _get_cached_campanas_atribucion(
+    *,
+    repo: CRMRepository,
+    user_token: str | None,
+    organizacion_id: UUID,
+    campana_id: UUID | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> list[dict[str, Any]]:
+    cache_key = _campanas_atribucion_cache_key(
+        organizacion_id=organizacion_id,
+        campana_id=campana_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    now = time.monotonic()
+    async with _CAMPANAS_ATRIBUCION_CACHE_LOCK:
+        cached = _CAMPANAS_ATRIBUCION_CACHE.get(cache_key)
+        if cached:
+            expires_at, rows = cached
+            if expires_at > now:
+                return [dict(row) for row in rows]
+            _CAMPANAS_ATRIBUCION_CACHE.pop(cache_key, None)
+
+        failure_until = _CAMPANAS_ATRIBUCION_FAILURES.get(cache_key, 0.0)
+        if failure_until > now:
+            raise CRMRepositoryError("prospeccion_campana_template_atribucion_cooldown")
+        _CAMPANAS_ATRIBUCION_FAILURES.pop(cache_key, None)
+
+        try:
+            rows = await asyncio.wait_for(
+                repo.get_prospeccion_campana_atribucion_cache_rango(
+                    usuario_token=user_token,
+                    organizacion_id=organizacion_id,
+                    campana_id=campana_id,
+                    date_from_iso=date_from.isoformat() if date_from else None,
+                    date_to_iso=date_to.isoformat() if date_to else None,
+                    limit=200,
+                    offset=0,
+                ),
+                timeout=CAMPANAS_ATRIBUCION_QUERY_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            _CAMPANAS_ATRIBUCION_FAILURES[cache_key] = (
+                now + CAMPANAS_ATRIBUCION_FAILURE_COOLDOWN_SECONDS
+            )
+            raise
+        normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
+        _CAMPANAS_ATRIBUCION_CACHE[cache_key] = (
+            now + CAMPANAS_ATRIBUCION_CACHE_TTL_SECONDS,
+            normalized_rows,
+        )
+        while len(_CAMPANAS_ATRIBUCION_CACHE) > CAMPANAS_ATRIBUCION_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_CAMPANAS_ATRIBUCION_CACHE), None)
+            if oldest_key is None:
+                break
+            _CAMPANAS_ATRIBUCION_CACHE.pop(oldest_key, None)
+        return [dict(row) for row in normalized_rows]
 GOOGLE_TRENDS_ALLOWED_ORGANIZACION_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
@@ -48731,21 +48842,23 @@ async def demografia_campanas_atribucion(
         hasta,
         timezone_name=effective_timezone,
     )
+    attribution_date_from, attribution_date_to = _stable_campanas_atribucion_range(
+        rango=rango,
+        date_from=date_from,
+        date_to=date_to,
+        timezone_name=effective_timezone,
+    )
     effective_user_token = _normalize_reports_user_token(user_token)
     attribution_warnings: list[str] = []
     try:
         campaign_rows_result, whatsapp_rows_result = await asyncio.gather(
-            repo.get_prospeccion_campana_template_atribucion_rango(
-                usuario_token=effective_user_token,
+            _get_cached_campanas_atribucion(
+                repo=repo,
+                user_token=effective_user_token,
                 organizacion_id=organizacion_id,
                 campana_id=campana_uuid,
-                date_from_iso=date_from.isoformat() if date_from else None,
-                date_to_iso=date_to.isoformat() if date_to else None,
-                # La vista carga este bloque de forma diferida. Mantener la
-                # primera página acotada evita convertir una consulta de
-                # atribución histórica en una exportación implícita.
-                limit=200,
-                offset=0,
+                date_from=attribution_date_from,
+                date_to=attribution_date_to,
             ),
             repo.get_prospeccion_campana_whatsapp_template_metricas_rango(
                 usuario_token=effective_user_token,

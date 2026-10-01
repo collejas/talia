@@ -382,3 +382,30 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
   bloques compartidos de 449,031 a 290,053.
 - La vista conserva la degradación parcial: si la atribución falla, el resto
   de la respuesta continúa disponible y se informa la advertencia.
+
+## 2026-10-01 — Serialización y cache de atribución en el API
+
+- `GET /api/crm/demografia/campanas-atribucion` ahora evita ejecutar en
+  paralelo misses de atribución por tenant y rango.
+- Los resultados exitosos se conservan temporalmente en memoria del proceso
+  para que cambios de vista, reintentos y solicitudes duplicadas no vuelvan a
+  consultar los logs históricos.
+- Se mantiene el fallback degradado y la separación de la atribución de correo
+  y WhatsApp; no se modifican sus métricas ni su contrato de respuesta.
+- Si Supabase no responde en 8 segundos, el backend corta ese intento y activa
+  un enfriamiento de 5 minutos por tenant/rango para evitar repetir timeouts y
+  bloquear la navegación.
+
+## 2026-10-01 — Resumen persistente de atribución
+
+- Se creó `prospeccion_campana_atribucion_cache` con columnas explícitas para
+  tenant, periodo, campaña, plantilla, envíos, respuestas, aperturas, clics y
+  sesiones.
+- Se agregaron RPCs separadas para reconstruir el resumen fuera de la
+  navegación y leerlo rápidamente desde el panel.
+- Se poblaron los snapshots `ano_actual` y `hoy` del tenant operativo: 40 y 33
+  filas respectivamente.
+- `campanas-atribucion` quedó conectado a la lectura persistente; la RPC
+  histórica ya no se ejecuta al abrir la vista.
+- Pendiente operativo: programar el refresco incremental de los snapshots para
+  todos los tenants y periodos activos.
