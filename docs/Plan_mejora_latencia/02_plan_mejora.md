@@ -201,6 +201,47 @@ Resultado esperado:
 Resultado esperado:
 - Menor sobrecosto por request de listado.
 
+### 4. Prospección: separar indicadores del listado
+
+El listado de prospectos obtiene una página y posteriormente consulta
+indicadores agregados por los IDs de esa página. Esta segunda operación no debe
+bloquear la carga base.
+
+Plan:
+
+- Mantener en el listado los contadores persistidos de uso frecuente.
+- Mover indicadores detallados a carga bajo demanda o endpoint separado.
+- Conservar la RPC por IDs para detalle, con límites y caché por tenant.
+- Medir por separado `list_ms`, `contact_indicators_ms` y
+  `scraper_status_ms`.
+
+Resultado esperado:
+- Menos picos de 8–19 segundos y degradación parcial cuando falle una consulta
+  auxiliar.
+
+### 5. Manejo de errores de dependencia
+
+- Corregir logging estructurado con `extra`/`exc_info`.
+- No resolver zona horaria mediante Supabase si no hay filtro de fecha.
+- Aplicar fallback seguro para consultas auxiliares.
+- Devolver errores de dependencia como `502` controlado, sin convertirlos en
+  `TypeError`/`500`.
+
+Resultado esperado:
+- Diagnóstico real de Supabase y respuestas previsibles para el panel.
+
+### 6. Refreshes fuera de peticiones interactivas
+
+- Ejecutar refreshes de materialized views desde worker/tarea programada.
+- Impedir ejecuciones concurrentes.
+- Medir duración y resultado de cada refresh.
+- Evaluar refresh concurrente o tabla resumen incremental según el plan de
+  ejecución.
+
+Resultado esperado:
+- El refresh de métricas no bloquea la navegación ni compite directamente con
+  el listado de prospectos.
+
 ### Avance adicional (2026-08-06) - Demografía mapa de conversión
 
 - Se confirmó en `logs/api.log` que `demografia.resumen_v2` estaba tardando entre `4.5 s` y `13.1 s` en cache miss.

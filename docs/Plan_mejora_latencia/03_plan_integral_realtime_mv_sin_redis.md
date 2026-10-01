@@ -337,6 +337,23 @@ Se considera completado cuando por 7 días consecutivos:
 
 ## Propuesta inmediata para mejora de latencia (sin Redis)
 
+### Actualización crítica 2026-10-01
+
+La materialización de datos sigue siendo válida, pero el refresh no puede
+formar parte del camino interactivo. Se observaron `57014` en refreshes de
+Prospección y `PGRST002` transversal en Supabase. Por ello, toda MV nueva debe
+definir desde el inicio:
+
+- quién la refresca;
+- con qué frecuencia;
+- cómo se evita la concurrencia;
+- cómo se mide su duración;
+- cuál es el dato anterior que se sirve si el refresh falla.
+
+Además, el listado de `/prospeccion/prospectos` debe separar la página base de
+los indicadores detallados. La MV o tabla resumen debe servir lecturas rápidas,
+no justificar consultas adicionales dentro de cada carga de la vista.
+
 Prioridad 1 (impacto alto, corto plazo):
 - Endurecer "deferred by default" en Inbox:
   - bloquear cualquier hidratación automática con `enrich=true` durante carga inicial.
@@ -367,6 +384,13 @@ Prioridad 3 (estabilidad operativa):
   - deduplicación in-flight por clave de request en inbox/prospección.
 - SLO por endpoint y alertas de regresión:
   - alarma separada para `whatsapp_hint_lookup_ms` y `prospeccion.prospectos.list`.
+
+Prioridad 4 (resiliencia de Supabase y workers):
+- Diferenciar indisponibilidad de Supabase, timeout SQL y error del proveedor.
+- Mantener Brevo y WhatsApp desacoplados, pero limitar la presión conjunta
+  sobre Supabase.
+- Registrar `provider`, operación, duración y resultado sin incluir secretos.
+- No interpretar un error Meta `132000` como un problema de base de datos.
 
 ## Criterio de validación de la propuesta
 

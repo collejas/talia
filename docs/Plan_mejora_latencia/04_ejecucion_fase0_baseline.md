@@ -90,3 +90,41 @@ Iniciar Fase 1 con prioridad alta en:
 - Verificación post-migración:
   - MV con datos: `mv_rows=256`, rango `2026-02-27` a `2026-03-17`.
   - Funciones presentes en catálogo de DB.
+
+## Actualización de incidente y baseline operativo (2026-10-01)
+
+Esta actualización no reemplaza el baseline histórico; agrega evidencia de
+disponibilidad y concurrencia observada posteriormente.
+
+### Supabase
+
+- `PGRST002` apareció en varios módulos con el mensaje de fallo al consultar la
+  caché de esquema.
+- `57014` apareció en `prospeccion_query_daily_mv_refresh` y
+  `prospeccion_enriquecimiento_resumen`.
+- Después del reinicio del servidor, API, email-worker y request log no
+  registraron nuevos errores de Supabase durante la verificación posterior.
+
+### Prospección
+
+- Se observaron solicitudes de `/api/crm/prospeccion/prospectos` de 15–18 s.
+- La ruta agrega una consulta de indicadores después del listado principal.
+- El manejo de excepciones de zona horaria genera `TypeError` por usar
+  `logger.warning(..., error=...)`, ocultando la falla original de Supabase.
+
+### Workers
+
+- Brevo registró envíos exitosos, pero también fallos de alcance de proveedor
+  por `database_unreachable`.
+- WhatsApp registró fallos de red hacia Supabase y errores Meta `132000` por
+  parámetros incorrectos de plantilla.
+- No se encontró evidencia de un lock directo entre Brevo y WhatsApp; ambos
+  compiten por dependencias compartidas, principalmente Supabase.
+
+### Decisión de la siguiente fase
+
+1. Corregir el manejo de errores de Prospección.
+2. Sacar indicadores detallados del camino crítico del listado.
+3. Ejecutar refreshes de MV desde worker/tarea programada con control de
+   concurrencia.
+4. Medir de nuevo p50/p95/p99 y errores por operación.

@@ -1,7 +1,10 @@
 # Diagnóstico actual de latencia
 
-Fecha: 2026-03-17 (UTC)
+Fecha del diagnóstico inicial: 2026-03-17 (UTC)
 Alcance revisado: backend `inbox`, `prospeccion/prospectos`, `demografia/mapa` y `demografia/mapa-v2`.
+
+Actualización operativa: 2026-10-01 (UTC). Ver también
+`07_incidente_supabase_prospeccion_20261001.md`.
 
 ## Resumen ejecutivo
 
@@ -109,3 +112,23 @@ Hallazgos:
 1. El problema prioritario es `inbox` (causa directa de `high_demand_mode`).
 2. El segundo frente es `prospeccion/prospectos` por fallback scans y costos de conteo/auxiliares.
 3. `mapa-v2` requiere blindaje preventivo para crecimiento, aunque no es hoy el cuello principal.
+
+## Actualización 2026-10-01: disponibilidad y camino crítico de Prospección
+
+La revisión reciente amplía el diagnóstico anterior:
+
+- Supabase/PostgREST presentó `PGRST002` en varios módulos, indicando una
+  degradación transversal de acceso al esquema/base de datos.
+- Se observaron `57014` en refreshes de resúmenes/materialized views de
+  Prospección.
+- `/prospeccion/prospectos` puede tardar 15–18 segundos cuando coincide con
+  la degradación de Supabase.
+- El endpoint obtiene primero la página y después consulta indicadores de
+  contacto para los mismos IDs, por lo que los indicadores permanecen dentro
+  del camino crítico.
+- El manejo de errores de zona horaria usa un argumento inválido de logging y
+  genera un `TypeError`, ocultando la causa original.
+
+La conclusión actual es que Prospección tiene un problema propio de diseño de
+consultas, agravado por una indisponibilidad temporal de Supabase. No debe
+atribuirse toda la latencia a Brevo o WhatsApp.

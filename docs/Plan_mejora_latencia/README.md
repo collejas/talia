@@ -3,6 +3,7 @@
 - [Workspace de oportunidad en Inbox](06_workspace_oportunidad_inbox.md)
 - [Plan transversal de consolidación de métricas](../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md)
 - [Auditoría de separación de envíos de prospección](../Prospeccion/envios_y_separacion.md)
+- [Incidente Supabase/Prospección y actualización del plan](07_incidente_supabase_prospeccion_20261001.md)
 
 Documentación generada para diagnóstico y plan de mejora de rendimiento en backend CRM.
 
@@ -37,6 +38,11 @@ separación debe auditarse con los timestamps del worker y del proveedor.
 - `05_inbox_persistente_definitivo.md`
   - Modelo persistente, compatibilidad persona/cuenta, triggers, seguridad y rendimiento.
 
+- `07_incidente_supabase_prospeccion_20261001.md`
+  - Evidencia reciente de `PGRST002`, `57014`, latencia de Prospección y relación
+    con los workers de Brevo/WhatsApp.
+  - Correcciones propuestas para manejo de errores, indicadores y refreshes.
+
 ## Orden recomendado
 
 1. Leer `01_diagnostico_actual.md`.
@@ -44,6 +50,8 @@ separación debe auditarse con los timestamps del worker y del proveedor.
 3. Ejecutar `03_plan_integral_realtime_mv_sin_redis.md` como plan principal, con medición continua.
 4. Usar `04_ejecucion_fase0_baseline.md` como punto de comparación antes/después.
 5. Usar `05_inbox_persistente_definitivo.md` como arquitectura vigente de Inbox.
+6. Usar `07_incidente_supabase_prospeccion_20261001.md` como actualización operativa
+   vigente para Supabase y Prospección.
 
 ## Estado actual
 
@@ -51,3 +59,10 @@ separación debe auditarse con los timestamps del worker y del proveedor.
   - Fase 1 parcialmente implementada en backend inbox.
   - Plan integral actualizado (sin Redis) documentado en archivo 03.
   - Baseline inicial de ejecución documentado en archivo 04.
+
+- Actualización 2026-10-01:
+  - Confirmada degradación transversal temporal de Supabase/PostgREST.
+  - Confirmados timeouts en refreshes y resúmenes de Prospección.
+  - Confirmado defecto de logging que oculta errores de dependencia en
+    `/prospeccion/prospectos`.
+  - Pendiente separar indicadores del listado y sacar refreshes del camino crítico.
