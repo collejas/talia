@@ -24686,7 +24686,7 @@ class CRMRepository:
         if not batch_ids:
             return []
         params: dict[str, str] = {
-            "select": "id,batch_id,canal,estado,creado_en,programado_en,procesado_en",
+            "select": "id,batch_id,canal,estado,creado_en,programado_en,procesado_en,despacho_iniciado_en,proveedor_aceptado_en",
             "batch_id": _postgrest_in_clause([str(value) for value in batch_ids]),
             "order": "creado_en.asc",
             "limit": str(max(1, min(limit, 20000))),

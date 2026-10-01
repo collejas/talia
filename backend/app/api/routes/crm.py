@@ -39711,11 +39711,24 @@ async def prospeccion_metricas_dashboard(
             failed_states = {"fallido", "error", "failed"}
             omitted_states = {"omitido", "skipped", "suprimido", "suppressed"}
             for envio in envios_rows:
-                event_ts = (
-                    _parse_datetime(envio.get("procesado_en"))
-                    or _parse_datetime(envio.get("creado_en"))
-                    or _parse_datetime(envio.get("programado_en"))
-                )
+                # Para correo, la fecha de aceptación del proveedor representa
+                # el envío real. `procesado_en` puede reflejar una transición
+                # posterior (por ejemplo, una apertura) y no debe mover el
+                # envío a otro día. WhatsApp/llamadas conservan su reloj actual.
+                if (_clean_text(envio.get("canal")) or "").lower() == "correo":
+                    event_ts = (
+                        _parse_datetime(envio.get("proveedor_aceptado_en"))
+                        or _parse_datetime(envio.get("despacho_iniciado_en"))
+                        or _parse_datetime(envio.get("procesado_en"))
+                        or _parse_datetime(envio.get("creado_en"))
+                        or _parse_datetime(envio.get("programado_en"))
+                    )
+                else:
+                    event_ts = (
+                        _parse_datetime(envio.get("procesado_en"))
+                        or _parse_datetime(envio.get("creado_en"))
+                        or _parse_datetime(envio.get("programado_en"))
+                    )
                 if event_ts is None:
                     continue
                 if date_from_dt and event_ts < date_from_dt:
