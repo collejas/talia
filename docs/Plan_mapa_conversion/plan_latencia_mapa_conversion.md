@@ -562,3 +562,11 @@ La prueba con un rango de un año y `p_limit=200` finalizó en aproximadamente
 2.5 segundos sin timeout. Debe hacerse una comprobación autenticada desde el
 panel para validar que los conteos del tenant continúan coincidiendo con la
 vista anterior.
+# Nota operativa — 2026-10-01
+
+El refresh automático de `prospeccion_query_daily_mv` quedó desactivado dentro
+del proceso principal del API mediante
+`TALIA_PROSPECCION_QUERY_MV_REFRESH_ENABLED=false`. El refresh completo de la
+vista materializada no debe competir con las consultas del panel; deberá
+reubicarse en un job de mantenimiento independiente o sustituirse por una
+actualización incremental.
