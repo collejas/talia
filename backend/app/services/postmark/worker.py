@@ -116,12 +116,15 @@ class PostmarkWorker:
                 organizacion_id=organizacion_id
             ):
                 source_batch = await repository.get_contact_batch(batch_id=source_batch_id)
-                if not source_batch or source_batch.get("estado") != "completado":
+                if not source_batch:
                     continue
                 # Las campañas nuevas deben salir únicamente por bloques
                 # persistentes. El camino legado queda disponible para lotes
                 # históricos que no tienen manifiesto de preparación.
-                if source_batch.get("preparacion_estado") not in (None, "no_requerida"):
+                preparation_state = source_batch.get("preparacion_estado")
+                if preparation_state not in (None, "no_requerida"):
+                    continue
+                if source_batch.get("estado") != "completado":
                     continue
                 claimed_batch = await repository.claim_messages_for_batch(
                     organizacion_id=organizacion_id,
@@ -486,6 +489,10 @@ class PostmarkWorker:
                 await self.run_once()
             except (PostmarkError, PostmarkRepositoryError) as exc:
                 logger.exception("postmark.worker_cycle_failed", extra={"error": str(exc)})
+            except Exception as exc:  # pragma: no cover - protección del proceso
+                # Un fallo no tipado no debe matar silenciosamente la tarea
+                # asyncio mientras systemd sigue mostrando el servicio activo.
+                logger.exception("postmark.worker_cycle_unexpected", extra={"error": str(exc)})
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval_seconds)
             except asyncio.TimeoutError:

@@ -135,7 +135,12 @@ class PostmarkPreparationWorker:
                 organizacion_id=organizacion_id
             ):
                 source_batch = await repository.get_contact_batch(batch_id=source_batch_id)
-                if not source_batch or source_batch.get("estado") != "completado":
+                if not source_batch:
+                    continue
+                preparation_state = source_batch.get("preparacion_estado")
+                if preparation_state not in (None, "no_requerida", "completada"):
+                    continue
+                if preparation_state != "completada" and source_batch.get("estado") != "completado":
                     continue
                 blocks = await repository.prepare_delivery_batches(
                     organizacion_id=organizacion_id,
