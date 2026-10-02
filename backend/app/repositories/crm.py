@@ -26388,11 +26388,27 @@ class CRMRepository:
         canal: str | None = None,
         organizacion_ids: Sequence[UUID] | None = None,
         excluir_organizacion_ids: Sequence[UUID] | None = None,
+        postmark_preparation_ready: bool = False,
     ) -> list[dict[str, Any]]:
         """Obtiene envíos pendientes listos para procesarse (service role)."""
 
         effective_limit = max(limit, 1)
         now_iso = datetime.now(timezone.utc).isoformat()
+        if postmark_preparation_ready:
+            normalized_ids = [str(value) for value in (organizacion_ids or ())]
+            if not normalized_ids:
+                return []
+            data = await self._rpc(
+                "worker_list_pending_postmark_envios",
+                {
+                    "p_organizacion_ids": normalized_ids,
+                    "p_limit": min(effective_limit, 500),
+                },
+            )
+            if not isinstance(data, list):
+                raise CRMRepositoryError("worker_pending_postmark_envios_invalid")
+            return [row for row in data if isinstance(row, dict)]
+
         params = {
             "select": "*",
             "estado": "eq.pendiente",
@@ -26428,7 +26444,7 @@ class CRMRepository:
             "/rest/v1/prospeccion_contacto_batch",
             params={
                 "select": "id,organizacion_id,estado,preparacion_estado,preparacion_total,preparacion_preparados,preparacion_fallidos",
-                "preparacion_estado": "in.(pendiente,procesando)",
+                "preparacion_estado": "in.(pendiente,procesando,parcial,fallida)",
                 "order": "creado_en.asc",
                 "limit": str(max(1, min(limit, 100))),
             },
@@ -26552,7 +26568,12 @@ class CRMRepository:
         organizacion_id: UUID,
         entries: Sequence[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Crea envíos operativos Postmark en chunks idempotentes de 500."""
+        """Crea envíos Postmark mediante una RPC bulk idempotente.
+
+        El camino anterior hacía POST directo a la tabla y ejecutaba el
+        trigger de totales por cada fila. Para bloques grandes eso convertía
+        una inserción de 500 en cientos de recalculos completos.
+        """
         if not entries:
             return []
         created: list[dict[str, Any]] = []
@@ -26561,15 +26582,13 @@ class CRMRepository:
                 dict(entry, organizacion_id=str(organizacion_id))
                 for entry in entries[start : start + 500]
             ]
-            resp = await self._request(
-                "POST",
-                "/rest/v1/prospeccion_contacto_envio",
-                params={"on_conflict": "batch_id,prospecto_id,canal"},
-                json=_align_postgrest_bulk_items(chunk),
-                prefer="resolution=ignore-duplicates,return=representation",
-                organizacion_id=organizacion_id,
+            data = await self._rpc(
+                "worker_insert_postmark_contact_envios_bulk",
+                {
+                    "p_organizacion_id": str(organizacion_id),
+                    "p_entries": _align_postgrest_bulk_items(chunk),
+                },
             )
-            data = resp.json() or []
             if not isinstance(data, list):
                 raise CRMRepositoryError("postmark_campaign_envios_insert_invalid")
             created.extend(row for row in data if isinstance(row, dict))

@@ -2227,6 +2227,7 @@ class ProspeccionContactSender:
             canal=next(iter(self._channels)) if self._channels and len(self._channels) == 1 else None,
             organizacion_ids=provider_organization_ids,
             excluir_organizacion_ids=excluded_provider_organization_ids,
+            postmark_preparation_ready=self._provider_filter == "postmark",
         )
         mark_stage("fetch_pending_envios")
         if self._channels and len(self._channels) > 1:
