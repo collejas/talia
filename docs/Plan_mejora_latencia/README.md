@@ -4,6 +4,7 @@
 - [Plan transversal de consolidación de métricas](../Plan_metricas/PLAN_CONSOLIDACION_METRICAS.md)
 - [Auditoría de separación de envíos de prospección](../Prospeccion/envios_y_separacion.md)
 - [Incidente Supabase/Prospección y actualización del plan](07_incidente_supabase_prospeccion_20261001.md)
+- [Incidente de envío masivo y saturación de Supabase](08_incidente_envio_masivo_20261002.md)
 - [Changelog de mejoras de latencia](changelog.md)
 
 Documentación generada para diagnóstico y plan de mejora de rendimiento en backend CRM.
@@ -70,3 +71,11 @@ separación debe auditarse con los timestamps del worker y del proveedor.
   - Confirmado defecto de logging que oculta errores de dependencia en
     `/prospeccion/prospectos`.
   - Pendiente separar indicadores del listado y sacar refreshes del camino crítico.
+
+- Actualización 2026-10-02:
+  - Un envío de 1001 prospectos terminó en `502` después de persistencia parcial.
+  - Se identificaron dos lotes, targets incompletos y preparación fallida.
+  - La clave de idempotencia recibida por HTTP no quedó persistida en el batch.
+  - Queda prohibido repetir el envío hasta reconciliar ambos lotes.
+  - El siguiente paso es desacoplar completamente la preparación del endpoint y
+    hacer durable la idempotencia de la campaña.

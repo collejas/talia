@@ -676,6 +676,27 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
   envíos de los prospectos y no bloquean una nueva selección.
 - Se cancelaron también los mensajes locales `queued` sin
   `external_message_id`; ningún mensaje cancelado fue aceptado por Postmark.
+
+## 2026-10-02 — incidente de lote 1001 y persistencia parcial
+
+- Un `POST /api/prospeccion/prospectos/contactar` de 1001 prospectos terminó en
+  `HTTP 502` después de aproximadamente 42 segundos.
+- Supabase presentó timeouts, errores de red y fallos de schema cache durante la
+  inserción, preparación y sincronización de webhooks.
+- Se observaron dos lotes para el tenant maestro:
+  `f126d4ea-cae3-4bd9-a501-a97b0ae61fad` y
+  `4e9070a1-8277-4603-b4b0-5092920b0771`.
+- El primer lote sólo conservó 500 targets pendientes; el segundo conservó
+  1001 targets con 500 fallidos, 500 procesando y 1 preparado.
+- La clave `Idempotency-Key` recibida por HTTP no quedó almacenada en
+  `solicitud_idempotencia`, por lo que un reintento no fue deduplicado.
+- El incidente queda documentado como persistencia parcial; no se considera
+  confirmada la entrega de los 1001 mensajes.
+- Antes de cualquier reenvío se debe reconciliar cada target con Talia,
+  `MessageID`, respuesta de `/email/batch` y eventos Postmark.
+- El plan se actualiza para exigir respuesta HTTP asíncrona `202`, idempotencia
+  durable por tenant, bloques independientes de máximo 500, reanudación por
+  bloque y webhooks procesados fuera de la petición pública.
 # 2026-10-02 — Preparación durable y batches Postmark de hasta 500
 
 - Se agregó el manifiesto `prospeccion_postmark_campaign_targets` para separar

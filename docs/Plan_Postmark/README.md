@@ -2,6 +2,10 @@
 
 Documentación de la migración completa de Brevo a Postmark.
 
+## Incidente vigente
+
+- [Incidente Postmark: lote de 1001 con persistencia parcial](./09-incidente-lote-1001-20261002.md)
+
 ## Objetivo
 
 Que GEOACTIV opere el servicio de correo desde Talia para todos los tenants:
@@ -26,7 +30,8 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 7. [Decisiones operativas y criterios](./06-decisiones-operativas-y-criterios.md)
 8. [Sincronización Postmark por tenant](./07-sincronizacion-postmark-por-tenant.md)
 9. [Sincronización Brevo y métricas unificadas](./08-sincronizacion-brevo-y-metricas.md)
-10. [Changelog](./CHANGELOG.md)
+10. [Incidente de lote 1001 y persistencia parcial](./09-incidente-lote-1001-20261002.md)
+11. [Changelog](./CHANGELOG.md)
 
 ## Decisiones iniciales
 
@@ -73,6 +78,13 @@ de base de datos, errores o profundidad de cola, sin borrar ni duplicar lotes.
 La experiencia esperada es que el panel responda rápidamente con el lote en
 estado `preparando`; la latencia de renderizado, persistencia y entrega queda
 fuera de la solicitud HTTP y puede observarse mediante el progreso del lote.
+
+El incidente del 2026-10-02 demostró que esta separación todavía no está
+completa: la petición de 1001 prospectos permaneció aproximadamente 42
+segundos, terminó en `502` y dejó dos lotes con persistencia parcial. La
+idempotencia HTTP tampoco quedó persistida en el batch. Por ello, la creación
+asíncrona real, la idempotencia durable y la conciliación previa al reenvío son
+criterios obligatorios antes de declarar estable el envío masivo.
 
 ## Alta automática de tenants
 
