@@ -830,7 +830,7 @@ class PostmarkRepository:
         return await self._get_one(
             "/rest/v1/prospeccion_contacto_batch",
             params={
-                "select": "id,organizacion_id,estado,total_prospectos",
+                "select": "id,organizacion_id,estado,total_prospectos,preparacion_estado",
                 "id": f"eq.{batch_id}",
                 "limit": "1",
             },

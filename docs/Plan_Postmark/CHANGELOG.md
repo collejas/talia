@@ -676,3 +676,18 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
   envíos de los prospectos y no bloquean una nueva selección.
 - Se cancelaron también los mensajes locales `queued` sin
   `external_message_id`; ningún mensaje cancelado fue aceptado por Postmark.
+# 2026-10-02 — Preparación durable y batches Postmark de hasta 500
+
+- Se agregó el manifiesto `prospeccion_postmark_campaign_targets` para separar
+  la aceptación de la campaña de la creación de envíos operativos.
+- La API ya no inserta miles de `prospeccion_contacto_envio` para campañas
+  Postmark dentro de la misma solicitud; registra targets en chunks de máximo
+  500 y responde para que el preparador continúe en segundo plano.
+- `talia-postmark-preparer.service` reclama targets con `SKIP LOCKED`, crea
+  envíos operativos en chunks idempotentes y mantiene contadores explícitos de
+  preparación.
+- Se agregó una protección de base de datos para impedir completar un batch
+  mientras la preparación no haya terminado.
+- El camino legado de entrega por `source_batch_id` queda reservado para lotes
+  históricos sin manifiesto; las campañas nuevas usan bloques persistentes.
+- Brevo y WhatsApp no comparten esta cola ni sus límites.

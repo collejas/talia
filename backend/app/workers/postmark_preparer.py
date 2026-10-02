@@ -10,24 +10,126 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+from uuid import UUID
 
 from app.core.config import settings
 from app.core.logging import configure_logging, resolve_log_level
+from app.repositories.crm import CRMRepository
 from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
 from app.services.prospeccion_contact_sender import ProspeccionContactSender
 
 logger = logging.getLogger("app.workers.postmark_preparer")
 
 
+class PostmarkCampaignTargetPreparationWorker:
+    """Convierte el manifiesto durable en envíos operativos por bloques de 500.
+
+    Aquí no se llama a Postmark. La única responsabilidad es materializar el
+    snapshot local; ``ProspeccionContactSender`` y ``PostmarkWorker`` siguen
+    siendo los únicos procesos que encolan y entregan respectivamente.
+    """
+
+    def __init__(self, *, batch_size: int = 500) -> None:
+        self.batch_size = max(1, min(int(batch_size), 500))
+
+    async def run_once(self) -> int:
+        repository = CRMRepository()
+        prepared = 0
+        for batch in await repository.worker_list_postmark_campaign_batches(limit=20):
+            try:
+                organizacion_id = UUID(str(batch["organizacion_id"]))
+                batch_id = UUID(str(batch["id"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+            targets = await repository.worker_claim_postmark_campaign_targets(
+                organizacion_id=organizacion_id,
+                batch_id=batch_id,
+                limit=self.batch_size,
+            )
+            if not targets:
+                await repository.worker_sync_postmark_campaign_preparation(
+                    organizacion_id=organizacion_id,
+                    batch_id=batch_id,
+                )
+                continue
+
+            entries: list[dict[str, object]] = []
+            target_ids: list[UUID] = []
+            for target in targets:
+                try:
+                    target_id = UUID(str(target["id"]))
+                    target_ids.append(target_id)
+                except (KeyError, TypeError, ValueError):
+                    continue
+                entries.append(
+                    {
+                        "batch_id": str(batch_id),
+                        "prospecto_id": str(target["prospecto_id"]),
+                        "organizacion_id": str(organizacion_id),
+                        "canal": "correo",
+                        "numero_lote": int(target.get("numero_lote") or 1),
+                        "lote_programado_en": target.get("lote_programado_en"),
+                        "programado_en": target.get("programado_en"),
+                        "plantilla_id": target.get("plantilla_id"),
+                        "version_id": target.get("version_id"),
+                        "payload": target.get("payload") if isinstance(target.get("payload"), dict) else {},
+                        "detalle": target.get("detalle") if isinstance(target.get("detalle"), dict) else {},
+                    }
+                )
+
+            try:
+                await repository.worker_insert_contact_envios(
+                    organizacion_id=organizacion_id,
+                    entries=entries,
+                )
+                await repository.worker_finish_postmark_campaign_targets(
+                    organizacion_id=organizacion_id,
+                    batch_id=batch_id,
+                    target_ids=target_ids,
+                    success=True,
+                )
+                prepared += len(entries)
+                logger.info(
+                    "postmark.campaign_targets_prepared",
+                    extra={
+                        "organizacion_id": str(organizacion_id),
+                        "source_batch_id": str(batch_id),
+                        "target_count": len(entries),
+                    },
+                )
+            except Exception as exc:
+                await repository.worker_finish_postmark_campaign_targets(
+                    organizacion_id=organizacion_id,
+                    batch_id=batch_id,
+                    target_ids=target_ids,
+                    success=False,
+                    error=str(exc),
+                )
+                logger.exception(
+                    "postmark.campaign_targets_prepare_failed",
+                    extra={
+                        "organizacion_id": str(organizacion_id),
+                        "source_batch_id": str(batch_id),
+                        "target_count": len(targets),
+                    },
+                )
+            await repository.worker_sync_postmark_campaign_preparation(
+                organizacion_id=organizacion_id,
+                batch_id=batch_id,
+            )
+        return prepared
+
+
 class PostmarkPreparationWorker:
     def __init__(self, *, interval_seconds: float = 5.0) -> None:
         self.interval_seconds = max(float(interval_seconds), 1.0)
+        self.campaign_target_preparer = PostmarkCampaignTargetPreparationWorker(batch_size=500)
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
 
     async def run_once(self) -> int:
         repository = PostmarkRepository()
-        prepared = 0
+        prepared = await self.campaign_target_preparer.run_once()
         for organizacion_id in await repository.list_enabled_organizations():
             for source_batch_id in await repository.list_queued_source_batches(
                 organizacion_id=organizacion_id

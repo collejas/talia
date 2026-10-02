@@ -42862,16 +42862,25 @@ async def contactar_prospectos_legacy(
             "idempotent_replay": True,
         }
 
-    envios_entries, suppressed_by_channel = _build_contact_envios_entries(
-        batch_id=batch_id,
-        prospectos=prospectos,
-        canales=canales_config,
-        programacion=programacion,
-        separacion_segundos=payload.separacion_segundos,
-        envios_por_lote=payload.envios_por_lote,
-        intervalo_entre_lotes_segundos=payload.intervalo_entre_lotes_segundos,
-        postmark_email_batch=postmark_email_batch,
-    )
+    # Para Postmark ya tenemos el manifiesto calculado antes de reservar las
+    # cuotas. Reutilizarlo evita reconstruir miles de entradas en la misma
+    # petición; solo sustituimos el identificador temporal por el batch real.
+    if postmark_email_batch:
+        envios_entries = [
+            {**entry, "batch_id": str(batch_id)} for entry in preview_entries
+        ]
+        suppressed_by_channel = _preview_suppressed
+    else:
+        envios_entries, suppressed_by_channel = _build_contact_envios_entries(
+            batch_id=batch_id,
+            prospectos=prospectos,
+            canales=canales_config,
+            programacion=programacion,
+            separacion_segundos=payload.separacion_segundos,
+            envios_por_lote=payload.envios_por_lote,
+            intervalo_entre_lotes_segundos=payload.intervalo_entre_lotes_segundos,
+            postmark_email_batch=postmark_email_batch,
+        )
     if suppressed_by_channel:
         for canal, ids in suppressed_by_channel.items():
             omitidos.append(
@@ -42909,12 +42918,52 @@ async def contactar_prospectos_legacy(
                         extra={"quota_day_utc": reserved_date.isoformat()},
                     )
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+    postmark_target_entries: list[dict[str, Any]] = []
+    immediate_envios_entries: list[dict[str, Any]] = []
+    if postmark_email_batch:
+        for ordinal, entry in enumerate(envios_entries):
+            if _clean_text(entry.get("canal")) != "correo":
+                immediate_envios_entries.append(entry)
+                continue
+            postmark_target_entries.append(
+                {
+                    "batch_id": str(batch_id),
+                    "prospecto_id": entry["prospecto_id"],
+                    "canal": "correo",
+                    "ordinal": ordinal,
+                    "numero_lote": entry.get("numero_lote") or 1,
+                    "lote_programado_en": entry.get("lote_programado_en"),
+                    "programado_en": entry.get("programado_en") or datetime.now(UTC).isoformat(),
+                    "plantilla_id": entry.get("plantilla_id"),
+                    "version_id": entry.get("version_id"),
+                    "payload": entry.get("payload") if isinstance(entry.get("payload"), dict) else {},
+                    "detalle": entry.get("detalle") if isinstance(entry.get("detalle"), dict) else {},
+                }
+            )
+    else:
+        immediate_envios_entries = envios_entries
+
     try:
+        if postmark_target_entries:
+            postmark_repo = CRMRepository()
+            await _retry_transient_repo_error(
+                operation="insert_postmark_campaign_targets",
+                func=lambda: postmark_repo.insert_postmark_campaign_targets(
+                    organizacion_id=organizacion_id,
+                    entries=postmark_target_entries,
+                ),
+                retries=1,
+            )
+            await postmark_repo.worker_initialize_postmark_preparation(
+                organizacion_id=organizacion_id,
+                batch_id=UUID(str(batch_id)),
+                total=len(postmark_target_entries),
+            )
         envios = await _retry_transient_repo_error(
             operation="insert_contact_envios",
             func=lambda: repo.insert_contact_envios(
                 usuario_token=user_token,
-                entries=envios_entries,
+                entries=immediate_envios_entries,
             ),
             retries=1,
         )
@@ -42959,6 +43008,9 @@ async def contactar_prospectos_legacy(
         "total_contactos": len(resumen),
         "contactos_truncados": len(resumen) > 100,
     }
+    if postmark_target_entries:
+        response["preparacion_asincrona"] = True
+        response["postmark_targets"] = len(postmark_target_entries)
     if omitidos:
         response["omitidos"] = omitidos
     return response

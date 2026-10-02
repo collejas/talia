@@ -95,6 +95,59 @@ created -> preparing -> ready -> sending -> submitted
 entrega real continúa confirmándose mediante webhooks y puede terminar en
 `delivered`, `bounced`, `complained`, `unsubscribed` o un estado equivalente.
 
+### Implementación durable de campañas grandes — 2026-10-02
+
+La implementación del flujo anterior quedó reforzada con una cola durable de
+preparación. La solicitud HTTP ya no debe crear miles de filas de envío
+operativo ni renderizar el contenido final antes de responder. Para campañas
+Postmark se persiste primero un manifiesto en
+`prospeccion_postmark_campaign_targets`, con una fila por destinatario,
+`ordinal`, `batch_id`, `prospecto_id`, plantilla, programación, snapshot de
+contenido y estado de preparación.
+
+El flujo vigente es:
+
+```text
+POST del panel
+  -> valida selección, dominio, supresiones e idempotencia
+  -> crea prospeccion_contacto_batch
+  -> inserta targets Postmark en chunks locales de <= 500
+  -> responde con preparacion_asincrona=true
+
+talia-postmark-preparer.service
+  -> reclama targets con SKIP LOCKED
+  -> crea prospeccion_contacto_envio en chunks de <= 500
+  -> marca el manifiesto preparado
+  -> permite preparar el siguiente chunk
+
+prospeccion_contact_sender (scope Postmark)
+  -> reclama envíos operativos en bloque
+  -> materializa tenant_email_messages
+
+postmark-worker
+  -> prepara bloques persistentes homogéneos
+  -> reclama un bloque ready
+  -> llama exactamente una vez a /email/batch para <= 500 mensajes
+  -> persiste el resultado individual y su MessageID
+```
+
+El estado de preparación se guarda explícitamente en
+`prospeccion_contacto_batch`: `pendiente`, `procesando`, `completada` o
+`fallida`, con totales, fechas y error. Un trigger impide que los RPC de
+finalización marquen `completado` un lote cuyo manifiesto aún no terminó. Los
+targets tienen reclamación atómica, leases de recuperación e idempotencia por
+`batch_id + prospecto_id + canal`.
+
+Esta cola solo aplica al proveedor Postmark. Brevo mantiene su sender,
+cuotas, límites y estados; WhatsApp mantiene su worker y callbacks. No se
+comparte concurrencia ni se cambia el contrato de esos proveedores.
+
+El límite de 500 es el tamaño de una llamada externa, no una separación de
+cinco segundos entre destinatarios. La pausa configurada, si se necesita,
+solo puede aplicarse entre llamadas externas completas. Una campaña de 1,200
+mensajes debe generar bloques `500 + 500 + 200`; nunca 1,200 llamadas
+individuales.
+
 La preparación y la entrega deben ejecutarse fuera de `talia-api.service` en
 workers separados o procesos aislados. El worker de Postmark debe tener un
 límite de batches simultáneos, no una concurrencia ilimitada de mensajes. La

@@ -21306,9 +21306,11 @@ class CRMRepository:
         if organizacion_id is None and not usuario_token:
             raise CRMRepositoryError("prospectos_by_ids_missing_token")
 
-        # PostgREST recibe los IDs en la URL. Mantener bloques pequeños evita
-        # 502/414 cuando el panel selecciona cientos o miles de prospectos.
-        chunk_size = 200
+        # PostgREST recibe los IDs en la URL. 500 mantiene el selector de una
+        # campaña grande acotado sin convertir cada destinatario en una
+        # consulta independiente; la entrega posterior sigue usando bloques
+        # Postmark de máximo 500.
+        chunk_size = 500
         requested_ids: list[str] = []
         seen_ids: set[str] = set()
         for value in prospecto_ids:
@@ -23916,6 +23918,39 @@ class CRMRepository:
             created.extend(data)
         return created
 
+    async def insert_postmark_campaign_targets(
+        self,
+        *,
+        organizacion_id: UUID,
+        entries: Sequence[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Persiste el manifiesto Postmark sin crear envíos operativos todavía.
+
+        Esta escritura usa service role desde el backend para que la API no
+        exponga la tabla de preparación a usuarios autenticados. La operación
+        es idempotente por ``batch_id + prospecto_id + canal``.
+        """
+        if not entries:
+            return []
+        created: list[dict[str, Any]] = []
+        for start in range(0, len(entries), 500):
+            chunk = [
+                dict(entry, organizacion_id=str(organizacion_id))
+                for entry in entries[start : start + 500]
+            ]
+            resp = await self._request(
+                "POST",
+                "/rest/v1/prospeccion_postmark_campaign_targets",
+                json=_align_postgrest_bulk_items(chunk),
+                prefer="resolution=ignore-duplicates,return=representation",
+                organizacion_id=organizacion_id,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError("postmark_campaign_targets_insert_invalid")
+            created.extend(row for row in data if isinstance(row, dict))
+        return created
+
     async def list_contact_templates(
         self,
         *,
@@ -26386,6 +26421,160 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_pending_envios_invalid:{data!r}")
         return data
 
+    async def worker_list_postmark_campaign_batches(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Lista campañas Postmark con destinatarios aún no preparados."""
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_batch",
+            params={
+                "select": "id,organizacion_id,estado,preparacion_estado,preparacion_total,preparacion_preparados,preparacion_fallidos",
+                "preparacion_estado": "in.(pendiente,procesando)",
+                "order": "creado_en.asc",
+                "limit": str(max(1, min(limit, 100))),
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError("postmark_campaign_batches_invalid")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def worker_get_contact_batch(self, *, batch_id: UUID) -> dict[str, Any] | None:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_batch",
+            params={"id": f"eq.{batch_id}", "limit": "1"},
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError("worker_contact_batch_invalid")
+        return row
+
+    async def worker_initialize_postmark_preparation(
+        self,
+        *,
+        organizacion_id: UUID,
+        batch_id: UUID,
+        total: int,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_batch",
+            params={"id": f"eq.{batch_id}", "organizacion_id": f"eq.{organizacion_id}"},
+            json={
+                "preparacion_estado": "pendiente",
+                "preparacion_total": max(0, int(total)),
+                "preparacion_preparados": 0,
+                "preparacion_fallidos": 0,
+                "preparacion_iniciada_en": datetime.now(timezone.utc).isoformat(),
+                "preparacion_finalizada_en": None,
+                "preparacion_error": None,
+                "estado": "en_proceso",
+            },
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        return data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
+
+    async def worker_claim_postmark_campaign_targets(
+        self,
+        *,
+        organizacion_id: UUID,
+        batch_id: UUID,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Reclama targets de forma atómica y con SKIP LOCKED."""
+        data = await self._rpc(
+            "tenant_claim_postmark_campaign_targets",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_batch_id": str(batch_id),
+                "p_limit": max(1, min(limit, 500)),
+                "p_stale_after_seconds": 900,
+            },
+        )
+        if not isinstance(data, list):
+            raise CRMRepositoryError("postmark_campaign_targets_claim_invalid")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def worker_finish_postmark_campaign_targets(
+        self,
+        *,
+        organizacion_id: UUID,
+        batch_id: UUID,
+        target_ids: Sequence[UUID],
+        success: bool,
+        error: str | None = None,
+    ) -> int:
+        if not target_ids:
+            return 0
+        data = await self._rpc(
+            "tenant_finish_postmark_campaign_targets",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_batch_id": str(batch_id),
+                "p_target_ids": [str(value) for value in target_ids],
+                "p_success": bool(success),
+                "p_error": error,
+            },
+        )
+        if isinstance(data, int):
+            return data
+        if isinstance(data, list) and data and isinstance(data[0], int):
+            return data[0]
+        raise CRMRepositoryError("postmark_campaign_targets_finish_invalid")
+
+    async def worker_sync_postmark_campaign_preparation(
+        self,
+        *,
+        organizacion_id: UUID,
+        batch_id: UUID,
+    ) -> dict[str, Any]:
+        data = await self._rpc(
+            "tenant_sync_postmark_campaign_preparation",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_batch_id": str(batch_id),
+            },
+        )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError("postmark_campaign_preparation_sync_invalid")
+
+    async def worker_insert_contact_envios(
+        self,
+        *,
+        organizacion_id: UUID,
+        entries: Sequence[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Crea envíos operativos Postmark en chunks idempotentes de 500."""
+        if not entries:
+            return []
+        created: list[dict[str, Any]] = []
+        for start in range(0, len(entries), 500):
+            chunk = [
+                dict(entry, organizacion_id=str(organizacion_id))
+                for entry in entries[start : start + 500]
+            ]
+            resp = await self._request(
+                "POST",
+                "/rest/v1/prospeccion_contacto_envio",
+                params={"on_conflict": "batch_id,prospecto_id,canal"},
+                json=_align_postgrest_bulk_items(chunk),
+                prefer="resolution=ignore-duplicates,return=representation",
+                organizacion_id=organizacion_id,
+            )
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError("postmark_campaign_envios_insert_invalid")
+            created.extend(row for row in data if isinstance(row, dict))
+        return created
+
     async def worker_list_envios_local_message_pending(
         self,
         *,
@@ -28058,6 +28247,17 @@ class CRMRepository:
 
     async def worker_sync_batch_status(self, *, batch_id: UUID) -> str | None:
         """Actualiza el estado del lote conforme avanza el procesamiento."""
+
+        batch_row = await self.worker_get_contact_batch(batch_id=batch_id)
+        preparation_state = str((batch_row or {}).get("preparacion_estado") or "no_requerida")
+        if preparation_state in {"pendiente", "procesando"}:
+            await self._request(
+                "PATCH",
+                "/rest/v1/prospeccion_contacto_batch",
+                params={"id": f"eq.{batch_id}"},
+                json={"estado": "en_proceso"},
+            )
+            return "en_proceso"
 
         pending_total = await self._count_batch_envios(
             batch_id=batch_id,

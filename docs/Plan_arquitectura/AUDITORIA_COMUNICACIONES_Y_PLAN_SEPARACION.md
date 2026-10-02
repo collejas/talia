@@ -4,6 +4,38 @@ Fecha de auditoría inicial: 2026-09-18 UTC
 Actualización de estado: 2026-09-19 UTC
 Estado: separación inicial implementada; optimización de preparación de lotes y desacoplamiento durable de webhooks pendientes.
 
+## Actualización 2026-10-02: cierre de la ruta de campañas Postmark
+
+La auditoría de los lotes de 3,351 y 1,000 destinatarios confirmó que el
+problema no era el límite de Postmark: el adaptador ya llamaba a
+`/email/batch`, pero la API de Talia creaba todos los envíos operativos de
+forma síncrona y el preparador podía vaciar restos pequeños en cada ciclo. Eso
+provocaba presión sobre PostgREST/Supabase, respuestas 502 y estados locales
+incompletos.
+
+Se implementó una separación durable en cuatro capas:
+
+1. `prospeccion_contacto_batch` conserva el estado y los contadores de
+   preparación.
+2. `prospeccion_postmark_campaign_targets` conserva el manifiesto de
+   destinatarios y el snapshot de contenido antes del envío.
+3. `talia-postmark-preparer.service` reclama y materializa envíos operativos
+   en bloques de máximo 500 con `SKIP LOCKED` e idempotencia.
+4. `postmark-worker` entrega únicamente bloques homogéneos de máximo 500 por
+   llamada a `/email/batch`; cada elemento se confirma con su propio resultado
+   y `MessageID`.
+
+La finalización del lote quedó protegida por base de datos: mientras existan
+targets pendientes, procesando o fallidos, ningún RPC de persistencia puede
+marcar el lote como completado. La entrega aceptada por Postmark sigue siendo
+distinta de `Delivery`, `Bounce`, `Open`, `Click`, `SpamComplaint` o
+`SubscriptionChange`, que continúan llegando por la cola durable de webhooks.
+
+La implementación no modifica el camino de Brevo ni el de WhatsApp. El
+despliegue requiere reiniciar `talia-api.service`,
+`talia-postmark-preparer.service` y `talia-email-worker.service`, y validar un
+lote controlado de 10, después uno de 500 y finalmente uno de 1,000.
+
 ## 1. Alcance
 
 Se revisaron:
