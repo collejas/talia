@@ -1074,6 +1074,7 @@ export type ProspectosQueryMetadataResult = {
   activities: string[]
   segmentos: string[]
   tipos_negocio: string[]
+  degraded?: boolean
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -1186,6 +1187,7 @@ export async function listProspectosQueryMetadata(params?: {
     activities: string[]
     segmentos?: string[]
     tipos_negocio?: string[]
+    degraded?: boolean
   }>(url.toString(), { cache: "no-store", signal: params?.signal })
   const normalizedQueries = (response.queries ?? [])
     .map((item) => {
@@ -1207,6 +1209,7 @@ export async function listProspectosQueryMetadata(params?: {
     activities: response.activities ?? [],
     segmentos: response.segmentos ?? [],
     tipos_negocio: response.tipos_negocio ?? [],
+    degraded: response.degraded === true,
   }
   })()
   prospectosQueryMetadataInflight.set(inflightKey, requestPromise)

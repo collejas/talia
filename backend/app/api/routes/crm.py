@@ -36924,6 +36924,22 @@ async def listar_prospectos_query_metadata(
                 envios_voz_max=envios_voz_max,
             )
         except CRMRepositoryError as exc:
+            if _is_transient_supabase_error(exc):
+                payload = {
+                    "ok": True,
+                    "queries": [],
+                    "activities": [],
+                    "segmentos": [],
+                    "tipos_negocio": [],
+                    "degraded": True,
+                }
+                logger.warning(
+                    "crm.prospectos.queries.degraded_fallback",
+                    extra={"error": str(exc)},
+                )
+                if not inflight_future.done():
+                    inflight_future.set_result(payload)
+                return payload
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         payload = {
             "ok": True,

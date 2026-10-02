@@ -28632,7 +28632,10 @@ class CRMRepository:
         usuario_token: str,
     ) -> dict[str, Any]:
         last_exc: CRMRepositoryError | None = None
-        for attempt in range(3):
+        # Este resumen es secundario para la vista. Reintentar varias veces
+        # durante una saturacion de PostgREST mantiene ocupadas conexiones y
+        # retrasa tambien la carga principal de prospectos.
+        for attempt in range(1):
             try:
                 resp = await self._request_with_user(
                     "POST",
@@ -28653,7 +28656,7 @@ class CRMRepository:
                     or "Supabase respondió error 503" in error_message
                     or "Supabase respondió error 504" in error_message
                 )
-                if not retryable or attempt >= 2:
+                if not retryable or attempt >= 0:
                     raise
                 logger.warning(
                     "crm.enriquecimiento_resumen_retry",
