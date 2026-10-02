@@ -585,16 +585,27 @@ async def _get_cached_campanas_atribucion(
         _CAMPANAS_ATRIBUCION_FAILURES.pop(cache_key, None)
 
         try:
-            rows = await asyncio.wait_for(
-                repo.get_prospeccion_campana_atribucion_cache_rango(
+            if date_from is not None and date_to is not None:
+                cache_loader = repo.get_prospeccion_campana_atribucion_cache_rango(
                     usuario_token=user_token,
                     organizacion_id=organizacion_id,
                     campana_id=campana_id,
-                    date_from_iso=date_from.isoformat() if date_from else None,
-                    date_to_iso=date_to.isoformat() if date_to else None,
+                    date_from_iso=date_from.isoformat(),
+                    date_to_iso=date_to.isoformat(),
                     limit=200,
                     offset=0,
-                ),
+                )
+            elif date_from is None and date_to is None:
+                cache_loader = repo.get_latest_prospeccion_campana_atribucion_cache(
+                    organizacion_id=organizacion_id,
+                    campana_id=campana_id,
+                    limit=200,
+                    offset=0,
+                )
+            else:
+                raise CRMRepositoryError("prospeccion_campana_atribucion_cache_period_incomplete")
+            rows = await asyncio.wait_for(
+                cache_loader,
                 timeout=CAMPANAS_ATRIBUCION_QUERY_TIMEOUT_SECONDS,
             )
         except Exception:
@@ -39221,27 +39232,22 @@ async def prospeccion_campanas_atribucion(
         raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
 
     rows: list[dict[str, Any]] = []
+    warnings: list[str] = []
     try:
-        page_size = max(1, min(params.limit, 1000))
-        page_offset = 0
-        while True:
-            page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
-                usuario_token=user_token,
-                organizacion_id=organizacion_id,
-                campana_id=params.campana_id,
-                date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
-                date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
-                limit=page_size,
-                offset=page_offset,
-            )
-            if not page_rows:
-                break
-            rows.extend(page_rows)
-            if len(page_rows) < page_size:
-                break
-            page_offset += len(page_rows)
+        rows = await _get_cached_campanas_atribucion(
+            repo=repo,
+            user_token=user_token,
+            organizacion_id=organizacion_id,
+            campana_id=params.campana_id,
+            date_from=date_from_dt,
+            date_to=date_to_dt,
+        )
     except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        warnings.append("email_attribution_cache_unavailable")
+        logger.warning(
+            "crm.prospeccion.campanas_atribucion.cache_unavailable",
+            extra={"organizacion_id": str(organizacion_id), "error_type": type(exc).__name__},
+        )
 
     items: list[dict[str, Any]] = []
     for row in rows:
@@ -39269,7 +39275,7 @@ async def prospeccion_campanas_atribucion(
             }
         )
 
-    return {"ok": True, "items": items}
+    return {"ok": True, "items": items, "warnings": warnings}
 
 
 @router.get("/prospeccion/metricas")
@@ -39300,27 +39306,30 @@ async def prospeccion_metricas_dashboard(
     if date_from_dt and date_to_dt and date_from_dt > date_to_dt:
         raise HTTPException(status_code=400, detail="metricas_date_range_invalid")
 
+    metric_warnings: list[str] = []
+
     async def _load_campaign_rows() -> list[dict[str, Any]]:
-        campaign_rows: list[dict[str, Any]] = []
-        campaign_page_size = max(1, min(params.limit, 1000))
-        campaign_offset = 0
-        while True:
-            page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
-                usuario_token=user_token,
+        try:
+            return await _get_cached_campanas_atribucion(
+                repo=repo,
+                user_token=user_token,
                 organizacion_id=organizacion_id,
                 campana_id=params.campana_id,
-                date_from_iso=date_from_dt.isoformat() if date_from_dt else None,
-                date_to_iso=date_to_dt.isoformat() if date_to_dt else None,
-                limit=campaign_page_size,
-                offset=campaign_offset,
+                date_from=date_from_dt,
+                date_to=date_to_dt,
             )
-            if not page_rows:
-                break
-            campaign_rows.extend(page_rows)
-            if params.lite or len(page_rows) < campaign_page_size:
-                break
-            campaign_offset += len(page_rows)
-        return campaign_rows
+        except CRMRepositoryError as exc:
+            # La atribución es secundaria: jamás debe bloquear el tablero ni
+            # volver a ejecutar la RPC histórica durante la navegación.
+            metric_warnings.append("email_attribution_cache_unavailable")
+            logger.warning(
+                "prospeccion.metricas.campaign_attribution_degraded",
+                extra={
+                    "organizacion_id": str(organizacion_id),
+                    "error_type": type(exc).__name__,
+                },
+            )
+            return []
 
     try:
         if not params.lite:
@@ -40333,6 +40342,7 @@ async def prospeccion_metricas_dashboard(
 
     return {
         "ok": True,
+        "warnings": sorted(set(metric_warnings)),
         "filters": {
             "date_from": date_from_dt.isoformat() if date_from_dt else None,
             "date_to": date_to_dt.isoformat() if date_to_dt else None,
@@ -49475,33 +49485,23 @@ async def demografia_resumen_v2(
         async def load_campaign_conversion_rows() -> list[dict[str, Any]]:
             if not incluir_atribucion_campanas:
                 return []
-            rows: list[dict[str, Any]] = []
-            offset = 0
-            page_size = 200
             max_rows = 600
             try:
-                while len(rows) < max_rows:
-                    page_rows = await repo.get_prospeccion_campana_template_atribucion_rango(
-                        usuario_token=effective_user_token,
-                        organizacion_id=organizacion_id,
-                        campana_id=campana_uuid_value,
-                        date_from_iso=date_from.isoformat() if date_from else None,
-                        date_to_iso=date_to.isoformat() if date_to else None,
-                        limit=min(page_size, max_rows - len(rows)),
-                        offset=offset,
-                    )
-                    if not page_rows:
-                        break
-                    rows.extend(page_rows)
-                    if len(page_rows) < page_size:
-                        break
-                    offset += len(page_rows)
+                rows = await _get_cached_campanas_atribucion(
+                    repo=repo,
+                    user_token=effective_user_token,
+                    organizacion_id=organizacion_id,
+                    campana_id=campana_uuid_value,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+                return rows[:max_rows]
             except CRMRepositoryError:
                 logger.warning(
                     "crm.demografia.resumen_v2.campaign_attribution_degraded",
                     extra={"organizacion_id": str(organizacion_id)},
                 )
-            return rows
+            return []
 
         async def load_whatsapp_conversion_rows() -> list[dict[str, Any]]:
             rows: list[dict[str, Any]] = []

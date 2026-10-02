@@ -26195,6 +26195,33 @@ class CRMRepository:
             raise CRMRepositoryError(f"prospeccion_campana_atribucion_cache_rango_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def get_latest_prospeccion_campana_atribucion_cache(
+        self,
+        *,
+        organizacion_id: UUID,
+        campana_id: UUID | None = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Lee el snapshot más reciente sin recalcular el histórico."""
+
+        payload: dict[str, Any] = {
+            "p_limit": max(1, min(limit, 1000)),
+            "p_offset": max(0, int(offset)),
+        }
+        if campana_id is not None:
+            payload["p_campana_id"] = str(campana_id)
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/prospeccion_campana_atribucion_cache_ultimo",
+            json=payload,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospeccion_campana_atribucion_cache_ultimo_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def get_prospeccion_campana_whatsapp_metricas_rango(
         self,
         *,
