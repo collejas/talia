@@ -42435,6 +42435,7 @@ async def contactar_prospectos_legacy(
     usuario_id: UUID | None = Depends(optional_usuario_id),
     organizacion_id: UUID = Depends(require_organizacion_id),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    http_response: Response,
     payload: ProspectoContactarPayload,
 ) -> dict[str, Any]:
     """Envía correos, WhatsApps o llamadas registrando lotes y envíos individuales."""
@@ -42947,17 +42948,13 @@ async def contactar_prospectos_legacy(
         if postmark_target_entries:
             postmark_repo = CRMRepository()
             await _retry_transient_repo_error(
-                operation="insert_postmark_campaign_targets",
-                func=lambda: postmark_repo.insert_postmark_campaign_targets(
+                operation="enqueue_postmark_campaign_preparation",
+                func=lambda: postmark_repo.enqueue_postmark_campaign_preparation(
                     organizacion_id=organizacion_id,
+                    batch_id=UUID(str(batch_id)),
                     entries=postmark_target_entries,
                 ),
                 retries=1,
-            )
-            await postmark_repo.worker_initialize_postmark_preparation(
-                organizacion_id=organizacion_id,
-                batch_id=UUID(str(batch_id)),
-                total=len(postmark_target_entries),
             )
         envios = await _retry_transient_repo_error(
             operation="insert_contact_envios",
@@ -43009,6 +43006,7 @@ async def contactar_prospectos_legacy(
         "contactos_truncados": len(resumen) > 100,
     }
     if postmark_target_entries:
+        http_response.status_code = status.HTTP_202_ACCEPTED
         response["preparacion_asincrona"] = True
         response["postmark_targets"] = len(postmark_target_entries)
     if omitidos:

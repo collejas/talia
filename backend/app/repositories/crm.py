@@ -23951,6 +23951,49 @@ class CRMRepository:
             created.extend(row for row in data if isinstance(row, dict))
         return created
 
+    async def enqueue_postmark_campaign_preparation(
+        self,
+        *,
+        organizacion_id: UUID,
+        batch_id: UUID,
+        entries: Sequence[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Encola el manifiesto para que el preparador lo materialice fuera de HTTP."""
+        if not entries or len(entries) > 10000:
+            raise CRMRepositoryError("postmark_preparation_manifest_invalid_size")
+        payload = {
+            "organizacion_id": str(organizacion_id),
+            "batch_id": str(batch_id),
+            "total": len(entries),
+            "manifest": [dict(entry) for entry in entries],
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/prospeccion_postmark_campaign_preparation_jobs",
+            params={"on_conflict": "batch_id"},
+            json=payload,
+            prefer="resolution=ignore-duplicates,return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        existing = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_postmark_campaign_preparation_jobs",
+            params={
+                "select": "id,organizacion_id,batch_id,total,status,attempt_count",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "batch_id": f"eq.{batch_id}",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        existing_data = existing.json() or []
+        if isinstance(existing_data, list) and existing_data and isinstance(existing_data[0], dict):
+            return existing_data[0]
+        raise CRMRepositoryError("postmark_preparation_enqueue_failed")
+
     async def list_contact_templates(
         self,
         *,
@@ -26494,6 +26537,28 @@ class CRMRepository:
         )
         data = resp.json() or []
         return data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
+
+    async def worker_claim_postmark_preparation_jobs(self, *, limit: int = 5) -> list[dict[str, Any]]:
+        data = await self._rpc(
+            "worker_claim_postmark_preparation_jobs",
+            {"p_limit": max(1, min(limit, 20)), "p_stale_after_seconds": 900},
+        )
+        if not isinstance(data, list):
+            raise CRMRepositoryError("postmark_preparation_jobs_claim_invalid")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def worker_finish_postmark_preparation_job(
+        self, *, job_id: UUID, success: bool, error: str | None = None
+    ) -> dict[str, Any]:
+        data = await self._rpc(
+            "worker_finish_postmark_preparation_job",
+            {"p_job_id": str(job_id), "p_success": bool(success), "p_error": error},
+        )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        raise CRMRepositoryError("postmark_preparation_job_finish_invalid")
 
     async def worker_claim_postmark_campaign_targets(
         self,

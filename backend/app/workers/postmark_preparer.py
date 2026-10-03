@@ -35,6 +35,38 @@ class PostmarkCampaignTargetPreparationWorker:
     async def run_once(self) -> int:
         repository = CRMRepository()
         prepared = 0
+        for job in await repository.worker_claim_postmark_preparation_jobs(limit=5):
+            try:
+                organizacion_id = UUID(str(job["organizacion_id"]))
+                batch_id = UUID(str(job["batch_id"]))
+                job_id = UUID(str(job["id"]))
+                manifest = job.get("manifest")
+                if not isinstance(manifest, list) or not manifest:
+                    raise ValueError("postmark_preparation_manifest_invalid")
+                await repository.insert_postmark_campaign_targets(
+                    organizacion_id=organizacion_id,
+                    entries=[row for row in manifest if isinstance(row, dict)],
+                )
+                await repository.worker_initialize_postmark_preparation(
+                    organizacion_id=organizacion_id,
+                    batch_id=batch_id,
+                    total=len(manifest),
+                )
+                await repository.worker_finish_postmark_preparation_job(
+                    job_id=job_id, success=True
+                )
+                logger.info(
+                    "postmark.preparation_manifest_materialized",
+                    extra={"organizacion_id": str(organizacion_id), "batch_id": str(batch_id), "target_count": len(manifest)},
+                )
+            except Exception as exc:
+                try:
+                    await repository.worker_finish_postmark_preparation_job(
+                        job_id=UUID(str(job.get("id"))), success=False, error=str(exc)
+                    )
+                except Exception:
+                    logger.exception("postmark.preparation_manifest_finish_failed", extra={"job_id": str(job.get("id"))})
+                logger.exception("postmark.preparation_manifest_failed", extra={"job_id": str(job.get("id"))})
         for batch in await repository.worker_list_postmark_campaign_batches(limit=20):
             try:
                 organizacion_id = UUID(str(batch["organizacion_id"]))
@@ -47,6 +79,10 @@ class PostmarkCampaignTargetPreparationWorker:
                 limit=self.batch_size,
             )
             if not targets:
+                if int(batch.get("preparacion_total") or 0) <= 0:
+                    # El manifiesto todavía no fue materializado. No debemos
+                    # sincronizarlo como completado con cero destinatarios.
+                    continue
                 await repository.worker_sync_postmark_campaign_preparation(
                     organizacion_id=organizacion_id,
                     batch_id=batch_id,

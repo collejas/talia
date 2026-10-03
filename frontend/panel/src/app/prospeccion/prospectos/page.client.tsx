@@ -3900,7 +3900,13 @@ function ProspectosView() {
               scraper={filters.conScraper}
               onCampaignChange={(value) => setFilters((prev) => ({ ...prev, campanaId: value === "all" ? "" : value, plantillaId: "" }))}
               onTemplateChange={(value) => setFilters((prev) => ({ ...prev, plantillaId: value === "all" ? "" : value }))}
-              onEnvioModoChange={(value) => setFilters((prev) => ({ ...prev, conEnvioModo: value === "si" || value === "no" ? value : "" }))}
+              onEnvioModoChange={(value) => setFilters((prev) => ({
+                ...prev,
+                conEnvioModo: value === "si" || value === "no" ? value : "",
+                // "Todos" debe quitar también el alcance por canal; de lo
+                // contrario resolveConEnvio vuelve a activar "Con envío".
+                conEnvioCanales: value === "all" ? [] : prev.conEnvioCanales,
+              }))}
               onEnvioCanalesChange={(canales) => setFilters((prev) => ({ ...prev, conEnvioCanales: canales, conEnvioModo: canales.length && prev.conEnvioModo === "" ? "si" : prev.conEnvioModo }))}
               onScraperChange={(value) => setFilters((prev) => ({ ...prev, conScraper: value === "all" ? "" : value as ConScraperFilter }))}
               />

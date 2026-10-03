@@ -136,3 +136,36 @@ el envío no se había registrado.
 - La vista no depende de que termine la preparación.
 - No se reproducen `57014` en una prueba controlada de carga.
 
+## Ejecución inicial del plan — 2026-10-02
+
+Se implementó la primera corrección estructural:
+
+- Se creó `prospeccion_postmark_campaign_preparation_jobs` como cola durable,
+  aislada del flujo de Brevo.
+- La petición Postmark ya no inserta targets ni envíos operativos. Persiste un
+  manifiesto y devuelve `202 Accepted`.
+- El worker `talia-postmark-preparer.service` reclama manifiestos con lease,
+  reintentos y `SKIP LOCKED`, y materializa los targets después en bloques de
+  máximo 500.
+- Un worker puede reanudar un manifiesto parcialmente materializado porque la
+  inserción de targets sigue siendo idempotente por lote, prospecto y canal.
+- La cola queda protegida con RLS sin acceso para `anon` ni `authenticated`; la
+  ejecución queda limitada a `service_role`.
+
+### Evidencia de verificación
+
+- Migración aplicada: `20261002_233000_postmark_manifest_queue.sql`.
+- La base confirmó la existencia de la tabla y de las dos RPC nuevas.
+- La prueba de `worker_claim_postmark_preparation_jobs(5, 900)` no reclamó
+  trabajos cuando la cola estaba vacía.
+- `compileall`, `git diff --check` y las pruebas de `contactar_prospectos`
+  terminaron correctamente: `2 passed`.
+
+### Pendiente antes de prueba masiva
+
+1. Reiniciar el preparador y el worker de correo para cargar el código nuevo.
+2. Probar primero con 10, después 500 y finalmente 1001 destinatarios.
+3. Verificar que la respuesta HTTP sea inmediata, que se cree una sola cola y
+   que el worker produzca exactamente bloques de 500, 500 y 1.
+4. Confirmar en Postmark y en Talia la aceptación individual de cada mensaje.
+5. Mantener sin cambios el flujo Brevo durante toda la prueba.
