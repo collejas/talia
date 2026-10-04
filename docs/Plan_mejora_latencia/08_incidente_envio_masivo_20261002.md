@@ -169,3 +169,32 @@ Se implementó la primera corrección estructural:
    que el worker produzca exactamente bloques de 500, 500 y 1.
 4. Confirmar en Postmark y en Talia la aceptación individual de cada mensaje.
 5. Mantener sin cambios el flujo Brevo durante toda la prueba.
+
+## Corrección aplicada y recuperación — 2026-10-03
+
+- Se reencolaron targets Postmark fallidos por red/RPC y se creó la orden de
+  preparación durable para lotes que habían quedado con targets sin materializar.
+- La finalización de envíos se dividió en subbloques de 100 dentro del límite
+  público de 500 para reducir `57014` bajo concurrencia.
+- La RPC del worker tiene un timeout específico de 30 segundos, sin modificar
+  el timeout global de PostgREST.
+- Se actualizaron índices de lotes, targets y envíos para reducir recorridos en
+  preparación y filtros por campaña.
+- Se actualizó la caché de atribución del 2026-10-03: 7 filas y última
+  actualización registrada a las 23:49 UTC.
+- La vista de métricas ahora muestra advertencias explícitas cuando la caché de
+  atribución está vacía, atrasada o la serie temporal falla.
+
+## Ajuste posterior de métricas y filtros — 2026-10-04
+
+- Se confirmó que el tenant opera en `America/Mexico_City`; el snapshot se
+  generó para el rango exacto que usa el filtro de últimos 7 días:
+  `2026-09-27 06:00Z` a `2026-10-04 06:00Z`.
+- La ruta de métricas dejó de ejecutar consultas de WhatsApp cuando el canal
+  seleccionado es `correo`, reduciendo trabajo innecesario y la exposición a
+  `57014`.
+- Si se solicita un periodo que todavía no tiene snapshot exacto, la API lo
+  genera una sola vez con límite de 15 segundos y después lee el resultado
+  persistido. Así el panel no muestra cero como si fuera un dato real.
+- La carga del panel ahora envía `include_whatsapp_channels` según el canal
+  seleccionado, en lugar de pedir WhatsApp también para correo.

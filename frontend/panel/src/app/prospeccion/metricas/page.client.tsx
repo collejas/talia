@@ -164,6 +164,7 @@ export default function ProspeccionMetricasPageClient() {
   const [data, setData] = useState<ProspeccionMetricasResponse | null>(null)
   const [campaignTimeseries, setCampaignTimeseries] = useState<ProspeccionMetricasResponse["campanas_correo"]["timeseries"]>([])
   const [campaignTimeseriesLoading, setCampaignTimeseriesLoading] = useState(false)
+  const [campaignTimeseriesError, setCampaignTimeseriesError] = useState<string | null>(null)
 
   const [templates, setTemplates] = useState<ContactoTemplate[]>([])
 
@@ -239,7 +240,7 @@ export default function ProspeccionMetricasPageClient() {
         limit: 500,
         include_campaign_timeseries: false,
         include_whatsapp_timeseries: false,
-        include_whatsapp_channels: true,
+        include_whatsapp_channels: canal === "todos" || canal === "whatsapp",
         lite: false,
       })
       setData(response)
@@ -258,6 +259,7 @@ export default function ProspeccionMetricasPageClient() {
 
   const loadCampaignTimeseries = useCallback(async () => {
     setCampaignTimeseriesLoading(true)
+    setCampaignTimeseriesError(null)
     try {
       const response = await getProspeccionMetricas({
         date_from: dateFrom || undefined,
@@ -270,8 +272,9 @@ export default function ProspeccionMetricasPageClient() {
         lite: false,
       })
       setCampaignTimeseries(response.campanas_correo?.timeseries ?? response.campanas.timeseries ?? [])
-    } catch {
+    } catch (err) {
       setCampaignTimeseries([])
+      setCampaignTimeseriesError(err instanceof Error ? err.message : "No se pudo cargar la serie temporal.")
     } finally {
       setCampaignTimeseriesLoading(false)
     }
@@ -279,6 +282,7 @@ export default function ProspeccionMetricasPageClient() {
 
   useEffect(() => {
     setCampaignTimeseries([])
+    setCampaignTimeseriesError(null)
     if (!data) return
 
     // La serie diaria es secundaria: esperar a que el resumen principal
@@ -1243,6 +1247,23 @@ export default function ProspeccionMetricasPageClient() {
       {error ? (
         <Card>
           <CardContent className="py-4 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      ) : null}
+
+      {(data?.warnings?.length || campaignTimeseriesError) ? (
+        <Card className="border-amber-500/30 bg-amber-500/5 shadow-none">
+          <CardContent className="space-y-1 py-3 text-sm text-amber-900 dark:text-amber-200">
+            {data?.warnings?.map((warning) => (
+              <p key={warning}>
+                {warning === "email_attribution_cache_stale" || warning === "email_attribution_cache_empty"
+                  ? "La atribución de correo todavía no está conciliada para este periodo; los envíos y estados operativos siguen siendo consultables por lote."
+                  : warning === "email_attribution_cache_unavailable"
+                  ? "La atribución histórica no está disponible temporalmente por latencia de base de datos."
+                  : warning}
+              </p>
+            ))}
+            {campaignTimeseriesError ? <p>La serie temporal no pudo cargarse: {campaignTimeseriesError}</p> : null}
+          </CardContent>
         </Card>
       ) : null}
 

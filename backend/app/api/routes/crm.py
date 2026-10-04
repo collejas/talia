@@ -608,6 +608,32 @@ async def _get_cached_campanas_atribucion(
                 cache_loader,
                 timeout=CAMPANAS_ATRIBUCION_QUERY_TIMEOUT_SECONDS,
             )
+            normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
+            if not normalized_rows and date_from is not None and date_to is not None:
+                # El snapshot se genera solo para periodos exactos. Si el usuario
+                # solicita un periodo aún no generado, se construye una vez y se
+                # vuelve a leer; los siguientes accesos permanecen en caché.
+                await asyncio.wait_for(
+                    repo.refresh_prospeccion_campana_atribucion_cache(
+                        organizacion_id=organizacion_id,
+                        date_from_iso=date_from.isoformat(),
+                        date_to_iso=date_to.isoformat(),
+                        campana_id=campana_id,
+                    ),
+                    timeout=15.0,
+                )
+                rows = await asyncio.wait_for(
+                    repo.get_prospeccion_campana_atribucion_cache_rango(
+                        usuario_token=user_token,
+                        organizacion_id=organizacion_id,
+                        campana_id=campana_id,
+                        date_from_iso=date_from.isoformat(),
+                        date_to_iso=date_to.isoformat(),
+                        limit=200,
+                        offset=0,
+                    ),
+                    timeout=CAMPANAS_ATRIBUCION_QUERY_TIMEOUT_SECONDS,
+                )
         except Exception:
             _CAMPANAS_ATRIBUCION_FAILURES[cache_key] = (
                 now + CAMPANAS_ATRIBUCION_FAILURE_COOLDOWN_SECONDS
@@ -39364,6 +39390,26 @@ async def prospeccion_metricas_dashboard(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    # La caché evita repetir la RPC histórica en la navegación, pero no debe
+    # aparentar que un periodo actual está actualizado cuando el refresco está
+    # detenido. La fecha se expone como warning para que el panel diferencie
+    # cero real de datos todavía no conciliados.
+    cache_updated_at = max(
+        (
+            parsed
+            for parsed in (_parse_timestamp(row.get("actualizado_en")) for row in campaign_rows)
+            if parsed is not None
+        ),
+        default=None,
+    )
+    if cache_updated_at is not None:
+        if cache_updated_at.tzinfo is None:
+            cache_updated_at = cache_updated_at.replace(tzinfo=UTC)
+        if cache_updated_at < datetime.now(UTC) - timedelta(minutes=20):
+            metric_warnings.append("email_attribution_cache_stale")
+    elif campaign_rows == [] and date_from_dt is not None:
+        metric_warnings.append("email_attribution_cache_empty")
+
     campana_name_map: dict[str, str] = {}
     campana_ids: set[str] = set()
     for row in campaign_rows:
@@ -39458,7 +39504,7 @@ async def prospeccion_metricas_dashboard(
         "tasa_oportunidad_pct": 0.0,
         "tasa_cierre_pct": 0.0,
     }
-    if params.include_whatsapp_channels:
+    if params.include_whatsapp_channels and params.canal in ("todos", "whatsapp"):
         try:
             whatsapp_page_size = max(1, min(params.limit, 1000))
             whatsapp_offset = 0

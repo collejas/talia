@@ -26273,6 +26273,36 @@ class CRMRepository:
             raise CRMRepositoryError(f"prospeccion_campana_atribucion_cache_rango_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def refresh_prospeccion_campana_atribucion_cache(
+        self,
+        *,
+        organizacion_id: UUID,
+        date_from_iso: str,
+        date_to_iso: str,
+        campana_id: UUID | None = None,
+    ) -> int:
+        """Genera el snapshot exacto cuando un periodo aún no existe."""
+
+        payload: dict[str, Any] = {
+            "p_date_from": date_from_iso,
+            "p_date_to": date_to_iso,
+        }
+        if campana_id is not None:
+            payload["p_campana_id"] = str(campana_id)
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/prospeccion_campana_atribucion_cache_refresh",
+            json=payload,
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        try:
+            return int(data or 0)
+        except (TypeError, ValueError) as exc:
+            raise CRMRepositoryError(
+                f"prospeccion_campana_atribucion_cache_refresh_invalid:{data!r}"
+            ) from exc
+
     async def get_latest_prospeccion_campana_atribucion_cache(
         self,
         *,
@@ -26863,18 +26893,31 @@ class CRMRepository:
         """Finaliza envíos Postmark, logs y lotes en una sola RPC."""
         if not items or len(items) > 500:
             raise CRMRepositoryError("worker_postmark_finalize_bulk_invalid_size")
-        result = await self._rpc(
-            "worker_finalize_postmark_envios_bulk",
-            {
-                "p_organizacion_id": str(organizacion_id),
-                "p_items": list(items),
-            },
-        )
-        if isinstance(result, list) and result and isinstance(result[0], dict):
-            return result[0]
-        if isinstance(result, dict):
-            return result
-        raise CRMRepositoryError("worker_postmark_finalize_bulk_invalid_response")
+        # La RPC actualiza envíos, bitácora, batch y contadores. Mantener el
+        # límite público en 500, pero dividir la operación transaccional en
+        # bloques menores evita statement_timeout cuando hay concurrencia o
+        # triggers esperando filas de prospectos.
+        totals = {"updated_count": 0, "log_count": 0, "batch_count": 0}
+        for start in range(0, len(items), 100):
+            result = await self._rpc(
+                "worker_finalize_postmark_envios_bulk",
+                {
+                    "p_organizacion_id": str(organizacion_id),
+                    "p_items": list(items[start : start + 100]),
+                },
+            )
+            if isinstance(result, list) and result and isinstance(result[0], dict):
+                row = result[0]
+            elif isinstance(result, dict):
+                row = result
+            else:
+                raise CRMRepositoryError("worker_postmark_finalize_bulk_invalid_response")
+            for key in totals:
+                try:
+                    totals[key] += int(row.get(key) or 0)
+                except (AttributeError, TypeError, ValueError):
+                    continue
+        return totals
 
     async def worker_get_envio_by_mensaje(
         self,

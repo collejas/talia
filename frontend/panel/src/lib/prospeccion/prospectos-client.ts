@@ -2297,6 +2297,7 @@ export type ProspeccionSaludCanales = {
 
 export type ProspeccionMetricasResponse = {
   ok: boolean
+  warnings?: string[]
   filters: {
     date_from?: string | null
     date_to?: string | null
