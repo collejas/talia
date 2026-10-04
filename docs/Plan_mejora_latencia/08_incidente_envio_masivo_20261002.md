@@ -198,3 +198,19 @@ Se implementó la primera corrección estructural:
   persistido. Así el panel no muestra cero como si fuera un dato real.
 - La carga del panel ahora envía `include_whatsapp_channels` según el canal
   seleccionado, en lugar de pedir WhatsApp también para correo.
+
+## Timeout al abrir Prospectos — 2026-10-04
+
+- Supabase correlacionó el `57014` con la RPC
+  `prospeccion_enriquecimiento_resumen()`, llamada por
+  `/prospeccion/prospectos/checklist` al entrar a la vista.
+- La consulta agregaba los indicadores sobre 30,635 prospectos del tenant y
+  leía la tabla ancha completa bajo concurrencia.
+- Se aplicó el índice de cobertura
+  `prospeccion_prospectos_org_enriquecimiento_summary_cover_idx` sobre
+  `organizacion_id`, incluyendo los seis campos explícitos del resumen.
+- El plan pasó de `Bitmap Heap Scan` (~2.16 s y 13,977 bloques) a
+  `Index Only Scan` (~238 ms y 1,260 bloques); la llamada completa de la RPC
+  quedó verificada en ~98 ms.
+- No se modificó el timeout global de Supabase. No se observaron nuevos
+  `statement timeout` en la ventana posterior a la aplicación del índice.
