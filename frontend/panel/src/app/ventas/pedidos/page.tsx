@@ -2,6 +2,7 @@ import { AppViewLayout } from "@/components/layouts/app-view-layout";
 import { OrderFormalizationQueue } from "@/components/ventas/order-formalization-queue";
 import { callCrmApi } from "@/lib/api/crm";
 import { hasPermission } from "@/lib/auth/permissions";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export default function SalesOrdersPage() {
 
 async function SalesOrdersPageContent() {
   const canReview = await hasPermission("sales.orders.confirm");
+  if (!canReview) redirect("/dashboard");
   const brandResponse = await callCrmApi<{
     organization_name: string;
     logo_url: string;

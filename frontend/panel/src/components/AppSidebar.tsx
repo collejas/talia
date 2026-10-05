@@ -117,9 +117,9 @@ const NAVIGATION: {
       title: "Operación",
       url: "/operacion",
       icon: IconClipboardCheck,
-      permission: ["sales.orders.confirm", "sales.orders.submit", "inventory.fulfillment.view"],
+      permission: ["sales.orders.confirm", "inventory.fulfillment.view"],
       children: [
-        { title: "Órdenes de venta", url: "/ventas/pedidos", icon: IconClipboardCheck, permission: ["sales.orders.confirm", "sales.orders.submit"] },
+        { title: "Órdenes de venta", url: "/ventas/pedidos", icon: IconClipboardCheck, permission: "sales.orders.confirm" },
         { title: "Surtidos", url: "/inventario/surtidos", icon: IconTruckDelivery, permission: "inventory.fulfillment.view" },
       ],
     },

@@ -33222,7 +33222,7 @@ async def listar_pedidos_pendientes_formalizacion(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
-    _: str = Depends(require_any_permission(["sales.orders.confirm", "sales.orders.submit"])),
+    _: str = Depends(require_permission("sales.orders.confirm")),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
