@@ -44,19 +44,18 @@ datos, por lo que no depende únicamente del frontend.
 ## Flujo comercial actualizado
 
 1. El vendedor pulsa **Confirmar pedido** desde la oportunidad.
-2. El panel consulta la completitud del pedido y muestra el resumen de los
-   cuatro bloques.
+2. El panel abre un único modal de **Confirmar pedido**, consulta la
+   completitud y muestra el resumen de los cuatro bloques.
 3. Los bloques incompletos muestran los datos faltantes.
-4. Si falta la evidencia de aceptación, el mismo resumen permite capturar la
-   forma de confirmación, referencia, notas o archivo admitido.
-5. Mientras exista algún bloque incompleto, se deshabilita **Continuar a
-   Confirmar pedido**.
-6. Cuando los cuatro bloques están completos, se abre el modal existente de
+4. En ese mismo modal se captura la forma de confirmación, referencia, fecha,
+   notas o archivo admitido.
+5. Mientras existan datos comerciales incompletos, se mantiene bloqueado
    **Confirmar pedido**.
-7. El modal registra la confirmación y envía el pedido a la cola de revisión.
-8. Operaciones revisa visualmente la información, utiliza sus checkboxes y
+6. El botón **Confirmar pedido** guarda la evidencia y envía el pedido a la
+   cola de revisión en la misma acción; no se abre un segundo modal.
+7. Operaciones revisa visualmente la información, utiliza sus checkboxes y
    puede devolver o aprobar/liberar el pedido.
-9. La aprobación elevada continúa siendo la acción que formaliza la venta,
+8. La aprobación elevada continúa siendo la acción que formaliza la venta,
    crea la cuenta por cobrar y libera el pedido al flujo de surtido.
 
 ## Vista `ventas/pedidos`

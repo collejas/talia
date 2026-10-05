@@ -3341,10 +3341,14 @@ export function LeadDrawer({
 
   const handleOpenFormalizeQuote = useCallback(async (quote: LeadQuoteEntry) => {
     setCompletitudQuote(quote);
+    setFormalizeQuote(quote);
+    setFormalizeError(null);
     setCompletitud(null);
     setCompletitudError(null);
     setOrderReference(quote.pedido?.referencia_pedido_cliente ?? "");
+    setOrderDate(quote.pedido?.fecha_orden_cliente ?? "");
     setOrderConfirmationMethod((quote.pedido?.forma_confirmacion as OrderConfirmationMethod | null) ?? "orden_compra");
+    setOrderConfirmationDate(quote.pedido?.fecha_confirmacion_cliente ?? new Date().toISOString().slice(0, 10));
     setOrderEvidenceReference(quote.pedido?.documentos.find((document) => document.tipo_documento === (quote.pedido?.forma_confirmacion ?? "orden_compra"))?.referencia ?? "");
     setOrderConfirmationNotes(quote.pedido?.observaciones_confirmacion ?? "");
     setOrderDocumentFile(null);
@@ -3367,52 +3371,6 @@ export function LeadDrawer({
     }
   }, []);
 
-  const handleSaveCompletitudEvidence = useCallback(async () => {
-    const quote = completitudQuote;
-    if (!quote) return;
-    const existingDocument = orderDocumentUploaded ?? quote.pedido?.documentos.find((document) => document.tipo_documento === orderConfirmationMethod) ?? null;
-    const evidenceReference = orderConfirmationMethod === "orden_compra" ? orderReference.trim() : orderEvidenceReference.trim();
-    if (!evidenceReference && !orderConfirmationNotes.trim() && !orderDocumentFile && !existingDocument) {
-      setCompletitudError("Agrega una referencia, una descripción o adjunta el respaldo de la confirmación.");
-      return;
-    }
-    setCompletitudError(null);
-    setCompletitudLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append("tipo_evidencia", orderConfirmationMethod);
-      if (evidenceReference) formData.append("referencia", evidenceReference);
-      if (orderConfirmationNotes.trim()) formData.append("observaciones", orderConfirmationNotes.trim());
-      if (orderDocumentFile) formData.append("file", orderDocumentFile, orderDocumentFile.name);
-      const response = await fetch(`/api/embudo/quotes/${quote.id}/pedido/evidencias`, { method: "POST", body: formData });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(typeof body?.error === "string" ? body.error : "No se pudo guardar la evidencia.");
-      setOrderDocumentUploaded(body as LeadQuoteOrderDocument);
-      setOrderDocumentFile(null);
-      await fetchQuotes();
-      await handleOpenFormalizeQuote(quote);
-    } catch (error) {
-      setCompletitudError(error instanceof Error ? error.message : "No se pudo guardar la evidencia.");
-      setCompletitudLoading(false);
-    }
-  }, [completitudQuote, fetchQuotes, handleOpenFormalizeQuote, orderConfirmationMethod, orderConfirmationNotes, orderDocumentFile, orderDocumentUploaded, orderEvidenceReference, orderReference]);
-
-  const continueToFormalizeQuote = useCallback(() => {
-    const quote = completitudQuote;
-    if (!quote || !completitud?.puede_enviar_a_revision) return;
-    setCompletitudQuote(null);
-    setCompletitud(null);
-    setFormalizeError(null);
-    setOrderReference(quote.pedido?.referencia_pedido_cliente ?? "");
-    setOrderDate(quote.pedido?.fecha_orden_cliente ?? "");
-    setOrderConfirmationMethod((quote.pedido?.forma_confirmacion as OrderConfirmationMethod | null) ?? "orden_compra");
-    setOrderEvidenceReference(quote.pedido?.documentos.find((document) => document.tipo_documento === (quote.pedido?.forma_confirmacion ?? "orden_compra"))?.referencia ?? "");
-    setOrderConfirmationDate(quote.pedido?.fecha_confirmacion_cliente ?? new Date().toISOString().slice(0, 10));
-    setOrderConfirmationNotes(quote.pedido?.observaciones_confirmacion ?? "");
-    setOrderDocumentFile(null);
-    setOrderDocumentUploaded(quote.pedido?.documentos.find((document) => document.tipo_documento === "orden_compra") ?? null);
-    setFormalizeQuote(quote);
-  }, [completitud, completitudQuote]);
 
   const handleConfirmedPayment = useCallback(() => {
     if (!paymentQuote) return;
@@ -5665,46 +5623,22 @@ export function LeadDrawer({
         onOpenChange={(open) => {
           if (!open && !quotePending) {
             setCompletitudQuote(null);
+            setFormalizeQuote(null);
             setCompletitud(null);
             setCompletitudError(null);
+            setFormalizeError(null);
           }
         }}
       >
-        <DialogContent className="max-w-lg">
-          <DialogTitle>Resumen antes de confirmar el pedido</DialogTitle>
+        <DialogContent className="max-w-2xl">
+          <DialogTitle>Confirmar pedido</DialogTitle>
           <DialogDescription>
-            Revisa que la oportunidad esté completa. Solo un pedido completo puede continuar al modal de confirmación y enviarse a revisión de Operaciones.
+            Registra cómo confirmó el cliente y adjunta su evidencia. El pedido pasará a revisión de Operaciones; aquí todavía no se crea la venta ni la cuenta por cobrar.
           </DialogDescription>
           {completitudLoading ? <p className="text-sm text-muted-foreground">Revisando información del pedido…</p> : null}
           {completitudError ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{completitudError}</p> : null}
           {completitud ? (
             <>
-              {!completitud.oc_evidencias_completo ? (
-                <div className="space-y-3 rounded-md border bg-muted/20 p-3">
-                  <p className="text-sm font-medium">Completar evidencia de aceptación</p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-xs font-medium">
-                      Forma de confirmación
-                      <select className="h-9 rounded-md border bg-background px-2 text-sm font-normal" value={orderConfirmationMethod} onChange={(event) => setOrderConfirmationMethod(event.target.value as OrderConfirmationMethod)}>
-                        {Object.entries({ orden_compra: "Orden de compra", cotizacion_firmada_aceptada: "Cotización firmada o aceptada", correo_electronico: "Correo electrónico", whatsapp: "WhatsApp", contrato: "Contrato", confirmacion_verbal: "Confirmación verbal", anticipo_pago: "Anticipo o pago", otro: "Otro" }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                      </select>
-                    </label>
-                    <label className="grid gap-1 text-xs font-medium">
-                      {orderConfirmationMethod === "orden_compra" ? "Número de OC" : "Referencia"}
-                      <Input value={orderConfirmationMethod === "orden_compra" ? orderReference : orderEvidenceReference} onChange={(event) => orderConfirmationMethod === "orden_compra" ? setOrderReference(event.target.value) : setOrderEvidenceReference(event.target.value)} maxLength={500} />
-                    </label>
-                  </div>
-                  <label className="grid gap-1 text-xs font-medium">
-                    Descripción o notas de la evidencia
-                    <Input value={orderConfirmationNotes} onChange={(event) => setOrderConfirmationNotes(event.target.value)} maxLength={2000} />
-                  </label>
-                  <input type="file" accept="application/pdf,image/png,image/jpeg" onChange={(event) => setOrderDocumentFile(event.target.files?.[0] ?? null)} className="block w-full text-xs" />
-                  {orderDocumentFile ? <p className="text-xs text-muted-foreground">Archivo seleccionado: {orderDocumentFile.name}</p> : null}
-                  <div className="flex justify-end">
-                    <Button type="button" variant="outline" onClick={() => void handleSaveCompletitudEvidence()} disabled={completitudLoading}>Guardar evidencia y volver a revisar</Button>
-                  </div>
-                </div>
-              ) : null}
               <div className="divide-y rounded-md border">
                 {([
                   ["Cliente y facturación", completitud.cliente_facturacion_completo, completitud.faltantes_cliente_facturacion],
@@ -5721,153 +5655,141 @@ export function LeadDrawer({
                   </div>
                 ))}
               </div>
+
+              <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+                <p className="text-sm font-medium">Evidencia de aceptación</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>Forma de confirmación</Label>
+                    <Select
+                      value={orderConfirmationMethod}
+                      onValueChange={(value) => {
+                        setOrderConfirmationMethod(value as OrderConfirmationMethod);
+                        setOrderEvidenceReference(formalizeQuote?.pedido?.documentos.find((document) => document.tipo_documento === value)?.referencia ?? "");
+                        setOrderDocumentFile(null);
+                        setOrderDocumentUploaded(null);
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="orden_compra">Orden de compra</SelectItem>
+                        <SelectItem value="cotizacion_firmada_aceptada">Cotización firmada / aceptada</SelectItem>
+                        <SelectItem value="correo_electronico">Correo electrónico</SelectItem>
+                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                        <SelectItem value="contrato">Contrato</SelectItem>
+                        <SelectItem value="confirmacion_verbal">Confirmación verbal</SelectItem>
+                        <SelectItem value="otro">Otro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {orderConfirmationMethod === "orden_compra" ? (
+                    <div className="grid gap-2">
+                      <Label htmlFor="customer-order-reference">Número de OC</Label>
+                      <Input
+                        id="customer-order-reference"
+                        value={orderReference}
+                        onChange={(event) => setOrderReference(event.target.value)}
+                        maxLength={160}
+                        placeholder="Ej. OC-4832"
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      <Label htmlFor="customer-evidence-reference">Referencia verificable</Label>
+                      <Input
+                        id="customer-evidence-reference"
+                        value={orderEvidenceReference}
+                        onChange={(event) => setOrderEvidenceReference(event.target.value)}
+                        maxLength={500}
+                        placeholder={orderConfirmationMethod === "whatsapp" ? "Ej. mensaje del 23/09, conversación con Ana" : orderConfirmationMethod === "correo_electronico" ? "Ej. asunto y fecha del correo" : "Ej. folio, fecha o descripción del respaldo"}
+                      />
+                    </div>
+                  )}
+                </div>
+                {orderConfirmationMethod === "orden_compra" ? (
+                  <div className="grid gap-2">
+                    <Label htmlFor="customer-order-date">Fecha de la OC</Label>
+                    <Input
+                      id="customer-order-date"
+                      type="date"
+                      value={orderDate}
+                      onChange={(event) => setOrderDate(event.target.value)}
+                    />
+                  </div>
+                ) : null}
+                <div className="grid gap-2">
+                  <Label htmlFor="customer-order-file">Adjuntar evidencia (PDF, JPG o PNG, opcional)</Label>
+                  <Input
+                    id="customer-order-file"
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                    onChange={(event) => setOrderDocumentFile(event.target.files?.[0] ?? null)}
+                    disabled={quotePending}
+                  />
+                  <p className="text-[11px] text-muted-foreground">Hasta 10 MB. Puedes adjuntar el documento, una captura o una imagen si la tienes.</p>
+                  {orderDocumentFile ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><IconPaperclip className="size-3.5" />{orderDocumentFile.name}</p> : null}
+                  {(() => {
+                    const document = orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((item) => item.tipo_documento === orderConfirmationMethod);
+                    if (!document) return null;
+                    return (
+                      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                        Evidencia guardada: {document.nombre_original || document.referencia || "Referencia registrada"}
+                        {document.nombre_original ? <a className="font-medium text-primary underline-offset-4 hover:underline" href={"/api/embudo/quotes/" + formalizeQuote?.id + "/pedido/orden-compra?documento_id=" + encodeURIComponent(document.id)} target="_blank" rel="noreferrer">Ver archivo</a> : null}
+                      </p>
+                    );
+                  })()}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="customer-confirmation-date">Fecha de confirmación del cliente</Label>
+                    <Input
+                      id="customer-confirmation-date"
+                      type="date"
+                      value={orderConfirmationDate}
+                      onChange={(event) => setOrderConfirmationDate(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="customer-confirmation-notes">Observaciones</Label>
+                    <Input
+                      id="customer-confirmation-notes"
+                      value={orderConfirmationNotes}
+                      onChange={(event) => setOrderConfirmationNotes(event.target.value)}
+                      maxLength={2000}
+                      placeholder="Ej. Entrega solicitada el viernes"
+                    />
+                  </div>
+                  <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
+                    Vendedor asignado: {quoteAssignedVendorName}. Operaciones revisará cliente, evidencia y partidas. Si la confirmación no fue por OC, no se reserva inventario en este paso.
+                  </div>
+                </div>
+              </div>
             </>
           ) : null}
           {completitud && !completitud.puede_enviar_a_revision ? (
             <p className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-              El pedido está incompleto. Corrige la información pendiente en la oportunidad antes de continuar.
+              El pedido está incompleto. Completa los datos pendientes antes de enviarlo a revisión.
             </p>
           ) : null}
+          {formalizeError ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{formalizeError}</p> : null}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setCompletitudQuote(null)} disabled={completitudLoading}>Cerrar</Button>
-            <Button type="button" onClick={continueToFormalizeQuote} disabled={completitudLoading || !completitud?.puede_enviar_a_revision}>
-              Continuar a Confirmar pedido
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={Boolean(formalizeQuote)}
-        onOpenChange={(open) => {
-          if (!open && !quotePending) {
-            setFormalizeQuote(null);
-            setFormalizeError(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogTitle>Confirmar pedido</DialogTitle>
-          <DialogDescription>
-            Registra cómo confirmó el cliente y adjunta su evidencia. El pedido pasará a revisión de Operaciones; aquí todavía no se crea la venta ni la cuenta por cobrar.
-          </DialogDescription>
-          <div className="grid gap-3">
-            <div className="grid gap-2">
-              <Label>Forma de confirmación</Label>
-              <Select
-                value={orderConfirmationMethod}
-                onValueChange={(value) => {
-                  setOrderConfirmationMethod(value as OrderConfirmationMethod);
-                  setOrderEvidenceReference(formalizeQuote?.pedido?.documentos.find((document) => document.tipo_documento === value)?.referencia ?? "");
-                  setOrderDocumentFile(null);
-                  setOrderDocumentUploaded(null);
-                }}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="orden_compra">Orden de compra</SelectItem>
-                  <SelectItem value="cotizacion_firmada_aceptada">Cotización firmada / aceptada</SelectItem>
-                  <SelectItem value="correo_electronico">Correo electrónico</SelectItem>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="contrato">Contrato</SelectItem>
-                  <SelectItem value="confirmacion_verbal">Confirmación verbal</SelectItem>
-                  <SelectItem value="otro">Otro</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-muted-foreground">
-                Con una OC válida se reservarán únicamente los productos físicos controlados por inventario. Operaciones formalizará la venta y la cuenta por cobrar al aprobar el pedido.
-              </p>
-            </div>
-            {orderConfirmationMethod === "orden_compra" ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="customer-order-reference">Número de OC</Label>
-                  <Input
-                    id="customer-order-reference"
-                    value={orderReference}
-                    onChange={(event) => setOrderReference(event.target.value)}
-                    maxLength={160}
-                    placeholder="Ej. OC-4832"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="customer-order-date">Fecha de la OC</Label>
-                  <Input
-                    id="customer-order-date"
-                    type="date"
-                    value={orderDate}
-                    onChange={(event) => setOrderDate(event.target.value)}
-                  />
-                </div>
-              </div>
-            ) : null}
-            {orderConfirmationMethod !== "orden_compra" ? (
-              <div className="grid gap-2">
-                <Label htmlFor="customer-evidence-reference">Referencia verificable</Label>
-                <Input
-                  id="customer-evidence-reference"
-                  value={orderEvidenceReference}
-                  onChange={(event) => setOrderEvidenceReference(event.target.value)}
-                  maxLength={500}
-                  placeholder={orderConfirmationMethod === "whatsapp" ? "Ej. mensaje del 23/09, conversación con Ana" : orderConfirmationMethod === "correo_electronico" ? "Ej. asunto y fecha del correo" : "Ej. folio, fecha o descripción del respaldo"}
-                />
-              </div>
-            ) : null}
-            <div className="grid gap-2">
-              <Label htmlFor="customer-order-file">Adjuntar evidencia (PDF, JPG o PNG, opcional)</Label>
-              <Input
-                id="customer-order-file"
-                type="file"
-                accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
-                onChange={(event) => setOrderDocumentFile(event.target.files?.[0] ?? null)}
-                disabled={quotePending}
-              />
-              <p className="text-[11px] text-muted-foreground">Hasta 10 MB. Puedes adjuntar el documento, una captura o una imagen si la tienes.</p>
-              {orderDocumentFile ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><IconPaperclip className="size-3.5" />{orderDocumentFile.name}</p> : null}
-              {(() => {
-                const document = orderDocumentUploaded ?? formalizeQuote?.pedido?.documentos.find((item) => item.tipo_documento === orderConfirmationMethod);
-                if (!document) return null;
-                return (
-                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                    Evidencia guardada: {document.nombre_original || document.referencia || "Referencia registrada"}
-                    {document.nombre_original ? <a className="font-medium text-primary underline-offset-4 hover:underline" href={`/api/embudo/quotes/${formalizeQuote?.id}/pedido/orden-compra?documento_id=${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer">Ver archivo</a> : null}
-                  </p>
-                );
-              })()}
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="customer-confirmation-date">Fecha de confirmación del cliente</Label>
-                <Input
-                  id="customer-confirmation-date"
-                  type="date"
-                  value={orderConfirmationDate}
-                  onChange={(event) => setOrderConfirmationDate(event.target.value)}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="customer-confirmation-notes">Observaciones</Label>
-                <Input
-                  id="customer-confirmation-notes"
-                  value={orderConfirmationNotes}
-                  onChange={(event) => setOrderConfirmationNotes(event.target.value)}
-                  maxLength={2000}
-                  placeholder="Ej. Entrega solicitada el viernes"
-                />
-              </div>
-              <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
-                Vendedor asignado: {quoteAssignedVendorName}. Operaciones revisará cliente, evidencia y partidas. Si la confirmación no fue por OC, no se reserva inventario en este paso.
-              </div>
-            </div>
-          </div>
-          {formalizeError ? (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{formalizeError}</p>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setFormalizeQuote(null)} disabled={quotePending}>
+            <Button type="button" variant="outline" onClick={() => { setCompletitudQuote(null); setFormalizeQuote(null); }} disabled={quotePending || completitudLoading}>
               Cancelar
             </Button>
-            <Button type="button" onClick={handleFormalizeSale} disabled={quotePending || !formalizeQuote}>
+            <Button
+              type="button"
+              onClick={handleFormalizeSale}
+              disabled={
+                quotePending
+                || completitudLoading
+                || !formalizeQuote
+                || !completitud
+                || !completitud.cliente_facturacion_completo
+                || !completitud.datos_entrega_completos
+                || !completitud.productos_cantidades_completos
+              }
+            >
               {quotePending ? "Confirmando pedido..." : "Confirmar pedido"}
             </Button>
           </div>
