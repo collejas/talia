@@ -5820,7 +5820,7 @@ export function LeadDrawer({
                 <div className="divide-y rounded-md border">
                   {([
                     ["Cliente y facturación", completitud.cliente_facturacion_completo, completitud.faltantes_cliente_facturacion],
-                    ["OC confirmada y evidencias", completitud.oc_evidencias_completo, completitud.faltantes_oc_evidencias],
+                    ["Confirmación del cliente y evidencias", completitud.oc_evidencias_completo, completitud.faltantes_oc_evidencias],
                     ["Datos de entrega", completitud.datos_entrega_completos, completitud.faltantes_datos_entrega],
                     ["Productos y cantidades", completitud.productos_cantidades_completos, completitud.faltantes_productos_cantidades],
                   ] as const).map(([label, complete, missing]) => (

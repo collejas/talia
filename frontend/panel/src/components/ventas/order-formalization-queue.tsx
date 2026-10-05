@@ -120,6 +120,23 @@ const CONFIRMATION_LABELS: Record<string, string> = {
   otro: "Otro",
 };
 
+function isPurchaseOrderConfirmation(value: string | null) {
+  return value === "orden_compra";
+}
+
+function getConfirmationEvidence(item: QueueItem) {
+  return item.forma_confirmacion
+    ? item.documentos.find((document) => document.tipo_documento === item.forma_confirmacion) ?? null
+    : null;
+}
+
+function getConfirmationReference(item: QueueItem, evidence: QueueItem["documentos"][number] | null) {
+  if (isPurchaseOrderConfirmation(item.forma_confirmacion)) {
+    return item.referencia_pedido_cliente || evidence?.referencia || (evidence?.nombre_original ? "Incluida en archivo adjunto" : null);
+  }
+  return evidence?.referencia || evidence?.observaciones || (evidence?.nombre_original ? "Archivo adjunto" : null);
+}
+
 function formatMoney(amount: number | string | null, currency: string | null) {
   if (amount == null || !Number.isFinite(Number(amount))) return "—";
   try {
@@ -232,14 +249,12 @@ function getOrderReadinessCount(item: QueueItem) {
       && item.cliente_datos.forma_pago
       && item.cliente_datos.metodo_pago,
   );
-  const evidence = item.forma_confirmacion
-    ? item.documentos.find((document) => document.tipo_documento === item.forma_confirmacion)
-    : null;
+  const evidence = getConfirmationEvidence(item);
   const evidenceComplete = Boolean(
     item.forma_confirmacion
       && evidence
       && (evidence.referencia || evidence.nombre_original || evidence.observaciones)
-      && (item.forma_confirmacion !== "orden_compra" || item.referencia_pedido_cliente || evidence.referencia),
+      && (!isPurchaseOrderConfirmation(item.forma_confirmacion) || item.referencia_pedido_cliente || evidence.referencia || evidence.nombre_original),
   );
   const deliveryComplete = !item.items.some((line) => line.maneja_inventario) || item.domicilio_entrega_completo;
   const productsComplete = item.items.length > 0 && !item.items.some((line) => differsFromAcceptedQuote(line));
@@ -572,8 +587,11 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
               && item.cliente_datos.forma_pago
               && item.cliente_datos.metodo_pago,
           );
-          const evidence = item.forma_confirmacion ? item.documentos.find((document) => document.tipo_documento === item.forma_confirmacion) : null;
-          const evidenceComplete = Boolean(item.forma_confirmacion && evidence && (evidence.referencia || evidence.nombre_original || evidence.observaciones) && (item.forma_confirmacion !== "orden_compra" || item.referencia_pedido_cliente || evidence.referencia));
+          const evidence = getConfirmationEvidence(item);
+          const confirmationLabel = CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada";
+          const purchaseOrderConfirmation = isPurchaseOrderConfirmation(item.forma_confirmacion);
+          const confirmationReference = getConfirmationReference(item, evidence);
+          const evidenceComplete = Boolean(item.forma_confirmacion && evidence && (evidence.referencia || evidence.nombre_original || evidence.observaciones) && (!purchaseOrderConfirmation || item.referencia_pedido_cliente || evidence.referencia || evidence.nombre_original));
           const deliveryComplete = !deliveryRequired || item.domicilio_entrega_completo;
           const discountOutOfLimit = item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje));
           const inventoryPending = inventoryProjection.some((product) => product.pendienteDespues > 0);
@@ -608,9 +626,10 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
                       <FieldStatus label="Método de pago" value={item.cliente_datos.metodo_pago} />
                       {!item.cuenta_crm_asociada ? <p className="font-medium text-destructive">Bloqueante: no hay una cuenta CRM asociada.</p> : null}
                     </ReviewRow>
-                    <ReviewRow title="OC confirmada y evidencias" summary={(item.referencia_pedido_cliente ? "OC " + item.referencia_pedido_cliente : "Sin OC") + " · " + item.documentos.length + " evidencia" + (item.documentos.length === 1 ? "" : "s") + " · " + (CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada")} complete={evidenceComplete} checked={review.evidencia} onCheckedChange={(checked) => updateReview(item.id, "evidencia", checked)} disabled={pendingId === item.id} showReviewControl={canReview}>
+                    <ReviewRow title="Confirmación del cliente y evidencias" summary={(purchaseOrderConfirmation ? (item.referencia_pedido_cliente ? "OC " + item.referencia_pedido_cliente : "OC respaldada en evidencia") : confirmationLabel) + " · " + item.documentos.length + " evidencia" + (item.documentos.length === 1 ? "" : "s")} complete={evidenceComplete} checked={review.evidencia} onCheckedChange={(checked) => updateReview(item.id, "evidencia", checked)} disabled={pendingId === item.id} showReviewControl={canReview}>
                       <FieldStatus label="Forma de confirmación" value={CONFIRMATION_LABELS[item.forma_confirmacion || ""] || null} />
-                      <FieldStatus label="Referencia OC" value={item.referencia_pedido_cliente} />
+                      <FieldStatus label={purchaseOrderConfirmation ? "Referencia OC" : "Referencia o respaldo"} value={confirmationReference} />
+                      {purchaseOrderConfirmation ? <FieldStatus label="Fecha de OC" value={item.fecha_orden_cliente} /> : null}
                       <FieldStatus label="Fecha de confirmación" value={item.fecha_confirmacion_cliente} />
                       <FieldStatus label="Evidencias" value={item.documentos.length ? `${item.documentos.length} archivo(s)` : null} />
                       {item.documentos.map((document) => <p key={document.id} className="text-muted-foreground">{CONFIRMATION_LABELS[document.tipo_documento] || "Otro"}{document.nombre_original ? <a className="ml-2 text-primary underline underline-offset-4" href={"/api/embudo/quotes/" + item.cotizacion_id + "/pedido/orden-compra?documento_id=" + encodeURIComponent(document.id)} target="_blank" rel="noreferrer">Ver archivo</a> : null}</p>)}
@@ -676,7 +695,7 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
                   <h2 className="font-semibold">Orden de venta · {order.folio || "Sin referencia de cotización"}</h2>
                   <p className="text-sm">{order.cliente || order.razon_social || "Cliente sin nombre"}{order.contacto ? ` · ${order.contacto}` : ""}</p>
                   <p className="text-sm text-muted-foreground">Autorizado {order.autorizado_en ? `el ${new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" }).format(new Date(order.autorizado_en))}` : ""}{order.autorizado_por ? ` por ${order.autorizado_por}` : ""}</p>
-                  <p className="text-xs text-muted-foreground">OC: {order.referencia_pedido_cliente || "Sin OC"} · Logística: {order.estatus_logistico || "Pendiente"}</p>
+                  <p className="text-xs text-muted-foreground">{order.forma_confirmacion === "orden_compra" ? `OC: ${order.referencia_pedido_cliente || "Respaldada en evidencia"}` : `Confirmación: ${order.forma_confirmacion || "Registrada"}`} · Logística: {order.estatus_logistico || "Pendiente"}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right"><p className="font-semibold">{formatMoney(order.total, order.moneda)}</p></div>

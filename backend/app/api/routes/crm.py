@@ -33145,8 +33145,8 @@ async def enviar_pedido_a_formalizacion(
             usuario_id=usuario_id,
             forma_confirmacion=payload.forma_confirmacion,
             fecha_confirmacion_cliente=payload.fecha_confirmacion_cliente or date.today(),
-            referencia_pedido_cliente=payload.referencia_pedido_cliente,
-            fecha_orden_cliente=payload.fecha_orden_cliente,
+            referencia_pedido_cliente=payload.referencia_pedido_cliente if payload.forma_confirmacion == "orden_compra" else None,
+            fecha_orden_cliente=payload.fecha_orden_cliente if payload.forma_confirmacion == "orden_compra" else None,
             observaciones_confirmacion=payload.observaciones_confirmacion,
         )
         return {"ok": True, **result}
