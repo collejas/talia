@@ -4727,7 +4727,7 @@ class CRMRepository:
                 "order": "confirmado_en.asc,id.asc",
                 "limit": str(limit),
                 "offset": str(offset),
-                "select": "id,cotizacion_id,estatus_logistico,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(titulo)),items:pedido_venta_items(id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad),reservas:inventario_reservas!inventario_reservas_pedido_item_org_fkey(cantidad,cantidad_surtida,estado))",
+                "select": "id,cotizacion_id,estatus_logistico,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(id,titulo,codigo_oportunidad)),items:pedido_venta_items(id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad),reservas:inventario_reservas!inventario_reservas_pedido_item_org_fkey(cantidad,cantidad_surtida,estado)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type,tamano_bytes,storage_path,metadata))",
             },
             organizacion_id=organizacion_id,
         )
@@ -4735,6 +4735,29 @@ class CRMRepository:
         if not isinstance(data, list) or not all(isinstance(row, dict) for row in data):
             raise CRMRepositoryError("sales_order_fulfillment_queue_invalid_response")
         return data
+
+    async def obtener_pedido_venta_para_surtido(
+        self,
+        *,
+        organizacion_id: UUID,
+        pedido_venta_id: UUID,
+    ) -> dict[str, Any] | None:
+        response = await self._request_service_role(
+            "GET",
+            "/rest/v1/pedidos_venta",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{pedido_venta_id}",
+                "estatus": "eq.confirmado",
+                "limit": "1",
+                "select": "id,cotizacion_id,estatus",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("sales_order_fulfillment_document_response_invalid")
+        return data[0] if data and isinstance(data[0], dict) else None
 
     async def devolver_pedido_venta_a_comercial(
         self,

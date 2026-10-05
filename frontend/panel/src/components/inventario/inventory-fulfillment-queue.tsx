@@ -19,6 +19,8 @@ type FulfillmentItem = {
 type FulfillmentOrder = {
   id: string;
   cotizacion_id: string;
+  oportunidad_id: string | null;
+  codigo_oportunidad: string | null;
   folio: string | null;
   oportunidad_titulo: string | null;
   cliente: string | null;
@@ -27,10 +29,43 @@ type FulfillmentOrder = {
   moneda: string | null;
   estatus_logistico: "pendiente" | "parcial" | string;
   items: FulfillmentItem[];
+  documentos_oportunidad: FulfillmentDocument[];
+  documentos_pedido: FulfillmentDocument[];
+};
+
+type FulfillmentDocument = {
+  id: string;
+  nombre_original: string | null;
+  tipo_documento?: string | null;
+  content_type?: string | null;
+  url: string | null;
 };
 
 function formatQuantity(value: number | string) {
   return new Intl.NumberFormat("es-MX", { maximumFractionDigits: 3 }).format(Number(value) || 0);
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  })[character] ?? character);
+}
+
+function printDeliveryDocument(order: FulfillmentOrder, quantities: Record<string, string>) {
+  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
+  if (!printWindow) return;
+  const lines = order.items.map((item) => {
+    const entered = Number((quantities[item.id] ?? "").replace(",", "."));
+    const quantity = Number.isFinite(entered) && entered > 0 ? entered : Number(item.cantidad_pendiente) || 0;
+    return `<tr><td>${escapeHtml(item.descripcion)}</td><td>${escapeHtml(formatQuantity(quantity))}</td></tr>`;
+  }).join("");
+  const reference = order.codigo_oportunidad || order.folio || order.id;
+  printWindow.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Entrega de mercancía</title><style>body{font-family:Arial,sans-serif;color:#111;margin:40px}h1{font-size:22px;margin:0 0 8px}p{margin:4px 0;color:#444}.meta{margin:22px 0}.meta strong{color:#111}table{border-collapse:collapse;width:100%;margin-top:24px}th,td{border:1px solid #bbb;padding:10px;text-align:left}th:last-child,td:last-child{text-align:right;width:160px}.signatures{display:flex;gap:50px;margin-top:80px}.signature{border-top:1px solid #333;flex:1;padding-top:8px;color:#444}@media print{body{margin:20px}}</style></head><body><h1>Documento de entrega de mercancía</h1><div class="meta"><p><strong>Oportunidad:</strong> ${escapeHtml(reference)}</p><p><strong>Cliente:</strong> ${escapeHtml(order.cliente || "Sin nombre")}</p><p><strong>Fecha:</strong> ${escapeHtml(new Date().toLocaleDateString("es-MX"))}</p></div><table><thead><tr><th>Descripción</th><th>Cantidad</th></tr></thead><tbody>${lines}</tbody></table><div class="signatures"><div class="signature">Entrega</div><div class="signature">Recibe</div></div><script>window.onload=()=>{window.print();}</script></body></html>`);
+  printWindow.document.close();
 }
 
 export function InventoryFulfillmentQueue({ canManageFulfillment }: { canManageFulfillment: boolean }) {
@@ -125,6 +160,10 @@ export function InventoryFulfillmentQueue({ canManageFulfillment }: { canManageF
     }
   };
 
+  const openQuote = (order: FulfillmentOrder) => {
+    window.open(`/api/inventario/surtidos/${encodeURIComponent(order.id)}/cotizacion`, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -145,7 +184,8 @@ export function InventoryFulfillmentQueue({ canManageFulfillment }: { canManageF
           <article key={order.id} className="space-y-4 rounded-xl border bg-card p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="font-semibold">{order.folio || order.oportunidad_titulo || "Pedido de venta"}</h2>
+                <h2 className="font-semibold">{order.codigo_oportunidad || order.oportunidad_titulo || "Pedido de venta"}</h2>
+                {order.folio ? <p className="text-xs text-muted-foreground">Cotización: {order.folio}</p> : null}
                 <p className="text-sm text-muted-foreground">{order.cliente || order.contacto || "Cliente sin nombre"}</p>
                 {order.contacto && order.cliente ? <p className="text-xs text-muted-foreground">Contacto: {order.contacto}</p> : null}
               </div>
@@ -180,8 +220,31 @@ export function InventoryFulfillmentQueue({ canManageFulfillment }: { canManageF
               <div className="space-y-1"><Label htmlFor={`reference-${order.id}`}>Referencia</Label><Input id={`reference-${order.id}`} maxLength={160} value={references[order.id] ?? ""} onChange={(event) => setReferences((current) => ({ ...current, [order.id]: event.target.value }))} placeholder="Remisión o guía" /></div>
               <div className="space-y-1"><Label htmlFor={`notes-${order.id}`}>Observaciones</Label><Input id={`notes-${order.id}`} maxLength={2000} value={notes[order.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [order.id]: event.target.value }))} /></div>
             </div>
+            {(order.documentos_pedido.length || order.documentos_oportunidad.length) ? (
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">Documentos asociados</p>
+                <div className="flex flex-wrap gap-2">
+                  {order.documentos_pedido.map((document) => document.url ? (
+                    <a key={`pedido-${document.id}`} href={document.url} target="_blank" rel="noreferrer" className="rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted">
+                      {document.tipo_documento === "orden_compra" ? "Orden de compra" : document.nombre_original || "Documento del pedido"}
+                    </a>
+                  ) : null)}
+                  {order.documentos_oportunidad.map((document) => document.url ? (
+                    <a key={`oportunidad-${document.id}`} href={document.url} target="_blank" rel="noreferrer" className="rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted">
+                      {document.nombre_original || "Documento de la oportunidad"}
+                    </a>
+                  ) : null)}
+                </div>
+              </div>
+            ) : null}
             <div className="flex justify-end border-t pt-3">
               <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => printDeliveryDocument(order, quantities)}>
+                  Imprimir entrega
+                </Button>
+                <Button type="button" variant="outline" onClick={() => openQuote(order)}>
+                  Imprimir cotización
+                </Button>
                 {canManageFulfillment && order.items.some((item) => Number(item.cantidad_pendiente_inventario) > 0) ? (
                   <Button type="button" variant="outline" onClick={() => void reserveRestockedItems(order)} disabled={reservingId === order.id || pendingId === order.id}>
                     {reservingId === order.id ? "Reservando…" : "Reservar inventario disponible"}

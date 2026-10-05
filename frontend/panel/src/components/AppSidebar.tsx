@@ -129,7 +129,7 @@ const NAVIGATION: {
     { title: "Propiedades 3D", url: "/propiedades", icon: IconBuilding, permission: "propiedades.view" },
     {
       title: "Prospeccion",
-      url: "/prospeccion",
+      url: "/prospeccion/busqueda",
       icon: IconTargetArrow,
       children: [
         { title: "Buscar empresas", url: "/prospeccion/busqueda", permission: "busquedas.view" },

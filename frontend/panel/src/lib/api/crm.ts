@@ -17,7 +17,7 @@ type CrmFetchOptions = {
   organizacionId?: string | null;
   usuarioId?: string | null;
   withUserToken?: boolean;
-  responseType?: "json" | "text";
+  responseType?: "json" | "text" | "arrayBuffer";
 };
 
 export type CrmResult<T> =
@@ -232,6 +232,10 @@ export async function callCrmApi<T = unknown>(
 
   if (response.status === 204 || method === "DELETE") {
     return { ok: true, data: ([] as unknown) as T };
+  }
+
+  if (options.responseType === "arrayBuffer") {
+    return { ok: true, data: await response.arrayBuffer() as T };
   }
 
   const text = await response.text();

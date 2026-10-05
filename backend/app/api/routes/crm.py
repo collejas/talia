@@ -33420,6 +33420,78 @@ async def listar_pedidos_pendientes_surtido(
         contact = _single_related(quote.get("contacto"))
         account = _single_related(quote.get("cuenta"))
         opportunity = _single_related(quote.get("oportunidad"))
+        opportunity_id = _safe_uuid(quote.get("oportunidad_id") or (opportunity or {}).get("id"))
+        opportunity_documents: list[dict[str, Any]] = []
+        if opportunity_id:
+            try:
+                notes = await repo.list_notes(
+                    organizacion_id=organizacion_id,
+                    relacion_tipo="oportunidad",
+                    relacion_id=opportunity_id,
+                )
+                for note in notes:
+                    note_id = _safe_uuid(note.get("id")) if isinstance(note, dict) else None
+                    if not note_id:
+                        continue
+                    attachments = await repo.list_note_attachments(
+                        organizacion_id=organizacion_id,
+                        nota_id=note_id,
+                        limit=10,
+                    )
+                    for attachment in attachments:
+                        if not isinstance(attachment, dict):
+                            continue
+                        storage_path = _clean_text(attachment.get("storage_path"))
+                        if not storage_path:
+                            continue
+                        try:
+                            signed_url = await repo.create_signed_storage_url(
+                                bucket=_clean_text(attachment.get("storage_bucket")) or NOTE_ATTACHMENT_BUCKET,
+                                object_path=storage_path,
+                                expires_in=300,
+                            )
+                        except CRMRepositoryError:
+                            signed_url = None
+                        opportunity_documents.append({
+                            "id": attachment.get("id"),
+                            "nota_id": note_id,
+                            "nombre_original": attachment.get("nombre_original") or "Documento",
+                            "content_type": attachment.get("content_type"),
+                            "url": signed_url,
+                        })
+            except CRMRepositoryError:
+                logger.warning(
+                    "sales_order_fulfillment_opportunity_documents_failed",
+                    extra={"organizacion_id": str(organizacion_id), "oportunidad_id": str(opportunity_id)},
+                )
+
+        order_documents: list[dict[str, Any]] = []
+        for document in row.get("documentos") if isinstance(row.get("documentos"), list) else []:
+            if not isinstance(document, dict):
+                continue
+            file_row = _single_related(document.get("archivo"))
+            storage_path = _clean_text(file_row.get("storage_path")) if file_row else ""
+            document_url = None
+            if storage_path:
+                metadata = file_row.get("metadata") if isinstance(file_row, dict) else None
+                bucket = _clean_text(metadata.get("bucket")) if isinstance(metadata, dict) else ""
+                try:
+                    document_url = await repo.create_signed_storage_url(
+                        bucket=bucket or "quotes",
+                        object_path=storage_path,
+                        expires_in=300,
+                    )
+                except CRMRepositoryError:
+                    document_url = None
+            order_documents.append({
+                "id": document.get("id"),
+                "tipo_documento": document.get("tipo_documento"),
+                "nombre_original": file_row.get("nombre_original") if file_row else None,
+                "content_type": file_row.get("content_type") if file_row else None,
+                "referencia": document.get("referencia"),
+                "observaciones": document.get("observaciones"),
+                "url": document_url,
+            })
         order_items = []
         for order_item in row.get("items") if isinstance(row.get("items"), list) else []:
             if not isinstance(order_item, dict):
@@ -33466,6 +33538,8 @@ async def listar_pedidos_pendientes_surtido(
             "id": row.get("id"),
             "cotizacion_id": quote.get("id") or row.get("cotizacion_id"),
             "folio": quote.get("folio"),
+            "oportunidad_id": str(opportunity_id) if opportunity_id else None,
+            "codigo_oportunidad": opportunity.get("codigo_oportunidad") if opportunity else None,
             "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
             "cliente": account.get("nombre") if account else None,
             "contacto": contact.get("nombre_completo") if contact else None,
@@ -33473,8 +33547,58 @@ async def listar_pedidos_pendientes_surtido(
             "moneda": quote.get("moneda"),
             "estatus_logistico": row.get("estatus_logistico"),
             "items": order_items,
+            "documentos_oportunidad": opportunity_documents,
+            "documentos_pedido": order_documents,
         })
     return {"items": items, "limit": limit, "offset": offset, "has_more": len(items) == limit}
+
+
+@router.get("/pedidos-venta/{pedido_venta_id}/cotizacion.pdf")
+async def imprimir_cotizacion_pedido_por_inventario(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.fulfillment.view")),
+    pedido_venta_id: UUID,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> Response:
+    try:
+        order = await repo.obtener_pedido_venta_para_surtido(
+            organizacion_id=organizacion_id,
+            pedido_venta_id=pedido_venta_id,
+        )
+        if order is None:
+            raise HTTPException(status_code=404, detail="pedido_no_encontrado")
+        quote_id = _safe_uuid(order.get("cotizacion_id"))
+        if quote_id is None:
+            raise HTTPException(status_code=404, detail="cotizacion_no_encontrada")
+        quote_row = await repo.get_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=quote_id,
+        )
+        opportunity_id = _safe_uuid(quote_row.get("oportunidad_id"))
+        if opportunity_id is None:
+            raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+        opportunity_row = await repo.get_opportunity_with_contact(
+            organizacion_id=organizacion_id,
+            oportunidad_id=opportunity_id,
+        )
+        if opportunity_row is None:
+            raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+        quote_context = await _build_quote_pdf_context_from_quote_entry(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            opportunity_row=opportunity_row,
+            quote_row=quote_row,
+            usuario_id=usuario_id,
+        )
+        pdf_doc = await quotes_service.render_quote_pdf(quote_context)
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudo_generar_cotizacion") from exc
+    headers = {"Content-Disposition": f'inline; filename="{pdf_doc.filename}"'}
+    return Response(content=pdf_doc.content, media_type="application/pdf", headers=headers)
 
 
 @router.get("/pedidos-venta/autorizados")
