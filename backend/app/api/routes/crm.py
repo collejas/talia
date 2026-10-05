@@ -33337,9 +33337,12 @@ async def listar_pedidos_pendientes_formalizacion(
             "cliente_datos": {
                 "razon_social": account.get("razon_social") if account else None,
                 "rfc": account.get("rfc") if account else None,
-                "correo_facturacion": (account.get("email_facturacion") or account.get("correo_principal")) if account else None,
+                "correo_facturacion": account.get("email_facturacion") if account else None,
                 "codigo_postal": account.get("codigo_postal") if account else None,
                 "regimen_capital": account.get("regimen_capital") if account else None,
+                "uso_cfdi": account.get("uso_cfdi") if account else None,
+                "forma_pago": account.get("forma_pago") if account else None,
+                "metodo_pago": account.get("metodo_pago") if account else None,
                 "contacto_correo": contact.get("correo_principal") if contact else None,
                 "contacto_telefono": contact.get("telefono_principal_e164") if contact else None,
             },

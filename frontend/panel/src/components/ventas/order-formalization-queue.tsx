@@ -227,7 +227,10 @@ function getOrderReadinessCount(item: QueueItem) {
       && item.cliente_datos.razon_social
       && item.cliente_datos.rfc
       && item.cliente_datos.correo_facturacion
-      && item.cliente_datos.codigo_postal,
+      && item.cliente_datos.codigo_postal
+      && item.cliente_datos.uso_cfdi
+      && item.cliente_datos.forma_pago
+      && item.cliente_datos.metodo_pago,
   );
   const evidence = item.forma_confirmacion
     ? item.documentos.find((document) => document.tipo_documento === item.forma_confirmacion)
@@ -564,7 +567,10 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
               && item.cliente_datos.razon_social
               && item.cliente_datos.rfc
               && item.cliente_datos.correo_facturacion
-              && item.cliente_datos.codigo_postal,
+              && item.cliente_datos.codigo_postal
+              && item.cliente_datos.uso_cfdi
+              && item.cliente_datos.forma_pago
+              && item.cliente_datos.metodo_pago,
           );
           const evidence = item.forma_confirmacion ? item.documentos.find((document) => document.tipo_documento === item.forma_confirmacion) : null;
           const evidenceComplete = Boolean(item.forma_confirmacion && evidence && (evidence.referencia || evidence.nombre_original || evidence.observaciones) && (item.forma_confirmacion !== "orden_compra" || item.referencia_pedido_cliente || evidence.referencia));
@@ -597,6 +603,9 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
                       <FieldStatus label="RFC" value={item.cliente_datos.rfc} />
                       <FieldStatus label="Correo de facturación" value={item.cliente_datos.correo_facturacion} />
                       <FieldStatus label="Código postal" value={item.cliente_datos.codigo_postal} />
+                      <FieldStatus label="Uso de CFDI" value={item.cliente_datos.uso_cfdi} />
+                      <FieldStatus label="Forma de pago" value={item.cliente_datos.forma_pago} />
+                      <FieldStatus label="Método de pago" value={item.cliente_datos.metodo_pago} />
                       {!item.cuenta_crm_asociada ? <p className="font-medium text-destructive">Bloqueante: no hay una cuenta CRM asociada.</p> : null}
                     </ReviewRow>
                     <ReviewRow title="OC confirmada y evidencias" summary={(item.referencia_pedido_cliente ? "OC " + item.referencia_pedido_cliente : "Sin OC") + " · " + item.documentos.length + " evidencia" + (item.documentos.length === 1 ? "" : "s") + " · " + (CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada")} complete={evidenceComplete} checked={review.evidencia} onCheckedChange={(checked) => updateReview(item.id, "evidencia", checked)} disabled={pendingId === item.id} showReviewControl={canReview}>
