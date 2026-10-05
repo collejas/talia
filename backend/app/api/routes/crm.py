@@ -33296,6 +33296,7 @@ async def listar_pedidos_pendientes_formalizacion(
                 "descripcion": item.get("descripcion") or "Artículo",
                 "cantidad": item.get("cantidad"),
                 "precio_unitario": item.get("precio_unitario_final"),
+                "impuestos": item.get("impuestos"),
                 "subtotal": item.get("subtotal"),
                 "moneda": item.get("moneda") or quote.get("moneda"),
                 "catalog_item_id": str(item.get("catalog_item_id")) if item.get("catalog_item_id") else None,
@@ -33316,6 +33317,14 @@ async def listar_pedidos_pendientes_formalizacion(
                 "cotizacion_moneda": quote_item.get("moneda_aplicada") or quote.get("moneda"),
                 "cotizacion_catalog_item_id": quote_item.get("catalog_item_id"),
             })
+        subtotal_values = [item.get("subtotal") for item in order_items if item.get("subtotal") is not None]
+        tax_values = [item.get("impuestos") for item in order_items if item.get("impuestos") is not None]
+        subtotal = sum((Decimal(str(value)) for value in subtotal_values), Decimal("0")) if subtotal_values else None
+        total = quote.get("total")
+        quote_total = Decimal(str(total)) if total is not None else None
+        impuestos = quote_total - subtotal if quote_total is not None and subtotal is not None else (sum((Decimal(str(value)) for value in tax_values), Decimal("0")) if tax_values else None)
+        if total is None and subtotal is not None and impuestos is not None:
+            total = subtotal + impuestos
         documents = []
         for document in row.get("documentos") if isinstance(row.get("documentos"), list) else []:
             if not isinstance(document, dict):
@@ -33332,6 +33341,7 @@ async def listar_pedidos_pendientes_formalizacion(
             "id": row.get("id"),
             "cotizacion_id": quote.get("id") or row.get("cotizacion_id"),
             "folio": quote.get("folio"),
+            "codigo_oportunidad": opportunity.get("codigo_oportunidad") if opportunity else None,
             "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
             "cliente": account.get("nombre") if account else None,
             "cuenta_crm_asociada": account is not None,
@@ -33348,7 +33358,9 @@ async def listar_pedidos_pendientes_formalizacion(
                 "contacto_telefono": contact.get("telefono_principal_e164") if contact else None,
             },
             "contacto": contact.get("nombre_completo") if contact else None,
-            "total": quote.get("total"),
+            "subtotal": subtotal,
+            "impuestos": impuestos,
+            "total": total,
             "moneda": quote.get("moneda"),
             "enviado_en": row.get("enviado_formalizacion_en"),
             "forma_confirmacion": row.get("forma_confirmacion"),

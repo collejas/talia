@@ -13,10 +13,13 @@ type QueueItem = {
   id: string;
   cotizacion_id: string;
   folio: string | null;
+  codigo_oportunidad: string | null;
   oportunidad_titulo: string | null;
   cliente: string | null;
   cuenta_crm_asociada: boolean;
   contacto: string | null;
+  subtotal: number | string | null;
+  impuestos: number | string | null;
   total: number | string | null;
   moneda: string | null;
   enviado_en: string | null;
@@ -46,7 +49,7 @@ type QueueItem = {
   domicilio_entrega_referencias: string | null;
   observaciones_comerciales: string | null;
   cliente_datos: Record<string, string | null>;
-  items: { id: string; catalog_item_id: string | null; tipo_catalogo: string | null; descripcion: string; cantidad: number | string; precio_unitario: number | string | null; subtotal: number | string | null; moneda: string | null; maneja_inventario: boolean; stock_disponible: number | string | null; stock_reservado_pedido: number | string | null; cotizacion_cantidad: number | string | null; cotizacion_precio_unitario: number | string | null; cotizacion_descuento_porcentaje: number | string | null; cotizacion_limite_descuento_porcentaje: number | string | null; cotizacion_moneda: string | null; cotizacion_catalog_item_id: string | null }[];
+  items: { id: string; catalog_item_id: string | null; tipo_catalogo: string | null; descripcion: string; cantidad: number | string; precio_unitario: number | string | null; impuestos: number | string | null; subtotal: number | string | null; moneda: string | null; maneja_inventario: boolean; stock_disponible: number | string | null; stock_reservado_pedido: number | string | null; cotizacion_cantidad: number | string | null; cotizacion_precio_unitario: number | string | null; cotizacion_descuento_porcentaje: number | string | null; cotizacion_limite_descuento_porcentaje: number | string | null; cotizacion_moneda: string | null; cotizacion_catalog_item_id: string | null }[];
   documentos: { id: string; tipo_documento: string; nombre_original: string | null; referencia: string | null; observaciones: string | null }[];
 };
 
@@ -604,7 +607,8 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
                 <IconChevronDown className={"size-4 shrink-0 text-muted-foreground transition-transform " + (expanded ? "rotate-180" : "")} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="font-medium">{item.folio || item.oportunidad_titulo || "Pedido por formalizar"}</span>
+                    <span className="font-medium">Oportunidad: {item.codigo_oportunidad || item.oportunidad_titulo || "Sin referencia"}</span>
+                    <span className="text-sm text-muted-foreground">Cotización: {item.folio || "Sin folio"}</span>
                     <span className="truncate text-sm text-muted-foreground">{item.cliente || item.contacto || "Cliente sin nombre"}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">{item.items.length} partidas · {formatMoney(item.total, item.moneda)}{item.contacto && item.cliente ? " · " + item.contacto : ""}</p>
@@ -653,8 +657,21 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
                       {productMismatch ? <p className="font-medium text-destructive">Bloqueante: las partidas, cantidades, productos o precios no coinciden.</p> : null}
                       {item.items.length === 0 ? <p className="font-medium text-destructive">Bloqueante: la orden no tiene productos.</p> : null}
                       {inventoryProjection.some((product) => product.pendienteDespues > 0) ? <p className="text-amber-700">Faltante de inventario: {inventoryProjection.filter((product) => product.pendienteDespues > 0).length} producto(s); se valida al aprobar.</p> : null}
-                      {item.items.slice(0, 3).map((line) => <p key={line.id} className="text-muted-foreground">{line.descripcion} · {line.cantidad}</p>)}
-                      {item.items.length > 3 ? <p className="text-muted-foreground">y {item.items.length - 3} partida(s) más</p> : null}
+                      <div className="overflow-x-auto rounded-md border">
+                        <table className="w-full min-w-[620px] text-xs">
+                          <thead className="bg-muted/40 text-left text-muted-foreground">
+                            <tr><th className="px-2 py-1.5 font-medium">Descripción</th><th className="px-2 py-1.5 text-right font-medium">Cantidad</th><th className="px-2 py-1.5 text-right font-medium">Precio unitario</th><th className="px-2 py-1.5 text-right font-medium">Total de línea</th></tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {item.items.map((line) => <tr key={line.id}><td className="px-2 py-1.5">{line.descripcion}</td><td className="px-2 py-1.5 text-right">{formatQuantity(Number(line.cantidad) || 0)}</td><td className="px-2 py-1.5 text-right">{formatMoney(line.precio_unitario, line.moneda)}</td><td className="px-2 py-1.5 text-right">{formatMoney(line.subtotal, line.moneda)}</td></tr>)}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="grid gap-2 border-t pt-2 sm:grid-cols-3">
+                        <FieldStatus label="Subtotal" value={formatMoney(item.subtotal, item.moneda)} />
+                        <FieldStatus label="IVA" value={formatMoney(item.impuestos, item.moneda)} />
+                        <FieldStatus label="Total" value={formatMoney(item.total, item.moneda)} />
+                      </div>
                     </ReviewRow>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-3">
