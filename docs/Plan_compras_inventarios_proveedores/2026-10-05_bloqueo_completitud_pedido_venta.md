@@ -46,13 +46,18 @@ datos, por lo que no depende únicamente del frontend.
 1. El vendedor pulsa **Confirmar pedido** desde la oportunidad.
 2. El panel abre un único modal de **Confirmar pedido**, consulta la
    completitud y muestra el resumen de los cuatro bloques.
-3. Los bloques incompletos muestran los datos faltantes.
-4. En ese mismo modal se captura la forma de confirmación, referencia, fecha,
-   notas o archivo admitido.
+3. La sección para capturar la OC o evidencia aparece antes del resumen.
+4. El usuario guarda la evidencia con **Guardar evidencia y actualizar
+   resumen**; el panel vuelve a consultar los cuatro bloques y refleja el
+   estado persistido.
+   - Los medios disponibles incluyen orden de compra, cotización aceptada,
+     correo, WhatsApp, contrato, confirmación verbal, anticipo o pago y otro.
+   - La evidencia puede persistirse con referencia, observaciones o archivo;
+     no es obligatorio adjuntar un archivo si existe una descripción válida.
 5. Mientras existan datos comerciales incompletos, se mantiene bloqueado
    **Confirmar pedido**.
-6. El botón **Confirmar pedido** guarda la evidencia y envía el pedido a la
-   cola de revisión en la misma acción; no se abre un segundo modal.
+6. Cuando los cuatro bloques están completos, **Confirmar pedido** envía el
+   pedido a la cola de revisión; no se abre un segundo modal.
 7. Operaciones revisa visualmente la información, utiliza sus checkboxes y
    puede devolver o aprobar/liberar el pedido.
 8. La aprobación elevada continúa siendo la acción que formaliza la venta,

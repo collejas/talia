@@ -4382,6 +4382,7 @@ class FormalizeSalePayload(BaseModel):
         "whatsapp",
         "contrato",
         "confirmacion_verbal",
+        "anticipo_pago",
         "otro",
     ] = "orden_compra"
     fecha_confirmacion_cliente: date | None = None
@@ -33689,6 +33690,7 @@ ORDER_CONFIRMATION_EVIDENCE_TYPES = {
     "whatsapp",
     "contrato",
     "confirmacion_verbal",
+    "anticipo_pago",
     "otro",
 }
 
