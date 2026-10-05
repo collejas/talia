@@ -4552,6 +4552,28 @@ class CRMRepository:
             return data
         raise CRMRepositoryError("sales_order_submission_response_invalid")
 
+    async def obtener_completitud_pedido_venta(
+        self,
+        *,
+        organizacion_id: UUID,
+        cotizacion_id: UUID,
+        usuario_id: UUID,
+    ) -> dict[str, Any]:
+        response = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/crm_obtener_completitud_pedido_venta",
+            json={
+                "p_organizacion_id": str(organizacion_id),
+                "p_cotizacion_id": str(cotizacion_id),
+                "p_usuario_id": str(usuario_id),
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json() if response.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError("sales_order_readiness_response_invalid")
+
     async def list_pedidos_venta_pendientes_formalizacion(
         self,
         *,

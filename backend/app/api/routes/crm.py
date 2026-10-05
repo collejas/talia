@@ -4388,6 +4388,18 @@ class FormalizeSalePayload(BaseModel):
     observaciones_confirmacion: str | None = Field(default=None, max_length=2000)
 
 
+class PedidoVentaCompletitudResponse(BaseModel):
+    cliente_facturacion_completo: bool
+    oc_evidencias_completo: bool
+    datos_entrega_completos: bool
+    productos_cantidades_completos: bool
+    faltantes_cliente_facturacion: list[str] = Field(default_factory=list)
+    faltantes_oc_evidencias: list[str] = Field(default_factory=list)
+    faltantes_datos_entrega: list[str] = Field(default_factory=list)
+    faltantes_productos_cantidades: list[str] = Field(default_factory=list)
+    puede_enviar_a_revision: bool
+
+
 class PedidoVentaEntregaItemPayload(BaseModel):
     item_id: UUID
     cantidad: Decimal = Field(..., gt=0, max_digits=14, decimal_places=3)
@@ -33155,7 +33167,52 @@ async def enviar_pedido_a_formalizacion(
             raise HTTPException(status_code=400, detail="forma_confirmacion_invalida") from exc
         if "sales_order_not_submittable" in message:
             raise HTTPException(status_code=409, detail="pedido_no_puede_enviarse_a_formalizacion") from exc
+        if "sales_order_completeness_incomplete" in message:
+            raise HTTPException(status_code=409, detail="pedido_incompleto_para_revision") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_enviar_pedido_a_formalizacion") from exc
+
+
+@router.post(
+    "/cotizaciones/{cotizacion_id}/pedido/completitud",
+    response_model=PedidoVentaCompletitudResponse,
+)
+async def obtener_completitud_pedido_venta(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+    cotizacion_id: UUID,
+) -> PedidoVentaCompletitudResponse:
+    if usuario_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    try:
+        quote = await repo.get_quote_entry(
+            organizacion_id=organizacion_id,
+            quote_id=cotizacion_id,
+        )
+        oportunidad_id = _safe_uuid(quote.get("oportunidad_id"))
+        if oportunidad_id is None:
+            raise HTTPException(status_code=409, detail="cotizacion_sin_oportunidad")
+        await _require_sales_write_scope(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            oportunidad_id=oportunidad_id,
+        )
+        result = await repo.obtener_completitud_pedido_venta(
+            organizacion_id=organizacion_id,
+            cotizacion_id=cotizacion_id,
+            usuario_id=usuario_id,
+        )
+        return PedidoVentaCompletitudResponse.model_validate(result)
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "quote_not_found" in message:
+            raise HTTPException(status_code=404, detail="cotizacion_no_encontrada") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_consultar_completitud_pedido") from exc
 
 
 @router.get("/pedidos-venta/cola-formalizacion")
@@ -33163,7 +33220,8 @@ async def listar_pedidos_pendientes_formalizacion(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_permission("sales.orders.confirm")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_any_permission(["sales.orders.confirm", "sales.orders.submit"])),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
@@ -33173,6 +33231,27 @@ async def listar_pedidos_pendientes_formalizacion(
             limit=limit,
             offset=offset,
         )
+        can_review = await repo.current_user_has_perm(codigo="sales.orders.confirm")
+        if not can_review:
+            scoped_rows: list[dict[str, Any]] = []
+            for row in rows:
+                quote = _single_related(row.get("cotizacion")) or {}
+                opportunity_id = _safe_uuid(quote.get("oportunidad_id"))
+                if opportunity_id is None:
+                    continue
+                try:
+                    await _require_sales_write_scope(
+                        repo=repo,
+                        organizacion_id=organizacion_id,
+                        usuario_id=usuario_id,
+                        oportunidad_id=opportunity_id,
+                    )
+                except HTTPException as exc:
+                    if exc.status_code in {403, 404}:
+                        continue
+                    raise
+                scoped_rows.append(row)
+            rows = scoped_rows
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="no_se_pudo_consultar_pedidos_pendientes") from exc
 

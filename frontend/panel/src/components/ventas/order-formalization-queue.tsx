@@ -62,6 +62,7 @@ function ReviewRow({
   checked,
   onCheckedChange,
   disabled,
+  showReviewControl = true,
   children,
 }: {
   title: string;
@@ -70,6 +71,7 @@ function ReviewRow({
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   disabled: boolean;
+  showReviewControl?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -82,10 +84,12 @@ function ReviewRow({
         <p className="truncate pl-6 text-xs text-muted-foreground">{summary}</p>
         <div className="mt-1 space-y-1 pl-6 text-xs">{children}</div>
       </div>
-      <label className="flex items-center gap-2 text-xs text-muted-foreground sm:justify-end">
-        <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} disabled={disabled} aria-label={`Marcar ${title} como revisado`} />
-        Revisado
-      </label>
+      {showReviewControl ? (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground sm:justify-end">
+          <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange(event.target.checked)} disabled={disabled} aria-label={`Marcar ${title} como revisado`} />
+          Revisado
+        </label>
+      ) : null}
     </div>
   );
 }
@@ -217,7 +221,29 @@ function hasBlockingIssues(item: QueueItem) {
     || (!item.permite_entrega_parcial && getInventoryProjection(item).some((product) => product.pendienteDespues > 0));
 }
 
-export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrintBrand | null }) {
+function getOrderReadinessCount(item: QueueItem) {
+  const billingComplete = Boolean(
+    item.cuenta_crm_asociada
+      && item.cliente_datos.razon_social
+      && item.cliente_datos.rfc
+      && item.cliente_datos.correo_facturacion
+      && item.cliente_datos.codigo_postal,
+  );
+  const evidence = item.forma_confirmacion
+    ? item.documentos.find((document) => document.tipo_documento === item.forma_confirmacion)
+    : null;
+  const evidenceComplete = Boolean(
+    item.forma_confirmacion
+      && evidence
+      && (evidence.referencia || evidence.nombre_original || evidence.observaciones)
+      && (item.forma_confirmacion !== "orden_compra" || item.referencia_pedido_cliente || evidence.referencia),
+  );
+  const deliveryComplete = !item.items.some((line) => line.maneja_inventario) || item.domicilio_entrega_completo;
+  const productsComplete = item.items.length > 0 && !item.items.some((line) => differsFromAcceptedQuote(line));
+  return [billingComplete, evidenceComplete, deliveryComplete, productsComplete].filter(Boolean).length;
+}
+
+export function OrderFormalizationQueue({ printBrand, canReview = true }: { printBrand: OrderPrintBrand | null; canReview?: boolean }) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [approvedItems, setApprovedItems] = useState<ApprovedOrder[]>([]);
   const [approvedLoaded, setApprovedLoaded] = useState(false);
@@ -467,7 +493,9 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
   };
 
   const reviewCount = (item: QueueItem) => Object.values(reviews[item.id] ?? EMPTY_REVIEW).filter(Boolean).length;
-  const needsAttention = (item: QueueItem) => hasBlockingIssues(item) || reviewCount(item) < 4;
+  const needsAttention = (item: QueueItem) => canReview
+    ? hasBlockingIssues(item) || reviewCount(item) < 4
+    : getOrderReadinessCount(item) < 4;
   const visibleItems = items
     .filter((item) => {
       const needle = search.trim().toLowerCase();
@@ -498,8 +526,8 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
       {!printBrand ? <p role="status" className="text-sm text-muted-foreground">No está disponible el formato de impresión de la empresa.</p> : null}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="revision">Por revisar ({items.length})</TabsTrigger>
-          <TabsTrigger value="autorizados">Órdenes autorizadas</TabsTrigger>
+          <TabsTrigger value="revision">{canReview ? "Por revisar" : "Mis pedidos"} ({items.length})</TabsTrigger>
+          {canReview ? <TabsTrigger value="autorizados">Órdenes autorizadas</TabsTrigger> : null}
         </TabsList>
         <TabsContent value="revision" className="space-y-4">
       {loading && items.length === 0 ? <p className="text-sm text-muted-foreground">Cargando pedidos…</p> : null}
@@ -526,7 +554,7 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
       <div className="overflow-hidden rounded-lg border bg-card">
         {visibleItems.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No hay órdenes que coincidan con el filtro.</p> : visibleItems.map((item) => {
           const review = reviews[item.id] ?? EMPTY_REVIEW;
-          const progress = reviewCount(item);
+          const progress = canReview ? reviewCount(item) : getOrderReadinessCount(item);
           const expanded = expandedId === item.id;
           const inventoryProjection = getInventoryProjection(item);
           const productMismatch = item.items.some((line) => differsFromAcceptedQuote(line));
@@ -538,11 +566,12 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
               && item.cliente_datos.correo_facturacion
               && item.cliente_datos.codigo_postal,
           );
-          const evidenceComplete = Boolean(item.forma_confirmacion && item.referencia_pedido_cliente && item.documentos.length > 0);
+          const evidence = item.forma_confirmacion ? item.documentos.find((document) => document.tipo_documento === item.forma_confirmacion) : null;
+          const evidenceComplete = Boolean(item.forma_confirmacion && evidence && (evidence.referencia || evidence.nombre_original || evidence.observaciones) && (item.forma_confirmacion !== "orden_compra" || item.referencia_pedido_cliente || evidence.referencia));
           const deliveryComplete = !deliveryRequired || item.domicilio_entrega_completo;
           const discountOutOfLimit = item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje));
           const inventoryPending = inventoryProjection.some((product) => product.pendienteDespues > 0);
-          const productsComplete = item.items.length > 0 && !productMismatch && !discountOutOfLimit && !inventoryPending;
+          const productsComplete = item.items.length > 0 && !productMismatch && !discountOutOfLimit && (canReview ? !inventoryPending : true);
           const statusText = hasBlockingIssues(item) ? "Bloqueada" : progress === 4 ? "Lista" : "Pendiente";
           const statusClass = hasBlockingIssues(item) ? "text-destructive" : progress === 4 ? "text-emerald-600" : "text-amber-600";
           return (
@@ -562,7 +591,7 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
               {expanded ? (
                 <div className="border-t bg-muted/10">
                   <div className="divide-y">
-                    <ReviewRow title="Cliente y facturación" summary={(item.cliente || item.contacto || "Cliente sin nombre") + " · " + (item.cliente_datos.rfc ? "RFC " + item.cliente_datos.rfc : "RFC pendiente") + " · " + (item.cliente_datos.codigo_postal ? "C.P. " + item.cliente_datos.codigo_postal : "C.P. pendiente")} complete={billingComplete} checked={review.cliente} onCheckedChange={(checked) => updateReview(item.id, "cliente", checked)} disabled={pendingId === item.id}>
+                    <ReviewRow title="Cliente y facturación" summary={(item.cliente || item.contacto || "Cliente sin nombre") + " · " + (item.cliente_datos.rfc ? "RFC " + item.cliente_datos.rfc : "RFC pendiente") + " · " + (item.cliente_datos.codigo_postal ? "C.P. " + item.cliente_datos.codigo_postal : "C.P. pendiente")} complete={billingComplete} checked={review.cliente} onCheckedChange={(checked) => updateReview(item.id, "cliente", checked)} disabled={pendingId === item.id} showReviewControl={canReview}>
                       <FieldStatus label="Cuenta CRM" value={item.cuenta_crm_asociada ? "Asociada" : null} />
                       <FieldStatus label="Razón social" value={item.cliente_datos.razon_social} />
                       <FieldStatus label="RFC" value={item.cliente_datos.rfc} />
@@ -570,14 +599,14 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
                       <FieldStatus label="Código postal" value={item.cliente_datos.codigo_postal} />
                       {!item.cuenta_crm_asociada ? <p className="font-medium text-destructive">Bloqueante: no hay una cuenta CRM asociada.</p> : null}
                     </ReviewRow>
-                    <ReviewRow title="OC confirmada y evidencias" summary={(item.referencia_pedido_cliente ? "OC " + item.referencia_pedido_cliente : "Sin OC") + " · " + item.documentos.length + " evidencia" + (item.documentos.length === 1 ? "" : "s") + " · " + (CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada")} complete={evidenceComplete} checked={review.evidencia} onCheckedChange={(checked) => updateReview(item.id, "evidencia", checked)} disabled={pendingId === item.id}>
+                    <ReviewRow title="OC confirmada y evidencias" summary={(item.referencia_pedido_cliente ? "OC " + item.referencia_pedido_cliente : "Sin OC") + " · " + item.documentos.length + " evidencia" + (item.documentos.length === 1 ? "" : "s") + " · " + (CONFIRMATION_LABELS[item.forma_confirmacion || ""] || "Forma no registrada")} complete={evidenceComplete} checked={review.evidencia} onCheckedChange={(checked) => updateReview(item.id, "evidencia", checked)} disabled={pendingId === item.id} showReviewControl={canReview}>
                       <FieldStatus label="Forma de confirmación" value={CONFIRMATION_LABELS[item.forma_confirmacion || ""] || null} />
                       <FieldStatus label="Referencia OC" value={item.referencia_pedido_cliente} />
                       <FieldStatus label="Fecha de confirmación" value={item.fecha_confirmacion_cliente} />
                       <FieldStatus label="Evidencias" value={item.documentos.length ? `${item.documentos.length} archivo(s)` : null} />
                       {item.documentos.map((document) => <p key={document.id} className="text-muted-foreground">{CONFIRMATION_LABELS[document.tipo_documento] || "Otro"}{document.nombre_original ? <a className="ml-2 text-primary underline underline-offset-4" href={"/api/embudo/quotes/" + item.cotizacion_id + "/pedido/orden-compra?documento_id=" + encodeURIComponent(document.id)} target="_blank" rel="noreferrer">Ver archivo</a> : null}</p>)}
                     </ReviewRow>
-                    <ReviewRow title="Datos de entrega" summary={deliveryRequired ? (item.domicilio_entrega_completo ? item.domicilio_entrega || "Dirección completa" : "Faltan datos de entrega") : "No aplica a estas partidas"} complete={deliveryComplete} checked={review.entrega} onCheckedChange={(checked) => updateReview(item.id, "entrega", checked)} disabled={pendingId === item.id}>
+                    <ReviewRow title="Datos de entrega" summary={deliveryRequired ? (item.domicilio_entrega_completo ? item.domicilio_entrega || "Dirección completa" : "Faltan datos de entrega") : "No aplica a estas partidas"} complete={deliveryComplete} checked={review.entrega} onCheckedChange={(checked) => updateReview(item.id, "entrega", checked)} disabled={pendingId === item.id} showReviewControl={canReview}>
                       <FieldStatus label="País" value={deliveryRequired ? item.domicilio_entrega_pais : "No aplica"} />
                       <FieldStatus label="Estado" value={deliveryRequired ? item.domicilio_entrega_entidad : "No aplica"} />
                       <FieldStatus label="Municipio" value={deliveryRequired ? item.domicilio_entrega_municipio : "No aplica"} />
@@ -589,7 +618,7 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
                       {deliveryRequired && !item.domicilio_entrega_completo ? <p className="font-medium text-destructive">Bloqueante: faltan {item.domicilio_entrega_faltantes.join(", ") || "datos de entrega"}.</p> : null}
                       {item.domicilio_entrega_referencias ? <p className="text-muted-foreground">Referencias: {item.domicilio_entrega_referencias}</p> : null}
                     </ReviewRow>
-                    <ReviewRow title="Productos y cantidades" summary={item.items.length + " partida" + (item.items.length === 1 ? "" : "s") + " · " + (productMismatch ? "Hay diferencias contra la cotización" : "Coinciden con la cotización aceptada")} complete={productsComplete} checked={review.productos} onCheckedChange={(checked) => updateReview(item.id, "productos", checked)} disabled={pendingId === item.id}>
+                    <ReviewRow title="Productos y cantidades" summary={item.items.length + " partida" + (item.items.length === 1 ? "" : "s") + " · " + (productMismatch ? "Hay diferencias contra la cotización" : "Coinciden con la cotización aceptada")} complete={productsComplete} checked={review.productos} onCheckedChange={(checked) => updateReview(item.id, "productos", checked)} disabled={pendingId === item.id} showReviewControl={canReview}>
                       <FieldStatus label="Productos" value={item.items.length ? `${item.items.length} partida(s)` : null} />
                       <FieldStatus label="Cantidades y precios" value={productMismatch ? "No coinciden con la cotización" : item.items.length ? "Coinciden con la cotización aceptada" : null} warning={productMismatch} />
                       <FieldStatus label="Descuentos" value={item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje)) ? "Superan el límite" : "Dentro del límite"} warning={item.items.some((line) => line.cotizacion_descuento_porcentaje != null && line.cotizacion_limite_descuento_porcentaje != null && Number(line.cotizacion_descuento_porcentaje) > Number(line.cotizacion_limite_descuento_porcentaje))} />
@@ -602,7 +631,7 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-3">
                     <span className="text-xs text-muted-foreground">Revisión: {progress}/4</span>
-                    <div className="flex flex-wrap justify-end gap-2">
+                    {canReview ? <div className="flex flex-wrap justify-end gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => printPendingOrder(item)} disabled={!printBrand}><IconPrinter className="mr-2 size-4" />Imprimir</Button>
                       {returningId === item.id ? (
                         <div className="flex w-full flex-col gap-2 sm:flex-row">
@@ -619,7 +648,7 @@ export function OrderFormalizationQueue({ printBrand }: { printBrand: OrderPrint
                           <Button type="button" size="sm" onClick={() => void confirmOrder(item)} disabled={pendingId === item.id || hasBlockingIssues(item)}>{pendingId === item.id ? "Aprobando…" : "Aprobar y liberar"}</Button>
                         </>
                       )}
-                    </div>
+                    </div> : <span className="text-xs text-muted-foreground">Solo consulta. La liberación la realiza Operaciones.</span>}
                   </div>
                 </div>
               ) : null}
