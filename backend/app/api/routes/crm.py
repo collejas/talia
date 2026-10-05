@@ -33823,6 +33823,8 @@ async def crear_evidencia_confirmacion_pedido(
                 await repo.delete_storage_object(bucket="quotes", object_path=storage_path)
             except CRMRepositoryError:
                 logger.warning("sales_order_evidence_storage_cleanup_failed", extra={"organizacion_id": str(organizacion_id), "pedido_venta_id": str(order_id)})
+        if "invalid_mime_type" in str(exc).lower():
+            raise HTTPException(status_code=415, detail="tipo_evidencia_no_admitido_por_almacenamiento") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_guardar_evidencia_pedido") from exc
 
     return PedidoVentaDocumentoResponse(
@@ -33959,6 +33961,8 @@ async def subir_documento_orden_compra_cliente(
                     "sales_order_oc_storage_cleanup_failed",
                     extra={"organizacion_id": str(organizacion_id), "pedido_venta_id": str(order_id)},
                 )
+        if "invalid_mime_type" in str(exc).lower():
+            raise HTTPException(status_code=415, detail="tipo_evidencia_no_admitido_por_almacenamiento") from exc
         if "duplicate key" in str(exc).lower() or "unique" in str(exc).lower():
             raise HTTPException(status_code=409, detail="orden_compra_ya_adjunta") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_guardar_orden_compra") from exc
