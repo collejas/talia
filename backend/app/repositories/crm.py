@@ -4380,7 +4380,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "cotizacion_id": f"in.({','.join(quote_ids)})",
-            "select": "id,cotizacion_id,estatus,estado_formalizacion,motivo_devolucion_comercial,estatus_logistico,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),items:pedido_venta_items(id,catalog_item_id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path))",
+            "select": "id,cotizacion_id,estatus,estado_formalizacion,motivo_devolucion_comercial,estatus_logistico,referencia_pedido_cliente,fecha_orden_cliente,forma_confirmacion,fecha_confirmacion_cliente,observaciones_confirmacion,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,confirmado_en,confirmado_por_usuario_id,venta:ventas!ventas_pedido_venta_org_fkey(id,cliente_id,total,estatus,cuenta:cuentas_por_cobrar!cuentas_por_cobrar_venta_cliente_org_fkey(id,saldo)),items:pedido_venta_items(id,catalog_item_id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad,entrega:pedido_venta_entregas!pedido_venta_entrega_items_entrega_org_fkey(estado))),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(id,nombre_original,content_type,tamano_bytes,subido_en,storage_path))",
         }
         response = await self._request_service_role(
             "GET",
@@ -4627,7 +4627,7 @@ class CRMRepository:
                 "order": "confirmado_en.desc,id.desc",
                 "limit": str(limit),
                 "offset": str(offset),
-                "select": "id,cotizacion_id,estatus,estatus_logistico,confirmado_en,confirmado_por_usuario_id,confirmado_por:usuarios!pedidos_venta_confirmado_usuario_fkey(id,nombre_completo),forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre,razon_social,rfc)),items:pedido_venta_items(id,descripcion,unidad,cantidad,precio_unitario_final,subtotal,moneda,entregas:pedido_venta_entrega_items(cantidad)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original))",
+                "select": "id,cotizacion_id,estatus,estatus_logistico,confirmado_en,confirmado_por_usuario_id,confirmado_por:usuarios!pedidos_venta_confirmado_usuario_fkey(id,nombre_completo),forma_confirmacion,fecha_confirmacion_cliente,referencia_pedido_cliente,fecha_orden_cliente,observaciones_confirmacion,condicion_pago,dias_credito,anticipo_porcentaje,permite_entrega_parcial,fecha_entrega_comprometida,domicilio_entrega,observaciones_comerciales,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre,razon_social,rfc)),items:pedido_venta_items(id,descripcion,unidad,cantidad,precio_unitario_final,subtotal,moneda,entregas:pedido_venta_entrega_items(cantidad,entrega:pedido_venta_entregas!pedido_venta_entrega_items_entrega_org_fkey(estado))),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original))",
             },
             organizacion_id=organizacion_id,
         )
@@ -4738,7 +4738,7 @@ class CRMRepository:
                 "order": "confirmado_en.asc,id.asc",
                 "limit": str(limit),
                 "offset": str(offset),
-                "select": "id,cotizacion_id,estatus_logistico,referencia_pedido_cliente,domicilio_entrega,domicilio_entrega_pais,domicilio_entrega_entidad,domicilio_entrega_municipio,domicilio_entrega_localidad,domicilio_entrega_tipo_vialidad,domicilio_entrega_nombre_vialidad,domicilio_entrega_numero_exterior,domicilio_entrega_numero_interior,domicilio_entrega_colonia,domicilio_entrega_codigo_postal,domicilio_entrega_referencias,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo,telefono_principal_e164),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(id,titulo,codigo_oportunidad)),items:pedido_venta_items(id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad),reservas:inventario_reservas!inventario_reservas_pedido_item_org_fkey(cantidad,cantidad_surtida,estado)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type,tamano_bytes,storage_path,metadata))",
+                "select": "id,cotizacion_id,estatus_logistico,referencia_pedido_cliente,domicilio_entrega,domicilio_entrega_pais,domicilio_entrega_entidad,domicilio_entrega_municipio,domicilio_entrega_localidad,domicilio_entrega_tipo_vialidad,domicilio_entrega_nombre_vialidad,domicilio_entrega_numero_exterior,domicilio_entrega_numero_interior,domicilio_entrega_colonia,domicilio_entrega_codigo_postal,domicilio_entrega_referencias,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo,telefono_principal_e164),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(id,titulo,codigo_oportunidad)),items:pedido_venta_items(id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad,entrega:pedido_venta_entregas!pedido_venta_entrega_items_entrega_org_fkey(estado)),reservas:inventario_reservas!inventario_reservas_pedido_item_org_fkey(cantidad,cantidad_surtida,estado)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type,tamano_bytes,storage_path,metadata))",
             },
             organizacion_id=organizacion_id,
         )
@@ -4827,6 +4827,53 @@ class CRMRepository:
         if isinstance(data, list) and data and isinstance(data[0], dict):
             return data[0]
         raise CRMRepositoryError("sales_order_delivery_response_invalid")
+
+    async def preparar_entrega_pedido_venta(
+        self, *, organizacion_id: UUID, pedido_venta_id: UUID, items: list[dict[str, Any]],
+        fecha_entrega: date, referencia: str | None = None, observaciones: str | None = None,
+        usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        response = await self._request_service_role(
+            "POST", "/rest/v1/rpc/crm_preparar_entrega_pedido_venta",
+            json={"p_organizacion_id": str(organizacion_id), "p_pedido_venta_id": str(pedido_venta_id),
+                  "p_items": items, "p_fecha_entrega": fecha_entrega.isoformat(), "p_referencia": referencia,
+                  "p_observaciones": observaciones, "p_usuario_id": str(usuario_id) if usuario_id else None},
+            organizacion_id=organizacion_id,
+        )
+        data = response.json() if response.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict): return data[0]
+        raise CRMRepositoryError("sales_order_delivery_prepare_response_invalid")
+
+    async def cambiar_estado_entrega_pedido_venta(
+        self, *, organizacion_id: UUID, entrega_id: UUID, accion: str, usuario_id: UUID | None = None,
+        motivo: str | None = None,
+    ) -> dict[str, Any]:
+        functions = {
+            "en_ruta": ("crm_marcar_entrega_en_ruta", {"p_organizacion_id": str(organizacion_id), "p_entrega_id": str(entrega_id), "p_usuario_id": str(usuario_id) if usuario_id else None}),
+            "confirmar": ("crm_confirmar_entrega_pedido_venta", {"p_organizacion_id": str(organizacion_id), "p_entrega_id": str(entrega_id), "p_usuario_id": str(usuario_id) if usuario_id else None}),
+            "no_entregada": ("crm_marcar_entrega_no_realizada", {"p_organizacion_id": str(organizacion_id), "p_entrega_id": str(entrega_id), "p_motivo": motivo, "p_usuario_id": str(usuario_id) if usuario_id else None}),
+        }
+        function_name, payload = functions[action]
+        response = await self._request_service_role("POST", f"/rest/v1/rpc/{function_name}", json=payload, organizacion_id=organizacion_id)
+        data = response.json() if response.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict): return data[0]
+        raise CRMRepositoryError("sales_order_delivery_state_response_invalid")
+
+    async def list_pedidos_venta_entregas(
+        self, *, organizacion_id: UUID, estados: list[str], limit: int = 50, offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        response = await self._request_service_role(
+            "GET", "/rest/v1/pedido_venta_entregas",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}", "estado": f"in.({','.join(estados)})",
+                "order": "creado_en.desc,id.desc", "limit": str(limit), "offset": str(offset),
+                "select": "id,pedido_venta_id,fecha_entrega,referencia,observaciones,estado,salida_en,en_ruta_en,entregada_en,no_entregada_en,motivo_no_entrega,creado_en,creado_por_usuario_id,pedido:pedidos_venta!pedido_venta_entregas_pedido_org_fkey(id,cotizacion_id,referencia_pedido_cliente,domicilio_entrega,domicilio_entrega_pais,domicilio_entrega_entidad,domicilio_entrega_municipio,domicilio_entrega_localidad,domicilio_entrega_tipo_vialidad,domicilio_entrega_nombre_vialidad,domicilio_entrega_numero_exterior,domicilio_entrega_numero_interior,domicilio_entrega_colonia,domicilio_entrega_codigo_postal,domicilio_entrega_referencias,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(folio,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo,telefono_principal_e164),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(codigo_oportunidad,titulo))),items:pedido_venta_entrega_items!pedido_venta_entrega_items_entrega_org_fkey(id,pedido_venta_item_id,cantidad,catalog_item_id,item:pedido_venta_items!pedido_venta_entrega_items_pedido_item_org_fkey(descripcion,cantidad))"
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not all(isinstance(row, dict) for row in data): raise CRMRepositoryError("sales_order_delivery_history_invalid_response")
+        return data
 
     async def crear_documento_pedido_venta(
         self,

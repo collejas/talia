@@ -4414,6 +4414,11 @@ class PedidoVentaEntregaPayload(BaseModel):
     items: list[PedidoVentaEntregaItemPayload] = Field(..., min_length=1, max_length=100)
 
 
+class PedidoVentaEntregaNoRealizadaPayload(BaseModel):
+    motivo: Literal["domicilio_cerrado", "contacto_no_localizado", "rechazo_cliente", "direccion_incorrecta", "documentacion_faltante", "problema_transporte", "otro"]
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
 class PedidoVentaDevolverPayload(BaseModel):
     codigo_motivo: Literal[
         "falta_evidencia", "oc_no_coincide", "precio_incorrecto",
@@ -10185,7 +10190,7 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
                 catalog_row = _single_related(item_row.get("catalog_item"))
                 raw_deliveries = item_row.get("entregas")
                 delivered = sum(
-                    (Decimal(str(_as_number(delivery.get("cantidad")) or 0)) for delivery in raw_deliveries if isinstance(delivery, dict)),
+                    (Decimal(str(_as_number(delivery.get("cantidad")) or 0)) for delivery in raw_deliveries if isinstance(delivery, dict) and (_single_related(delivery.get("entrega")) or {}).get("estado") == "entregada"),
                     Decimal("0"),
                 ) if isinstance(raw_deliveries, list) else Decimal("0")
                 try:
@@ -33502,7 +33507,7 @@ async def listar_pedidos_pendientes_surtido(
                 continue
             raw_deliveries = order_item.get("entregas")
             delivered = sum(
-                (Decimal(str(_as_number(line.get("cantidad")) or 0)) for line in raw_deliveries if isinstance(line, dict)),
+                (Decimal(str(_as_number(line.get("cantidad")) or 0)) for line in raw_deliveries if isinstance(line, dict) and (_single_related(line.get("entrega")) or {}).get("estado") == "entregada"),
                 Decimal("0"),
             ) if isinstance(raw_deliveries, list) else Decimal("0")
             quantity = Decimal(str(_as_number(order_item.get("cantidad")) or 0))
@@ -33533,6 +33538,12 @@ async def listar_pedidos_pendientes_surtido(
                 "cantidad_reservada": available_to_fulfill,
                 "cantidad_pendiente_inventario": max(Decimal("0"), quantity - reserved_total),
             })
+        if any(
+            isinstance(order_item, dict)
+            and any(isinstance(line, dict) and (_single_related(line.get("entrega")) or {}).get("estado") in {"preparada", "en_ruta"} for line in (order_item.get("entregas") if isinstance(order_item.get("entregas"), list) else []))
+            for order_item in (row.get("items") if isinstance(row.get("items"), list) else [])
+        ):
+            continue
         if not order_items:
             continue
         items.append({
@@ -33646,7 +33657,7 @@ async def listar_pedidos_venta_autorizados(
                 continue
             deliveries = line.get("entregas") if isinstance(line.get("entregas"), list) else []
             delivered = sum(
-                (Decimal(str(_as_number(delivery.get("cantidad")) or 0)) for delivery in deliveries if isinstance(delivery, dict)),
+                (Decimal(str(_as_number(delivery.get("cantidad")) or 0)) for delivery in deliveries if isinstance(delivery, dict) and (_single_related(delivery.get("entrega")) or {}).get("estado") == "entregada"),
                 Decimal("0"),
             )
             order_items.append({
@@ -33831,6 +33842,107 @@ async def registrar_entrega_pedido_venta(
         if "delivery_items_required" in message or "invalid_delivery_item" in message or "duplicate_delivery_item" in message:
             raise HTTPException(status_code=400, detail="renglones_entrega_invalidos") from exc
         raise HTTPException(status_code=502, detail="no_se_pudo_registrar_entrega") from exc
+
+
+@router.post("/pedidos-venta/{pedido_venta_id}/entregas/preparar")
+async def preparar_entrega_pedido_por_inventario(
+    *, repo: CRMRepository = Depends(get_repository), organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id), _: str = Depends(require_permission("inventory.fulfillment.manage")),
+    pedido_venta_id: UUID, payload: PedidoVentaEntregaPayload,
+) -> dict[str, Any]:
+    try:
+        result = await repo.preparar_entrega_pedido_venta(
+            organizacion_id=organizacion_id, pedido_venta_id=pedido_venta_id,
+            items=[{"item_id": str(item.item_id), "cantidad": str(item.cantidad)} for item in payload.items],
+            fecha_entrega=payload.fecha_entrega, referencia=payload.referencia,
+            observaciones=payload.observaciones, usuario_id=usuario_id,
+        )
+        return {"ok": True, **result}
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "delivery_exceeds_reserved" in message or "reservation_shortfall" in message:
+            raise HTTPException(status_code=409, detail="cantidad_no_disponible_para_preparar") from exc
+        if "confirmed_order_required" in message:
+            raise HTTPException(status_code=409, detail="pedido_confirmado_requerido") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_preparar_entrega") from exc
+
+
+@router.post("/entregas/{entrega_id}/en-ruta")
+async def marcar_entrega_en_ruta(
+    *, repo: CRMRepository = Depends(get_repository), organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id), _: str = Depends(require_permission("inventory.fulfillment.manage")),
+    entrega_id: UUID,
+) -> dict[str, Any]:
+    try:
+        return {"ok": True, **await repo.cambiar_estado_entrega_pedido_venta(organizacion_id=organizacion_id, entrega_id=entrega_id, accion="en_ruta", usuario_id=usuario_id)}
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=409, detail="entrega_no_preparada_o_no_disponible") from exc
+
+
+@router.post("/entregas/{entrega_id}/confirmar")
+async def confirmar_entrega_por_inventario(
+    *, repo: CRMRepository = Depends(get_repository), organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id), _: str = Depends(require_permission("inventory.fulfillment.manage")),
+    entrega_id: UUID,
+) -> dict[str, Any]:
+    try:
+        return {"ok": True, **await repo.cambiar_estado_entrega_pedido_venta(organizacion_id=organizacion_id, entrega_id=entrega_id, accion="confirmar", usuario_id=usuario_id)}
+    except CRMRepositoryError as exc:
+        if "inventory_balance" in str(exc): raise HTTPException(status_code=409, detail="inventario_no_disponible_para_confirmar") from exc
+        raise HTTPException(status_code=409, detail="entrega_no_disponible_para_confirmar") from exc
+
+
+@router.post("/entregas/{entrega_id}/no-realizada")
+async def marcar_entrega_no_realizada(
+    *, repo: CRMRepository = Depends(get_repository), organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id), _: str = Depends(require_permission("inventory.fulfillment.manage")),
+    entrega_id: UUID, payload: PedidoVentaEntregaNoRealizadaPayload,
+) -> dict[str, Any]:
+    motivo = payload.motivo if not payload.observaciones else f"{payload.motivo}: {payload.observaciones.strip()}"
+    try:
+        return {"ok": True, **await repo.cambiar_estado_entrega_pedido_venta(organizacion_id=organizacion_id, entrega_id=entrega_id, accion="no_entregada", usuario_id=usuario_id, motivo=motivo)}
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=409, detail="entrega_no_disponible_para_marcar_no_realizada") from exc
+
+
+@router.get("/pedidos-venta/entregas")
+async def listar_entregas_pedido_por_inventario(
+    *, repo: CRMRepository = Depends(get_repository), organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.fulfillment.view")),
+    vista: Literal["en_ruta", "historial"] = Query(default="historial"), limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    estados = ["preparada", "en_ruta"] if vista == "en_ruta" else ["entregada", "no_entregada"]
+    try:
+        rows = await repo.list_pedidos_venta_entregas(organizacion_id=organizacion_id, estados=estados, limit=limit, offset=offset)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudo_consultar_entregas") from exc
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        order = _single_related(row.get("pedido")) or {}
+        quote = _single_related(order.get("cotizacion")) or {}
+        contact = _single_related(quote.get("contacto"))
+        account = _single_related(quote.get("cuenta"))
+        opportunity = _single_related(quote.get("oportunidad"))
+        items.append({
+            "id": row.get("id"), "pedido_venta_id": row.get("pedido_venta_id"), "estado": row.get("estado"),
+            "fecha_entrega": row.get("fecha_entrega"), "referencia": row.get("referencia"),
+            "observaciones": row.get("observaciones"), "salida_en": row.get("salida_en"),
+            "en_ruta_en": row.get("en_ruta_en"), "entregada_en": row.get("entregada_en"),
+            "no_entregada_en": row.get("no_entregada_en"), "motivo_no_entrega": row.get("motivo_no_entrega"),
+            "codigo_oportunidad": opportunity.get("codigo_oportunidad") if opportunity else None,
+            "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
+            "folio": quote.get("folio"), "cliente": account.get("nombre") if account else None,
+            "contacto": contact.get("nombre_completo") if contact else None,
+            "contacto_telefono": contact.get("telefono_principal_e164") if contact else None,
+            "referencia_pedido_cliente": order.get("referencia_pedido_cliente"),
+            "domicilio_entrega": {key: order.get(key) for key in (
+                "domicilio_entrega", "domicilio_entrega_pais", "domicilio_entrega_entidad", "domicilio_entrega_municipio",
+                "domicilio_entrega_localidad", "domicilio_entrega_tipo_vialidad", "domicilio_entrega_nombre_vialidad",
+                "domicilio_entrega_numero_exterior", "domicilio_entrega_numero_interior", "domicilio_entrega_colonia",
+                "domicilio_entrega_codigo_postal", "domicilio_entrega_referencias")},
+            "items": [{"id": item.get("pedido_venta_item_id"), "descripcion": (_single_related(item.get("item")) or {}).get("descripcion") or "Artículo", "cantidad": item.get("cantidad")} for item in (row.get("items") if isinstance(row.get("items"), list) else [])],
+        })
+    return {"items": items, "limit": limit, "offset": offset, "has_more": len(items) == limit}
 
 
 MAX_ORDER_PURCHASE_ORDER_BYTES = 10 * 1024 * 1024
