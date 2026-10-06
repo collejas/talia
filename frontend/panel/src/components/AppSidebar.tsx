@@ -37,6 +37,7 @@ import {
   IconCoin,
   IconClipboardCheck,
   IconTruckDelivery,
+  IconBox,
   type Icon,
 } from "@tabler/icons-react"
 
@@ -121,6 +122,7 @@ const NAVIGATION: {
       children: [
         { title: "Órdenes de venta", url: "/ventas/pedidos", icon: IconClipboardCheck, permission: "sales.orders.confirm" },
         { title: "Surtidos", url: "/inventario/surtidos", icon: IconTruckDelivery, permission: "inventory.fulfillment.view" },
+        { title: "Inventario y almacenes", url: "/operacion/inventario", icon: IconBox, permission: "inventory.operations.view" },
       ],
     },
     { title: "Inbox", url: "/inbox", icon: IconInbox, permission: "ver_inbox" },

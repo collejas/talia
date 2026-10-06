@@ -1,7 +1,7 @@
 # Propuesta: inventario operativo y control de almacenes en Operación
 
 **Fecha:** 2026-10-06  
-**Estado:** Propuesta documentada; sin implementación funcional.
+**Estado:** Fase 1 implementada en código; pendiente de aplicar migración y desplegar.
 
 ## Objetivo
 
@@ -125,6 +125,21 @@ La vista no debe depender de `settings.manage` para operar inventario. Si alguna
 5. **Almacenes y alertas:** agregar administración restringida y alertas de bajo inventario.
 6. **Integración operativa:** enlazar surtidos, entregas, documentos y navegación del panel.
 7. **Roles:** asignar permisos mínimos al perfil de almacén y verificar que no tenga acceso indirecto a Compras o costos.
+
+## Avance de la fase 1
+
+Se implementó el primer corte de solo lectura:
+
+- Nueva entrada de menú **Operación → Inventario y almacenes**.
+- Nueva ruta de panel /operacion/inventario.
+- Nuevo endpoint protegido GET /crm/operacion/inventario.
+- Nuevo permiso inventory.operations.view, separado de settings.manage y de los permisos de Compras.
+- Consulta de almacenes, existencia actual, reservada, disponible, tránsito y mínimos.
+- Búsqueda por producto/almacén y filtro por almacén.
+- Alertas visuales cuando la disponibilidad está en el mínimo o por debajo.
+- El endpoint no expone costos ni permite modificar inventario.
+
+La migración 20261006_120000_operational_inventory_view_permission.sql asigna el permiso de consulta a owner, admin, admin_operativo y supervisor. Todavía no se implementaron movimientos, ajustes manuales ni administración de almacenes; corresponden a las siguientes fases.
 
 ## Criterios de aceptación
 

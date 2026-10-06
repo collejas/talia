@@ -16536,6 +16536,44 @@ class CRMInventarioAjusteCreate(BaseModel):
     motivo: str | None = Field(default=None, max_length=2000)
 
 
+class CRMInventarioOperativoAlmacen(BaseModel):
+    id: UUID
+    codigo: str
+    nombre: str
+    tipo: str
+    es_principal: bool
+
+
+class CRMInventarioOperativoProducto(BaseModel):
+    id: UUID
+    nombre: str
+    slug: str | None = None
+    codigo: str | None = None
+    unidad: str | None = None
+    activo: bool = True
+    maneja_inventario: bool = False
+
+
+class CRMInventarioOperativoExistencia(BaseModel):
+    id: UUID | None = None
+    catalog_item_id: UUID
+    almacen_id: UUID
+    stock_actual: float
+    stock_reservado: float
+    stock_disponible: float
+    stock_en_transito: float = 0
+    stock_minimo: float | None = None
+    stock_objetivo: float | None = None
+    producto: CRMInventarioOperativoProducto | None = None
+    almacen: CRMInventarioOperativoAlmacen | None = None
+
+
+class CRMInventarioOperativoResponse(BaseModel):
+    almacenes: list[CRMInventarioOperativoAlmacen]
+    almacen_seleccionado_id: UUID | None = None
+    existencias: list[CRMInventarioOperativoExistencia]
+
+
 class CRMOrdenCompraCreateItem(BaseModel):
     catalog_item_id: UUID
     proveedor_item_id: UUID | None = None
@@ -22840,6 +22878,101 @@ async def listar_existencias_catalogo_precios(
             for row in stock_rows
         ],
     }
+
+
+@router.get("/operacion/inventario", response_model=CRMInventarioOperativoResponse)
+async def listar_inventario_operativo(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.operations.view")),
+    almacen_id: UUID | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=1000)] = 500,
+) -> CRMInventarioOperativoResponse:
+    """Consulta operativa de existencias sin exponer costos ni funciones de Compras."""
+    try:
+        warehouses, stock_rows = await asyncio.gather(
+            repo.list_almacenes(organizacion_id=organizacion_id, include_inactive=False, limit=5000),
+            repo.list_inventario_existencias(
+                organizacion_id=organizacion_id,
+                almacen_id=almacen_id,
+                limit=limit,
+            ),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudieron_consultar_existencias_operativas") from exc
+
+    warehouse_rows = [
+        CRMInventarioOperativoAlmacen(
+            id=warehouse["id"],
+            codigo=warehouse.get("codigo") or "",
+            nombre=warehouse.get("nombre") or "Almacén",
+            tipo=warehouse.get("tipo") or "central",
+            es_principal=bool(warehouse.get("es_principal")),
+        )
+        for warehouse in warehouses
+        if isinstance(warehouse, dict) and warehouse.get("id")
+    ]
+
+    selected_warehouse = (
+        next((warehouse for warehouse in warehouse_rows if warehouse.id == almacen_id), None)
+        if almacen_id
+        else None
+    )
+    if almacen_id is not None and selected_warehouse is None:
+        raise HTTPException(status_code=404, detail="almacen_no_encontrado")
+
+    operational_rows: list[CRMInventarioOperativoExistencia] = []
+    for row in stock_rows:
+        if not isinstance(row, dict) or not row.get("catalog_item_id") or not row.get("almacen_id"):
+            continue
+        raw_product = row.get("catalog_item") if isinstance(row.get("catalog_item"), dict) else None
+        raw_warehouse = row.get("almacen") if isinstance(row.get("almacen"), dict) else None
+        product = (
+            CRMInventarioOperativoProducto(
+                id=raw_product["id"],
+                nombre=raw_product.get("nombre") or "Producto sin nombre",
+                slug=raw_product.get("slug"),
+                codigo=raw_product.get("codigo"),
+                unidad=raw_product.get("unidad"),
+                activo=bool(raw_product.get("activo", True)),
+                maneja_inventario=bool(raw_product.get("maneja_inventario", False)),
+            )
+            if raw_product and raw_product.get("id")
+            else None
+        )
+        warehouse = (
+            CRMInventarioOperativoAlmacen(
+                id=raw_warehouse["id"],
+                codigo=raw_warehouse.get("codigo") or "",
+                nombre=raw_warehouse.get("nombre") or "Almacén",
+                tipo=raw_warehouse.get("tipo") or "central",
+                es_principal=bool(raw_warehouse.get("es_principal")),
+            )
+            if raw_warehouse and raw_warehouse.get("id")
+            else next((item for item in warehouse_rows if item.id == row["almacen_id"]), None)
+        )
+        operational_rows.append(
+            CRMInventarioOperativoExistencia(
+                id=row.get("id"),
+                catalog_item_id=row["catalog_item_id"],
+                almacen_id=row["almacen_id"],
+                stock_actual=float(row.get("stock_actual") or 0),
+                stock_reservado=float(row.get("stock_reservado") or 0),
+                stock_disponible=float(row.get("stock_disponible") or 0),
+                stock_en_transito=float(row.get("stock_en_transito") or 0),
+                stock_minimo=float(row["stock_minimo"]) if row.get("stock_minimo") is not None else None,
+                stock_objetivo=float(row["stock_objetivo"]) if row.get("stock_objetivo") is not None else None,
+                producto=product,
+                almacen=warehouse,
+            )
+        )
+
+    return CRMInventarioOperativoResponse(
+        almacenes=warehouse_rows,
+        almacen_seleccionado_id=selected_warehouse.id if selected_warehouse else None,
+        existencias=operational_rows,
+    )
 
 
 @router.get("/catalogo-precios/branding", response_model=CRMCatalogPriceBrand)
