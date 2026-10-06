@@ -22846,7 +22846,7 @@ async def listar_existencias_catalogo_precios(
 async def obtener_branding_catalogo_precios(
     *,
     organizacion_id: UUID = Depends(require_organizacion_id),
-    _: str = Depends(require_any_permission(["propuesta.view", "propiedades.view", "sales.view", "sales.orders.confirm", "settings.view"])),
+    _: str = Depends(require_any_permission(["propuesta.view", "propiedades.view", "sales.view", "sales.orders.confirm", "settings.view", "inventory.fulfillment.view"])),
 ) -> CRMCatalogPriceBrand:
     """Identidad del tenant y del formato de cotización para imprimir el catálogo."""
     try:
