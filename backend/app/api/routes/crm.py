@@ -3375,6 +3375,7 @@ async def _render_quote_pdf_after_sale(
         quote_row = await repo.get_quote_entry(
             organizacion_id=organizacion_id,
             quote_id=quote_id,
+            service_role=True,
         )
     except CRMRepositoryError as exc:
         logger.warning(
@@ -33543,6 +33544,7 @@ async def listar_pedidos_pendientes_surtido(
             "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
             "cliente": account.get("nombre") if account else None,
             "contacto": contact.get("nombre_completo") if contact else None,
+            "referencia_pedido_cliente": row.get("referencia_pedido_cliente"),
             "total": quote.get("total"),
             "moneda": quote.get("moneda"),
             "estatus_logistico": row.get("estatus_logistico"),
@@ -33579,7 +33581,7 @@ async def imprimir_cotizacion_pedido_por_inventario(
         opportunity_id = _safe_uuid(quote_row.get("oportunidad_id"))
         if opportunity_id is None:
             raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
-        opportunity_row = await repo.get_opportunity_with_contact(
+        opportunity_row = await repo.get_opportunity_with_contact_service_role(
             organizacion_id=organizacion_id,
             oportunidad_id=opportunity_id,
         )

@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { printDeliveryDocument } from "@/components/inventario/inventory-delivery-print";
+import type { OrderPrintBrand } from "@/components/ventas/approved-order-print";
 
 type FulfillmentItem = {
   id: string;
@@ -25,6 +27,7 @@ type FulfillmentOrder = {
   oportunidad_titulo: string | null;
   cliente: string | null;
   contacto: string | null;
+  referencia_pedido_cliente: string | null;
   total: number | string | null;
   moneda: string | null;
   estatus_logistico: "pendiente" | "parcial" | string;
@@ -45,30 +48,7 @@ function formatQuantity(value: number | string) {
   return new Intl.NumberFormat("es-MX", { maximumFractionDigits: 3 }).format(Number(value) || 0);
 }
 
-function escapeHtml(value: string) {
-  return value.replace(/[&<>'"]/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "'": "&#39;",
-    '"': "&quot;",
-  })[character] ?? character);
-}
-
-function printDeliveryDocument(order: FulfillmentOrder, quantities: Record<string, string>) {
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
-  if (!printWindow) return;
-  const lines = order.items.map((item) => {
-    const entered = Number((quantities[item.id] ?? "").replace(",", "."));
-    const quantity = Number.isFinite(entered) && entered > 0 ? entered : Number(item.cantidad_pendiente) || 0;
-    return `<tr><td>${escapeHtml(item.descripcion)}</td><td>${escapeHtml(formatQuantity(quantity))}</td></tr>`;
-  }).join("");
-  const reference = order.codigo_oportunidad || order.folio || order.id;
-  printWindow.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Entrega de mercancía</title><style>body{font-family:Arial,sans-serif;color:#111;margin:40px}h1{font-size:22px;margin:0 0 8px}p{margin:4px 0;color:#444}.meta{margin:22px 0}.meta strong{color:#111}table{border-collapse:collapse;width:100%;margin-top:24px}th,td{border:1px solid #bbb;padding:10px;text-align:left}th:last-child,td:last-child{text-align:right;width:160px}.signatures{display:flex;gap:50px;margin-top:80px}.signature{border-top:1px solid #333;flex:1;padding-top:8px;color:#444}@media print{body{margin:20px}}</style></head><body><h1>Documento de entrega de mercancía</h1><div class="meta"><p><strong>Oportunidad:</strong> ${escapeHtml(reference)}</p><p><strong>Cliente:</strong> ${escapeHtml(order.cliente || "Sin nombre")}</p><p><strong>Fecha:</strong> ${escapeHtml(new Date().toLocaleDateString("es-MX"))}</p></div><table><thead><tr><th>Descripción</th><th>Cantidad</th></tr></thead><tbody>${lines}</tbody></table><div class="signatures"><div class="signature">Entrega</div><div class="signature">Recibe</div></div><script>window.onload=()=>{window.print();}</script></body></html>`);
-  printWindow.document.close();
-}
-
-export function InventoryFulfillmentQueue({ canManageFulfillment }: { canManageFulfillment: boolean }) {
+export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: { canManageFulfillment: boolean; printBrand: OrderPrintBrand | null }) {
   const [items, setItems] = useState<FulfillmentOrder[]>([]);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [dates, setDates] = useState<Record<string, string>>({});
@@ -239,7 +219,7 @@ export function InventoryFulfillmentQueue({ canManageFulfillment }: { canManageF
             ) : null}
             <div className="flex justify-end border-t pt-3">
               <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => printDeliveryDocument(order, quantities)}>
+                <Button type="button" variant="outline" onClick={() => { if (printBrand) printDeliveryDocument(order, quantities, printBrand); }} disabled={!printBrand}>
                   Imprimir entrega
                 </Button>
                 <Button type="button" variant="outline" onClick={() => openQuote(order)}>

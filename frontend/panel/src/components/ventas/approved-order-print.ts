@@ -77,7 +77,7 @@ function money(value: number | string | null, currency: string | null) {
   }
 }
 
-function openPrintWindow(brand: OrderPrintBrand, title: string, body: string, targetWindow?: Window) {
+export function openPrintWindow(brand: OrderPrintBrand, title: string, body: string, targetWindow?: Window) {
   const printWindow = targetWindow ?? window.open("", "_blank");
   if (!printWindow) return false;
   printWindow.opener = null;

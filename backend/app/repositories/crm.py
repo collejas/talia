@@ -4403,6 +4403,7 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         quote_id: UUID,
+        service_role: bool = False,
     ) -> dict[str, Any]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -4411,7 +4412,15 @@ class CRMRepository:
             "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
             "items.order": "orden.asc,id.asc",
         }
-        resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
+        if service_role:
+            resp = await self._request_service_role(
+                "GET",
+                "/rest/v1/cotizaciones",
+                params=params,
+                organizacion_id=organizacion_id,
+            )
+        else:
+            resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)
         data = resp.json()
         if isinstance(data, list) and data:
             row = data[0]
@@ -4727,7 +4736,7 @@ class CRMRepository:
                 "order": "confirmado_en.asc,id.asc",
                 "limit": str(limit),
                 "offset": str(offset),
-                "select": "id,cotizacion_id,estatus_logistico,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(id,titulo,codigo_oportunidad)),items:pedido_venta_items(id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad),reservas:inventario_reservas!inventario_reservas_pedido_item_org_fkey(cantidad,cantidad_surtida,estado)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type,tamano_bytes,storage_path,metadata))",
+                "select": "id,cotizacion_id,estatus_logistico,referencia_pedido_cliente,cotizacion:cotizaciones!pedidos_venta_cotizacion_org_fkey(id,folio,total,moneda,oportunidad_id,contacto:personas!cotizaciones_contacto_org_fkey(nombre_completo),cuenta:cuentas!cotizaciones_cuenta_org_fkey(nombre),oportunidad:oportunidades!cotizaciones_oportunidad_org_fkey(id,titulo,codigo_oportunidad)),items:pedido_venta_items(id,descripcion,cantidad,catalog_item:catalog_items(maneja_inventario),entregas:pedido_venta_entrega_items(cantidad),reservas:inventario_reservas!inventario_reservas_pedido_item_org_fkey(cantidad,cantidad_surtida,estado)),documentos:pedido_venta_documentos!pedido_venta_documentos_order_org_fkey(id,tipo_documento,referencia,observaciones,creado_en,archivo:archivos!pedido_venta_documentos_archivo_org_fkey(nombre_original,content_type,tamano_bytes,storage_path,metadata))",
             },
             organizacion_id=organizacion_id,
         )
@@ -5222,6 +5231,37 @@ class CRMRepository:
             "select": self._PIPELINE_SELECT,
         }
         resp = await self._request("GET", "/rest/v1/oportunidades", params=params)
+        data = resp.json()
+        if isinstance(data, list) and data:
+            row = data[0]
+            if isinstance(row, dict):
+                await self._attach_contact_rows(
+                    organizacion_id=organizacion_id,
+                    rows=[row],
+                    source_fields=("contacto_principal_id",),
+                )
+                return row
+        return None
+
+    async def get_opportunity_with_contact_service_role(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Load an opportunity for an already authorized operational workflow."""
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "id": f"eq.{oportunidad_id}",
+            "limit": "1",
+            "select": self._PIPELINE_SELECT,
+        }
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/oportunidades",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
         data = resp.json()
         if isinstance(data, list) and data:
             row = data[0]
