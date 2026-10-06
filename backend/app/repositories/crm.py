@@ -1368,6 +1368,8 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
+            "archived_at": "is.null",
+            "merged_into_cuenta_id": "is.null",
             "order": order,
             "limit": str(limit),
             "offset": str(offset),
