@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { printDeliveryDocument } from "@/components/inventario/inventory-delivery-print";
 import type { OrderPrintBrand } from "@/components/ventas/approved-order-print";
+import { AlertTriangle, Building2, CalendarDays, FileText, MapPin, Package, Phone, RefreshCw, Search, Truck } from "lucide-react";
 
 type FulfillmentItem = {
   id: string;
@@ -67,6 +68,8 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
   const [dates, setDates] = useState<Record<string, string>>({});
   const [references, setReferences] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "pendiente" | "parcial">("todos");
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [reservingId, setReservingId] = useState<string | null>(null);
@@ -157,11 +160,49 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
     window.open(`/api/inventario/surtidos/${encodeURIComponent(order.id)}/cotizacion`, "_blank", "noopener,noreferrer");
   };
 
+  const visibleItems = items.filter((order) => {
+    const needle = search.trim().toLocaleLowerCase("es-MX");
+    const matchesSearch = !needle || [order.codigo_oportunidad, order.oportunidad_titulo, order.cliente, order.contacto, order.folio, order.referencia_pedido_cliente]
+      .some((value) => value?.toLocaleLowerCase("es-MX").includes(needle));
+    const matchesStatus = statusFilter === "todos" || order.estatus_logistico === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const pendingOrders = items.filter((order) => order.estatus_logistico === "pendiente").length;
+  const partialOrders = items.filter((order) => order.estatus_logistico === "parcial").length;
+
+  const deliveryAddress = (order: FulfillmentOrder) => {
+    const street = [order.domicilio_entrega_tipo_vialidad, order.domicilio_entrega_nombre_vialidad].filter(Boolean).join(" ");
+    const number = [
+      order.domicilio_entrega_numero_exterior ? `No. ext. ${order.domicilio_entrega_numero_exterior}` : "",
+      order.domicilio_entrega_numero_interior ? `No. int. ${order.domicilio_entrega_numero_interior}` : "",
+    ].filter(Boolean).join(", ");
+    const locality = [order.domicilio_entrega_colonia, order.domicilio_entrega_municipio, order.domicilio_entrega_localidad].filter(Boolean).join(", ");
+    const region = [order.domicilio_entrega_entidad, order.domicilio_entrega_codigo_postal, order.domicilio_entrega_pais].filter(Boolean).join(", ");
+    const structured = [[street, number].filter(Boolean).join(" "), locality, region].filter(Boolean);
+    return structured.length ? structured : [order.domicilio_entrega || "Sin domicilio de entrega registrado"];
+  };
+
+  const phoneHref = (phone: string | null) => phone ? `tel:${phone.replace(/[^\d+]/g, "")}` : null;
+
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">Entrega productos reservados. Puedes registrar surtidos parciales; cada entrega actualiza existencias y reserva.</p>
-        <Button type="button" variant="outline" onClick={() => void loadQueue()} disabled={loading}>{loading ? "Actualizando…" : "Actualizar"}</Button>
+    <section className="space-y-5">
+      <div className="flex flex-col gap-4 rounded-2xl border bg-gradient-to-br from-card to-muted/30 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-primary"><Truck className="size-5" /><span className="text-xs font-semibold uppercase tracking-[0.16em]">Operación logística</span></div>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Pedidos por surtir</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Identifica rápidamente qué entregar, a qué empresa y dónde realizar la entrega.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={() => void loadQueue()} disabled={loading} className="shrink-0"><RefreshCw className={loading ? "mr-2 size-4 animate-spin" : "mr-2 size-4"} />{loading ? "Actualizando…" : "Actualizar"}</Button>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <button type="button" onClick={() => setStatusFilter("todos")} className={`rounded-xl border p-4 text-left transition-colors ${statusFilter === "todos" ? "border-primary bg-primary/5" : "bg-card hover:bg-muted/40"}`}><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total de pedidos</p><p className="mt-1 text-2xl font-semibold">{items.length}</p></button>
+        <button type="button" onClick={() => setStatusFilter("pendiente")} className={`rounded-xl border p-4 text-left transition-colors ${statusFilter === "pendiente" ? "border-primary bg-primary/5" : "bg-card hover:bg-muted/40"}`}><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pendientes de surtir</p><p className="mt-1 text-2xl font-semibold text-amber-700">{pendingOrders}</p></button>
+        <button type="button" onClick={() => setStatusFilter("parcial")} className={`rounded-xl border p-4 text-left transition-colors ${statusFilter === "parcial" ? "border-primary bg-primary/5" : "bg-card hover:bg-muted/40"}`}><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Entregas parciales</p><p className="mt-1 text-2xl font-semibold text-blue-700">{partialOrders}</p></button>
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por oportunidad, empresa, contacto, cotización u OC" className="h-10 pl-9" /></div>
+        <select aria-label="Filtrar por estado" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} className="h-10 rounded-md border bg-background px-3 text-sm"><option value="todos">Todos los estados</option><option value="pendiente">Pendientes de surtir</option><option value="parcial">Entregas parciales</option></select>
       </div>
       {error ? <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
       {notice ? <p role="status" className="rounded-md bg-primary/10 px-3 py-2 text-sm">{notice}</p> : null}
@@ -172,86 +213,52 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
           <p className="mt-1 text-sm text-muted-foreground">Los pedidos confirmados con productos de inventario aparecerán aquí.</p>
         </div>
       ) : null}
-      <div className="space-y-3">
-        {items.map((order) => (
-          <article key={order.id} className="space-y-4 rounded-xl border bg-card p-4 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="font-semibold">{order.codigo_oportunidad || order.oportunidad_titulo || "Pedido de venta"}</h2>
-                {order.folio ? <p className="text-xs text-muted-foreground">Cotización: {order.folio}</p> : null}
-                <p className="text-sm text-muted-foreground">{order.cliente || order.contacto || "Cliente sin nombre"}</p>
-                {order.contacto && order.cliente ? <p className="text-xs text-muted-foreground">Contacto: {order.contacto}</p> : null}
-              </div>
-              <Badge variant={order.estatus_logistico === "parcial" ? "outline" : "secondary"}>
-                {order.estatus_logistico === "parcial" ? "Entrega parcial" : "Pendiente de surtir"}
-              </Badge>
-            </div>
-            <div className="divide-y">
-              {order.items.map((item) => (
-                <div key={item.id} className="grid gap-2 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
-                  <div>
-                    <p className="text-sm font-medium">{item.descripcion}</p>
-                    <p className="text-xs text-muted-foreground">Requerido {formatQuantity(item.cantidad)} · Reservado para surtir {formatQuantity(item.cantidad_reservada)} · Entregado {formatQuantity(item.cantidad_entregada)} · Pendiente de inventario {formatQuantity(item.cantidad_pendiente_inventario)}</p>
+      {!loading && items.length > 0 && visibleItems.length === 0 && !error ? <div className="rounded-xl border border-dashed p-8 text-center"><h2 className="font-semibold">No hay coincidencias</h2><p className="mt-1 text-sm text-muted-foreground">Prueba con otra empresa, oportunidad, cotización u OC.</p></div> : null}
+      <div className="space-y-5">
+        {visibleItems.map((order) => {
+          const hasShortage = order.items.some((item) => Number(item.cantidad_pendiente_inventario) > 0);
+          const canDeliver = order.items.some((item) => Number(item.cantidad_reservada) > 0);
+          return (
+            <article key={order.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+              <header className="flex flex-col gap-3 border-b bg-muted/20 p-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{order.codigo_oportunidad || "Pedido de venta"}</span><Badge variant={order.estatus_logistico === "parcial" ? "outline" : "secondary"}>{order.estatus_logistico === "parcial" ? "Entrega parcial" : "Pendiente de surtir"}</Badge></div>
+                  <h2 className="mt-2 truncate text-xl font-semibold">{order.cliente || "Cliente sin nombre"}</h2>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"><span>{order.oportunidad_titulo || "Sin título de oportunidad"}</span>{order.folio ? <span>Cotización: <strong className="font-medium text-foreground">{order.folio}</strong></span> : null}{order.referencia_pedido_cliente ? <span>OC: <strong className="font-medium text-foreground">{order.referencia_pedido_cliente}</strong></span> : null}</div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground"><Package className="size-4" />{order.items.length} {order.items.length === 1 ? "producto" : "productos"}</div>
+              </header>
+              <div className="grid gap-4 p-5 lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.8fr)]">
+                <section className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4" aria-labelledby={`delivery-destination-${order.id}`}>
+                  <div className="flex items-center gap-2 text-primary"><MapPin className="size-5" /><h3 id={`delivery-destination-${order.id}`} className="font-semibold">Entregar a</h3></div>
+                  <div className="mt-4 space-y-3 text-sm">
+                    <div className="flex gap-2"><Building2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><div><p className="font-medium">{order.cliente || "Empresa sin nombre"}</p>{order.contacto ? <p className="text-muted-foreground">{order.contacto}</p> : null}</div></div>
+                    <div className="flex gap-2"><MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><div className="leading-6">{deliveryAddress(order).map((line) => <p key={line}>{line}</p>)}</div></div>
+                    {order.contacto_telefono ? <a href={phoneHref(order.contacto_telefono) ?? undefined} className="flex w-fit items-center gap-2 font-medium text-primary hover:underline"><Phone className="size-4" />{order.contacto_telefono}</a> : <p className="text-xs text-muted-foreground">Sin teléfono de contacto registrado</p>}
                   </div>
-                  <Label className="text-xs text-muted-foreground" htmlFor={`delivery-${item.id}`}>Entregar ahora</Label>
-                  <Input
-                    id={`delivery-${item.id}`}
-                    className="sm:w-32"
-                    type="number"
-                    min="0"
-                    max={String(Math.min(Number(item.cantidad_reservada) || 0, Number(item.cantidad_pendiente) || 0))}
-                    step="0.001"
-                    value={quantities[item.id] ?? "0"}
-                    onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
-                    disabled={!canManageFulfillment || Number(item.cantidad_reservada) <= 0}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="grid gap-3 border-t pt-3 sm:grid-cols-3">
-              <div className="space-y-1"><Label htmlFor={`date-${order.id}`}>Fecha de entrega</Label><Input id={`date-${order.id}`} type="date" value={dates[order.id] ?? new Date().toISOString().slice(0, 10)} onChange={(event) => setDates((current) => ({ ...current, [order.id]: event.target.value }))} /></div>
-              <div className="space-y-1"><Label htmlFor={`reference-${order.id}`}>Referencia</Label><Input id={`reference-${order.id}`} maxLength={160} value={references[order.id] ?? ""} onChange={(event) => setReferences((current) => ({ ...current, [order.id]: event.target.value }))} placeholder="Remisión o guía" /></div>
-              <div className="space-y-1"><Label htmlFor={`notes-${order.id}`}>Observaciones</Label><Input id={`notes-${order.id}`} maxLength={2000} value={notes[order.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [order.id]: event.target.value }))} /></div>
-            </div>
-            {(order.documentos_pedido.length || order.documentos_oportunidad.length) ? (
-              <div className="space-y-2 border-t pt-3">
-                <p className="text-xs font-medium text-muted-foreground">Documentos asociados</p>
-                <div className="flex flex-wrap gap-2">
-                  {order.documentos_pedido.map((document) => document.url ? (
-                    <a key={`pedido-${document.id}`} href={document.url} target="_blank" rel="noreferrer" className="rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted">
-                      {document.tipo_documento === "orden_compra" ? "Orden de compra" : document.nombre_original || "Documento del pedido"}
-                    </a>
-                  ) : null)}
-                  {order.documentos_oportunidad.map((document) => document.url ? (
-                    <a key={`oportunidad-${document.id}`} href={document.url} target="_blank" rel="noreferrer" className="rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted">
-                      {document.nombre_original || "Documento de la oportunidad"}
-                    </a>
-                  ) : null)}
-                </div>
+                </section>
+                <section aria-labelledby={`products-${order.id}`}>
+                  <div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Package className="size-5 text-primary" /><h3 id={`products-${order.id}`} className="font-semibold">Qué entregar</h3></div>{hasShortage ? <span className="flex items-center gap-1 text-xs font-medium text-amber-700"><AlertTriangle className="size-4" />Inventario incompleto</span> : null}</div>
+                  <div className="overflow-hidden rounded-xl border">
+                    <div className="hidden grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(72px,0.5fr))_minmax(100px,0.7fr)] gap-3 bg-muted/50 px-4 py-2 text-right text-xs font-medium text-muted-foreground sm:grid"><span className="text-left">Producto</span><span>Pedido</span><span>Reservado</span><span>Entregado</span><span>Entregar ahora</span></div>
+                    <div className="divide-y">{order.items.map((item) => { const itemShortage = Number(item.cantidad_pendiente_inventario) > 0; return <div key={item.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(72px,0.5fr))_minmax(100px,0.7fr)] sm:items-center sm:text-right">
+                      <div className="text-left"><p className="font-medium">{item.descripcion}</p><div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground sm:block"><span className="sm:hidden">Pedido: {formatQuantity(item.cantidad)} · </span><span className={itemShortage ? "font-medium text-amber-700" : ""}>{itemShortage ? `Faltan ${formatQuantity(item.cantidad_pendiente_inventario)}` : "Disponible para surtir"}</span></div></div>
+                      <div className="hidden text-sm sm:block">{formatQuantity(item.cantidad)}</div><div className="hidden text-sm sm:block">{formatQuantity(item.cantidad_reservada)}</div><div className="hidden text-sm sm:block">{formatQuantity(item.cantidad_entregada)}</div>
+                      <div className="flex items-center gap-2 sm:block"><Label className="text-xs text-muted-foreground sm:hidden" htmlFor={`delivery-${item.id}`}>Entregar</Label><Input id={`delivery-${item.id}`} className="h-10 text-right text-base font-semibold sm:w-full" type="number" min="0" max={String(Math.min(Number(item.cantidad_reservada) || 0, Number(item.cantidad_pendiente) || 0))} step="0.001" value={quantities[item.id] ?? "0"} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} disabled={!canManageFulfillment || Number(item.cantidad_reservada) <= 0} /></div>
+                    </div>; })}</div>
+                  </div>
+                </section>
               </div>
-            ) : null}
-            <div className="flex justify-end border-t pt-3">
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => { if (printBrand) printDeliveryDocument(order, quantities, printBrand); }} disabled={!printBrand}>
-                  Imprimir entrega
-                </Button>
-                <Button type="button" variant="outline" onClick={() => openQuote(order)}>
-                  Imprimir cotización
-                </Button>
-                {canManageFulfillment && order.items.some((item) => Number(item.cantidad_pendiente_inventario) > 0) ? (
-                  <Button type="button" variant="outline" onClick={() => void reserveRestockedItems(order)} disabled={reservingId === order.id || pendingId === order.id}>
-                    {reservingId === order.id ? "Reservando…" : "Reservar inventario disponible"}
-                  </Button>
-                ) : null}
-                {canManageFulfillment ? (
-                  <Button type="button" onClick={() => void registerDelivery(order)} disabled={pendingId === order.id || reservingId === order.id || !order.items.some((item) => Number(item.cantidad_reservada) > 0)}>
-                    {pendingId === order.id ? "Registrando…" : order.items.some((item) => Number(item.cantidad_reservada) > 0) ? "Registrar entrega" : "En espera de inventario"}
-                  </Button>
-                ) : null}
+              <div className="grid gap-3 border-t bg-muted/10 p-5 sm:grid-cols-3">
+                <div className="space-y-1"><Label htmlFor={`date-${order.id}`} className="flex items-center gap-1.5"><CalendarDays className="size-3.5" />Fecha de entrega</Label><Input id={`date-${order.id}`} type="date" value={dates[order.id] ?? new Date().toISOString().slice(0, 10)} onChange={(event) => setDates((current) => ({ ...current, [order.id]: event.target.value }))} /></div>
+                <div className="space-y-1"><Label htmlFor={`reference-${order.id}`}>Remisión o guía</Label><Input id={`reference-${order.id}`} maxLength={160} value={references[order.id] ?? ""} onChange={(event) => setReferences((current) => ({ ...current, [order.id]: event.target.value }))} placeholder="Opcional" /></div>
+                <div className="space-y-1"><Label htmlFor={`notes-${order.id}`}>Observaciones</Label><Input id={`notes-${order.id}`} maxLength={2000} value={notes[order.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [order.id]: event.target.value }))} placeholder="Opcional" /></div>
               </div>
-            </div>
-          </article>
-        ))}
+              {(order.documentos_pedido.length || order.documentos_oportunidad.length) ? <div className="border-t px-5 py-3"><div className="flex flex-wrap items-center gap-2"><span className="mr-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><FileText className="size-3.5" />Documentos</span>{order.documentos_pedido.map((document) => document.url ? <a key={`pedido-${document.id}`} href={document.url} target="_blank" rel="noreferrer" className="rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted">{document.tipo_documento === "orden_compra" ? "Orden de compra" : document.nombre_original || "Documento del pedido"}</a> : null)}{order.documentos_oportunidad.map((document) => document.url ? <a key={`oportunidad-${document.id}`} href={document.url} target="_blank" rel="noreferrer" className="rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted">{document.nombre_original || "Documento de la oportunidad"}</a> : null)}</div></div> : null}
+              <footer className="flex flex-col-reverse gap-2 border-t p-5 sm:flex-row sm:items-center sm:justify-between"><div className="text-xs text-muted-foreground">{canDeliver ? "Hay inventario reservado listo para entregar." : "En espera de inventario reservado."}</div><div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => { if (printBrand) printDeliveryDocument(order, quantities, printBrand); }} disabled={!printBrand}><Truck className="mr-2 size-4" />Imprimir entrega</Button><Button type="button" variant="outline" onClick={() => openQuote(order)}>Imprimir cotización</Button>{canManageFulfillment && hasShortage ? <Button type="button" variant="outline" onClick={() => void reserveRestockedItems(order)} disabled={reservingId === order.id || pendingId === order.id}>{reservingId === order.id ? "Reservando…" : "Reservar inventario"}</Button> : null}{canManageFulfillment ? <Button type="button" onClick={() => void registerDelivery(order)} disabled={pendingId === order.id || reservingId === order.id || !canDeliver}>{pendingId === order.id ? "Registrando…" : canDeliver ? "Registrar entrega" : "En espera de inventario"}</Button> : null}</div></footer>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
