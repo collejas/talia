@@ -33867,6 +33867,31 @@ async def preparar_entrega_pedido_por_inventario(
         raise HTTPException(status_code=502, detail="no_se_pudo_preparar_entrega") from exc
 
 
+@router.post("/pedidos-venta/{pedido_venta_id}/entregas/preparar-en-ruta")
+async def preparar_y_marcar_entrega_en_ruta(
+    *, repo: CRMRepository = Depends(get_repository), organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id), _: str = Depends(require_permission("inventory.fulfillment.manage")),
+    pedido_venta_id: UUID, payload: PedidoVentaEntregaPayload,
+) -> dict[str, Any]:
+    try:
+        result = await repo.preparar_y_marcar_entrega_en_ruta(
+            organizacion_id=organizacion_id, pedido_venta_id=pedido_venta_id,
+            items=[{"item_id": str(item.item_id), "cantidad": str(item.cantidad)} for item in payload.items],
+            fecha_entrega=payload.fecha_entrega, referencia=payload.referencia,
+            observaciones=payload.observaciones, usuario_id=usuario_id,
+        )
+        return {"ok": True, **result}
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "delivery_exceeds_reserved" in message or "reservation_shortfall" in message:
+            raise HTTPException(status_code=409, detail="cantidad_no_disponible_para_preparar") from exc
+        if "confirmed_order_required" in message:
+            raise HTTPException(status_code=409, detail="pedido_confirmado_requerido") from exc
+        if "delivery_items_required" in message or "invalid_delivery_item" in message or "duplicate_delivery_item" in message:
+            raise HTTPException(status_code=400, detail="renglones_entrega_invalidos") from exc
+        raise HTTPException(status_code=502, detail="no_se_pudo_preparar_y_marcar_entrega") from exc
+
+
 @router.post("/entregas/{entrega_id}/en-ruta")
 async def marcar_entrega_en_ruta(
     *, repo: CRMRepository = Depends(get_repository), organizacion_id: UUID = Depends(require_organizacion_id),
@@ -33909,9 +33934,13 @@ async def marcar_entrega_no_realizada(
 async def listar_entregas_pedido_por_inventario(
     *, repo: CRMRepository = Depends(get_repository), organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("inventory.fulfillment.view")),
-    vista: Literal["en_ruta", "historial"] = Query(default="historial"), limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0),
+    vista: Literal["por_surtir", "en_ruta", "historial"] = Query(default="historial"), limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    estados = ["preparada", "en_ruta"] if vista == "en_ruta" else ["entregada", "no_entregada"]
+    estados = {
+        "por_surtir": ["preparada"],
+        "en_ruta": ["en_ruta"],
+        "historial": ["entregada", "no_entregada"],
+    }[vista]
     try:
         rows = await repo.list_pedidos_venta_entregas(organizacion_id=organizacion_id, estados=estados, limit=limit, offset=offset)
     except CRMRepositoryError as exc:
@@ -34499,6 +34528,8 @@ async def create_lead_quote(
         items=_normalize_quote_items(payload.items or []),
         usuario_id=usuario_id,
     )
+    if not normalized_items:
+        raise HTTPException(status_code=400, detail="quote_items_required")
     body["items"] = normalized_items
     repo_items = _quote_items_to_repository_payload(body.pop("items", None))
     totals = _quote_totals_from_items(normalized_items)
@@ -34666,6 +34697,8 @@ async def preview_lead_quote_pdf(
         items=_normalize_quote_items(base_payload.items or []),
         usuario_id=usuario_id,
     )
+    if not normalized_items:
+        raise HTTPException(status_code=400, detail="quote_items_required")
     base_payload.items = [LeadQuoteItemPayload.model_validate(item) for item in normalized_items]
     totals = _quote_totals_from_items(normalized_items)
     if totals:
@@ -34858,6 +34891,8 @@ async def send_lead_quote(
         items=_normalize_quote_items(base_payload.items or []),
         usuario_id=usuario_id,
     )
+    if not normalized_items:
+        raise HTTPException(status_code=400, detail="quote_items_required")
     base_payload.items = [LeadQuoteItemPayload.model_validate(item) for item in normalized_items]
     totals = _quote_totals_from_items(normalized_items)
     if totals:

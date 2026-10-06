@@ -4844,6 +4844,22 @@ class CRMRepository:
         if isinstance(data, list) and data and isinstance(data[0], dict): return data[0]
         raise CRMRepositoryError("sales_order_delivery_prepare_response_invalid")
 
+    async def preparar_y_marcar_entrega_en_ruta(
+        self, *, organizacion_id: UUID, pedido_venta_id: UUID, items: list[dict[str, Any]],
+        fecha_entrega: date, referencia: str | None = None, observaciones: str | None = None,
+        usuario_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        response = await self._request_service_role(
+            "POST", "/rest/v1/rpc/crm_preparar_y_marcar_entrega_en_ruta",
+            json={"p_organizacion_id": str(organizacion_id), "p_pedido_venta_id": str(pedido_venta_id),
+                  "p_items": items, "p_fecha_entrega": fecha_entrega.isoformat(), "p_referencia": referencia,
+                  "p_observaciones": observaciones, "p_usuario_id": str(usuario_id) if usuario_id else None},
+            organizacion_id=organizacion_id,
+        )
+        data = response.json() if response.content else []
+        if isinstance(data, list) and data and isinstance(data[0], dict): return data[0]
+        raise CRMRepositoryError("sales_order_delivery_prepare_en_route_response_invalid")
+
     async def cambiar_estado_entrega_pedido_venta(
         self, *, organizacion_id: UUID, entrega_id: UUID, accion: str, usuario_id: UUID | None = None,
         motivo: str | None = None,
@@ -4853,7 +4869,7 @@ class CRMRepository:
             "confirmar": ("crm_confirmar_entrega_pedido_venta", {"p_organizacion_id": str(organizacion_id), "p_entrega_id": str(entrega_id), "p_usuario_id": str(usuario_id) if usuario_id else None}),
             "no_entregada": ("crm_marcar_entrega_no_realizada", {"p_organizacion_id": str(organizacion_id), "p_entrega_id": str(entrega_id), "p_motivo": motivo, "p_usuario_id": str(usuario_id) if usuario_id else None}),
         }
-        function_name, payload = functions[action]
+        function_name, payload = functions[accion]
         response = await self._request_service_role("POST", f"/rest/v1/rpc/{function_name}", json=payload, organizacion_id=organizacion_id)
         data = response.json() if response.content else []
         if isinstance(data, list) and data and isinstance(data[0], dict): return data[0]

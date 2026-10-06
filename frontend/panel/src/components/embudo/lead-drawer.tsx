@@ -3024,12 +3024,9 @@ export function LeadDrawer({
         const folio = await ensureQuoteFolio();
         const payload = buildQuoteBasePayload(folio);
         const itemsPayload = payload.items ?? [];
-        const subtotalValue = payload.subtotal;
-        const totalValue = payload.total;
         const hasItems = itemsPayload.length > 0;
-        const hasTotals = subtotalValue != null || totalValue != null;
-        if (!hasItems && !hasTotals) {
-          setQuoteError("Agrega al menos un concepto con cantidad o define un monto estimado.");
+        if (!hasItems) {
+          setQuoteError("Agrega al menos una partida de producto antes de crear la cotización.");
           return;
         }
         const currencyValue = payload.moneda ?? "MXN";
@@ -3103,14 +3100,11 @@ export function LeadDrawer({
       try {
         const folio = await ensureQuoteFolio();
         const payload = buildQuotePayload(folio);
-        const subtotalValue = payload.subtotal;
-        const totalValue = payload.total;
         const itemsPayload = payload.items;
 
         const hasItems = itemsPayload.length > 0;
-        const hasTotals = subtotalValue != null || totalValue != null;
-        if (!hasItems && !hasTotals) {
-          setQuoteError("Agrega al menos un concepto con cantidad o define un monto estimado.");
+        if (!hasItems) {
+          setQuoteError("Agrega al menos una partida de producto antes de enviar la cotización.");
           return;
         }
         const currencyValue = payload.moneda;

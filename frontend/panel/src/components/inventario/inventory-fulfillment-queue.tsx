@@ -148,7 +148,7 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch(`/api/inventario/surtidos/${order.id}/preparar`, {
+      const response = await fetch(`/api/inventario/surtidos/${order.id}/preparar-en-ruta`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -160,7 +160,7 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body?.error || "No se pudo registrar la entrega.");
-      setNotice(`Salida preparada para ${order.folio || order.cliente || "el pedido"}. Ahora puedes marcarla en ruta.`);
+      setNotice(`Salida preparada y marcada en ruta para ${order.folio || order.cliente || "el pedido"}.`);
       setActiveView("en_ruta");
       await loadQueue();
       await loadDeliveries("en_ruta");
@@ -171,7 +171,7 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
     }
   };
 
-  const loadDeliveries = async (view: "en_ruta" | "historial") => {
+  const loadDeliveries = useCallback(async (view: "por_surtir" | "en_ruta" | "historial") => {
     setDeliveryLoading(true);
     try {
       const response = await fetch(`/api/inventario/surtidos/entregas?vista=${view}&limit=50&offset=0`, { cache: "no-store" });
@@ -183,7 +183,11 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
     } finally {
       setDeliveryLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadDeliveries("por_surtir");
+  }, [loadDeliveries]);
 
   const updateDelivery = async (delivery: DeliveryRecord, action: "en-ruta" | "confirmar" | "no-realizada", body: Record<string, string> = {}) => {
     setDeliveryActionId(delivery.id);
@@ -194,7 +198,7 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
       if (!response.ok) throw new Error(responseBody?.error || "No se pudo actualizar la entrega.");
       setNotice(action === "en-ruta" ? "La entrega fue marcada en ruta." : action === "confirmar" ? "La entrega fue confirmada." : "La entrega quedó registrada como no realizada.");
       setFailureDeliveryId(null);
-      await loadDeliveries(activeView === "historial" ? "historial" : "en_ruta");
+      await loadDeliveries(activeView === "historial" ? "historial" : activeView === "en_ruta" ? "en_ruta" : "por_surtir");
       await loadQueue();
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "No se pudo actualizar la entrega.");
@@ -260,7 +264,7 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
         <Button type="button" variant="outline" onClick={() => void loadQueue()} disabled={loading} className="shrink-0"><RefreshCw className={loading ? "mr-2 size-4 animate-spin" : "mr-2 size-4"} />{loading ? "Actualizando…" : "Actualizar"}</Button>
       </div>
       <div className="flex flex-wrap gap-1 rounded-xl border bg-muted/30 p-1">
-        {([['pendientes', 'Por surtir'], ['en_ruta', 'En ruta'], ['historial', 'Historial']] as const).map(([view, label]) => <button key={view} type="button" onClick={() => { setActiveView(view); if (view !== "pendientes") void loadDeliveries(view); }} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeView === view ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}{view === "en_ruta" && deliveryRows.length && activeView === "en_ruta" ? ` (${deliveryRows.length})` : ""}</button>)}
+        {([['pendientes', 'Por surtir'], ['en_ruta', 'En ruta'], ['historial', 'Historial']] as const).map(([view, label]) => <button key={view} type="button" onClick={() => { setActiveView(view); void loadDeliveries(view === "pendientes" ? "por_surtir" : view); }} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeView === view ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}{deliveryRows.length && activeView === view ? ` (${deliveryRows.length})` : ""}</button>)}
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <button type="button" onClick={() => setStatusFilter("todos")} className={`rounded-xl border p-4 text-left transition-colors ${statusFilter === "todos" ? "border-primary bg-primary/5" : "bg-card hover:bg-muted/40"}`}><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total de pedidos</p><p className="mt-1 text-2xl font-semibold">{items.length}</p></button>
@@ -274,13 +278,13 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
       {error ? <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
       {notice ? <p role="status" className="rounded-md bg-primary/10 px-3 py-2 text-sm">{notice}</p> : null}
       {loading && items.length === 0 ? <p className="text-sm text-muted-foreground">Cargando surtidos…</p> : null}
-      {!loading && items.length === 0 && !error ? (
+      {!loading && items.length === 0 && deliveryRows.length === 0 && !error ? (
         <div className="rounded-xl border border-dashed p-8 text-center">
           <h2 className="font-semibold">No hay pedidos por surtir</h2>
           <p className="mt-1 text-sm text-muted-foreground">Los pedidos confirmados con productos de inventario aparecerán aquí.</p>
         </div>
       ) : null}
-      {!loading && items.length > 0 && visibleItems.length === 0 && !error ? <div className="rounded-xl border border-dashed p-8 text-center"><h2 className="font-semibold">No hay coincidencias</h2><p className="mt-1 text-sm text-muted-foreground">Prueba con otra empresa, oportunidad, cotización u OC.</p></div> : null}
+      {activeView === "pendientes" && !loading && items.length > 0 && visibleItems.length === 0 && !error ? <div className="rounded-xl border border-dashed p-8 text-center"><h2 className="font-semibold">No hay coincidencias</h2><p className="mt-1 text-sm text-muted-foreground">Prueba con otra empresa, oportunidad, cotización u OC.</p></div> : null}
       <div className={activeView === "pendientes" ? "space-y-5" : "hidden"}>
         {visibleItems.map((order) => {
           const hasShortage = order.items.some((item) => Number(item.cantidad_pendiente_inventario) > 0);
@@ -322,25 +326,25 @@ export function InventoryFulfillmentQueue({ canManageFulfillment, printBrand }: 
                 <div className="space-y-1"><Label htmlFor={`notes-${order.id}`}>Observaciones</Label><Input id={`notes-${order.id}`} maxLength={2000} value={notes[order.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [order.id]: event.target.value }))} placeholder="Opcional" /></div>
               </div>
               {(order.documentos_pedido.length || order.documentos_oportunidad.length) ? <div className="border-t px-5 py-3"><div className="flex flex-wrap items-center gap-2"><span className="mr-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><FileText className="size-3.5" />Documentos</span>{order.documentos_pedido.map((document) => document.url ? <a key={`pedido-${document.id}`} href={document.url} target="_blank" rel="noreferrer" className="rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted">{document.tipo_documento === "orden_compra" ? "Orden de compra" : document.nombre_original || "Documento del pedido"}</a> : null)}{order.documentos_oportunidad.map((document) => document.url ? <a key={`oportunidad-${document.id}`} href={document.url} target="_blank" rel="noreferrer" className="rounded-md border px-2.5 py-1.5 text-xs hover:bg-muted">{document.nombre_original || "Documento de la oportunidad"}</a> : null)}</div></div> : null}
-              <footer className="flex flex-col-reverse gap-2 border-t p-5 sm:flex-row sm:items-center sm:justify-between"><div className="text-xs text-muted-foreground">{canDeliver ? "Hay inventario reservado listo para preparar." : "En espera de inventario reservado."}</div><div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => { if (printBrand) printDeliveryDocument(order, quantities, printBrand); }} disabled={!printBrand}><Truck className="mr-2 size-4" />Imprimir entrega</Button><Button type="button" variant="outline" onClick={() => openQuote(order)}>Imprimir cotización</Button>{canManageFulfillment && hasShortage ? <Button type="button" variant="outline" onClick={() => void reserveRestockedItems(order)} disabled={reservingId === order.id || pendingId === order.id}>{reservingId === order.id ? "Reservando…" : "Reservar inventario"}</Button> : null}{canManageFulfillment ? <Button type="button" onClick={() => void prepareDelivery(order)} disabled={pendingId === order.id || reservingId === order.id || !canDeliver}>{pendingId === order.id ? "Preparando…" : canDeliver ? "Preparar salida" : "En espera de inventario"}</Button> : null}</div></footer>
+              <footer className="flex flex-col-reverse gap-2 border-t p-5 sm:flex-row sm:items-center sm:justify-between"><div className="text-xs text-muted-foreground">{canDeliver ? "Hay inventario reservado listo para salir." : "En espera de inventario reservado."}</div><div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => { if (printBrand) printDeliveryDocument(order, quantities, printBrand); }} disabled={!printBrand}><Truck className="mr-2 size-4" />Imprimir entrega</Button><Button type="button" variant="outline" onClick={() => openQuote(order)}>Imprimir cotización</Button>{canManageFulfillment && hasShortage ? <Button type="button" variant="outline" onClick={() => void reserveRestockedItems(order)} disabled={reservingId === order.id || pendingId === order.id}>{reservingId === order.id ? "Reservando…" : "Reservar inventario"}</Button> : null}{canManageFulfillment ? <Button type="button" onClick={() => void prepareDelivery(order)} disabled={pendingId === order.id || reservingId === order.id || !canDeliver}>{pendingId === order.id ? "Preparando y marcando…" : canDeliver ? "Preparar y marcar en ruta" : "En espera de inventario"}</Button> : null}</div></footer>
             </article>
           );
         })}
       </div>
-      {activeView !== "pendientes" ? <div className="space-y-4">
-        {deliveryLoading ? <p className="text-sm text-muted-foreground">Cargando {activeView === "en_ruta" ? "entregas en ruta" : "historial"}…</p> : null}
-        {!deliveryLoading && deliveryRows.length === 0 ? <div className="rounded-xl border border-dashed p-8 text-center"><h2 className="font-semibold">{activeView === "en_ruta" ? "No hay entregas en ruta" : "No hay entregas registradas"}</h2><p className="mt-1 text-sm text-muted-foreground">Las salidas preparadas y las entregas confirmadas aparecerán aquí.</p></div> : null}
+      <div className="space-y-4">
+        {deliveryLoading ? <p className="text-sm text-muted-foreground">Cargando {activeView === "pendientes" ? "salidas pendientes" : activeView === "en_ruta" ? "entregas en ruta" : "historial"}…</p> : null}
+        {!deliveryLoading && deliveryRows.length === 0 ? <div className="rounded-xl border border-dashed p-8 text-center"><h2 className="font-semibold">{activeView === "pendientes" ? "No hay salidas pendientes de despacho" : activeView === "en_ruta" ? "No hay entregas en ruta" : "No hay entregas registradas"}</h2><p className="mt-1 text-sm text-muted-foreground">{activeView === "pendientes" ? "Las salidas preparadas aparecerán aquí para marcar su recorrido y confirmar la entrega." : "Las salidas preparadas y las entregas confirmadas aparecerán aquí."}</p></div> : null}
         {deliveryRows.map((delivery) => {
           const address = Object.entries(delivery.domicilio_entrega || {}).filter(([, value]) => value).map(([, value]) => value).join(", ");
           return <article key={delivery.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
             <div className="flex flex-col gap-3 border-b bg-muted/20 p-5 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{delivery.codigo_oportunidad || "Pedido de venta"}</span><Badge variant={delivery.estado === "no_entregada" ? "destructive" : delivery.estado === "entregada" ? "secondary" : "outline"}>{delivery.estado === "en_ruta" ? "En ruta" : delivery.estado === "preparada" ? "Preparada" : delivery.estado === "no_entregada" ? "No realizada" : "Entregada"}</Badge></div><h2 className="mt-2 text-xl font-semibold">{delivery.cliente || "Cliente sin nombre"}</h2><p className="mt-1 text-sm text-muted-foreground">{delivery.oportunidad_titulo || "Sin título de oportunidad"}{delivery.folio ? ` · Cotización ${delivery.folio}` : ""}{delivery.referencia_pedido_cliente ? ` · OC ${delivery.referencia_pedido_cliente}` : ""}</p></div><div className="text-sm text-muted-foreground">{delivery.fecha_entrega || "Sin fecha"}</div></div>
             <div className="grid gap-4 p-5 lg:grid-cols-[0.8fr_1.2fr]"><div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4"><p className="flex items-center gap-2 font-semibold text-primary"><MapPin className="size-4" />Destino</p><p className="mt-3 text-sm leading-6">{address || "Sin domicilio registrado"}</p>{delivery.contacto ? <p className="mt-3 text-sm"><strong>Contacto:</strong> {delivery.contacto}</p> : null}{delivery.contacto_telefono ? <a href={phoneHref(delivery.contacto_telefono) ?? undefined} className="mt-1 flex w-fit items-center gap-2 text-sm font-medium text-primary hover:underline"><Phone className="size-4" />{delivery.contacto_telefono}</a> : null}</div><div><p className="mb-3 flex items-center gap-2 font-semibold"><Package className="size-4 text-primary" />Productos de esta salida</p><div className="divide-y rounded-xl border">{delivery.items.map((item) => <div key={item.id} className="flex items-center justify-between gap-4 px-4 py-3 text-sm"><span>{item.descripcion}</span><strong>{formatQuantity(item.cantidad)}</strong></div>)}</div>{delivery.estado === "no_entregada" ? <p className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"><strong>Motivo:</strong> {delivery.motivo_no_entrega}</p> : null}</div></div>
-            {delivery.estado === "en_ruta" && canManageFulfillment ? <div className="flex flex-col gap-3 border-t p-5 sm:flex-row sm:items-center sm:justify-end"><Button type="button" variant="outline" onClick={() => setFailureDeliveryId(failureDeliveryId === delivery.id ? null : delivery.id)} disabled={deliveryActionId === delivery.id}>No se pudo entregar</Button><Button type="button" onClick={() => void updateDelivery(delivery, "confirmar")} disabled={deliveryActionId === delivery.id}>{deliveryActionId === delivery.id ? "Confirmando…" : "Confirmar entrega realizada"}</Button></div> : null}
-            {delivery.estado === "preparada" && canManageFulfillment ? <div className="flex justify-end border-t p-5"><Button type="button" onClick={() => void updateDelivery(delivery, "en-ruta")} disabled={deliveryActionId === delivery.id}>{deliveryActionId === delivery.id ? "Actualizando…" : "Marcar en ruta"}</Button></div> : null}
-            {failureDeliveryId === delivery.id ? <div className="grid gap-3 border-t bg-destructive/[0.03] p-5 sm:grid-cols-[1fr_1fr_auto]"><div><Label htmlFor={`failure-reason-${delivery.id}`}>Motivo de no entrega</Label><select id={`failure-reason-${delivery.id}`} value={failureReason} onChange={(event) => setFailureReason(event.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="domicilio_cerrado">Domicilio cerrado</option><option value="contacto_no_localizado">Contacto no localizado</option><option value="rechazo_cliente">Rechazo del cliente</option><option value="direccion_incorrecta">Dirección incorrecta</option><option value="documentacion_faltante">Documentación faltante</option><option value="problema_transporte">Problema con el transporte</option><option value="otro">Otro</option></select></div><div><Label htmlFor={`failure-notes-${delivery.id}`}>Observaciones</Label><Input id={`failure-notes-${delivery.id}`} value={failureNotes} onChange={(event) => setFailureNotes(event.target.value)} placeholder="Describe lo ocurrido" /></div><Button type="button" variant="destructive" className="self-end" onClick={() => void updateDelivery(delivery, "no-realizada", { motivo: failureReason, observaciones: failureNotes })} disabled={deliveryActionId === delivery.id}>Registrar no entrega</Button></div> : null}
+            {activeView === "en_ruta" && delivery.estado === "en_ruta" && canManageFulfillment ? <div className="flex flex-col gap-3 border-t p-5 sm:flex-row sm:items-center sm:justify-end"><Button type="button" variant="outline" onClick={() => setFailureDeliveryId(failureDeliveryId === delivery.id ? null : delivery.id)} disabled={deliveryActionId === delivery.id}>No se pudo entregar</Button><Button type="button" onClick={() => void updateDelivery(delivery, "confirmar")} disabled={deliveryActionId === delivery.id}>{deliveryActionId === delivery.id ? "Confirmando…" : "Marcar como entregada"}</Button></div> : null}
+            {activeView === "pendientes" && delivery.estado === "preparada" && canManageFulfillment ? <div className="flex justify-end border-t p-5"><Button type="button" onClick={() => void updateDelivery(delivery, "en-ruta")} disabled={deliveryActionId === delivery.id}>{deliveryActionId === delivery.id ? "Actualizando…" : "Marcar en ruta"}</Button></div> : null}
+            {activeView === "en_ruta" && delivery.estado === "en_ruta" && failureDeliveryId === delivery.id ? <div className="grid gap-3 border-t bg-destructive/[0.03] p-5 sm:grid-cols-[1fr_1fr_auto]"><div><Label htmlFor={`failure-reason-${delivery.id}`}>Motivo de no entrega</Label><select id={`failure-reason-${delivery.id}`} value={failureReason} onChange={(event) => setFailureReason(event.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="domicilio_cerrado">Domicilio cerrado</option><option value="contacto_no_localizado">Contacto no localizado</option><option value="rechazo_cliente">Rechazo del cliente</option><option value="direccion_incorrecta">Dirección incorrecta</option><option value="documentacion_faltante">Documentación faltante</option><option value="problema_transporte">Problema con el transporte</option><option value="otro">Otro</option></select></div><div><Label htmlFor={`failure-notes-${delivery.id}`}>Observaciones</Label><Input id={`failure-notes-${delivery.id}`} value={failureNotes} onChange={(event) => setFailureNotes(event.target.value)} placeholder="Describe lo ocurrido" /></div><Button type="button" variant="destructive" className="self-end" onClick={() => void updateDelivery(delivery, "no-realizada", { motivo: failureReason, observaciones: failureNotes })} disabled={deliveryActionId === delivery.id}>Registrar no entrega</Button></div> : null}
           </article>;
         })}
-      </div> : null}
+      </div>
     </section>
   );
 }
