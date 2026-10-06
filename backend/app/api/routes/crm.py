@@ -33290,6 +33290,9 @@ async def listar_pedidos_pendientes_formalizacion(
         quote = _single_related(row.get("cotizacion")) or {}
         contact = _single_related(quote.get("contacto"))
         opportunity = _single_related(quote.get("oportunidad"))
+        opportunity_owner = _single_related(opportunity.get("propietario")) if opportunity else {}
+        opportunity_assignee = _single_related(opportunity.get("asignado")) if opportunity else {}
+        seller_name = (opportunity_owner or {}).get("nombre_completo") or (opportunity_assignee or {}).get("nombre_completo")
         account = _single_related(quote.get("cuenta")) or _single_related(opportunity.get("cuenta"))
         order_items = []
         for item in row.get("items") if isinstance(row.get("items"), list) else []:
@@ -33349,6 +33352,7 @@ async def listar_pedidos_pendientes_formalizacion(
             "folio": quote.get("folio"),
             "codigo_oportunidad": opportunity.get("codigo_oportunidad") if opportunity else None,
             "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
+            "vendedor_nombre": seller_name,
             "cliente": account.get("nombre") if account else None,
             "cuenta_crm_asociada": account is not None,
             "cliente_datos": {
@@ -33426,6 +33430,9 @@ async def listar_pedidos_pendientes_surtido(
         contact = _single_related(quote.get("contacto"))
         account = _single_related(quote.get("cuenta"))
         opportunity = _single_related(quote.get("oportunidad"))
+        opportunity_owner = _single_related(opportunity.get("propietario")) if opportunity else {}
+        opportunity_assignee = _single_related(opportunity.get("asignado")) if opportunity else {}
+        seller_name = (opportunity_owner or {}).get("nombre_completo") or (opportunity_assignee or {}).get("nombre_completo")
         opportunity_id = _safe_uuid(quote.get("oportunidad_id") or (opportunity or {}).get("id"))
         opportunity_documents: list[dict[str, Any]] = []
         if opportunity_id:
@@ -33553,6 +33560,7 @@ async def listar_pedidos_pendientes_surtido(
             "oportunidad_id": str(opportunity_id) if opportunity_id else None,
             "codigo_oportunidad": opportunity.get("codigo_oportunidad") if opportunity else None,
             "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
+            "vendedor_nombre": seller_name,
             "cliente": account.get("nombre") if account else None,
             "contacto": contact.get("nombre_completo") if contact else None,
             "contacto_telefono": contact.get("telefono_principal_e164") if contact else None,
@@ -33651,6 +33659,10 @@ async def listar_pedidos_venta_autorizados(
         contact = _single_related(quote.get("contacto"))
         account = _single_related(quote.get("cuenta"))
         approver = _single_related(row.get("confirmado_por"))
+        opportunity = _single_related(quote.get("oportunidad"))
+        opportunity_owner = _single_related(opportunity.get("propietario")) if opportunity else {}
+        opportunity_assignee = _single_related(opportunity.get("asignado")) if opportunity else {}
+        seller_name = (opportunity_owner or {}).get("nombre_completo") or (opportunity_assignee or {}).get("nombre_completo")
         order_items: list[dict[str, Any]] = []
         for line in row.get("items") if isinstance(row.get("items"), list) else []:
             if not isinstance(line, dict):
@@ -33686,6 +33698,7 @@ async def listar_pedidos_venta_autorizados(
             "id": row.get("id"),
             "cotizacion_id": quote.get("id") or row.get("cotizacion_id"),
             "folio": quote.get("folio"),
+            "vendedor_nombre": seller_name,
             "cliente": account.get("nombre") if account else None,
             "razon_social": account.get("razon_social") if account else None,
             "contacto": contact.get("nombre_completo") if contact else None,
@@ -33952,6 +33965,9 @@ async def listar_entregas_pedido_por_inventario(
         contact = _single_related(quote.get("contacto"))
         account = _single_related(quote.get("cuenta"))
         opportunity = _single_related(quote.get("oportunidad"))
+        opportunity_owner = _single_related(opportunity.get("propietario")) if opportunity else {}
+        opportunity_assignee = _single_related(opportunity.get("asignado")) if opportunity else {}
+        seller_name = (opportunity_owner or {}).get("nombre_completo") or (opportunity_assignee or {}).get("nombre_completo")
         items.append({
             "id": row.get("id"), "pedido_venta_id": row.get("pedido_venta_id"), "estado": row.get("estado"),
             "fecha_entrega": row.get("fecha_entrega"), "referencia": row.get("referencia"),
@@ -33960,6 +33976,7 @@ async def listar_entregas_pedido_por_inventario(
             "no_entregada_en": row.get("no_entregada_en"), "motivo_no_entrega": row.get("motivo_no_entrega"),
             "codigo_oportunidad": opportunity.get("codigo_oportunidad") if opportunity else None,
             "oportunidad_titulo": opportunity.get("titulo") if opportunity else None,
+            "vendedor_nombre": seller_name,
             "folio": quote.get("folio"), "cliente": account.get("nombre") if account else None,
             "contacto": contact.get("nombre_completo") if contact else None,
             "contacto_telefono": contact.get("telefono_principal_e164") if contact else None,

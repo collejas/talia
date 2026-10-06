@@ -15,6 +15,7 @@ type QueueItem = {
   folio: string | null;
   codigo_oportunidad: string | null;
   oportunidad_titulo: string | null;
+  vendedor_nombre: string | null;
   cliente: string | null;
   cuenta_crm_asociada: boolean;
   contacto: string | null;
@@ -382,6 +383,7 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
     const opened = printOrderForExceptionApproval({
       folio: item.folio,
       cliente: item.cliente,
+      vendedor_nombre: item.vendedor_nombre,
       razon_social: item.cliente_datos.razon_social,
       contacto: item.contacto,
       total: item.total,
@@ -608,6 +610,7 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="font-medium">Oportunidad: {item.codigo_oportunidad || item.oportunidad_titulo || "Sin referencia"}</span>
+                    {item.vendedor_nombre ? <span className="text-sm text-muted-foreground">Vendedor: {item.vendedor_nombre}</span> : null}
                     <span className="text-sm text-muted-foreground">Cotización: {item.folio || "Sin folio"}</span>
                     <span className="truncate text-sm text-muted-foreground">{item.cliente || item.contacto || "Cliente sin nombre"}</span>
                   </div>
@@ -710,7 +713,7 @@ export function OrderFormalizationQueue({ printBrand, canReview = true }: { prin
               <article key={order.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4">
                 <div className="min-w-0 space-y-1">
                   <h2 className="font-semibold">Orden de venta · {order.folio || "Sin referencia de cotización"}</h2>
-                  <p className="text-sm">{order.cliente || order.razon_social || "Cliente sin nombre"}{order.contacto ? ` · ${order.contacto}` : ""}</p>
+                  <p className="text-sm">{order.cliente || order.razon_social || "Cliente sin nombre"}{order.contacto ? ` · ${order.contacto}` : ""}{order.vendedor_nombre ? ` · Vendedor: ${order.vendedor_nombre}` : ""}</p>
                   <p className="text-sm text-muted-foreground">Autorizado {order.autorizado_en ? `el ${new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" }).format(new Date(order.autorizado_en))}` : ""}{order.autorizado_por ? ` por ${order.autorizado_por}` : ""}</p>
                   <p className="text-xs text-muted-foreground">{order.forma_confirmacion === "orden_compra" ? `OC: ${order.referencia_pedido_cliente || "Respaldada en evidencia"}` : `Confirmación: ${order.forma_confirmacion || "Registrada"}`} · Logística: {order.estatus_logistico || "Pendiente"}</p>
                 </div>
