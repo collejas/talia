@@ -32,6 +32,7 @@ type InventoryResponse = {
   almacen_seleccionado_id: string | null;
   existencias: StockRow[];
 };
+type AdjustmentResponse = { stock_actual: number; stock_reservado: number; stock_disponible: number };
 
 function quantity(value: number) {
   return new Intl.NumberFormat("es-MX", { maximumFractionDigits: 3 }).format(value);
@@ -108,6 +109,13 @@ export function OperationalInventoryWorkspace() {
     transit: filteredRows.reduce((sum, row) => sum + row.stock_en_transito, 0),
   }), [filteredRows]);
 
+  const selectedAdjustmentStock = useMemo(
+    () => data.existencias.find(
+      (row) => row.almacen_id === adjustmentWarehouseId && row.catalog_item_id === adjustmentProductId,
+    ) ?? null,
+    [adjustmentProductId, adjustmentWarehouseId, data.existencias],
+  );
+
   async function submitAdjustment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAdjusting(true);
@@ -124,9 +132,17 @@ export function OperationalInventoryWorkspace() {
           motivo: adjustmentReason.trim() || null,
         }),
       });
-      const payload = await response.json().catch(() => null) as { detail?: string } | null;
+      const payload = await response.json().catch(() => null) as (AdjustmentResponse & { detail?: string }) | null;
       if (!response.ok) throw new Error(payload?.detail ?? "No se pudo aplicar el ajuste.");
-      setAdjustmentMessage("Ajuste aplicado correctamente.");
+      const directionLabel = adjustmentDirection === "entrada" ? "Entrada" : "Salida";
+      const productName = data.productos.find((product) => product.id === adjustmentProductId)?.nombre ?? "Producto";
+      setAdjustmentMessage(
+        directionLabel
+        + " de " + quantity(Number(adjustmentQuantity))
+        + " ajustada para " + productName
+        + ". Stock actual: " + quantity(payload?.stock_actual ?? 0)
+        + "; disponible: " + quantity(payload?.stock_disponible ?? 0) + ".",
+      );
       setAdjustmentQuantity("");
       setAdjustmentReason("");
       await load(warehouseId);
@@ -247,6 +263,13 @@ export function OperationalInventoryWorkspace() {
               <Button type="submit" disabled={adjusting || !adjustmentWarehouseId || !adjustmentProductId || Number(adjustmentQuantity) <= 0}>{adjusting ? "Aplicando…" : "Aplicar ajuste"}</Button>
               <Input className="md:col-span-4" value={adjustmentReason} onChange={(event) => setAdjustmentReason(event.target.value)} placeholder="Motivo del ajuste (recomendado)" />
             </form>
+            {adjustmentWarehouseId && adjustmentProductId ? (
+              <div className="mt-4 grid gap-3 rounded-md border bg-muted/20 p-3 text-sm sm:grid-cols-3">
+                <div><p className="text-xs text-muted-foreground">Stock actual</p><p className="font-semibold">{quantity(selectedAdjustmentStock?.stock_actual ?? 0)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Reservado</p><p className="font-semibold">{quantity(selectedAdjustmentStock?.stock_reservado ?? 0)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Disponible</p><p className="font-semibold">{quantity(selectedAdjustmentStock?.stock_disponible ?? 0)}</p></div>
+              </div>
+            ) : null}
             {adjustmentMessage ? <p className="mt-3 text-sm text-muted-foreground" role="status">{adjustmentMessage}</p> : null}
           </CardContent>
         </Card>
