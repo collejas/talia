@@ -10871,6 +10871,7 @@ async def _auto_move_opportunity_to_won(
         "motivo": "quote_auto_accept",
         "metadata": {"source": "quote_auto_accept"},
     }
+    closed_at = datetime.now(timezone.utc).isoformat()
     try:
         await repo.update_opportunity(
             organizacion_id=organizacion_id,
@@ -10878,6 +10879,7 @@ async def _auto_move_opportunity_to_won(
             payload={
                 "etapa_id": str(won_stage["id"]),
                 "estado": "ganada",
+                "cerrado_en": closed_at,
             },
         )
         await repo.append_stage_history(

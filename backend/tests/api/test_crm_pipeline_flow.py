@@ -174,6 +174,8 @@ class InMemoryPipelineRepository(CRMRepository):
             "monto_estimado",
             "moneda",
             "probabilidad",
+            "estado",
+            "cerrado_en",
         ):
             if key in payload:
                 row[key] = payload[key]
@@ -595,6 +597,9 @@ async def test_crm_pipeline_end_to_end(
     assert resp.status_code == 200
     assert resp.json()["quote"]["estado"] == "aceptada"
     assert pipeline_repo.quotes[str(previous_quote_id)]["estatus"] == "rechazada"
+    won_opportunity = pipeline_repo.opportunities[str(oportunidad_id)]
+    assert won_opportunity["estado"] == "ganada"
+    assert won_opportunity["cerrado_en"]
 
     card_resp = await pipeline_client.get(
         f"/crm/pipeline/cards/{oportunidad_id}",
