@@ -8,8 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GeoLocationSelects } from "@/components/contactos/geo-location-selects";
 
-export type AccountDirectionType = "fiscal" | "principal" | "envio" | "sucursal" | "fiscal_principal";
-export type AccountDirectionPrimaryType = "fiscal" | "principal" | "envio" | "sucursal" | "fiscal_principal";
+export type AccountDirectionType =
+  | "fiscal"
+  | "principal"
+  | "envio"
+  | "sucursal"
+  | "fiscal_principal"
+  | "fiscal_envio"
+  | "principal_envio"
+  | "fiscal_principal_envio";
+export type AccountDirectionPrimaryType = AccountDirectionType;
 
 export type AccountDirectionDraft = {
   key: string;
@@ -75,6 +83,19 @@ export function normalizeDirectionType(value: string | null | undefined): Accoun
   if (normalized === "fiscal_principal" || normalized === "fiscal-principal" || normalized === "fiscal y principal") {
     return "fiscal_principal";
   }
+  if (normalized === "fiscal_envio" || normalized === "fiscal-envio" || normalized === "fiscal y envio") {
+    return "fiscal_envio";
+  }
+  if (normalized === "principal_envio" || normalized === "principal-envio" || normalized === "principal y envio") {
+    return "principal_envio";
+  }
+  if (
+    normalized === "fiscal_principal_envio" ||
+    normalized === "fiscal-principal-envio" ||
+    normalized === "fiscal, principal y envio"
+  ) {
+    return "fiscal_principal_envio";
+  }
   if (normalized === "fiscal" || normalized === "facturacion") {
     return "fiscal";
   }
@@ -88,16 +109,29 @@ export function normalizeDirectionType(value: string | null | undefined): Accoun
 }
 
 export function directionTypeIncludesFiscal(value: AccountDirectionType): boolean {
-  return value === "fiscal" || value === "fiscal_principal";
+  return value === "fiscal" || value === "fiscal_principal" || value === "fiscal_envio" || value === "fiscal_principal_envio";
 }
 
 export function directionTypeIncludesPrincipal(value: AccountDirectionType): boolean {
-  return value === "principal" || value === "fiscal_principal";
+  return value === "principal" || value === "fiscal_principal" || value === "principal_envio" || value === "fiscal_principal_envio";
+}
+
+export function directionTypeIncludesEnvio(value: AccountDirectionType): boolean {
+  return value === "envio" || value === "fiscal_envio" || value === "principal_envio" || value === "fiscal_principal_envio";
 }
 
 export function expandDirectionRelationTypes(value: AccountDirectionType): Array<"fiscal" | "principal" | "envio" | "sucursal"> {
   if (value === "fiscal_principal") {
     return ["fiscal", "principal"];
+  }
+  if (value === "fiscal_envio") {
+    return ["fiscal", "envio"];
+  }
+  if (value === "principal_envio") {
+    return ["principal", "envio"];
+  }
+  if (value === "fiscal_principal_envio") {
+    return ["fiscal", "principal", "envio"];
   }
   return [value === "fiscal" || value === "principal" || value === "envio" || value === "sucursal" ? value : "sucursal"];
 }
@@ -142,6 +176,12 @@ function directionTypeLabel(type: AccountDirectionType): string {
       return "Envío";
     case "fiscal_principal":
       return "Fiscal + principal";
+    case "fiscal_envio":
+      return "Fiscal + envío";
+    case "principal_envio":
+      return "Principal + envío";
+    case "fiscal_principal_envio":
+      return "Fiscal + principal + envío";
     default:
       return "Sucursal";
   }
@@ -201,6 +241,15 @@ export function AccountDirectionCard({
               <SelectItem value="sucursal">Sucursal</SelectItem>
               <SelectItem value="fiscal_principal" disabled={!canPickFiscal}>
                 Fiscal + principal
+              </SelectItem>
+              <SelectItem value="fiscal_envio" disabled={!canPickFiscal}>
+                Fiscal + envío
+              </SelectItem>
+              <SelectItem value="principal_envio">
+                Principal + envío
+              </SelectItem>
+              <SelectItem value="fiscal_principal_envio" disabled={!canPickFiscal}>
+                Fiscal + principal + envío
               </SelectItem>
             </SelectContent>
           </Select>

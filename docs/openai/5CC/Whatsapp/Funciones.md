@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead cuando ya existen nombre, teléfono de WhatsApp, necesidad/interés y notas. El correo y la empresa son opcionales y nunca deben bloquear este cierre. Puede usarse para guardar avances sin depender de que ya exista cita confirmada. Si WhatsApp tiene habilitado el envío de datos del asesor, el backend lo realiza una sola vez y no debe repetirse en el escalamiento.",
+  "description": "Persistir el avance operativo del lead cuando ya existe teléfono de WhatsApp y hay contexto explícito suficiente para redactar una necesidad/interés y notas breves. En este tenant no esperes nombre, correo ni empresa para llamar esta función. La función puede notificar al vendedor asignado, pero no termina ni bloquea la conversación: el asistente debe seguir preguntando y registrando datos de la oportunidad. Si WhatsApp tiene habilitado el envío de datos del asesor al cliente, el backend lo realiza una sola vez y no debe repetirse en el escalamiento.",
   "strict": true,
   "parameters": {
     "type": "object",

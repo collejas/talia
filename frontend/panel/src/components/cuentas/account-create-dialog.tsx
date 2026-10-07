@@ -667,8 +667,12 @@ export function AccountCreateDialog({ onCreated }: Props) {
                     >
                       <option value="fiscal">Fiscal</option>
                       <option value="principal">Principal</option>
+                      <option value="envio">Envío</option>
                       <option value="sucursal">Sucursal</option>
                       <option value="fiscal_principal">Fiscal + principal</option>
+                      <option value="fiscal_envio">Fiscal + envío</option>
+                      <option value="principal_envio">Principal + envío</option>
+                      <option value="fiscal_principal_envio">Fiscal + principal + envío</option>
                   </select>
                   <div className="pt-2">
                     <Button type="button" variant="outline" size="sm" onClick={() => setPrimaryDirectionType("fiscal_principal")}>

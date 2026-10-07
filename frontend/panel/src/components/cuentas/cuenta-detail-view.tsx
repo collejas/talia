@@ -21,6 +21,7 @@ import { useTenantContactCatalogs } from "@/components/contactos/use-contact-cat
 import {
   AccountDirectionCard,
   AccountDirectionDraft,
+  AccountDirectionType,
   AccountDirectionPrimaryType,
   buildDirectionPayload,
   createEmptyDirectionDraft,
@@ -154,34 +155,56 @@ function buildDraftFromDirectionRow(row: Record<string, unknown>, keyFallback: s
   });
 }
 
-function groupDirectionRows(rows: Record<string, unknown>[]): { primaryType: AccountDirectionPrimaryType; extras: AccountDirectionDraft[] } {
-  const normalized = rows
+function groupDirectionRows(rows: Record<string, unknown>[]): {
+  primaryType: AccountDirectionPrimaryType;
+  primaryDraft?: AccountDirectionDraft;
+  extras: AccountDirectionDraft[];
+} {
+  const groups = new Map<string, { draft: AccountDirectionDraft; types: Set<string> }>();
+  rows
     .filter((row) => row && typeof row === "object")
-    .map((row, index) => ({
-      row,
-      draft: buildDraftFromDirectionRow(row, `row-${index}`),
-      directionId: readDirectionText(row.direccion_id),
-    }));
-  const fiscalRow = normalized.find((item) => directionTypeIncludesFiscal(item.draft.tipo));
-  const principalRow = normalized.find((item) => directionTypeIncludesPrincipal(item.draft.tipo));
-  const sameAddressCombo = fiscalRow && principalRow && fiscalRow.directionId && fiscalRow.directionId === principalRow.directionId;
-  const primaryType: AccountDirectionPrimaryType = sameAddressCombo
-    ? "fiscal_principal"
-    : fiscalRow
-      ? "fiscal"
-      : principalRow
-        ? "principal"
-        : normalized[0]?.draft.tipo || "sucursal";
-  const primaryId = sameAddressCombo
-    ? fiscalRow?.directionId || principalRow?.directionId || ""
-    : fiscalRow?.directionId || principalRow?.directionId || "";
-  const extras = normalized
-    .filter((item) => {
-      if (!primaryId) return true;
-      return item.directionId !== primaryId;
-    })
-    .map((item) => item.draft);
-  return { primaryType, extras };
+    .forEach((row, index) => {
+      const draft = buildDraftFromDirectionRow(row, `row-${index}`);
+      const directionId = readDirectionText(row.direccion_id) || readDirectionText(row.id) || `row-${index}`;
+      const existing = groups.get(directionId);
+      if (existing) {
+        existing.types.add(draft.tipo);
+        return;
+      }
+      groups.set(directionId, { draft, types: new Set([draft.tipo]) });
+    });
+
+  const grouped = Array.from(groups.entries()).map(([id, group]) => {
+    const hasFiscal = Array.from(group.types).some((type) => directionTypeIncludesFiscal(type as AccountDirectionType));
+    const hasPrincipal = Array.from(group.types).some((type) => directionTypeIncludesPrincipal(type as AccountDirectionType));
+    const hasEnvio = Array.from(group.types).some((type) => type === "envio");
+    const tipo: AccountDirectionPrimaryType =
+      hasFiscal && hasPrincipal && hasEnvio
+        ? "fiscal_principal_envio"
+        : hasFiscal && hasPrincipal
+          ? "fiscal_principal"
+          : hasFiscal && hasEnvio
+            ? "fiscal_envio"
+            : hasPrincipal && hasEnvio
+              ? "principal_envio"
+              : hasFiscal
+                ? "fiscal"
+                : hasPrincipal
+                  ? "principal"
+                  : hasEnvio
+                    ? "envio"
+                    : "sucursal";
+    return { id, draft: { ...group.draft, tipo }, tipo };
+  });
+  const primary = grouped.find((item) => directionTypeIncludesFiscal(item.tipo))
+    ?? grouped.find((item) => directionTypeIncludesPrincipal(item.tipo))
+    ?? grouped.find((item) => item.tipo === "envio")
+    ?? grouped[0];
+  return {
+    primaryType: primary?.tipo || "sucursal",
+    primaryDraft: primary?.draft,
+    extras: grouped.filter((item) => item.id !== primary?.id).map((item) => item.draft),
+  };
 }
 
 async function syncAccountDirections(
@@ -644,9 +667,7 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
   const openEditDialog = () => {
     const rawDirections = Array.isArray(detail?.direcciones) ? (detail?.direcciones as Record<string, unknown>[]) : [];
     const groupedDirections = groupDirectionRows(rawDirections);
-    const preferredDirection = (detail?.direccion_principal as Record<string, unknown> | undefined)
-      ?? (detail?.direccion_fiscal as Record<string, unknown> | undefined)
-      ?? undefined;
+    const preferredDirection = groupedDirections.primaryDraft;
     setEditForm({
       nombre: getInputText(detail?.nombre),
       alias: getInputText(detail?.alias),
@@ -1424,8 +1445,12 @@ export function CuentaDetailView({ cuentaId }: { cuentaId: string }) {
                   >
                     <option value="fiscal">Fiscal</option>
                     <option value="principal">Principal</option>
+                    <option value="envio">Envío</option>
                     <option value="sucursal">Sucursal</option>
                     <option value="fiscal_principal">Fiscal + principal</option>
+                    <option value="fiscal_envio">Fiscal + envío</option>
+                    <option value="principal_envio">Principal + envío</option>
+                    <option value="fiscal_principal_envio">Fiscal + principal + envío</option>
                   </select>
                   <div className="pt-2">
                     <Button type="button" variant="outline" size="sm" onClick={() => setPrimaryDirectionType("fiscal_principal")}>
