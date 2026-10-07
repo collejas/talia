@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { IconAlertTriangle, IconBox, IconRefresh, IconSearch } from "@tabler/icons-react";
+import { IconAlertTriangle, IconBox, IconDownload, IconPrinter, IconRefresh, IconSearch } from "@tabler/icons-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,66 @@ function quantity(value: number) {
 
 function isLowStock(row: StockRow) {
   return row.stock_minimo !== null && row.stock_disponible <= row.stock_minimo;
+}
+
+function escapeHtml(value: unknown) {
+  const escaped: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  return String(value ?? "—").replace(/[&<>"']/g, (character) => escaped[character] ?? character);
+}
+
+async function downloadInventoryWorkbook(rows: StockRow[], warehouseLabel: string) {
+  const xlsx = await import("@e965/xlsx");
+  const values = [
+    ["Producto", "Código", "Almacén", "Unidad", "Stock actual", "Reservado", "Disponible", "En tránsito", "Mínimo"],
+    ...rows.map((row) => [
+      row.producto?.nombre ?? "Producto sin nombre",
+      row.producto?.codigo ?? "",
+      row.almacen?.nombre ?? "Almacén",
+      row.producto?.unidad ?? "",
+      row.stock_actual,
+      row.stock_reservado,
+      row.stock_disponible,
+      row.stock_en_transito,
+      row.stock_minimo ?? "",
+    ]),
+  ];
+  const sheet = xlsx.utils.aoa_to_sheet(values);
+  sheet["!cols"] = [28, 18, 24, 12, 14, 14, 14, 14, 12].map((wch) => ({ wch }));
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, sheet, "Inventario");
+  const buffer = xlsx.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+  const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "inventario_" + warehouseLabel.toLocaleLowerCase("es-MX").replace(/[^a-z0-9]+/gi, "_") + ".xlsx";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function printInventory(rows: StockRow[], warehouseLabel: string) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+  const tableRows = rows.map((row) =>
+    "<tr><td>" + escapeHtml(row.producto?.nombre ?? "Producto sin nombre")
+    + "<small>" + escapeHtml(row.producto?.codigo ?? "") + "</small></td>"
+    + "<td>" + escapeHtml(row.almacen?.nombre ?? "Almacén") + "</td>"
+    + '<td class="number">' + escapeHtml(row.stock_actual) + "</td>"
+    + '<td class="number">' + escapeHtml(row.stock_reservado) + "</td>"
+    + '<td class="number">' + escapeHtml(row.stock_disponible) + "</td>"
+    + '<td class="number">' + escapeHtml(row.stock_en_transito) + "</td>"
+    + "<td>" + (isLowStock(row) ? "Bajo mínimo" : "Disponible") + "</td></tr>",
+  ).join("");
+  printWindow.document.open();
+  printWindow.document.write(
+    '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Inventario · '
+    + escapeHtml(warehouseLabel)
+    + "</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;color:#172033;margin:0}h1{font-size:20px;margin:0 0 4px}p{color:#64748b;margin:0 0 18px}table{border-collapse:collapse;width:100%}th{background:#0f172a;color:white;text-align:left}th,td{border:1px solid #cbd5e1;padding:7px}small{color:#64748b;display:block;margin-top:2px}.number{text-align:right}</style></head><body><h1>Inventario</h1><p>"
+    + escapeHtml(warehouseLabel)
+    + " · " + rows.length + " línea(s)</p><table><thead><tr><th>Producto</th><th>Almacén</th><th>Actual</th><th>Reservado</th><th>Disponible</th><th>En tránsito</th><th>Estado</th></tr></thead><tbody>"
+    + tableRows
+    + "</tbody></table><script>window.onload=function(){window.print()}<\/script></body></html>",
+  );
+  printWindow.document.close();
 }
 
 export function OperationalInventoryWorkspace() {
@@ -116,6 +176,9 @@ export function OperationalInventoryWorkspace() {
     ) ?? null,
     [adjustmentProductId, adjustmentWarehouseId, data.existencias],
   );
+  const selectedWarehouseLabel = warehouseId === "todos"
+    ? "Todos los almacenes"
+    : data.almacenes.find((warehouse) => warehouse.id === warehouseId)?.nombre ?? "Almacén";
 
   async function submitAdjustment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -182,7 +245,15 @@ export function OperationalInventoryWorkspace() {
         <TabsContent value="existencias">
         <Card>
         <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
-          <CardTitle className="text-base">Inventario por almacén</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="mr-2 text-base">Inventario por almacén</CardTitle>
+            <Button type="button" variant="outline" size="sm" onClick={() => printInventory(filteredRows, selectedWarehouseLabel)} disabled={loading || filteredRows.length === 0}>
+              <IconPrinter className="mr-2 size-4" />Imprimir
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => void downloadInventoryWorkbook(filteredRows, selectedWarehouseLabel)} disabled={loading || filteredRows.length === 0}>
+              <IconDownload className="mr-2 size-4" />Excel
+            </Button>
+          </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative">
               <IconSearch className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
