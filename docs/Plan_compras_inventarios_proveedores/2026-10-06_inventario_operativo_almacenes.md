@@ -1,7 +1,7 @@
 # Propuesta: inventario operativo y control de almacenes en Operación
 
 **Fecha:** 2026-10-06  
-**Estado:** Fase 1 implementada en código; pendiente de aplicar migración y desplegar.
+**Estado:** Fase 1 implementada en código y base de datos; pendiente de desplegar backend y frontend.
 
 ## Objetivo
 
@@ -137,9 +137,10 @@ Se implementó el primer corte de solo lectura:
 - Consulta de almacenes, existencia actual, reservada, disponible, tránsito y mínimos.
 - Búsqueda por producto/almacén y filtro por almacén.
 - Alertas visuales cuando la disponibilidad está en el mínimo o por debajo.
-- El endpoint no expone costos ni permite modificar inventario.
+- El endpoint de consulta no expone costos.
+- La vista incluye ajustes manuales para usuarios con inventory.stock.adjust, con entrada/salida, cantidad, almacén, producto y auditoría.
 
-La migración 20261006_120000_operational_inventory_view_permission.sql asigna el permiso de consulta a owner, admin, admin_operativo y supervisor. Todavía no se implementaron movimientos, ajustes manuales ni administración de almacenes; corresponden a las siguientes fases.
+Las migraciones 20261006_120000_operational_inventory_view_permission.sql y 20261006_124000_operational_inventory_adjust_permission.sql separan consulta y edición. El permiso de ajuste se asignó a owner, admin_operativo y al rol Gerencia Almacen (0016) para los tenants donde exista ese rol. El historial de movimientos y la administración de almacenes corresponden a las siguientes fases.
 
 ## Criterios de aceptación
 

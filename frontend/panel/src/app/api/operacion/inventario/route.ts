@@ -6,3 +6,10 @@ export async function GET(request: Request) {
     backendPath: "/crm/operacion/inventario",
   });
 }
+
+export async function POST(request: Request) {
+  return proxyProspeccionRequest(request, {
+    method: "POST",
+    backendPath: "/crm/operacion/inventario/ajustes",
+  });
+}

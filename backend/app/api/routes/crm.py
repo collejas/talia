@@ -16570,6 +16570,7 @@ class CRMInventarioOperativoExistencia(BaseModel):
 
 class CRMInventarioOperativoResponse(BaseModel):
     almacenes: list[CRMInventarioOperativoAlmacen]
+    productos: list[CRMInventarioOperativoProducto]
     almacen_seleccionado_id: UUID | None = None
     existencias: list[CRMInventarioOperativoExistencia]
 
@@ -22891,13 +22892,14 @@ async def listar_inventario_operativo(
 ) -> CRMInventarioOperativoResponse:
     """Consulta operativa de existencias sin exponer costos ni funciones de Compras."""
     try:
-        warehouses, stock_rows = await asyncio.gather(
+        warehouses, stock_rows, catalog_rows = await asyncio.gather(
             repo.list_almacenes(organizacion_id=organizacion_id, include_inactive=False, limit=5000),
             repo.list_inventario_existencias(
                 organizacion_id=organizacion_id,
                 almacen_id=almacen_id,
                 limit=limit,
             ),
+            repo.list_catalog_items(organizacion_id=organizacion_id, include_inactive=False, tipo="producto", limit=5000),
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="no_se_pudieron_consultar_existencias_operativas") from exc
@@ -22970,9 +22972,58 @@ async def listar_inventario_operativo(
 
     return CRMInventarioOperativoResponse(
         almacenes=warehouse_rows,
+        productos=[
+            CRMInventarioOperativoProducto(
+                id=item["id"],
+                nombre=item.get("nombre") or "Producto sin nombre",
+                slug=item.get("slug"),
+                codigo=item.get("codigo"),
+                unidad=item.get("unidad"),
+                activo=bool(item.get("activo", True)),
+                maneja_inventario=bool(item.get("maneja_inventario", False)),
+            )
+            for item in catalog_rows
+            if isinstance(item, dict) and item.get("id") and item.get("maneja_inventario")
+        ],
         almacen_seleccionado_id=selected_warehouse.id if selected_warehouse else None,
         existencias=operational_rows,
     )
+
+
+@router.post("/operacion/inventario/ajustes", response_model=CRMInventarioExistencia)
+async def crear_ajuste_inventario_operativo(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.stock.adjust")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMInventarioAjusteCreate,
+) -> CRMInventarioExistencia:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="usuario_no_autenticado")
+    try:
+        await repo.adjust_inventario(
+            organizacion_id=organizacion_id,
+            catalog_item_id=payload.catalog_item_id,
+            almacen_id=payload.almacen_id,
+            sentido=payload.sentido,
+            cantidad=payload.cantidad,
+            motivo=payload.motivo,
+            creado_por=usuario_id,
+        )
+        row = await repo.get_inventario_existencia(
+            organizacion_id=organizacion_id,
+            catalog_item_id=payload.catalog_item_id,
+            almacen_id=payload.almacen_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "negativo" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=502, detail=detail) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="inventario_existencia_not_found")
+    return CRMInventarioExistencia.model_validate(row)
 
 
 @router.get("/catalogo-precios/branding", response_model=CRMCatalogPriceBrand)

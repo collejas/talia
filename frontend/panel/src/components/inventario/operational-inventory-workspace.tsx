@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { IconAlertTriangle, IconBox, IconRefresh, IconSearch } from "@tabler/icons-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { usePermissions } from "@/hooks/use-permissions";
 
 type Warehouse = { id: string; codigo: string; nombre: string; tipo: string; es_principal: boolean };
-type Product = { id: string; nombre: string; codigo: string | null; unidad: string | null };
+type Product = { id: string; nombre: string; codigo: string | null; unidad: string | null; maneja_inventario?: boolean };
 type StockRow = {
   id: string | null;
   catalog_item_id: string;
@@ -27,6 +28,7 @@ type StockRow = {
 };
 type InventoryResponse = {
   almacenes: Warehouse[];
+  productos: Product[];
   almacen_seleccionado_id: string | null;
   existencias: StockRow[];
 };
@@ -42,6 +44,7 @@ function isLowStock(row: StockRow) {
 export function OperationalInventoryWorkspace() {
   const [data, setData] = useState<InventoryResponse>({
     almacenes: [],
+    productos: [],
     almacen_seleccionado_id: null,
     existencias: [],
   });
@@ -49,6 +52,17 @@ export function OperationalInventoryWorkspace() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [adjustmentWarehouseId, setAdjustmentWarehouseId] = useState("");
+  const [adjustmentProductId, setAdjustmentProductId] = useState("");
+  const [adjustmentDirection, setAdjustmentDirection] = useState<"entrada" | "salida">("entrada");
+  const [adjustmentQuantity, setAdjustmentQuantity] = useState("");
+  const [adjustmentReason, setAdjustmentReason] = useState("");
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjustmentMessage, setAdjustmentMessage] = useState<string | null>(null);
+  const { context: permissionContext } = usePermissions();
+  const canAdjust = permissionContext.es_admin
+    || permissionContext.es_owner
+    || permissionContext.permisos.some((permission) => permission.toLowerCase() === "inventory.stock.adjust");
 
   const load = useCallback(async (selectedWarehouseId = warehouseId) => {
     setLoading(true);
@@ -93,6 +107,35 @@ export function OperationalInventoryWorkspace() {
     reserved: filteredRows.reduce((sum, row) => sum + row.stock_reservado, 0),
     transit: filteredRows.reduce((sum, row) => sum + row.stock_en_transito, 0),
   }), [filteredRows]);
+
+  async function submitAdjustment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAdjusting(true);
+    setAdjustmentMessage(null);
+    try {
+      const response = await fetch("/api/operacion/inventario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          almacen_id: adjustmentWarehouseId,
+          catalog_item_id: adjustmentProductId,
+          sentido: adjustmentDirection,
+          cantidad: Number(adjustmentQuantity),
+          motivo: adjustmentReason.trim() || null,
+        }),
+      });
+      const payload = await response.json().catch(() => null) as { detail?: string } | null;
+      if (!response.ok) throw new Error(payload?.detail ?? "No se pudo aplicar el ajuste.");
+      setAdjustmentMessage("Ajuste aplicado correctamente.");
+      setAdjustmentQuantity("");
+      setAdjustmentReason("");
+      await load(warehouseId);
+    } catch (cause) {
+      setAdjustmentMessage(cause instanceof Error ? cause.message : "No se pudo aplicar el ajuste.");
+    } finally {
+      setAdjusting(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -175,6 +218,39 @@ export function OperationalInventoryWorkspace() {
           ) : null}
         </CardContent>
       </Card>
+
+      {canAdjust ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Ajustar existencias</CardTitle>
+            <p className="text-sm text-muted-foreground">Registra una entrada o salida por conteo físico, merma o corrección. Cada ajuste queda auditado.</p>
+          </CardHeader>
+          <CardContent>
+            <form className="grid gap-4 md:grid-cols-5" onSubmit={submitAdjustment}>
+              <Select value={adjustmentWarehouseId} onValueChange={setAdjustmentWarehouseId}>
+                <SelectTrigger><SelectValue placeholder="Almacén" /></SelectTrigger>
+                <SelectContent>
+                  {data.almacenes.map((warehouse) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.codigo ? `${warehouse.codigo} · ` : ""}{warehouse.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={adjustmentProductId} onValueChange={setAdjustmentProductId}>
+                <SelectTrigger><SelectValue placeholder="Producto" /></SelectTrigger>
+                <SelectContent>
+                  {data.productos.map((product) => <SelectItem key={product.id} value={product.id}>{product.nombre}{product.codigo ? ` · ${product.codigo}` : ""}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={adjustmentDirection} onValueChange={(value) => setAdjustmentDirection(value as "entrada" | "salida")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="entrada">Entrada</SelectItem><SelectItem value="salida">Salida</SelectItem></SelectContent>
+              </Select>
+              <Input type="number" min="0.001" step="0.001" value={adjustmentQuantity} onChange={(event) => setAdjustmentQuantity(event.target.value)} placeholder="Cantidad" required />
+              <Button type="submit" disabled={adjusting || !adjustmentWarehouseId || !adjustmentProductId || Number(adjustmentQuantity) <= 0}>{adjusting ? "Aplicando…" : "Aplicar ajuste"}</Button>
+              <Input className="md:col-span-4" value={adjustmentReason} onChange={(event) => setAdjustmentReason(event.target.value)} placeholder="Motivo del ajuste (recomendado)" />
+            </form>
+            {adjustmentMessage ? <p className="mt-3 text-sm text-muted-foreground" role="status">{adjustmentMessage}</p> : null}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
