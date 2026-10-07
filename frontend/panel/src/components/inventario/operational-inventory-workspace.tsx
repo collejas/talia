@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { printInventoryExistences, type PurchaseOrderPrintBrand } from "@/components/compras/purchase-order-print";
 import { usePermissions } from "@/hooks/use-permissions";
 
 type Warehouse = { id: string; codigo: string; nombre: string; tipo: string; es_principal: boolean };
@@ -43,11 +44,6 @@ function isLowStock(row: StockRow) {
   return row.stock_minimo !== null && row.stock_disponible <= row.stock_minimo;
 }
 
-function escapeHtml(value: unknown) {
-  const escaped: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-  return String(value ?? "—").replace(/[&<>"']/g, (character) => escaped[character] ?? character);
-}
-
 async function downloadInventoryWorkbook(rows: StockRow[], warehouseLabel: string) {
   const xlsx = await import("@e965/xlsx");
   const values = [
@@ -77,33 +73,7 @@ async function downloadInventoryWorkbook(rows: StockRow[], warehouseLabel: strin
   URL.revokeObjectURL(url);
 }
 
-function printInventory(rows: StockRow[], warehouseLabel: string) {
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) return;
-  const tableRows = rows.map((row) =>
-    "<tr><td>" + escapeHtml(row.producto?.nombre ?? "Producto sin nombre")
-    + "<small>" + escapeHtml(row.producto?.codigo ?? "") + "</small></td>"
-    + "<td>" + escapeHtml(row.almacen?.nombre ?? "Almacén") + "</td>"
-    + '<td class="number">' + escapeHtml(row.stock_actual) + "</td>"
-    + '<td class="number">' + escapeHtml(row.stock_reservado) + "</td>"
-    + '<td class="number">' + escapeHtml(row.stock_disponible) + "</td>"
-    + '<td class="number">' + escapeHtml(row.stock_en_transito) + "</td>"
-    + "<td>" + (isLowStock(row) ? "Bajo mínimo" : "Disponible") + "</td></tr>",
-  ).join("");
-  printWindow.document.open();
-  printWindow.document.write(
-    '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Inventario · '
-    + escapeHtml(warehouseLabel)
-    + "</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font:11px Arial,sans-serif;color:#172033;margin:0}h1{font-size:20px;margin:0 0 4px}p{color:#64748b;margin:0 0 18px}table{border-collapse:collapse;width:100%}th{background:#0f172a;color:white;text-align:left}th,td{border:1px solid #cbd5e1;padding:7px}small{color:#64748b;display:block;margin-top:2px}.number{text-align:right}</style></head><body><h1>Inventario</h1><p>"
-    + escapeHtml(warehouseLabel)
-    + " · " + rows.length + " línea(s)</p><table><thead><tr><th>Producto</th><th>Almacén</th><th>Actual</th><th>Reservado</th><th>Disponible</th><th>En tránsito</th><th>Estado</th></tr></thead><tbody>"
-    + tableRows
-    + "</tbody></table><script>window.onload=function(){window.print()}<\/script></body></html>",
-  );
-  printWindow.document.close();
-}
-
-export function OperationalInventoryWorkspace() {
+export function OperationalInventoryWorkspace({ printBrand }: { printBrand: PurchaseOrderPrintBrand | null }) {
   const [data, setData] = useState<InventoryResponse>({
     almacenes: [],
     productos: [],
@@ -179,6 +149,11 @@ export function OperationalInventoryWorkspace() {
   const selectedWarehouseLabel = warehouseId === "todos"
     ? "Todos los almacenes"
     : data.almacenes.find((warehouse) => warehouse.id === warehouseId)?.nombre ?? "Almacén";
+  const printableRows = filteredRows.map((row) => ({
+    ...row,
+    catalog_item: row.producto,
+    almacen: row.almacen,
+  }));
 
   async function submitAdjustment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -247,7 +222,13 @@ export function OperationalInventoryWorkspace() {
         <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="mr-2 text-base">Inventario por almacén</CardTitle>
-            <Button type="button" variant="outline" size="sm" onClick={() => printInventory(filteredRows, selectedWarehouseLabel)} disabled={loading || filteredRows.length === 0}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => { if (printBrand) printInventoryExistences(printableRows, selectedWarehouseLabel, printBrand); }}
+              disabled={loading || filteredRows.length === 0 || !printBrand}
+            >
               <IconPrinter className="mr-2 size-4" />Imprimir
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => void downloadInventoryWorkbook(filteredRows, selectedWarehouseLabel)} disabled={loading || filteredRows.length === 0}>
@@ -287,6 +268,7 @@ export function OperationalInventoryWorkspace() {
                     <TableHead className="text-right">Reservado</TableHead>
                     <TableHead className="text-right">Disponible</TableHead>
                     <TableHead className="text-right">En tránsito</TableHead>
+                    <TableHead className="text-right">Mínimo</TableHead>
                     <TableHead>Estado</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -302,6 +284,7 @@ export function OperationalInventoryWorkspace() {
                       <TableCell className="text-right">{quantity(row.stock_reservado)}</TableCell>
                       <TableCell className="text-right font-medium">{quantity(row.stock_disponible)}</TableCell>
                       <TableCell className="text-right">{quantity(row.stock_en_transito)}</TableCell>
+                      <TableCell className="text-right">{row.stock_minimo === null ? "No definido" : quantity(row.stock_minimo)}</TableCell>
                       <TableCell>
                         {isLowStock(row) ? <Badge variant="destructive">Bajo mínimo</Badge> : <Badge variant="secondary">Disponible</Badge>}
                       </TableCell>
