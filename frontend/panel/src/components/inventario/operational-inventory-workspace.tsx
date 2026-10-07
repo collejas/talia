@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/hooks/use-permissions";
 
 type Warehouse = { id: string; codigo: string; nombre: string; tipo: string; es_principal: boolean };
@@ -172,7 +173,14 @@ export function OperationalInventoryWorkspace() {
         <MetricCard icon={<IconBox className="size-4" />} label="En tránsito" value={quantity(metrics.transit)} />
       </div>
 
-      <Card>
+      <Tabs defaultValue="existencias" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="existencias">Existencias</TabsTrigger>
+          {canAdjust ? <TabsTrigger value="ajustes">Ajustes</TabsTrigger> : null}
+        </TabsList>
+
+        <TabsContent value="existencias">
+        <Card>
         <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between">
           <CardTitle className="text-base">Inventario por almacén</CardTitle>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -233,9 +241,11 @@ export function OperationalInventoryWorkspace() {
             </div>
           ) : null}
         </CardContent>
-      </Card>
+        </Card>
+        </TabsContent>
 
       {canAdjust ? (
+        <TabsContent value="ajustes">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Ajustar existencias</CardTitle>
@@ -273,7 +283,9 @@ export function OperationalInventoryWorkspace() {
             {adjustmentMessage ? <p className="mt-3 text-sm text-muted-foreground" role="status">{adjustmentMessage}</p> : null}
           </CardContent>
         </Card>
+        </TabsContent>
       ) : null}
+      </Tabs>
     </div>
   );
 }
