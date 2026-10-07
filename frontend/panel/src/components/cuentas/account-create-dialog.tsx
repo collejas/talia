@@ -394,10 +394,15 @@ export function AccountCreateDialog({ onCreated }: Props) {
       }
       const createdAccountId = typeof body.id === "string" ? body.id.trim() : "";
       if (createdAccountId) {
-        const directionsToCreate: Array<{ tipo_relacion: "fiscal" | "principal" | "envio" | "sucursal"; direccion: ReturnType<typeof buildDirectionPayload> }> = [];
+        const directionsToCreate: Array<{
+          tipo_relacion: "fiscal" | "principal" | "envio" | "sucursal";
+          es_principal: boolean;
+          direccion: ReturnType<typeof buildDirectionPayload>;
+        }> = [];
         for (const relationType of expandDirectionRelationTypes(primaryDirection.tipo)) {
           directionsToCreate.push({
             tipo_relacion: relationType,
+            es_principal: true,
             direccion: buildDirectionPayload(primaryDirection, relationType),
           });
         }
@@ -405,6 +410,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
           for (const relationType of expandDirectionRelationTypes(direction.tipo)) {
             directionsToCreate.push({
               tipo_relacion: relationType,
+              es_principal: false,
               direccion: buildDirectionPayload(direction, relationType),
             });
           }
@@ -416,7 +422,7 @@ export function AccountCreateDialog({ onCreated }: Props) {
             body: JSON.stringify({
               tipo_relacion: entry.tipo_relacion,
               activo: true,
-              es_principal: entry.tipo_relacion === "principal" || entry.tipo_relacion === "envio",
+              es_principal: entry.es_principal,
               direccion: entry.direccion,
             }),
           });

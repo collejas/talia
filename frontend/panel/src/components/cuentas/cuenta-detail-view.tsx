@@ -155,23 +155,56 @@ function buildDraftFromDirectionRow(row: Record<string, unknown>, keyFallback: s
   });
 }
 
+function directionAddressKey(draft: AccountDirectionDraft): string {
+  return JSON.stringify([
+    draft.pais,
+    draft.clave_entidad,
+    draft.entidad,
+    draft.clave_municipio,
+    draft.municipio,
+    draft.clave_localidad,
+    draft.localidad,
+    draft.tipo_vialidad,
+    draft.nombre_vialidad,
+    draft.numero_exterior,
+    draft.letra_exterior,
+    draft.edificio,
+    draft.edificio_piso,
+    draft.numero_interior,
+    draft.letra_interior,
+    draft.tipo_asentamiento,
+    draft.colonia,
+    draft.tipo_centro_comercial,
+    draft.corredor_industrial,
+    draft.numero_local,
+    draft.codigo_postal,
+    draft.latitud,
+    draft.longitud,
+  ]);
+}
+
 function groupDirectionRows(rows: Record<string, unknown>[]): {
   primaryType: AccountDirectionPrimaryType;
   primaryDraft?: AccountDirectionDraft;
   extras: AccountDirectionDraft[];
 } {
-  const groups = new Map<string, { draft: AccountDirectionDraft; types: Set<string> }>();
+  const groups = new Map<string, { draft: AccountDirectionDraft; types: Set<string>; primaryTypes: Set<string> }>();
   rows
     .filter((row) => row && typeof row === "object")
     .forEach((row, index) => {
       const draft = buildDraftFromDirectionRow(row, `row-${index}`);
-      const directionId = readDirectionText(row.direccion_id) || readDirectionText(row.id) || `row-${index}`;
-      const existing = groups.get(directionId);
+      const directionKey = directionAddressKey(draft) || `row-${index}`;
+      const existing = groups.get(directionKey);
       if (existing) {
         existing.types.add(draft.tipo);
+        if (row.es_principal === true) existing.primaryTypes.add(draft.tipo);
         return;
       }
-      groups.set(directionId, { draft, types: new Set([draft.tipo]) });
+      groups.set(directionKey, {
+        draft,
+        types: new Set([draft.tipo]),
+        primaryTypes: new Set(row.es_principal === true ? [draft.tipo] : []),
+      });
     });
 
   const grouped = Array.from(groups.entries()).map(([id, group]) => {
@@ -194,11 +227,12 @@ function groupDirectionRows(rows: Record<string, unknown>[]): {
                   : hasEnvio
                     ? "envio"
                     : "sucursal";
-    return { id, draft: { ...group.draft, tipo }, tipo };
+    return { id, draft: { ...group.draft, tipo }, tipo, isPrimary: group.primaryTypes.size > 0 };
   });
-  const primary = grouped.find((item) => directionTypeIncludesFiscal(item.tipo))
+  const primary = grouped.find((item) => item.isPrimary)
     ?? grouped.find((item) => directionTypeIncludesPrincipal(item.tipo))
     ?? grouped.find((item) => item.tipo === "envio")
+    ?? grouped.find((item) => directionTypeIncludesFiscal(item.tipo))
     ?? grouped[0];
   return {
     primaryType: primary?.tipo || "sucursal",
@@ -216,24 +250,47 @@ async function syncAccountDirections(
   const currentDirectionsResponse = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/direcciones`, {
     cache: "no-store",
   });
-  const currentDirectionsBody = (await currentDirectionsResponse.json().catch(() => ({}))) as { items?: Array<Record<string, unknown>>; error?: string };
-  if (currentDirectionsResponse.ok && Array.isArray(currentDirectionsBody.items)) {
-    for (const row of currentDirectionsBody.items) {
+  const currentDirectionsBody = (await currentDirectionsResponse.json().catch(() => [])) as
+    | Array<Record<string, unknown>>
+    | { items?: Array<Record<string, unknown>>; error?: string };
+  const currentDirections = Array.isArray(currentDirectionsBody)
+    ? currentDirectionsBody
+    : Array.isArray(currentDirectionsBody.items)
+      ? currentDirectionsBody.items
+      : [];
+  if (currentDirectionsResponse.ok) {
+    for (const row of currentDirections) {
       const relationId = readDirectionText(row.id);
       if (!relationId) continue;
-      await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/direcciones/${encodeURIComponent(relationId)}`, {
+      const deleteResponse = await fetch(`/api/cuentas/${encodeURIComponent(cuentaId)}/direcciones/${encodeURIComponent(relationId)}`, {
         method: "DELETE",
       });
+      if (!deleteResponse.ok) {
+        const deleteBody = (await deleteResponse.json().catch(() => ({}))) as { error?: string };
+        throw new Error(deleteBody.error || "No se pudieron reemplazar las direcciones de la empresa.");
+      }
     }
   }
 
-  const directionsToCreate: Array<{ tipo_relacion: "fiscal" | "principal" | "envio" | "sucursal"; direccion: ReturnType<typeof buildDirectionPayload> }> = [];
+  const directionsToCreate: Array<{
+    tipo_relacion: "fiscal" | "principal" | "envio" | "sucursal";
+    es_principal: boolean;
+    direccion: ReturnType<typeof buildDirectionPayload>;
+  }> = [];
   for (const relationType of expandDirectionRelationTypes(primaryType)) {
-    directionsToCreate.push({ tipo_relacion: relationType, direccion: buildDirectionPayload(primaryDraft, relationType) });
+    directionsToCreate.push({
+      tipo_relacion: relationType,
+      es_principal: true,
+      direccion: buildDirectionPayload(primaryDraft, relationType),
+    });
   }
   for (const direction of extraDirections) {
     for (const relationType of expandDirectionRelationTypes(direction.tipo)) {
-      directionsToCreate.push({ tipo_relacion: relationType, direccion: buildDirectionPayload(direction, relationType) });
+      directionsToCreate.push({
+        tipo_relacion: relationType,
+        es_principal: false,
+        direccion: buildDirectionPayload(direction, relationType),
+      });
     }
   }
 
@@ -244,7 +301,7 @@ async function syncAccountDirections(
       body: JSON.stringify({
         tipo_relacion: entry.tipo_relacion,
         activo: true,
-        es_principal: entry.tipo_relacion === "principal" || entry.tipo_relacion === "envio",
+        es_principal: entry.es_principal,
         direccion: entry.direccion,
       }),
     });
