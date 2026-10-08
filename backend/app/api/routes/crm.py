@@ -4924,6 +4924,10 @@ class ProspectoListQuery(BaseModel):
 
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0, le=10_000)
+    count_exact: bool = Field(
+        default=False,
+        description="Solicita conteo exacto; la vista normal usa un conteo estimado para evitar scans costosos.",
+    )
     search: str | None = Field(default=None, max_length=120)
     fuente: Literal["google_places", "denue", "usuario", ""] | None = Field(default=None)
     lookup_status: str | None = Field(default=None, max_length=60)
@@ -37338,6 +37342,7 @@ async def listar_prospectos(
                 envios_voz_min=envios_voz_min,
                 envios_voz_max=envios_voz_max,
                 timezone_name=effective_timezone,
+                count_exact=params.count_exact,
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -37398,6 +37403,12 @@ async def listar_prospectos(
             "ok": True,
             "items": rows,
             "total": total,
+            "total_exact": params.count_exact,
+            "has_more": (
+                params.offset + len(rows) < total
+                if params.count_exact
+                else len(rows) >= params.limit
+            ),
             "limit": params.limit,
             "offset": params.offset,
             "contact_indicators_degraded": contact_indicators_degraded,

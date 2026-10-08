@@ -31,12 +31,22 @@ class PostmarkWorker:
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._last_sync_at: datetime | None = None
+        self._tenant_cursor = 0
+
+    def _rotate_tenants(self, tenant_ids: list[UUID]) -> list[UUID]:
+        """Rota el primer tenant de cada ciclo para evitar monopolios."""
+        if not tenant_ids:
+            return []
+        start = self._tenant_cursor % len(tenant_ids)
+        self._tenant_cursor = (start + 1) % len(tenant_ids)
+        return tenant_ids[start:] + tenant_ids[:start]
 
     async def run_once(self) -> int:
         repository = PostmarkRepository()
         service = PostmarkService(repository=repository)
         processed = await self._process_provision_jobs(repository)
-        for organizacion_id in await repository.list_enabled_organizations():
+        tenant_ids = self._rotate_tenants(await repository.list_enabled_organizations())
+        for organizacion_id in tenant_ids:
             server = await repository.get_server(organizacion_id=organizacion_id)
             if not server or server.get("server_status") != "active":
                 logger.warning(
@@ -79,7 +89,10 @@ class PostmarkWorker:
             # por disponibilidad accidental de la cola.
             for delivery_batch in await repository.list_ready_delivery_batches(
                 organizacion_id=organizacion_id,
-                limit=50,
+                # Un bloque por tenant y ciclo. Los demás permanecen en cola
+                # para que un tenant con miles de destinatarios no monopolice
+                # el worker mientras otros tenants esperan.
+                limit=1,
             ):
                 raw_delivery_batch_id = delivery_batch.get("id")
                 try:
@@ -112,9 +125,9 @@ class PostmarkWorker:
             # Los lotes de prospección esperan a que Talia termine de preparar
             # todos sus mensajes. Así /email/batch recibe el arreglo completo
             # del lote, en lugar de lo que casualmente alcanzó la cola.
-            for source_batch_id in await repository.list_queued_source_batches(
+            for source_batch_id in (await repository.list_queued_source_batches(
                 organizacion_id=organizacion_id
-            ):
+            ))[:1]:
                 source_batch = await repository.get_contact_batch(batch_id=source_batch_id)
                 if not source_batch:
                     continue

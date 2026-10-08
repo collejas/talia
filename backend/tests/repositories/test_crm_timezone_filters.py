@@ -573,12 +573,19 @@ async def test_list_prospectos_scopes_request_to_organizacion_id(monkeypatch: py
         captured["method"] = method
         captured["path"] = path
         captured["params"] = kwargs.get("params")
+        captured["prefer"] = kwargs.get("prefer")
         return DummyResponse([])
 
     repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
 
     org_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
-    await repo.list_prospectos(usuario_token="token", organizacion_id=org_id, limit=10, offset=0)
+    await repo.list_prospectos(
+        usuario_token="token",
+        organizacion_id=org_id,
+        limit=10,
+        offset=0,
+        opt_out_whatsapp=False,
+    )
 
     assert captured["method"] == "GET"
     assert captured["path"] == "/rest/v1/prospeccion_prospectos"
@@ -593,6 +600,35 @@ async def test_list_prospectos_scopes_request_to_organizacion_id(monkeypatch: py
     assert "scraper_ejecutado" not in select
     assert "scraper_ultimo_en" not in select
     assert "contact_indicators" not in select
+    assert repo._request_with_user.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_list_prospectos_can_use_planned_count_for_paginated_views(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        captured["prefer"] = kwargs.get("prefer")
+        return DummyResponse([])
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    await repo.list_prospectos(
+        usuario_token="token",
+        organizacion_id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
+        limit=500,
+        offset=1000,
+        count_exact=False,
+    )
+
+    assert captured["prefer"] == "count=planned"
 
 
 @pytest.mark.asyncio

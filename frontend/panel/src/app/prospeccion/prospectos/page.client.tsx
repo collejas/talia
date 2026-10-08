@@ -974,6 +974,7 @@ function ProspectosView() {
   })
   const [items, setItems] = useState<ProspectoItem[]>([])
   const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
   const [limit, setLimit] = useState<number>(PROSPECTOS_DEFAULT_LIMIT)
   const [limitInput, setLimitInput] = useState(String(PROSPECTOS_DEFAULT_LIMIT))
   const [offset, setOffset] = useState(0)
@@ -1812,6 +1813,7 @@ function ProspectosView() {
         const nextTotal =
           typeof response.total === "number" ? response.total : nextOffset + rows.length
         setTotal(nextTotal)
+        setHasMore(response.has_more ?? rows.length >= limit)
         setOffset(nextOffset)
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
@@ -1897,6 +1899,7 @@ function ProspectosView() {
         } else if (rows.length) {
           setTotal((prev) => Math.max(prev, startOffset + rows.length))
         }
+        setHasMore(response.has_more ?? rows.length >= needed)
       } catch {
         // Silencioso: solo relleno de huecos.
       }
@@ -2589,7 +2592,7 @@ function ProspectosView() {
     groupedQueryOptions.length > 0 && groupedQueryOptions.every((group) => selectedGroups.has(group.value))
   const someGroupsSelected =
     !allGroupsSelected && groupedQueryOptions.some((group) => selectedGroups.has(group.value))
-  const effectiveTotal = total
+  const effectiveTotal = hasMore ? Math.max(total, offset + items.length + 1) : total
   const showingFrom = items.length ? offset + 1 : 0
   const showingTo = items.length ? offset + items.length : 0
   const pageCount = limit ? Math.ceil(effectiveTotal / limit) : 1
@@ -2837,7 +2840,7 @@ function ProspectosView() {
           variant="outline"
           size="sm"
           onClick={() => void fetchProspectos(offset + limit)}
-          disabled={loading || offset + limit >= effectiveTotal}
+          disabled={loading || !hasMore}
         >
           Siguiente
         </Button>

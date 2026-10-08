@@ -21545,6 +21545,7 @@ class CRMRepository:
         envios_voz_max: int | None = None,
         opt_out_whatsapp: bool | None = None,
         timezone_name: str | None = None,
+        count_exact: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
 
@@ -21882,7 +21883,7 @@ class CRMRepository:
             )
             # Las listas para contactar excluyen por defecto las bajas del canal elegido.
             exclude_ids.update(opt_out_ids)
-        elif opt_out_whatsapp is not None:
+        elif opt_out_whatsapp is not None and "whatsapp" in normalized_con_envio_canales:
             opt_out_ids = await self._list_prospecto_ids_with_contact_suppressions(
                 usuario_token=usuario_token,
                 organizacion_id=organizacion_id,
@@ -21942,7 +21943,7 @@ class CRMRepository:
             "/rest/v1/prospeccion_prospectos",
             token=usuario_token,
             params=params,
-            prefer="count=exact",
+            prefer="count=exact" if count_exact else "count=planned",
         )
         data = resp.json() or []
         if not isinstance(data, list):
@@ -24100,6 +24101,34 @@ class CRMRepository:
                 raise CRMRepositoryError("postmark_campaign_targets_insert_invalid")
             created.extend(row for row in data if isinstance(row, dict))
         return created
+
+    async def worker_materialize_postmark_campaign_targets(
+        self,
+        *,
+        organizacion_id: UUID,
+        batch_id: UUID,
+        manifest: Sequence[dict[str, Any]],
+    ) -> int:
+        """Materializa un manifiesto completo en una transacción idempotente."""
+        if not manifest or len(manifest) > 10000:
+            raise CRMRepositoryError("postmark_manifest_materialization_invalid_size")
+        data = await self._rpc(
+            "worker_materialize_postmark_campaign_targets",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_batch_id": str(batch_id),
+                "p_manifest": [dict(entry) for entry in manifest],
+            },
+        )
+        if isinstance(data, int):
+            return data
+        if isinstance(data, list) and data and isinstance(data[0], int):
+            return data[0]
+        if isinstance(data, dict):
+            for key in ("worker_materialize_postmark_campaign_targets", "count", "inserted"):
+                if key in data:
+                    return int(data[key])
+        raise CRMRepositoryError("postmark_manifest_materialization_invalid_response")
 
     async def enqueue_postmark_campaign_preparation(
         self,
@@ -26721,7 +26750,10 @@ class CRMRepository:
     async def worker_claim_postmark_preparation_jobs(self, *, limit: int = 5) -> list[dict[str, Any]]:
         data = await self._rpc(
             "worker_claim_postmark_preparation_jobs",
-            {"p_limit": max(1, min(limit, 20)), "p_stale_after_seconds": 900},
+            # Un worker muerto no debe bloquear una campaña durante 15 minutos;
+            # la reclamación sigue siendo segura porque el manifiesto es
+            # idempotente y la materialización ocurre en una sola transacción.
+            {"p_limit": max(1, min(limit, 20)), "p_stale_after_seconds": 180},
         )
         if not isinstance(data, list):
             raise CRMRepositoryError("postmark_preparation_jobs_claim_invalid")

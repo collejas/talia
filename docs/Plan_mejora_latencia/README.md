@@ -5,6 +5,7 @@
 - [Auditoría de separación de envíos de prospección](../Prospeccion/envios_y_separacion.md)
 - [Incidente Supabase/Prospección y actualización del plan](07_incidente_supabase_prospeccion_20261001.md)
 - [Incidente de envío masivo y saturación de Supabase](08_incidente_envio_masivo_20261002.md)
+- [Incidente de listado de prospectos y conteo exacto](09_incidente_listado_prospectos_20261008.md)
 - [Changelog de mejoras de latencia](changelog.md)
 
 Documentación generada para diagnóstico y plan de mejora de rendimiento en backend CRM.

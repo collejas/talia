@@ -43,9 +43,10 @@ class PostmarkCampaignTargetPreparationWorker:
                 manifest = job.get("manifest")
                 if not isinstance(manifest, list) or not manifest:
                     raise ValueError("postmark_preparation_manifest_invalid")
-                await repository.insert_postmark_campaign_targets(
+                await repository.worker_materialize_postmark_campaign_targets(
                     organizacion_id=organizacion_id,
-                    entries=[row for row in manifest if isinstance(row, dict)],
+                    batch_id=batch_id,
+                    manifest=[row for row in manifest if isinstance(row, dict)],
                 )
                 await repository.worker_initialize_postmark_preparation(
                     organizacion_id=organizacion_id,

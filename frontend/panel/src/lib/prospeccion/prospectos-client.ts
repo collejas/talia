@@ -259,6 +259,8 @@ export type ProspectosResponse = {
   ok: boolean
   items: ProspectoItem[]
   total: number
+  total_exact?: boolean
+  has_more?: boolean
   limit: number
   offset: number
 }
@@ -985,7 +987,8 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
       }
     }
   }
-  if (typeof params.optOutWhatsapp === "boolean") {
+  const channelFilterIncludesWhatsapp = params.conEnvioCanales?.includes("whatsapp") ?? false
+  if (typeof params.optOutWhatsapp === "boolean" && channelFilterIncludesWhatsapp) {
     url.searchParams.set("opt_out_whatsapp", params.optOutWhatsapp ? "true" : "false")
   }
   if (params.optOutCanal) {
