@@ -37279,6 +37279,19 @@ async def listar_prospectos(
     total = 0
     request_failed = False
     contact_indicators_degraded = False
+    # Para un estado de validación el total visible debe ser exacto. El conteo
+    # planificado es útil para listados generales, pero con estadísticas
+    # desactualizadas puede mostrar miles de registros cuando sólo quedan unas
+    # decenas (por ejemplo, correo pendiente).
+    exact_validation_filter = any(
+        value
+        for value in (
+            params.lookup_status,
+            params.email_lookup_status,
+            params.website_lookup_status,
+        )
+    )
+    effective_count_exact = params.count_exact or exact_validation_filter
     con_envio_canales_values = sorted(
         set((con_envio_canal or []) + _parse_con_envio_canales_param(con_envio_canales))
     )
@@ -37342,7 +37355,7 @@ async def listar_prospectos(
                 envios_voz_min=envios_voz_min,
                 envios_voz_max=envios_voz_max,
                 timezone_name=effective_timezone,
-                count_exact=params.count_exact,
+                count_exact=effective_count_exact,
             )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -37403,10 +37416,10 @@ async def listar_prospectos(
             "ok": True,
             "items": rows,
             "total": total,
-            "total_exact": params.count_exact,
+            "total_exact": effective_count_exact,
             "has_more": (
                 params.offset + len(rows) < total
-                if params.count_exact
+                if effective_count_exact
                 else len(rows) >= params.limit
             ),
             "limit": params.limit,

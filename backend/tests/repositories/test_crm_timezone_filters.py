@@ -632,6 +632,35 @@ async def test_list_prospectos_can_use_planned_count_for_paginated_views(
 
 
 @pytest.mark.asyncio
+async def test_list_prospectos_uses_exact_count_for_validation_status_filters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository()
+    captured: dict[str, object] = {}
+
+    async def fake_request_with_user(method: str, path: str, **kwargs):
+        captured["prefer"] = kwargs.get("prefer")
+        return DummyResponse([])
+
+    repo._request_with_user = AsyncMock(side_effect=fake_request_with_user)
+
+    await repo.list_prospectos(
+        usuario_token="token",
+        organizacion_id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
+        email_lookup_status="pendiente",
+        limit=100,
+        offset=0,
+        count_exact=False,
+    )
+
+    assert captured["prefer"] == "count=exact"
+
+
+@pytest.mark.asyncio
 async def test_list_prospectos_status_filters_require_the_corresponding_contact_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

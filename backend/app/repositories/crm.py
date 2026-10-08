@@ -21549,6 +21549,13 @@ class CRMRepository:
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
 
+        # Las estadísticas planificadas pueden quedar obsoletas después de
+        # grandes actualizaciones de estados. Para un estado de validación el
+        # total es parte del dato que ve el usuario y debe ser exacto.
+        effective_count_exact = count_exact or any(
+            value for value in (lookup_status, email_lookup_status, website_lookup_status)
+        )
+
         params: dict[str, str] = {
             "select": ",".join(
                 [
@@ -21810,7 +21817,10 @@ class CRMRepository:
         # filtros más usados de la pantalla.
         if normalized_con_envio_canales and con_envio is False:
             channel_columns = {
-                "correo": "envios_correo_total",
+                # El filtro de disponibilidad no debe volver a tomar un
+                # prospecto reservado, suprimido o fallido. El contador de
+                # envios_correo_total sigue representando sólo aceptación.
+                "correo": "envios_correo_intentos_total",
                 "whatsapp": "envios_whatsapp_total",
                 "llamada": "envios_voz_total",
             }
@@ -21943,7 +21953,7 @@ class CRMRepository:
             "/rest/v1/prospeccion_prospectos",
             token=usuario_token,
             params=params,
-            prefer="count=exact" if count_exact else "count=planned",
+            prefer="count=exact" if effective_count_exact else "count=planned",
         )
         data = resp.json() or []
         if not isinstance(data, list):
@@ -22895,7 +22905,9 @@ class CRMRepository:
             if str(value or "").strip().lower() in {"correo", "whatsapp", "llamada"}
         }
         channel_columns = {
-            "correo": "envios_correo_total",
+            # La metadata debe mostrar la misma población que el listado:
+            # "sin envío" bloquea cualquier intento ya reservado.
+            "correo": "envios_correo_intentos_total" if con_envio is False else "envios_correo_total",
             "whatsapp": "envios_whatsapp_total",
             "llamada": "envios_voz_total",
         }

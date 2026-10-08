@@ -712,3 +712,21 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - El camino legado de entrega por `source_batch_id` queda reservado para lotes
   históricos sin manifiesto; las campañas nuevas usan bloques persistentes.
 - Brevo y WhatsApp no comparten esta cola ni sus límites.
+
+# 2026-10-08 — Disponibilidad de correo sin reintentos accidentales
+
+- Se confirmó que cuatro preparaciones sumaron 3,229 targets, pero sólo 1,427
+  prospectos distintos: el filtro basado únicamente en aceptación permitía
+  repetir pendientes, suprimidos y fallidos.
+- Se agregó `prospeccion_prospectos.envios_correo_intentos_total`, separado de
+  `envios_correo_total`. El primero bloquea la selección automática; el segundo
+  conserva la métrica de aceptación/entrega.
+- Se agregó un índice por tenant, intentos, validación y fecha, se reconstruyó
+  el histórico y se actualizó el worker bulk para mantenerlo sin escaneos por
+  prospecto.
+- La migración `20261008_214500_prospeccion_correo_intentos_no_repetir.sql` fue
+  aplicada y verificada en Supabase. Falta desplegar el backend que consume el
+  nuevo campo y comprobar la respuesta HTTP de producción.
+- Los filtros de estado de validación fuerzan ahora `count=exact`; se corrigió
+  la diferencia entre las 57 filas reales de correo pendiente y una estimación
+  de 5,554 mostrada por el planificador.
