@@ -31,7 +31,8 @@ Plan iniciado con la revisión del repositorio al 2026-08-12. El núcleo de tabl
 8. [Sincronización Postmark por tenant](./07-sincronizacion-postmark-por-tenant.md)
 9. [Sincronización Brevo y métricas unificadas](./08-sincronizacion-brevo-y-metricas.md)
 10. [Incidente de lote 1001 y persistencia parcial](./09-incidente-lote-1001-20261002.md)
-11. [Changelog](./CHANGELOG.md)
+11. [Refactor de cola multi-tenant y estados de entrega](./11-refactor-cola-multitenant-y-estados-entrega.md)
+12. [Changelog](./CHANGELOG.md)
 
 ## Decisiones iniciales
 

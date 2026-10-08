@@ -10169,16 +10169,34 @@ def _quote_from_row(row: dict[str, Any]) -> LeadQuote:
                 if not isinstance(document_row, dict):
                     continue
                 file_row = _single_related(document_row.get("archivo"))
-                if not isinstance(file_row, dict) or not file_row.get("id"):
+                if not document_row.get("id"):
                     continue
                 order_documents.append(
                     LeadQuoteSalesOrderDocument(
                         id=document_row.get("id"),
                         tipo_documento=document_row.get("tipo_documento") or "",
-                        nombre_original=file_row.get("nombre_original") or "Documento",
-                        content_type=file_row.get("content_type"),
-                        tamano_bytes=file_row.get("tamano_bytes"),
-                        subido_en=_parse_timestamp(file_row.get("subido_en")),
+                        nombre_original=(
+                            file_row.get("nombre_original")
+                            if isinstance(file_row, dict) and file_row.get("id")
+                            else None
+                        ),
+                        content_type=(
+                            file_row.get("content_type")
+                            if isinstance(file_row, dict) and file_row.get("id")
+                            else None
+                        ),
+                        tamano_bytes=(
+                            file_row.get("tamano_bytes")
+                            if isinstance(file_row, dict) and file_row.get("id")
+                            else None
+                        ),
+                        subido_en=(
+                            _parse_timestamp(file_row.get("subido_en"))
+                            if isinstance(file_row, dict) and file_row.get("id")
+                            else _parse_timestamp(document_row.get("creado_en"))
+                        ),
+                        referencia=document_row.get("referencia"),
+                        observaciones=document_row.get("observaciones"),
                     )
                 )
         order_items: list[LeadQuoteSalesOrderItem] = []
@@ -17606,10 +17624,12 @@ class LeadQuoteSendPayload(LeadQuoteCreatePayload):
 class LeadQuoteSalesOrderDocument(BaseModel):
     id: UUID
     tipo_documento: str
-    nombre_original: str
+    nombre_original: str | None = None
     content_type: str | None = None
     tamano_bytes: int | None = None
     subido_en: datetime | None = None
+    referencia: str | None = None
+    observaciones: str | None = None
 
 
 class LeadQuoteSalesOrderSale(BaseModel):

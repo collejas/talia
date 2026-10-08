@@ -1646,8 +1646,8 @@ export function LeadDrawer({
     }
   }, [card]);
 
-  const fetchQuotes = useCallback(async () => {
-    if (!card) return;
+  const fetchQuotes = useCallback(async (): Promise<LeadQuoteEntry[] | null> => {
+    if (!card) return null;
     setQuotesState((prev) => {
       if (prev.status === "loading") return prev;
       return { status: "loading", data: prev.data };
@@ -1663,7 +1663,7 @@ export function LeadDrawer({
           data: prev.data,
           error: message,
         }));
-        return;
+        return null;
       }
       const rows = Array.isArray(body?.quotes) ? (body.quotes as unknown[]) : [];
       const mapped = rows.map((row) => mapQuoteEntry(row));
@@ -1684,6 +1684,7 @@ export function LeadDrawer({
         }
         return next;
       });
+      return mapped;
     } catch (fetchError) {
       setQuotesState((prev) => ({
         status: "error",
@@ -1693,6 +1694,7 @@ export function LeadDrawer({
             ? fetchError.message
             : "No se pudieron cargar las cotizaciones.",
       }));
+      return null;
     }
   }, [card]);
 
@@ -3369,12 +3371,40 @@ export function LeadDrawer({
     setCompletitudLoading(true);
     try {
       await refreshCompletitud(quote.id);
+      // La validación garantiza que exista el pedido, pero no devuelve sus
+      // datos de captura. Recargar la cotización después de validar evita
+      // abrir el formulario con una versión anterior (o sin pedido).
+      const refreshedQuotes = await fetchQuotes();
+      const refreshedQuote = refreshedQuotes?.find((entry) => entry.id === quote.id);
+      if (refreshedQuote) {
+        const confirmationMethod =
+          (refreshedQuote.pedido?.forma_confirmacion as OrderConfirmationMethod | null) ?? "orden_compra";
+        setCompletitudQuote(refreshedQuote);
+        setFormalizeQuote(refreshedQuote);
+        setOrderReference(refreshedQuote.pedido?.referencia_pedido_cliente ?? "");
+        setOrderDate(refreshedQuote.pedido?.fecha_orden_cliente ?? "");
+        setOrderConfirmationMethod(confirmationMethod);
+        setOrderConfirmationDate(
+          refreshedQuote.pedido?.fecha_confirmacion_cliente ?? new Date().toISOString().slice(0, 10),
+        );
+        setOrderEvidenceReference(
+          refreshedQuote.pedido?.documentos.find(
+            (document) => document.tipo_documento === confirmationMethod,
+          )?.referencia ?? "",
+        );
+        setOrderConfirmationNotes(refreshedQuote.pedido?.observaciones_confirmacion ?? "");
+        setOrderDocumentUploaded(
+          refreshedQuote.pedido?.documentos.find(
+            (document) => document.tipo_documento === confirmationMethod,
+          ) ?? null,
+        );
+      }
     } catch (error) {
       setCompletitudError(error instanceof Error ? error.message : "No se pudo revisar la completitud del pedido.");
     } finally {
       setCompletitudLoading(false);
     }
-  }, [refreshCompletitud]);
+  }, [fetchQuotes, refreshCompletitud]);
 
   const handleSaveCompletitudEvidence = useCallback(async () => {
     if (!formalizeQuote) return;
