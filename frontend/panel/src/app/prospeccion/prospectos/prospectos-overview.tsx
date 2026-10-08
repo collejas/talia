@@ -267,7 +267,10 @@ export function ProspectosRecentBatches({ batches, loading, error, onRefresh }: 
           ))
         ) : batches.length ? (
           batches.map((batch) => {
-            const metrics = batchDeliveryMetrics(batch.totales, batch.total_envios)
+            // El denominador es la selección original, no sólo los envíos
+            // operativos ya materializados. Así un fallo de preparación no
+            // convierte un lote de 600 en una tarjeta "0/100".
+            const metrics = batchDeliveryMetrics(batch.totales, batch.total_prospectos)
             return (
               <div key={batch.id} className="flex h-full max-w-[280px] flex-col rounded-lg border bg-background/80 p-2.5 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
@@ -282,6 +285,11 @@ export function ProspectosRecentBatches({ batches, loading, error, onRefresh }: 
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   {(batch.total_prospectos ?? 0).toLocaleString("es-MX")} prospectos · {(batch.canales ?? []).map((canal) => CHANNEL_LABELS[canal] ?? canal).join(", ") || "Sin canales"}
                 </p>
+                {(batch.preparacion_fallidos ?? 0) > 0 ? (
+                  <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">
+                    Preparación parcial: {Number(batch.preparacion_fallidos).toLocaleString("es-MX")} por reintentar
+                  </p>
+                ) : null}
                 {typeof batch.metadata?.["campana_nombre"] === "string" ? (
                   <p className="mt-1 text-[11px] text-muted-foreground">Campaña: {String(batch.metadata["campana_nombre"])}</p>
                 ) : null}

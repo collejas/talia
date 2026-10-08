@@ -730,3 +730,9 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
 - Los filtros de estado de validación fuerzan ahora `count=exact`; se corrigió
   la diferencia entre las 57 filas reales de correo pendiente y una estimación
   de 5,554 mostrada por el planificador.
+- El lote `67acc70f-86d5-4e8a-b208-ff90c5a3f4bb` confirmó 100 targets
+  preparados y 500 fallidos por timeout de la RPC bulk. Se dejó preparado el
+  reintento idempotente de los 500 y la persistencia local del worker se redujo
+  a sublotes de 50; Postmark continúa recibiendo lotes de hasta 500.
+- La tarjeta de últimos envíos usará el total original de prospectos como
+  denominador, evitando mostrar `0/100` para un lote seleccionado de 600.

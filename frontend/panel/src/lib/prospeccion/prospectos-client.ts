@@ -533,6 +533,11 @@ export type ContactoBatch = {
   intervalo_entre_lotes_segundos?: number | null
   total_lotes?: number | null
   estrategia_plantillas?: string | null
+  preparacion_estado?: string | null
+  preparacion_total?: number | null
+  preparacion_preparados?: number | null
+  preparacion_fallidos?: number | null
+  preparacion_error?: string | null
 }
 
 export type ContactoEnvio = {

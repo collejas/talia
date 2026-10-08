@@ -23988,7 +23988,7 @@ class CRMRepository:
         """Obtiene lotes de contacto con filtros básicos."""
 
         params: dict[str, str] = {
-            "select": "id,iniciado_por,canales,total_prospectos,estado,programado_en,finalizado_en,creado_en,campana_id,lista_id,titulo,filtros,programacion,envios_por_lote,intervalo_entre_lotes_segundos,total_lotes,estrategia_plantillas",
+            "select": "id,iniciado_por,canales,total_prospectos,estado,programado_en,finalizado_en,creado_en,campana_id,lista_id,titulo,filtros,programacion,envios_por_lote,intervalo_entre_lotes_segundos,total_lotes,estrategia_plantillas,preparacion_estado,preparacion_total,preparacion_preparados,preparacion_fallidos,preparacion_error",
             "limit": str(limit),
             "offset": str(offset),
             "order": order or "creado_en.desc",
@@ -26866,10 +26866,13 @@ class CRMRepository:
         if not entries:
             return []
         created: list[dict[str, Any]] = []
-        for start in range(0, len(entries), 500):
+        # El límite del proveedor sigue siendo 500, pero la persistencia local
+        # debe usar sublotes pequeños para no mantener una RPC de Supabase
+        # abierta durante todo el bloque cuando hay contención o latencia.
+        for start in range(0, len(entries), 50):
             chunk = [
                 dict(entry, organizacion_id=str(organizacion_id))
-                for entry in entries[start : start + 500]
+                for entry in entries[start : start + 50]
             ]
             data = await self._rpc(
                 "worker_insert_postmark_contact_envios_bulk",
