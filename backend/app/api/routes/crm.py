@@ -610,30 +610,12 @@ async def _get_cached_campanas_atribucion(
             )
             normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
             if not normalized_rows and date_from is not None and date_to is not None:
-                # El snapshot se genera solo para periodos exactos. Si el usuario
-                # solicita un periodo aún no generado, se construye una vez y se
-                # vuelve a leer; los siguientes accesos permanecen en caché.
-                await asyncio.wait_for(
-                    repo.refresh_prospeccion_campana_atribucion_cache(
-                        organizacion_id=organizacion_id,
-                        date_from_iso=date_from.isoformat(),
-                        date_to_iso=date_to.isoformat(),
-                        campana_id=campana_id,
-                    ),
-                    timeout=15.0,
-                )
-                rows = await asyncio.wait_for(
-                    repo.get_prospeccion_campana_atribucion_cache_rango(
-                        usuario_token=user_token,
-                        organizacion_id=organizacion_id,
-                        campana_id=campana_id,
-                        date_from_iso=date_from.isoformat(),
-                        date_to_iso=date_to.isoformat(),
-                        limit=200,
-                        offset=0,
-                    ),
-                    timeout=CAMPANAS_ATRIBUCION_QUERY_TIMEOUT_SECONDS,
-                )
+                # Nunca reconstruir el histórico dentro de una petición del
+                # panel. La RPC de refresh puede recorrer envíos, logs y
+                # sesiones durante minutos y bloquear otras consultas del
+                # tenant. El snapshot faltante se debe generar por worker o
+                # tarea programada; la navegación queda degradada pero rápida.
+                raise CRMRepositoryError("prospeccion_campana_atribucion_cache_miss")
         except Exception:
             _CAMPANAS_ATRIBUCION_FAILURES[cache_key] = (
                 now + CAMPANAS_ATRIBUCION_FAILURE_COOLDOWN_SECONDS

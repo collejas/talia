@@ -1,3 +1,13 @@
+## 2026-10-09 — Eliminar refresh histórico dentro de peticiones
+
+- Se corrigió la ruta de atribución de campañas para que una ausencia de
+  snapshot no ejecute `prospeccion_campana_atribucion_cache_refresh` durante la
+  navegación del panel.
+- La reconstrucción de atribución queda fuera del request interactivo y debe
+  ejecutarse por worker/tarea programada con concurrencia controlada.
+- Ante un snapshot faltante, el endpoint responde degradado con advertencia en
+  lugar de mantener conexiones abiertas hasta provocar `57014`.
+
 # Changelog — Plan de mejora de latencia
 
 Registro de hallazgos, decisiones y mejoras propuestas para reducir la latencia
