@@ -16246,6 +16246,146 @@ class CRMRepository:
             return UUID(result)
         raise CRMRepositoryError(f"Respuesta inesperada al ajustar inventario: {result!r}")
 
+    async def list_transformaciones(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "nombre.asc,version.desc",
+            "limit": str(max(1, min(limit, 500))),
+            "select": (
+                "id,organizacion_id,codigo,nombre,version,estado,unidad_produccion,"
+                "cantidad_produccion,merma_esperada,activo,"
+                "componentes:transformacion_componentes(id,catalog_item_id,cantidad_requerida,unidad,porcentaje_merma,orden,"
+                "catalog_item:catalog_items(id,codigo,nombre,unidad)),"
+                "salidas:transformacion_salidas(id,catalog_item_id,cantidad_producida,unidad,porcentaje_costo,es_merma,nombre_merma,"
+                "catalog_item:catalog_items(id,codigo,nombre,unidad))"
+            ),
+        }
+        response = await self._request("GET", "/rest/v1/transformaciones", params=params, organizacion_id=organizacion_id)
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar transformaciones: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def create_transformacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        codigo: str,
+        nombre: str,
+        version: int,
+        unidad_produccion: str,
+        cantidad_produccion: float,
+        merma_esperada: float,
+        componentes: list[dict[str, Any]],
+        salidas: list[dict[str, Any]],
+        creado_por: UUID | None,
+    ) -> UUID:
+        result = await self._rpc_service_role(
+            "crm_crear_transformacion",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_codigo": codigo,
+                "p_nombre": nombre,
+                "p_version": version,
+                "p_unidad_produccion": unidad_produccion,
+                "p_cantidad_produccion": cantidad_produccion,
+                "p_merma_esperada": merma_esperada,
+                "p_componentes": componentes,
+                "p_salidas": salidas,
+                "p_creado_por": str(creado_por) if creado_por else None,
+            },
+        )
+        if isinstance(result, str):
+            return UUID(result)
+        if isinstance(result, dict):
+            for value in result.values():
+                try:
+                    return UUID(str(value))
+                except (ValueError, TypeError):
+                    continue
+        raise CRMRepositoryError(f"Respuesta inesperada al crear transformación: {result!r}")
+
+    async def activate_transformacion(self, *, organizacion_id: UUID, transformacion_id: UUID) -> None:
+        response = await self._request_service_role(
+            "PATCH",
+            "/rest/v1/transformaciones",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{transformacion_id}",
+                "estado": "eq.borrador",
+            },
+            json={"estado": "activa", "actualizado_en": datetime.now(timezone.utc).isoformat()},
+            prefer="return=minimal",
+            organizacion_id=organizacion_id,
+        )
+        if response.status_code >= 400:
+            raise CRMRepositoryError("transformacion_no_se_pudo_activar")
+
+    async def create_orden_transformacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        transformacion_id: UUID,
+        almacen_origen_id: UUID,
+        almacen_destino_id: UUID,
+        cantidad_lotes: float,
+        fecha_operacion: datetime | None,
+        observaciones: str | None,
+        usuario_responsable_id: UUID | None,
+    ) -> UUID:
+        result = await self._rpc_service_role(
+            "crm_crear_orden_transformacion",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_transformacion_id": str(transformacion_id),
+                "p_almacen_origen_id": str(almacen_origen_id),
+                "p_almacen_destino_id": str(almacen_destino_id),
+                "p_cantidad_lotes": cantidad_lotes,
+                "p_fecha_operacion": fecha_operacion.isoformat() if fecha_operacion else None,
+                "p_observaciones": observaciones,
+                "p_usuario_responsable_id": str(usuario_responsable_id) if usuario_responsable_id else None,
+            },
+        )
+        if isinstance(result, str):
+            return UUID(result)
+        if isinstance(result, dict):
+            for value in result.values():
+                try:
+                    return UUID(str(value))
+                except (ValueError, TypeError):
+                    continue
+        raise CRMRepositoryError(f"Respuesta inesperada al crear orden de transformación: {result!r}")
+
+    async def execute_orden_transformacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        orden_transformacion_id: UUID,
+        usuario_id: UUID | None,
+    ) -> UUID:
+        result = await self._rpc_service_role(
+            "crm_ejecutar_orden_transformacion",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_orden_transformacion_id": str(orden_transformacion_id),
+                "p_usuario_id": str(usuario_id) if usuario_id else None,
+            },
+        )
+        if isinstance(result, str):
+            return UUID(result)
+        if isinstance(result, dict):
+            for value in result.values():
+                try:
+                    return UUID(str(value))
+                except (ValueError, TypeError):
+                    continue
+        raise CRMRepositoryError(f"Respuesta inesperada al ejecutar transformación: {result!r}")
+
     async def reserve_quote_inventory(
         self,
         *,
@@ -30691,6 +30831,19 @@ class CRMRepository:
             return {}
         try:
             return resp.json()
+        except ValueError as exc:
+            raise CRMRepositoryError(f"Respuesta inválida de RPC {function_name}: {exc}") from exc
+
+    async def _rpc_service_role(self, function_name: str, payload: dict[str, Any]) -> Any:
+        response = await self._request_service_role(
+            "POST",
+            f"/rest/v1/rpc/{function_name}",
+            json=payload,
+        )
+        if response.status_code == 204:
+            return {}
+        try:
+            return response.json()
         except ValueError as exc:
             raise CRMRepositoryError(f"Respuesta inválida de RPC {function_name}: {exc}") from exc
 

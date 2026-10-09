@@ -16634,6 +16634,78 @@ class CRMInventarioOperativoResponse(BaseModel):
     existencias: list[CRMInventarioOperativoExistencia]
 
 
+class CRMTransformacionComponenteInput(BaseModel):
+    catalog_item_id: UUID
+    cantidad_requerida: Annotated[float, Field(gt=0)]
+    unidad: str = Field(min_length=1, max_length=80)
+    porcentaje_merma: Annotated[float, Field(ge=0, le=100)] = 0
+    orden: Annotated[int, Field(ge=1)] = 1
+
+
+class CRMTransformacionSalidaInput(BaseModel):
+    catalog_item_id: UUID | None = None
+    cantidad_producida: Annotated[float, Field(gt=0)]
+    unidad: str = Field(min_length=1, max_length=80)
+    porcentaje_costo: Annotated[float, Field(ge=0, le=100)] = 100
+    es_merma: bool = False
+    nombre_merma: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def validate_output(self) -> "CRMTransformacionSalidaInput":
+        if self.es_merma and (self.catalog_item_id is not None or not self.nombre_merma or not self.nombre_merma.strip()):
+            raise ValueError("una_merma_requiere_nombre_y_no_producto")
+        if not self.es_merma and self.catalog_item_id is None:
+            raise ValueError("una_salida_requiere_producto")
+        return self
+
+
+class CRMTransformacionCreate(BaseModel):
+    codigo: str = Field(min_length=1, max_length=80)
+    nombre: str = Field(min_length=1, max_length=255)
+    version: Annotated[int, Field(ge=1)] = 1
+    unidad_produccion: str = Field(default="unidad", min_length=1, max_length=80)
+    cantidad_produccion: Annotated[float, Field(gt=0)] = 1
+    merma_esperada: Annotated[float, Field(ge=0, le=100)] = 0
+    componentes: list[CRMTransformacionComponenteInput] = Field(min_length=1, max_length=100)
+    salidas: list[CRMTransformacionSalidaInput] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_cost_distribution(self) -> "CRMTransformacionCreate":
+        cost_total = sum(item.porcentaje_costo for item in self.salidas if not item.es_merma)
+        if abs(cost_total - 100) > 0.0001:
+            raise ValueError("la_distribucion_de_costo_debe_sumar_100")
+        return self
+
+
+class CRMTransformacionSummary(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    codigo: str
+    nombre: str
+    version: int
+    estado: str
+    unidad_produccion: str
+    cantidad_produccion: float
+    merma_esperada: float
+    activo: bool
+    componentes: list[dict[str, Any]] = Field(default_factory=list)
+    salidas: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class CRMOrdenTransformacionCreate(BaseModel):
+    transformacion_id: UUID
+    almacen_origen_id: UUID
+    almacen_destino_id: UUID
+    cantidad_lotes: Annotated[float, Field(gt=0)] = 1
+    fecha_operacion: datetime | None = None
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
+class CRMOrdenTransformacionExecuteResponse(BaseModel):
+    id: UUID
+    estado: str
+
+
 class CRMOrdenCompraCreateItem(BaseModel):
     catalog_item_id: UUID
     proveedor_item_id: UUID | None = None
@@ -23085,6 +23157,124 @@ async def crear_ajuste_inventario_operativo(
     if row is None:
         raise HTTPException(status_code=404, detail="inventario_existencia_not_found")
     return CRMInventarioExistencia.model_validate(row)
+
+
+@router.get("/operacion/transformaciones", response_model=list[CRMTransformacionSummary])
+async def listar_transformaciones_operativas(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.transformations.view")),
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[CRMTransformacionSummary]:
+    try:
+        rows = await repo.list_transformaciones(organizacion_id=organizacion_id, limit=limit)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="no_se_pudieron_consultar_transformaciones") from exc
+    return [CRMTransformacionSummary.model_validate(row) for row in rows]
+
+
+@router.post("/operacion/transformaciones", response_model=CRMTransformacionSummary, status_code=status.HTTP_201_CREATED)
+async def crear_transformacion_operativa(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.transformations.manage")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMTransformacionCreate,
+) -> CRMTransformacionSummary:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="usuario_no_autenticado")
+    try:
+        transformacion_id = await repo.create_transformacion(
+            organizacion_id=organizacion_id,
+            codigo=payload.codigo,
+            nombre=payload.nombre,
+            version=payload.version,
+            unidad_produccion=payload.unidad_produccion,
+            cantidad_produccion=payload.cantidad_produccion,
+            merma_esperada=payload.merma_esperada,
+            componentes=[item.model_dump(mode="json") for item in payload.componentes],
+            salidas=[item.model_dump(mode="json") for item in payload.salidas],
+            creado_por=usuario_id,
+        )
+        rows = await repo.list_transformaciones(organizacion_id=organizacion_id, limit=500)
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "duplicate" in detail.lower() or "unique" in detail.lower():
+            raise HTTPException(status_code=409, detail="codigo_version_transformacion_duplicado") from exc
+        raise HTTPException(status_code=422, detail=detail) from exc
+    row = next((item for item in rows if str(item.get("id")) == str(transformacion_id)), None)
+    if row is None:
+        raise HTTPException(status_code=502, detail="transformacion_creada_no_disponible")
+    return CRMTransformacionSummary.model_validate(row)
+
+
+@router.post("/operacion/transformaciones/ordenes", response_model=CRMOrdenTransformacionExecuteResponse, status_code=status.HTTP_201_CREATED)
+async def crear_orden_transformacion_operativa(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.transformations.execute")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    payload: CRMOrdenTransformacionCreate,
+) -> CRMOrdenTransformacionExecuteResponse:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="usuario_no_autenticado")
+    try:
+        order_id = await repo.create_orden_transformacion(
+            organizacion_id=organizacion_id,
+            transformacion_id=payload.transformacion_id,
+            almacen_origen_id=payload.almacen_origen_id,
+            almacen_destino_id=payload.almacen_destino_id,
+            cantidad_lotes=payload.cantidad_lotes,
+            fecha_operacion=payload.fecha_operacion,
+            observaciones=payload.observaciones,
+            usuario_responsable_id=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return CRMOrdenTransformacionExecuteResponse(id=order_id, estado="confirmada")
+
+
+@router.post("/operacion/transformaciones/{transformacion_id}/activar", response_model=CRMOrdenTransformacionExecuteResponse)
+async def activar_transformacion_operativa(
+    transformacion_id: UUID,
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.transformations.manage")),
+) -> CRMOrdenTransformacionExecuteResponse:
+    try:
+        await repo.activate_transformacion(organizacion_id=organizacion_id, transformacion_id=transformacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return CRMOrdenTransformacionExecuteResponse(id=transformacion_id, estado="activa")
+
+
+@router.post("/operacion/transformaciones/ordenes/{orden_transformacion_id}/ejecutar", response_model=CRMOrdenTransformacionExecuteResponse)
+async def ejecutar_orden_transformacion_operativa(
+    orden_transformacion_id: UUID,
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("inventory.transformations.execute")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> CRMOrdenTransformacionExecuteResponse:
+    if usuario_id is None:
+        raise HTTPException(status_code=401, detail="usuario_no_autenticado")
+    try:
+        order_id = await repo.execute_orden_transformacion(
+            organizacion_id=organizacion_id,
+            orden_transformacion_id=orden_transformacion_id,
+            usuario_id=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "insuficiente" in detail.lower() or "no_ejecutable" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=422, detail=detail) from exc
+    return CRMOrdenTransformacionExecuteResponse(id=order_id, estado="ejecutada")
 
 
 @router.get("/catalogo-precios/branding", response_model=CRMCatalogPriceBrand)

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getPanelApiBaseUrl } from "@/lib/api/panel"
+import { decodeJwtUserId } from "@/lib/auth/jwt"
 import { resolveServerAccessToken } from "@/lib/auth/server-session"
 import { resolveOrganizacionId } from "@/lib/settings/org"
 
@@ -49,6 +50,7 @@ export async function proxyProspeccionRequest(
   const rawBody = shouldSendBody ? await request.text() : null
   const body = rawBody && rawBody.length ? rawBody : undefined
   const organizacionId = await resolveOrganizacionId()
+  const usuarioId = decodeJwtUserId(token)
 
   let backendResponse: Response
   try {
@@ -59,6 +61,7 @@ export async function proxyProspeccionRequest(
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
         ...(organizacionId ? { "X-Organizacion-Id": organizacionId } : {}),
+        ...(usuarioId ? { "X-Usuario-Id": usuarioId } : {}),
       },
       cache: "no-store",
       body,
