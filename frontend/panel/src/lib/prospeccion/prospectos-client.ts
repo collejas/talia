@@ -260,6 +260,8 @@ export type ProspectosResponse = {
   items: ProspectoItem[]
   total: number
   total_exact?: boolean
+  count_source?: "summary" | "postgrest_exact" | "postgrest_planned" | string
+  degraded?: boolean
   has_more?: boolean
   limit: number
   offset: number

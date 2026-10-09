@@ -488,11 +488,14 @@ CAMPANAS_ATRIBUCION_CACHE_TTL_SECONDS = 180.0
 CAMPANAS_ATRIBUCION_CACHE_MAX_ENTRIES = 256
 CAMPANAS_ATRIBUCION_QUERY_TIMEOUT_SECONDS = 8.0
 CAMPANAS_ATRIBUCION_FAILURE_COOLDOWN_SECONDS = 300.0
+CAMPANAS_ATRIBUCION_MISS_COOLDOWN_SECONDS = 5.0
+CAMPANAS_ATRIBUCION_STALE_AFTER_SECONDS = 1200.0
 _CAMPANAS_ATRIBUCION_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _CAMPANAS_ATRIBUCION_FAILURES: dict[str, float] = {}
-# La atribución anual es costosa. Serializar los misses evita que dos cambios
-# de rango del panel ejecuten la misma familia de agregados al mismo tiempo.
+# La atribución anual es costosa. El lock por clave deduplica el mismo rango,
+# pero no serializa tenants o períodos independientes.
 _CAMPANAS_ATRIBUCION_CACHE_LOCK = asyncio.Lock()
+_CAMPANAS_ATRIBUCION_KEY_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def _demografia_response_cache_ttl_seconds(
@@ -571,18 +574,21 @@ async def _get_cached_campanas_atribucion(
         date_to=date_to,
     )
     now = time.monotonic()
-    async with _CAMPANAS_ATRIBUCION_CACHE_LOCK:
-        cached = _CAMPANAS_ATRIBUCION_CACHE.get(cache_key)
-        if cached:
-            expires_at, rows = cached
-            if expires_at > now:
-                return [dict(row) for row in rows]
-            _CAMPANAS_ATRIBUCION_CACHE.pop(cache_key, None)
 
-        failure_until = _CAMPANAS_ATRIBUCION_FAILURES.get(cache_key, 0.0)
-        if failure_until > now:
-            raise CRMRepositoryError("prospeccion_campana_template_atribucion_cooldown")
-        _CAMPANAS_ATRIBUCION_FAILURES.pop(cache_key, None)
+    async with _CAMPANAS_ATRIBUCION_CACHE_LOCK:
+        key_lock = _CAMPANAS_ATRIBUCION_KEY_LOCKS.setdefault(cache_key, asyncio.Lock())
+
+    async with key_lock:
+        async with _CAMPANAS_ATRIBUCION_CACHE_LOCK:
+            cached = _CAMPANAS_ATRIBUCION_CACHE.get(cache_key)
+            if cached and cached[0] > time.monotonic():
+                return [dict(row) for row in cached[1]]
+
+            current_monotonic = time.monotonic()
+            failure_until = _CAMPANAS_ATRIBUCION_FAILURES.get(cache_key, 0.0)
+            if failure_until > current_monotonic:
+                raise CRMRepositoryError("prospeccion_campana_template_atribucion_cooldown")
+            _CAMPANAS_ATRIBUCION_FAILURES.pop(cache_key, None)
 
         try:
             if date_from is not None and date_to is not None:
@@ -611,26 +617,70 @@ async def _get_cached_campanas_atribucion(
             normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
             if not normalized_rows and date_from is not None and date_to is not None:
                 # Nunca reconstruir el histórico dentro de una petición del
-                # panel. La RPC de refresh puede recorrer envíos, logs y
-                # sesiones durante minutos y bloquear otras consultas del
-                # tenant. El snapshot faltante se debe generar por worker o
-                # tarea programada; la navegación queda degradada pero rápida.
+                # panel. La RPC de refresh se ejecuta exclusivamente en worker.
+                await repo.enqueue_prospeccion_campana_atribucion_job(
+                    organizacion_id=organizacion_id,
+                    date_from_iso=date_from.isoformat(),
+                    date_to_iso=date_to.isoformat(),
+                    campana_id=campana_id,
+                )
                 raise CRMRepositoryError("prospeccion_campana_atribucion_cache_miss")
-        except Exception:
-            _CAMPANAS_ATRIBUCION_FAILURES[cache_key] = (
-                now + CAMPANAS_ATRIBUCION_FAILURE_COOLDOWN_SECONDS
-            )
+        except Exception as exc:
+            async with _CAMPANAS_ATRIBUCION_CACHE_LOCK:
+                cooldown_seconds = (
+                    CAMPANAS_ATRIBUCION_MISS_COOLDOWN_SECONDS
+                    if "prospeccion_campana_atribucion_cache_miss" in str(exc)
+                    else CAMPANAS_ATRIBUCION_FAILURE_COOLDOWN_SECONDS
+                )
+                _CAMPANAS_ATRIBUCION_FAILURES[cache_key] = (
+                    time.monotonic() + cooldown_seconds
+                )
             raise
-        normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
-        _CAMPANAS_ATRIBUCION_CACHE[cache_key] = (
-            now + CAMPANAS_ATRIBUCION_CACHE_TTL_SECONDS,
-            normalized_rows,
+
+        snapshot_updated_at = max(
+            (
+                parsed
+                for parsed in (_parse_timestamp(row.get("actualizado_en")) for row in normalized_rows)
+                if parsed is not None
+            ),
+            default=None,
         )
-        while len(_CAMPANAS_ATRIBUCION_CACHE) > CAMPANAS_ATRIBUCION_CACHE_MAX_ENTRIES:
-            oldest_key = next(iter(_CAMPANAS_ATRIBUCION_CACHE), None)
-            if oldest_key is None:
-                break
-            _CAMPANAS_ATRIBUCION_CACHE.pop(oldest_key, None)
+        snapshot_is_stale = bool(
+            date_from is not None
+            and date_to is not None
+            and snapshot_updated_at is not None
+            and snapshot_updated_at < datetime.now(timezone.utc)
+            - timedelta(seconds=CAMPANAS_ATRIBUCION_STALE_AFTER_SECONDS)
+        )
+        if snapshot_is_stale:
+            try:
+                await repo.enqueue_prospeccion_campana_atribucion_job(
+                    organizacion_id=organizacion_id,
+                    date_from_iso=date_from.isoformat(),
+                    date_to_iso=date_to.isoformat(),
+                    campana_id=campana_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "crm.campanas_atribucion.refresh_enqueue_failed",
+                    extra={"error": str(exc), "organizacion_id": str(organizacion_id)},
+                )
+
+        cache_ttl = (
+            min(CAMPANAS_ATRIBUCION_CACHE_TTL_SECONDS, 30)
+            if snapshot_is_stale
+            else CAMPANAS_ATRIBUCION_CACHE_TTL_SECONDS
+        )
+        async with _CAMPANAS_ATRIBUCION_CACHE_LOCK:
+            _CAMPANAS_ATRIBUCION_CACHE[cache_key] = (
+                time.monotonic() + cache_ttl,
+                normalized_rows,
+            )
+            while len(_CAMPANAS_ATRIBUCION_CACHE) > CAMPANAS_ATRIBUCION_CACHE_MAX_ENTRIES:
+                oldest_key = next(iter(_CAMPANAS_ATRIBUCION_CACHE), None)
+                if oldest_key is None:
+                    break
+                _CAMPANAS_ATRIBUCION_CACHE.pop(oldest_key, None)
         return [dict(row) for row in normalized_rows]
 GOOGLE_TRENDS_ALLOWED_ORGANIZACION_ID = UUID("00000000-0000-0000-0000-000000000001")
 
@@ -37297,6 +37347,63 @@ async def listar_prospectos(
     effective_opt_out_correo = (
         opt_out_correo if opt_out_correo is not None else params.opt_out_correo
     )
+    fast_count_eligible = (
+        not params.search
+        and not params.fuente
+        and not params.segmento
+        and not segmentos
+        and not params.tipo_negocio
+        and not params.carrier_type
+        and not params.stage
+        and not params.email_domain_relation
+        and params.whatsapp_permitido is None
+        and params.llamada_permitida is None
+        and params.phone_present is None
+        and params.email_present is None
+        and params.website_present is None
+        and params.opt_out_canal is None
+        and (
+            params.opt_out_whatsapp is None
+            or "whatsapp" not in con_envio_canales_values
+        )
+        and params.campana_id is None
+        and template_id is None
+        and not params.date_from
+        and not params.date_to
+        and not params.geo_estado
+        and not params.geo_municipio
+        and params.min_rating is None
+        and not params.estrato_group
+        and not metadata_query
+        and not actividad
+        and params.con_scraper is None
+        and all(value is None for value in (
+            envios_correo_min, envios_correo_max,
+            envios_whatsapp_min, envios_whatsapp_max,
+            envios_voz_min, envios_voz_max,
+        ))
+        and set(con_envio_canales_values).issubset({"correo"})
+        and params.con_envio in (None, False)
+        and (params.con_envio is None or bool(con_envio_canales_values))
+        and not (
+            params.con_envio is False
+            and "correo" in con_envio_canales_values
+            and params.email_lookup_status != "valido"
+        )
+        and not (params.lookup_status and params.email_lookup_status)
+        and not (params.lookup_status and params.website_lookup_status)
+        and not (params.email_lookup_status and params.website_lookup_status)
+        and (
+            effective_opt_out_correo is None
+            or (
+                effective_opt_out_correo is False
+                and params.email_lookup_status == "valido"
+                and params.con_envio is False
+                and "correo" in con_envio_canales_values
+            )
+        )
+    )
+    total_is_exact = effective_count_exact or fast_count_eligible
     try:
         order_value = (
             "display_name.asc.nullslast"
@@ -37358,8 +37465,23 @@ async def listar_prospectos(
                 envios_voz_min=envios_voz_min,
                 envios_voz_max=envios_voz_max,
                 timezone_name=effective_timezone,
-                count_exact=effective_count_exact,
+                count_exact=effective_count_exact and not fast_count_eligible,
             )
+            if fast_count_eligible:
+                try:
+                    total = await repo.get_prospeccion_recuento_rapido(
+                        usuario_token=user_token,
+                        lookup_status=params.lookup_status,
+                        email_lookup_status=params.email_lookup_status,
+                        website_lookup_status=params.website_lookup_status,
+                        opt_out_correo=effective_opt_out_correo,
+                        con_envio_correo=(False if params.con_envio is False and "correo" in con_envio_canales_values else None),
+                    )
+                except CRMRepositoryError as exc:
+                    logger.warning(
+                        "crm.prospectos.fast_count.degraded",
+                        extra={"error": str(exc), "organizacion_id": str(organizacion_id)},
+                    )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -37419,12 +37541,21 @@ async def listar_prospectos(
             "ok": True,
             "items": rows,
             "total": total,
-            "total_exact": effective_count_exact,
+            "total_exact": total_is_exact,
             "has_more": (
                 params.offset + len(rows) < total
-                if effective_count_exact
+                if total_is_exact
                 else len(rows) >= params.limit
             ),
+            "count_source": (
+                "summary"
+                if fast_count_eligible
+                else "postgrest_exact"
+                if effective_count_exact
+                else "postgrest_planned"
+            ),
+            "total_exact": total_is_exact,
+            "degraded": bool(contact_indicators_degraded),
             "limit": params.limit,
             "offset": params.offset,
             "contact_indicators_degraded": contact_indicators_degraded,

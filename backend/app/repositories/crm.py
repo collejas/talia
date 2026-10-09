@@ -26510,6 +26510,67 @@ class CRMRepository:
                 f"prospeccion_campana_atribucion_cache_refresh_invalid:{data!r}"
             ) from exc
 
+    async def enqueue_prospeccion_campana_atribucion_job(
+        self,
+        *,
+        organizacion_id: UUID,
+        date_from_iso: str,
+        date_to_iso: str,
+        campana_id: UUID | None = None,
+    ) -> UUID:
+        payload: dict[str, Any] = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_periodo_desde": date_from_iso,
+            "p_periodo_hasta": date_to_iso,
+        }
+        if campana_id is not None:
+            payload["p_campana_id"] = str(campana_id)
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/prospeccion_campana_atribucion_job_enqueue",
+            json=payload,
+            organizacion_id=organizacion_id,
+        )
+        try:
+            return UUID(str(resp.json()))
+        except (TypeError, ValueError) as exc:
+            raise CRMRepositoryError(
+                f"prospeccion_campana_atribucion_job_enqueue_invalid:{resp.text[:300]}"
+            ) from exc
+
+    async def worker_claim_prospeccion_campana_atribucion_jobs(
+        self, *, limit: int = 1, lease_seconds: int = 300
+    ) -> list[dict[str, Any]]:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/prospeccion_campana_atribucion_job_claim",
+            json={"p_limit": max(1, min(int(limit), 5)), "p_lease_seconds": int(lease_seconds)},
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"prospeccion_campana_atribucion_job_claim_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def worker_finish_prospeccion_campana_atribution_job(
+        self,
+        *,
+        job_id: UUID,
+        success: bool,
+        error: str | None = None,
+        retry_seconds: int = 60,
+    ) -> bool:
+        resp = await self._request_service_role(
+            "POST",
+            "/rest/v1/rpc/prospeccion_campana_atribucion_job_finish",
+            json={
+                "p_job_id": str(job_id),
+                "p_success": bool(success),
+                "p_error": error,
+                "p_retry_seconds": max(10, min(int(retry_seconds), 3600)),
+            },
+        )
+        return bool(resp.json())
+
     async def get_latest_prospeccion_campana_atribucion_cache(
         self,
         *,
@@ -29206,7 +29267,7 @@ class CRMRepository:
             try:
                 resp = await self._request_with_user(
                     "POST",
-                    "/rest/v1/rpc/prospeccion_enriquecimiento_resumen",
+                    "/rest/v1/rpc/prospeccion_prospectos_resumen_rapido",
                     token=usuario_token,
                     json={},
                 )
@@ -29233,6 +29294,35 @@ class CRMRepository:
         if last_exc:
             raise last_exc
         raise CRMRepositoryError("enriquecimiento_resumen_retry_exhausted")
+
+    async def get_prospeccion_recuento_rapido(
+        self,
+        *,
+        usuario_token: str,
+        lookup_status: str | None = None,
+        email_lookup_status: str | None = None,
+        website_lookup_status: str | None = None,
+        opt_out_correo: bool | None = None,
+        con_envio_correo: bool | None = None,
+    ) -> int:
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/rpc/prospeccion_prospectos_recuento_rapido",
+            token=usuario_token,
+            json={
+                "p_lookup_status": lookup_status,
+                "p_email_lookup_status": email_lookup_status,
+                "p_website_lookup_status": website_lookup_status,
+                "p_opt_out_correo": opt_out_correo,
+                "p_con_envio_correo": con_envio_correo,
+            },
+        )
+        try:
+            return int(resp.json() or 0)
+        except (TypeError, ValueError) as exc:
+            raise CRMRepositoryError(
+                f"prospeccion_recuento_rapido_invalid:{resp.text[:300]}"
+            ) from exc
 
     async def get_email_template(
         self,

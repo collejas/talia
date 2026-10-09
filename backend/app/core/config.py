@@ -1176,6 +1176,24 @@ class Settings(BaseSettings):
             "TALIA_PROSPECCION_QUERY_MV_REFRESH_INTERVAL_SECONDS",
         ),
     )
+    prospeccion_atribucion_worker_enabled: bool = Field(
+        default=True,
+        description="Activa el worker independiente que construye snapshots de atribución.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_ATRIBUCION_WORKER_ENABLED",
+            "TALIA_PROSPECCION_ATRIBUCION_WORKER_ENABLED",
+        ),
+    )
+    prospeccion_atribucion_worker_interval_seconds: int = Field(
+        default=10,
+        ge=5,
+        le=300,
+        description="Intervalo del worker de snapshots de atribución.",
+        validation_alias=AliasChoices(
+            "PROSPECCION_ATRIBUCION_WORKER_INTERVAL_SECONDS",
+            "TALIA_PROSPECCION_ATRIBUCION_WORKER_INTERVAL_SECONDS",
+        ),
+    )
     opportunity_followup_state_queue_enabled: bool = Field(
         default=True,
         description="Activa la evaluación automática de estados de seguimiento de oportunidades.",

@@ -1,7 +1,7 @@
 # Plan integral de Prospección: datos exactos sin bloquear la interfaz
 
 Fecha: 2026-10-09 (UTC)  
-Estado: **Documentado; implementación pendiente**
+Estado: **En implementación; Fase A y cola de Fase C aplicadas**
 
 ## 1. Objetivo
 
@@ -187,12 +187,67 @@ Nunca se elevará globalmente `statement_timeout` como solución de rendimiento.
 - Agregar índices validados con planes.
 - Alinear resumen, listado y filtros a la misma fuente.
 
+#### Implementado en el segundo corte (2026-10-09)
+
+- Tabla `prospeccion_prospectos_resumen` con contadores explícitos por tenant
+  para total, teléfonos, correos, sitios, supresiones y correo disponible.
+- Reconstrucción idempotente y trigger de deltas para no recalcular el universo
+  completo después de cada alta o actualización.
+- RPC de lectura rápida para el checklist y los conteos simples del listado.
+- Los estados de teléfono, correo y sitio web ya resuelven su total desde el
+  resumen; la combinación habitual `correo válido + sin envío de correo`
+  utiliza `correos_disponibles` e ignora correctamente parámetros de WhatsApp
+  que no aplican al canal correo.
+- El orden base `organizacion_id, creado_en DESC, id` tiene un índice alineado
+  con el `NULLS FIRST` implícito del endpoint; la página general y la página
+  profunda dejaron de usar `Incremental Sort` en la medición de PostgreSQL.
+- El API identifica `count_source=summary` cuando usa esa fuente; los filtros
+  complejos conservan la ruta exacta/planificada compatible mientras se migra
+  su paginación a cursor.
+
+La reconciliación periódica del resumen y la validación de todos los filtros
+combinados siguen siendo parte de la etapa de pruebas de carga.
+
 ### Fase C — Cola de métricas
 
 - Crear tabla de jobs de snapshots.
 - Crear worker de atribución.
 - Implementar deduplicación, lease, reintentos y backoff.
 - Cambiar la UI a stale-while-revalidate.
+
+#### Implementado en el primer corte (2026-10-09)
+
+- Migración `20261009_020000_prospeccion_atribucion_jobs.sql` aplicada en
+  Supabase.
+- Cola idempotente por tenant, período y campaña, con `SKIP LOCKED`, lease de
+  cinco minutos, máximo de ocho intentos y backoff.
+- El request sólo lee el snapshot; ante miss encola el cálculo y devuelve el
+  estado degradado existente. Un snapshot vencido se entrega como stale y se
+  revalida en segundo plano.
+- La caché en memoria utiliza lock por tenant/período/campaña; no bloquea
+  rangos independientes mientras espera a Supabase. También detecta snapshots
+  viejos después de reiniciar el API y vuelve a encolarlos.
+- Un cache miss sólo aplica cinco segundos de cooldown para permitir que el
+  panel lea el snapshot recién terminado; los errores reales conservan cinco
+  minutos de backoff.
+- Worker independiente:
+  `talia-prospeccion-atribucion-worker.service`. No comparte concurrencia con
+  el worker de Postmark.
+
+La instalación controlada del unit file queda encapsulada en
+`scripts/install_prospeccion_atribucion_worker.sh`; debe ejecutarse en el host
+de producción con la cuenta autorizada de deploy.
+
+En la verificación del host, `talia-email-worker.service` y
+`talia-postmark-preparer.service` permanecieron `active/enabled`; el refactor
+no cambia ni detiene la entrega Postmark.
+
+Prueba operativa realizada: el worker reclamó y completó el job
+`3c4247d6-c4a7-40e2-b76c-41f14aaa0722` en un intento, generando 35 filas de
+snapshot en aproximadamente 5.2 segundos, sin error.
+
+Queda pendiente activar/reiniciar ese servicio en producción y verificar los
+tiempos reales después del redeploy.
 
 ### Fase D — Cursor y carga
 

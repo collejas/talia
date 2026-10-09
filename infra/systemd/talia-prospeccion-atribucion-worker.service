@@ -1,0 +1,23 @@
+[Unit]
+Description=TalIA Prospeccion attribution snapshot worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/talia/backend
+ExecStart=/var/www/talia/backend/scripts/run_prospeccion_atribucion_worker.sh
+EnvironmentFile=/var/www/talia/backend/.env
+Environment=PROSPECCION_ATRIBUCION_WORKER_ENABLED=true
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=10
+User=jorge
+Group=jorge
+NoNewPrivileges=true
+PrivateTmp=true
+MemoryMax=256M
+CPUQuota=20%
+
+[Install]
+WantedBy=multi-user.target
