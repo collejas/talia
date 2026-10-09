@@ -8,6 +8,23 @@
 - Ante un snapshot faltante, el endpoint responde degradado con advertencia en
   lugar de mantener conexiones abiertas hasta provocar `57014`.
 
+## 2026-10-09 — Diagnóstico del total exacto del catálogo
+
+- Se confirmó que el listado puede usar `count=planned` y mostrar una
+  estimación como `30,459` mientras el resumen global muestra el total exacto
+  `31,197`.
+- La corrección definitiva queda documentada en
+  `10_plan_integral_prospeccion_exacta_sin_bloqueos_20261009.md`; todavía no se
+  implementa en esta fase documental.
+
+## 2026-10-09 — Plan integral de exactitud y latencia
+
+- Documentada la arquitectura objetivo para mantener datos exactos sin hacer
+  `COUNT(*)` ni refreshes históricos pesados en cada navegación.
+- El plan define contadores por tenant, índices, paginación por cursor,
+  snapshots, cola durable, worker de métricas, límites multi-tenant y criterios
+  de carga.
+
 # Changelog — Plan de mejora de latencia
 
 Registro de hallazgos, decisiones y mejoras propuestas para reducir la latencia

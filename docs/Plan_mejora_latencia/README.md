@@ -6,6 +6,7 @@
 - [Incidente Supabase/Prospección y actualización del plan](07_incidente_supabase_prospeccion_20261001.md)
 - [Incidente de envío masivo y saturación de Supabase](08_incidente_envio_masivo_20261002.md)
 - [Incidente de listado de prospectos y conteo exacto](09_incidente_listado_prospectos_20261008.md)
+- [Plan integral de Prospección: datos exactos sin bloqueos](10_plan_integral_prospeccion_exacta_sin_bloqueos_20261009.md)
 - [Changelog de mejoras de latencia](changelog.md)
 
 Documentación generada para diagnóstico y plan de mejora de rendimiento en backend CRM.
@@ -45,6 +46,10 @@ separación debe auditarse con los timestamps del worker y del proveedor.
   - Evidencia reciente de `PGRST002`, `57014`, latencia de Prospección y relación
     con los workers de Brevo/WhatsApp.
   - Correcciones propuestas para manejo de errores, indicadores y refreshes.
+
+- `10_plan_integral_prospeccion_exacta_sin_bloqueos_20261009.md`
+  - Especificación vigente para contadores exactos, índices, paginación,
+    snapshots, workers y operación multi-tenant sin bloquear la interfaz.
 
 - `changelog.md`
   - Registro cronológico de los tres puntos prioritarios de mejora.
