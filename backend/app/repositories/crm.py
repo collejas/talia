@@ -21544,6 +21544,7 @@ class CRMRepository:
         envios_voz_min: int | None = None,
         envios_voz_max: int | None = None,
         opt_out_whatsapp: bool | None = None,
+        opt_out_correo: bool | None = None,
         timezone_name: str | None = None,
         count_exact: bool = True,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -21884,6 +21885,20 @@ class CRMRepository:
                     include_ids &= scraper_prospecto_ids
             elif scraper_prospecto_ids:
                 exclude_ids.update(scraper_prospecto_ids)
+
+        # La disponibilidad de correo debe excluir siempre las supresiones
+        # activas, aunque el contador de intentos aún no se haya materializado.
+        if con_envio is False and "correo" in normalized_con_envio_canales:
+            and_filters.append("correo_suprimido_activo.is.false")
+
+        if opt_out_correo is not None:
+            if opt_out_correo:
+                and_filters.append("correo_suprimido_activo.is.true")
+            else:
+                and_filters.append("correo_suprimido_activo.is.false")
+
+        if and_filters:
+            params["and"] = "(" + ",".join(and_filters) + ")"
 
         if opt_out_canal:
             opt_out_ids = await self._list_prospecto_ids_with_contact_suppressions(
@@ -26092,6 +26107,7 @@ class CRMRepository:
             if len(data) < page_size:
                 break
             offset += len(data)
+
         return result
 
     async def list_prospecto_contact_indicators(

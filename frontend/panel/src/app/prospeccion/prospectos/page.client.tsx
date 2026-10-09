@@ -173,6 +173,7 @@ type Filters = {
   carrierType: "" | "mobile" | "landline" | "voip"
   contactFilters: ContactPresenceFilter[]
   whatsappOptOut: WhatsAppOptOutFilter
+  emailOptOut: WhatsAppOptOutFilter
   queryFilters: string[]
   actividadFilters: string[]
   dateOption: DateRangeOption
@@ -330,6 +331,7 @@ const initialFilters: Filters = {
   carrierType: "",
   contactFilters: [],
   whatsappOptOut: "no",
+  emailOptOut: "no",
   queryFilters: [],
   actividadFilters: [],
   dateOption: "",
@@ -521,6 +523,12 @@ const WHATSAPP_OPTOUT_LABELS: Record<WhatsAppOptOutFilter, string> = {
   "": "Todos los estados",
   si: "Solicitaron no recibir",
   no: "Disponibles para WhatsApp",
+}
+
+const EMAIL_OPTOUT_LABELS: Record<WhatsAppOptOutFilter, string> = {
+  "": "Todos los estados",
+  si: "Solicitaron no recibir",
+  no: "Disponibles para correo",
 }
 
 const CONTACT_FILTER_LABELS: Record<ContactPresenceFilter, string> = CONTACT_FILTER_OPTIONS.reduce(
@@ -878,6 +886,10 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
     whatsappOptOut:
       filtersObj["whatsappOptOut"] === "si" || filtersObj["whatsappOptOut"] === "no"
         ? filtersObj["whatsappOptOut"]
+        : "no",
+    emailOptOut:
+      filtersObj["emailOptOut"] === "si" || filtersObj["emailOptOut"] === "no"
+        ? filtersObj["emailOptOut"]
         : "no",
     queryFilters: Array.isArray(filtersObj["queryFilters"])
       ? (filtersObj["queryFilters"] as unknown[]).filter((value): value is string => typeof value === "string")
@@ -1248,6 +1260,7 @@ function ProspectosView() {
       !filters.carrierType &&
       filters.contactFilters.length === 0 &&
       filters.whatsappOptOut === "" &&
+      filters.emailOptOut === "" &&
       filters.actividadFilters.length === 0 &&
       filters.queryFilters.length === 0 &&
       filters.tipoNegocioFilters.length === 0,
@@ -1726,6 +1739,9 @@ function ProspectosView() {
     if (filters.whatsappOptOut) {
       chips.push(WHATSAPP_OPTOUT_LABELS[filters.whatsappOptOut])
     }
+    if (filters.emailOptOut) {
+      chips.push(`Correo: ${EMAIL_OPTOUT_LABELS[filters.emailOptOut]}`)
+    }
     if (filters.queryFilters.length) {
       const labels = filters.queryFilters.map((value) => queryLabelMap.get(value) ?? value)
       chips.push(`Consulta: ${labels.join(", ")}`)
@@ -1782,6 +1798,7 @@ function ProspectosView() {
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
           optOutWhatsapp: filters.whatsappOptOut === "si" ? true : filters.whatsappOptOut === "no" ? false : undefined,
+          optOutCorreo: filters.emailOptOut === "si" ? true : filters.emailOptOut === "no" ? false : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           includeScraperStatus: false,
@@ -1868,6 +1885,7 @@ function ProspectosView() {
           conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
           conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
           optOutWhatsapp: filters.whatsappOptOut === "si" ? true : filters.whatsappOptOut === "no" ? false : undefined,
+          optOutCorreo: filters.emailOptOut === "si" ? true : filters.emailOptOut === "no" ? false : undefined,
           conScraper:
             filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
           includeScraperStatus: false,
@@ -3975,6 +3993,7 @@ function ProspectosView() {
               contactOptions={CONTACT_FILTER_OPTIONS}
               contactValues={filters.contactFilters}
               whatsappOptOut={filters.whatsappOptOut}
+              emailOptOut={filters.emailOptOut}
               segmentOptions={filteredSegmentoOptions}
               segmentValues={filters.segmentoFilters}
               segmentSearch={segmentoFilterSearch}
@@ -3984,6 +4003,7 @@ function ProspectosView() {
               onActivityToggle={handleActividadFilterToggle}
               onContactToggle={(value, checked) => handleContactFilterToggle(value as ContactPresenceFilter, checked)}
               onWhatsappChange={(value) => setFilters((prev) => ({ ...prev, whatsappOptOut: value === "si" || value === "no" ? value : "" }))}
+              onEmailChange={(value) => setFilters((prev) => ({ ...prev, emailOptOut: value === "si" || value === "no" ? value : "" }))}
               onSegmentSearchChange={setSegmentoFilterSearch}
               onSegmentToggle={(segmento, checked) => setFilters((prev) => {
                 const next = new Set(prev.segmentoFilters)

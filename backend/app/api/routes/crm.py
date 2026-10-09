@@ -4957,6 +4957,7 @@ class ProspectoListQuery(BaseModel):
     con_envio: bool | None = Field(default=None)
     opt_out_canal: Literal["correo", "whatsapp", "llamada"] | None = Field(default=None)
     opt_out_whatsapp: bool | None = Field(default=None)
+    opt_out_correo: bool | None = Field(default=None)
     con_scraper: bool | None = Field(default=None)
     envios_correo_min: int | None = Field(default=None, ge=0, le=1_000_000)
     envios_correo_max: int | None = Field(default=None, ge=0, le=1_000_000)
@@ -5019,6 +5020,7 @@ class ProspectoFiltroPayload(BaseModel):
     opt_out_canal: Literal["correo", "whatsapp", "llamada"] | None = Field(default=None)
     con_envio_canales: list[Literal["correo", "whatsapp", "llamada"]] | None = Field(default=None, max_length=3)
     opt_out_whatsapp: bool | None = Field(default=None)
+    opt_out_correo: bool | None = Field(default=None)
     con_scraper: bool | None = Field(default=None)
     envios_correo_min: int | None = Field(default=None, ge=0, le=1_000_000)
     envios_correo_max: int | None = Field(default=None, ge=0, le=1_000_000)
@@ -12039,6 +12041,7 @@ def _prospecto_filters_to_kwargs(filters: ProspectoFiltroPayload) -> dict[str, A
         "opt_out_canal": filters.opt_out_canal,
         "con_envio_canales": filters.con_envio_canales,
         "opt_out_whatsapp": filters.opt_out_whatsapp,
+        "opt_out_correo": filters.opt_out_correo,
         "con_scraper": filters.con_scraper,
         "envios_correo_min": filters.envios_correo_min,
         "envios_correo_max": filters.envios_correo_max,
@@ -37258,6 +37261,7 @@ async def listar_prospectos(
         Query(alias="con_envio_canal"),
     ] = None,
     con_envio_canales: Annotated[str | None, Query(alias="con_envio_canales")] = None,
+    opt_out_correo: Annotated[bool | None, Query(alias="opt_out_correo")] = None,
     template_id: Annotated[UUID | None, Query(alias="template_id")] = None,
     envios_correo_min: Annotated[int | None, Query(alias="envios_correo_min")] = None,
     envios_correo_max: Annotated[int | None, Query(alias="envios_correo_max")] = None,
@@ -37291,9 +37295,25 @@ async def listar_prospectos(
             params.website_lookup_status,
         )
     )
-    effective_count_exact = params.count_exact or exact_validation_filter
+    # Los filtros de estado de correo representan una población operativa
+    # concreta. Un conteo planificado puede devolver la estimación del universo
+    # completo (por ejemplo, ~15k) aunque la lista sí venga filtrada a bajas.
+    # Fuerza count=exact para que el total visible corresponda a la consulta.
+    effective_count_exact = (
+        params.count_exact
+        or exact_validation_filter
+        or opt_out_correo is not None
+        or params.opt_out_correo is not None
+    )
     con_envio_canales_values = sorted(
         set((con_envio_canal or []) + _parse_con_envio_canales_param(con_envio_canales))
+    )
+    # El filtro también forma parte de ProspectoListQuery para reutilizarlo en
+    # payloads/listas guardadas. La ruta conserva el argumento explícito por
+    # compatibilidad, pero debe usar siempre el valor efectivo para no perderlo
+    # cuando FastAPI resuelve el modelo de dependencia y el query parameter.
+    effective_opt_out_correo = (
+        opt_out_correo if opt_out_correo is not None else params.opt_out_correo
     )
     try:
         order_value = (
@@ -37347,6 +37367,7 @@ async def listar_prospectos(
                 con_envio_canales=con_envio_canales_values or None,
                 opt_out_canal=params.opt_out_canal,
                 opt_out_whatsapp=params.opt_out_whatsapp,
+                opt_out_correo=effective_opt_out_correo,
                 con_scraper=params.con_scraper,
                 envios_correo_min=envios_correo_min,
                 envios_correo_max=envios_correo_max,

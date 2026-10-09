@@ -1,5 +1,9 @@
 # Próxima entrega
 
+- El filtro `Estado correo` fuerza `count=exact` en la API de prospectos. Antes
+  la consulta podía filtrar correctamente las bajas, pero el contador usaba
+  `count=planned` y mostraba una estimación del universo general (por ejemplo,
+  ~15 mil) en lugar del total real de suprimidos.
 - La función de cierre de bloques califica explícitamente `delivery_batch_id` para evitar que el nombre de la columna de salida PL/pgSQL entre en conflicto con la columna de mensajes.
 - El worker de entrega usa `/email/batch` para agrupar hasta 500 mensajes por tenant, tipo y stream, conservando el resultado individual de cada destinatario.
 - La separación operativa de 5 segundos se aplica entre lotes y no entre correos individuales; se mantiene una única ejecución concurrente por worker para no sobrecargar Talia ni mezclar tenants.
@@ -736,3 +740,13 @@ La cola y el worker aislado fueron completados posteriormente; los pendientes ac
   a sublotes de 50; Postmark continúa recibiendo lotes de hasta 500.
 - La tarjeta de últimos envíos usará el total original de prospectos como
   denominador, evitando mostrar `0/100` para un lote seleccionado de 600.
+## 2026-10-08 - Supresión de correo materializada en filtros de prospectos
+
+- Se agregó `prospeccion_prospectos.correo_suprimido_activo`, sincronizado con
+  `tenant_email_suppressions` mediante triggers y respaldado por un índice de
+  disponibilidad.
+- El listado de prospectos excluye por defecto OPT, rebotes, quejas y bloqueos
+  activos al solicitar correo sin envío previo, sin escanear la tabla completa
+  de supresiones por cada página.
+- La vista agregó `Estado correo`, con `Disponibles para correo`,
+  `Solicitaron no recibir` y `Todos los estados`, paralelo a Estado WhatsApp.

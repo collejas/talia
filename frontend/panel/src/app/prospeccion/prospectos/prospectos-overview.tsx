@@ -584,6 +584,7 @@ type ProspectosOperationalFiltersProps = {
   contactOptions: Array<{ value: string; label: string }>
   contactValues: string[]
   whatsappOptOut: "" | "si" | "no"
+  emailOptOut: "" | "si" | "no"
   segmentOptions: string[]
   segmentValues: string[]
   segmentSearch: string
@@ -593,6 +594,7 @@ type ProspectosOperationalFiltersProps = {
   onActivityToggle: (value: string, checked: boolean) => void
   onContactToggle: (value: string, checked: boolean) => void
   onWhatsappChange: (value: string) => void
+  onEmailChange: (value: string) => void
   onSegmentSearchChange: (value: string) => void
   onSegmentToggle: (value: string, checked: boolean) => void
   onClearSegments: () => void
@@ -612,6 +614,7 @@ export function ProspectosOperationalFilters({
   contactOptions,
   contactValues,
   whatsappOptOut,
+  emailOptOut,
   segmentOptions,
   segmentValues,
   segmentSearch,
@@ -621,6 +624,7 @@ export function ProspectosOperationalFilters({
   onActivityToggle,
   onContactToggle,
   onWhatsappChange,
+  onEmailChange,
   onSegmentSearchChange,
   onSegmentToggle,
   onClearSegments,
@@ -678,6 +682,10 @@ export function ProspectosOperationalFilters({
       <div className="space-y-1">
         <Label>Estado WhatsApp</Label>
         <Select value={whatsappOptOut || "todos"} onValueChange={onWhatsappChange}><SelectTrigger className="min-w-[220px] text-sm"><SelectValue placeholder="Estado WhatsApp" /></SelectTrigger><SelectContent><SelectItem value="todos">Todos los estados</SelectItem><SelectItem value="no">Disponibles para WhatsApp</SelectItem><SelectItem value="si">Solicitaron no recibir</SelectItem></SelectContent></Select>
+      </div>
+      <div className="space-y-1">
+        <Label>Estado correo</Label>
+        <Select value={emailOptOut || "todos"} onValueChange={onEmailChange}><SelectTrigger className="min-w-[220px] text-sm"><SelectValue placeholder="Estado correo" /></SelectTrigger><SelectContent><SelectItem value="todos">Todos los estados</SelectItem><SelectItem value="no">Disponibles para correo</SelectItem><SelectItem value="si">Solicitaron no recibir</SelectItem></SelectContent></Select>
       </div>
       <div className="space-y-1">
         <Label>Segmento guardado</Label>
