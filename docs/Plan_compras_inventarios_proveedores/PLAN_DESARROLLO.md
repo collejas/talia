@@ -31,6 +31,11 @@ seccion **Almacen de transito y recepcion de compras** de este plan. Debe
 implementarse de forma incremental sobre el flujo actual y no debe generar
 existencias fisicas al aprobar una orden.
 
+La mejora de productos transformados queda documentada en
+`2026-10-09_transformaciones_inventario_productos.md`. La propuesta agrega
+formulas y ordenes de transformacion dentro de **Operaciones**, manteniendo
+separados el producto comprado, los productos transformados y sus existencias.
+
 ## Principios de diseno
 
 - Usar columnas reales para los datos operativos mas importantes.
