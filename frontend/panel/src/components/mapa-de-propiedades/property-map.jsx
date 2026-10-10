@@ -4479,10 +4479,10 @@ export function PropertyMap() {
                                 style={{
                                   backgroundColor: STATUS_COLORS.reservado,
                                 }}
-                                onClick={() => handleOpenStatusModal("reservado")}
-                                disabled={statusLoading}
+                                onClick={handleOpenReservaPanel}
+                                disabled={statusLoading || reservaLoading}
                               >
-                                {statusLoading ? "Actualizando..." : "Reservar"}
+                                {reservaLoading ? "Preparando..." : "Reservar"}
                               </button>
                               <button
                                 type="button"
@@ -4769,23 +4769,25 @@ export function PropertyMap() {
                           </Dialog>
                         </>
                       )}
-                      {mapboxKind === "unidad" && unidadId && (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && (
+                      {mapboxKind === "unidad" && unidadId && ["apartado", "disponible"].includes((mapboxProps?.status ?? "").toString().toLowerCase()) && (
                         <>
-                          <div className="mt-6 space-y-2 border-t border-slate-800 pt-4">
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                className="flex-1 min-w-[140px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white transition disabled:opacity-50"
-                                style={{ backgroundColor: STATUS_COLORS.reservado }}
-                                onClick={handleOpenReservaPanel}
-                                disabled={reservaLoading}
-                              >
-                                {reservaLoading ? "Guardando..." : "Reservar"}
-                              </button>
+                          {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && (
+                            <div className="mt-6 space-y-2 border-t border-slate-800 pt-4">
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  className="flex-1 min-w-[140px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white transition disabled:opacity-50"
+                                  style={{ backgroundColor: STATUS_COLORS.reservado }}
+                                  onClick={handleOpenReservaPanel}
+                                  disabled={reservaLoading}
+                                >
+                                  {reservaLoading ? "Guardando..." : "Reservar"}
+                                </button>
+                              </div>
+                              {statusMessage && <p className="text-[0.65rem] text-emerald-300">{statusMessage}</p>}
+                              {statusError && <p className="text-[0.65rem] text-rose-400">{statusError}</p>}
                             </div>
-                            {statusMessage && <p className="text-[0.65rem] text-emerald-300">{statusMessage}</p>}
-                            {statusError && <p className="text-[0.65rem] text-rose-400">{statusError}</p>}
-                          </div>
+                          )}
                           <Dialog
                             open={isReservaPanelOpen}
                             onOpenChange={(open) => {
@@ -4803,7 +4805,11 @@ export function PropertyMap() {
                               <div className="space-y-4">
                                 <div className="space-y-1">
                                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Comprador y condiciones</p>
-                                  <p className="text-sm text-slate-200">La información del cliente principal ya está ligada al apartado.</p>
+                                  <p className="text-sm text-slate-200">
+                                    {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
+                                      ? "La información del cliente principal ya está ligada al apartado."
+                                      : "Completa los datos iniciales de la reserva para continuar con la operación."}
+                                  </p>
                                 </div>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <div className="space-y-1">
