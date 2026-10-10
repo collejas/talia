@@ -2112,7 +2112,7 @@ export function PropertyMap() {
     if (!isReservaPanelOpen) return undefined;
     const controller = new AbortController();
     setContratoPlantillaLoading(true);
-    fetch("/api/crm/inmobiliaria/contratos/plantillas?tipo_operacion=reserva&solo_activas=true", {
+    fetch("/api/crm/inmobiliaria/contratos/plantillas?solo_activas=true", {
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -4973,10 +4973,18 @@ export function PropertyMap() {
                                     <option value="otro">Otro</option>
                                   </select>
                                 </div>
+                                <div className="space-y-1">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-importe">Importe de reserva</label>
+                                  <Input id="reserva-importe" value={reservaImporte} onChange={(event) => setReservaImporte(event.target.value)} inputMode="decimal" placeholder="Ej. 30,000" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-condiciones">Condiciones acordadas</label>
+                                  <textarea id="reserva-condiciones" className="min-h-24 w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaCondiciones} onChange={(event) => setReservaCondiciones(event.target.value)} placeholder="Notas de la reserva" />
+                                </div>
                                 <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
                                   <div>
                                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Contrato</p>
-                                    <p className="mt-1 text-xs text-slate-400">Selecciona una plantilla para revisar e imprimir el contrato con los datos disponibles.</p>
+                                    <p className="mt-1 text-xs text-slate-400">Selecciona una plantilla después de completar los datos de la reserva.</p>
                                   </div>
                                   <select
                                     id="reserva-contrato-plantilla"
@@ -5013,14 +5021,6 @@ export function PropertyMap() {
                                       {renderContratoPreview()}
                                     </pre>
                                   )}
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-importe">Importe de reserva</label>
-                                  <Input id="reserva-importe" value={reservaImporte} onChange={(event) => setReservaImporte(event.target.value)} inputMode="decimal" placeholder="Ej. 30,000" />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-condiciones">Condiciones acordadas</label>
-                                  <textarea id="reserva-condiciones" className="min-h-24 w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaCondiciones} onChange={(event) => setReservaCondiciones(event.target.value)} placeholder="Notas de la reserva" />
                                 </div>
                                 {reservaError && <p className="text-xs text-rose-400">{reservaError}</p>}
                               </div>

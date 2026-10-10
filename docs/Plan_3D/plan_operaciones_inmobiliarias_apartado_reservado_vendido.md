@@ -82,6 +82,10 @@ operación.
 
 ## Formularios progresivos
 
+El detalle de los datos precargados desde el contacto y la oportunidad, los
+datos propios de la reserva y el orden definitivo del cuestionario se encuentra
+en [Diseño del formulario de reserva inmobiliaria](./diseno_formulario_reserva_datos.md).
+
 ### Apartar propiedad
 
 El formulario debe poder completarse en menos de un minuto. Solo debe mostrar:
