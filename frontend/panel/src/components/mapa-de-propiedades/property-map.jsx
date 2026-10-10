@@ -557,6 +557,10 @@ export function PropertyMap() {
   const [reservaCondiciones, setReservaCondiciones] = useState("");
   const [reservaError, setReservaError] = useState(null);
   const [reservaLoading, setReservaLoading] = useState(false);
+  const [contratoPlantillas, setContratoPlantillas] = useState([]);
+  const [contratoPlantillaId, setContratoPlantillaId] = useState("");
+  const [contratoPlantillaLoading, setContratoPlantillaLoading] = useState(false);
+  const [contratoPreviewOpen, setContratoPreviewOpen] = useState(false);
   const [availableOpportunities, setAvailableOpportunities] = useState([]);
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -2097,8 +2101,71 @@ export function PropertyMap() {
     setReservaImporte("");
     setReservaCondiciones("");
     setReservaError(null);
+    setContratoPlantillaId("");
+    setContratoPreviewOpen(false);
     setReservaPanelOpen(true);
   }, [mapboxProps?.precio, mapboxProps?.status]);
+
+  useEffect(() => {
+    if (!isReservaPanelOpen) return undefined;
+    const controller = new AbortController();
+    setContratoPlantillaLoading(true);
+    fetch("/api/crm/inmobiliaria/contratos/plantillas?tipo_operacion=reserva&solo_activas=true", {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("inmobiliaria_contract_templates_failed");
+        return response.json();
+      })
+      .then((payload) => {
+        if (controller.signal.aborted) return;
+        const templates = Array.isArray(payload) ? payload : [];
+        setContratoPlantillas(templates);
+        setContratoPlantillaId((current) => current || templates[0]?.id || "");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setContratoPlantillas([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setContratoPlantillaLoading(false);
+      });
+    return () => controller.abort();
+  }, [isReservaPanelOpen]);
+
+  const renderContratoPreview = useCallback(() => {
+    const template = contratoPlantillas.find((item) => item.id === contratoPlantillaId);
+    if (!template?.contenido_plantilla) return "";
+    const clientName = apartadoClient?.nombre || apartadoClient?.nombre_completo || "[Comprador pendiente]";
+    const replacements = {
+      "{{comprador.nombre_completo}}": clientName,
+      "{{comprador.domicilio}}": apartadoClient?.domicilio || "[Domicilio pendiente]",
+      "{{propiedad.nombre}}": mapboxProps?.nombre || mapboxProps?.unidad || "[Propiedad]",
+      "{{propiedad.direccion}}": mapboxProps?.direccion || "[Dirección pendiente]",
+      "{{operacion.precio_acordado}}": reservaPrecio || "[Precio pendiente]",
+      "{{operacion.importe_reserva}}": reservaImporte || "[Importe pendiente]",
+      "{{operacion.fecha_reserva}}": new Date().toLocaleDateString("es-MX"),
+      "{{inmobiliaria.nombre}}": "[Inmobiliaria]",
+    };
+    return Object.entries(replacements).reduce(
+      (content, [variable, value]) => content.split(variable).join(String(value)),
+      template.contenido_plantilla,
+    );
+  }, [apartadoClient, contratoPlantillaId, contratoPlantillas, mapboxProps, reservaImporte, reservaPrecio]);
+
+  const printContratoPreview = useCallback(() => {
+    const content = renderContratoPreview();
+    if (!content) return;
+    const printWindow = window.open("", "_blank", "noopener,noreferrer");
+    if (!printWindow) {
+      setReservaError("Permite ventanas emergentes para imprimir el contrato.");
+      return;
+    }
+    const escaped = content.replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character]);
+    printWindow.document.write(`<html><head><title>Contrato inmobiliario</title><style>body{font-family:Arial,sans-serif;white-space:pre-wrap;line-height:1.5;margin:40px;color:#111}</style></head><body>${escaped}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  }, [renderContratoPreview]);
 
   const handleSaveReservaAvance = useCallback(async () => {
     if (!unidadId) return;
@@ -4875,6 +4942,37 @@ export function PropertyMap() {
                                     <option value="mixto">Mixto</option>
                                     <option value="otro">Otro</option>
                                   </select>
+                                </div>
+                                <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                  <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Contrato</p>
+                                    <p className="mt-1 text-xs text-slate-400">Selecciona una plantilla para revisar e imprimir el contrato con los datos disponibles.</p>
+                                  </div>
+                                  <select
+                                    id="reserva-contrato-plantilla"
+                                    className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white"
+                                    value={contratoPlantillaId}
+                                    onChange={(event) => setContratoPlantillaId(event.target.value)}
+                                    disabled={contratoPlantillaLoading || contratoPlantillas.length === 0}
+                                  >
+                                    <option value="">{contratoPlantillaLoading ? "Cargando plantillas..." : contratoPlantillas.length ? "Selecciona una plantilla" : "No hay plantillas activas"}</option>
+                                    {contratoPlantillas.map((template) => (
+                                      <option key={template.id} value={template.id}>{template.nombre} · v{template.version}</option>
+                                    ))}
+                                  </select>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button type="button" variant="outline" size="sm" onClick={() => setContratoPreviewOpen((open) => !open)} disabled={!contratoPlantillaId || !renderContratoPreview()}>
+                                      {contratoPreviewOpen ? "Ocultar vista previa" : "Ver vista previa"}
+                                    </Button>
+                                    <Button type="button" variant="outline" size="sm" onClick={printContratoPreview} disabled={!contratoPlantillaId || !renderContratoPreview()}>
+                                      Imprimir contrato
+                                    </Button>
+                                  </div>
+                                  {contratoPreviewOpen && (
+                                    <pre className="max-h-64 overflow-y-auto rounded border border-slate-800 bg-white p-4 text-xs leading-5 text-slate-900 whitespace-pre-wrap">
+                                      {renderContratoPreview()}
+                                    </pre>
+                                  )}
                                 </div>
                                 <div className="space-y-1">
                                   <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-importe">Importe de reserva</label>
