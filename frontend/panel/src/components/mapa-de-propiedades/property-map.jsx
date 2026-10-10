@@ -561,6 +561,7 @@ export function PropertyMap() {
   const [contratoPlantillaId, setContratoPlantillaId] = useState("");
   const [contratoPlantillaLoading, setContratoPlantillaLoading] = useState(false);
   const [contratoPreviewOpen, setContratoPreviewOpen] = useState(false);
+  const [contratoFirmadoFile, setContratoFirmadoFile] = useState(null);
   const [availableOpportunities, setAvailableOpportunities] = useState([]);
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -2103,6 +2104,7 @@ export function PropertyMap() {
     setReservaError(null);
     setContratoPlantillaId("");
     setContratoPreviewOpen(false);
+    setContratoFirmadoFile(null);
     setReservaPanelOpen(true);
   }, [mapboxProps?.precio, mapboxProps?.status]);
 
@@ -2169,23 +2171,51 @@ export function PropertyMap() {
 
   const handleSaveReservaAvance = useCallback(async () => {
     if (!unidadId) return;
+    const directReservation = (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible";
+    if (directReservation && !apartadoClient?.id) {
+      setReservaError("Selecciona el contacto o comprador para guardar la reserva directa.");
+      return;
+    }
     setReservaLoading(true);
     setReservaError(null);
     try {
-      const response = await fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/avance`, {
+      const response = await fetch(
+        `/api/crm/propiedad-unidades/${unidadId}/reserva/${directReservation ? "avance-directo" : "avance"}`,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(directReservation ? { cliente_principal_id: apartadoClient.id } : {}),
           precio_acordado: reservaPrecio ? Number(reservaPrecio) : null,
           fecha_limite_reserva: reservaFechaLimite ? `${reservaFechaLimite}T23:59:59Z` : null,
           forma_adquisicion: reservaForma,
           reserva_importe: reservaImporte ? Number(reservaImporte) : null,
           condiciones_reserva: reservaCondiciones || null,
         }),
-      });
+        },
+      );
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(payload?.error || payload?.detail || "property_reserva_avance_failed");
+      }
+      const operationId = payload?.operacion?.id;
+      const signerId = apartadoClient?.id || payload?.operacion?.cliente_principal_id;
+      const contractContent = renderContratoPreview();
+      if (operationId && contratoPlantillaId && signerId && contractContent) {
+        const contractForm = new FormData();
+        contractForm.set("operacion_id", operationId);
+        contractForm.set("plantilla_id", contratoPlantillaId);
+        contractForm.set("cliente_principal_id", signerId);
+        contractForm.set("contenido_generado", contractContent);
+        if (contratoFirmadoFile) contractForm.set("file", contratoFirmadoFile);
+        const contractResponse = await fetch("/api/crm/inmobiliaria/contratos/operaciones", {
+          method: "POST",
+          body: contractForm,
+        });
+        const contractPayload = await contractResponse.json().catch(() => null);
+        if (!contractResponse.ok) {
+          throw new Error(contractPayload?.error || "property_contract_save_failed");
+        }
       }
       setStatusMessage("Avance de reserva guardado.");
       setReservaPanelOpen(false);
@@ -2194,7 +2224,7 @@ export function PropertyMap() {
     } finally {
       setReservaLoading(false);
     }
-  }, [reservaCondiciones, reservaFechaLimite, reservaForma, reservaImporte, reservaPrecio, unidadId]);
+  }, [apartadoClient?.id, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, renderContratoPreview, reservaCondiciones, reservaFechaLimite, reservaForma, reservaImporte, reservaPrecio, unidadId]);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
@@ -4967,6 +4997,16 @@ export function PropertyMap() {
                                     <Button type="button" variant="outline" size="sm" onClick={printContratoPreview} disabled={!contratoPlantillaId || !renderContratoPreview()}>
                                       Imprimir contrato
                                     </Button>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-xs text-slate-400" htmlFor="reserva-contrato-firmado">Contrato firmado (PDF)</label>
+                                    <Input
+                                      id="reserva-contrato-firmado"
+                                      type="file"
+                                      accept="application/pdf,.pdf"
+                                      onChange={(event) => setContratoFirmadoFile(event.target.files?.[0] || null)}
+                                    />
+                                    {contratoFirmadoFile && <p className="text-xs text-emerald-300">Listo para adjuntar: {contratoFirmadoFile.name}</p>}
                                   </div>
                                   {contratoPreviewOpen && (
                                     <pre className="max-h-64 overflow-y-auto rounded border border-slate-800 bg-white p-4 text-xs leading-5 text-slate-900 whitespace-pre-wrap">

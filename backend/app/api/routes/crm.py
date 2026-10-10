@@ -6807,6 +6807,11 @@ class PropiedadUnidadReservaAvanceRequest(BaseModel):
     condiciones_reserva: str | None = Field(default=None, max_length=4000)
 
 
+class PropiedadUnidadReservaDirectaRequest(PropiedadUnidadReservaAvanceRequest):
+    cliente_principal_id: UUID
+    oportunidad_id: UUID | None = None
+
+
 class InmobiliariaContratoPlantilla(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -53197,6 +53202,42 @@ async def guardar_avance_reserva_propiedad_unidad(
     return {"ok": True, "operacion": operation}
 
 
+@router.post("/propiedad-unidades/{unidad_id}/reserva/avance-directo")
+async def guardar_avance_reserva_directa_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    payload: PropiedadUnidadReservaDirectaRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+) -> dict[str, Any]:
+    try:
+        operation = await repo.guardar_avance_reserva_directa(
+            organizacion_id=organizacion_id,
+            unidad_id=unidad_id,
+            cliente_principal_id=payload.cliente_principal_id,
+            agente_usuario_id=usuario_id,
+            oportunidad_id=payload.oportunidad_id,
+            precio_acordado=payload.precio_acordado,
+            fecha_limite_reserva=payload.fecha_limite_reserva,
+            forma_adquisicion=payload.forma_adquisicion,
+            reserva_importe=payload.reserva_importe,
+            condiciones_reserva=payload.condiciones_reserva,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if any(marker in message for marker in (
+            "property_unit_not_found",
+            "property_unit_not_available_for_direct_reservation",
+            "property_client_not_found",
+            "property_acquisition_method_invalid",
+        )):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_direct_reservation_failed") from exc
+    return {"ok": True, "operacion": operation}
+
+
 @router.get("/inmobiliaria/contratos/plantillas", response_model=list[InmobiliariaContratoPlantilla])
 async def listar_plantillas_contrato_inmobiliario(
     *,
@@ -53266,6 +53307,94 @@ async def actualizar_plantilla_contrato_inmobiliario(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="inmobiliaria_contract_template_update_conflict") from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="inmobiliaria_contract_template_update_failed") from exc
     return InmobiliariaContratoPlantilla.model_validate(row)
+
+
+@router.post("/inmobiliaria/contratos/operaciones", status_code=status.HTTP_201_CREATED)
+async def guardar_contrato_operacion_inmobiliaria(
+    *,
+    operacion_id: UUID = Form(...),
+    plantilla_id: UUID = Form(...),
+    cliente_principal_id: UUID = Form(...),
+    contenido_generado: str = Form(..., max_length=250_000),
+    file: UploadFile | None = File(default=None),
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+) -> dict[str, Any]:
+    if not contenido_generado.strip():
+        raise HTTPException(status_code=400, detail="property_contract_content_required")
+
+    archivo_id: UUID | None = None
+    storage_path: str | None = None
+    if file is not None:
+        original_name = Path(file.filename or "").name
+        if not original_name or not original_name.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="property_contract_must_be_pdf")
+        content = await file.read(10 * 1024 * 1024 + 1)
+        if not content:
+            raise HTTPException(status_code=400, detail="property_contract_file_empty")
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="property_contract_file_too_large")
+        if not content[:1024].lstrip().startswith(b"%PDF-"):
+            raise HTTPException(status_code=415, detail="property_contract_invalid_pdf")
+        try:
+            storage_path = await repo.upload_storage_object(
+                bucket="quotes",
+                object_key=f"{organizacion_id}/{operacion_id}/contrato_firmado/{uuid4().hex}.pdf",
+                content=content,
+                content_type="application/pdf",
+            )
+            archivo = await repo.create_file(
+                organizacion_id=organizacion_id,
+                payload={
+                    "relacion_tipo": "inmobiliaria_contrato_operacion",
+                    "relacion_id": str(operacion_id),
+                    "nombre_original": original_name[:255],
+                    "content_type": "application/pdf",
+                    "tamano_bytes": len(content),
+                    "storage_path": storage_path,
+                    "metadata": {"bucket": "quotes", "tipo": "contrato_firmado"},
+                    "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+                },
+            )
+            archivo_id = _safe_uuid(archivo.get("id"))
+            if archivo_id is None:
+                raise CRMRepositoryError("property_contract_file_record_invalid")
+        except (CRMRepositoryError, StorageError) as exc:
+            if storage_path:
+                try:
+                    await repo.delete_storage_object(bucket="quotes", object_path=storage_path)
+                except CRMRepositoryError:
+                    logger.warning("property_contract_storage_cleanup_failed", extra={"operacion_id": str(operacion_id)})
+            raise HTTPException(status_code=502, detail="property_contract_file_upload_failed") from exc
+
+    try:
+        contract = await repo.guardar_contrato_inmobiliario(
+            organizacion_id=organizacion_id,
+            operacion_id=operacion_id,
+            plantilla_id=plantilla_id,
+            contenido_generado=contenido_generado,
+            cliente_principal_id=cliente_principal_id,
+            archivo_firmado_id=archivo_id,
+            generado_por=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        if archivo_id is not None:
+            try:
+                await repo.delete_file(organizacion_id=organizacion_id, archivo_id=archivo_id)
+            except CRMRepositoryError:
+                logger.warning("property_contract_file_record_cleanup_failed", extra={"archivo_id": str(archivo_id)})
+        if storage_path:
+            try:
+                await repo.delete_storage_object(bucket="quotes", object_path=storage_path)
+            except CRMRepositoryError:
+                logger.warning("property_contract_storage_cleanup_failed", extra={"operacion_id": str(operacion_id)})
+        message = str(exc)
+        if message.startswith("property_contract_"):
+            raise HTTPException(status_code=409, detail=message) from exc
+        raise HTTPException(status_code=502, detail="property_contract_save_failed") from exc
+    return {"ok": True, "contrato": contract, "archivo_firmado_id": str(archivo_id) if archivo_id else None}
 
 
 @router.delete("/propiedad-unidades/{unidad_id}")

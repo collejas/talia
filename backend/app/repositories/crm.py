@@ -1586,6 +1586,43 @@ class CRMRepository:
             return result
         raise CRMRepositoryError(f"property_reserva_avance_invalid_response:{result!r}")
 
+    async def guardar_avance_reserva_directa(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+        cliente_principal_id: UUID,
+        agente_usuario_id: UUID | None,
+        oportunidad_id: UUID | None,
+        precio_acordado: Decimal | None,
+        fecha_limite_reserva: datetime | None,
+        forma_adquisicion: str | None,
+        reserva_importe: Decimal | None,
+        condiciones_reserva: str | None,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_guardar_avance_reserva_directa",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_unidad_id": str(unidad_id),
+                "p_cliente_principal_id": str(cliente_principal_id),
+                "p_agente_usuario_id": str(agente_usuario_id) if agente_usuario_id else None,
+                "p_oportunidad_id": str(oportunidad_id) if oportunidad_id else None,
+                "p_precio_acordado": str(precio_acordado) if precio_acordado is not None else None,
+                "p_fecha_limite_reserva": fecha_limite_reserva.isoformat() if fecha_limite_reserva else None,
+                "p_forma_adquisicion": forma_adquisicion,
+                "p_reserva_importe": str(reserva_importe) if reserva_importe is not None else None,
+                "p_condiciones_reserva": condiciones_reserva,
+            },
+        )
+        if isinstance(result, list):
+            if not result or not isinstance(result[0], dict):
+                raise CRMRepositoryError("property_direct_reservation_invalid_response")
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError(f"property_direct_reservation_invalid_response:{result!r}")
+
     async def list_inmobiliaria_contrato_plantillas(
         self,
         *,
@@ -1651,6 +1688,37 @@ class CRMRepository:
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise CRMRepositoryError("inmobiliaria_contract_template_not_found")
         return data[0]
+
+    async def guardar_contrato_inmobiliario(
+        self,
+        *,
+        organizacion_id: UUID,
+        operacion_id: UUID,
+        plantilla_id: UUID,
+        contenido_generado: str,
+        cliente_principal_id: UUID,
+        archivo_firmado_id: UUID | None,
+        generado_por: UUID | None,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_guardar_contrato_inmobiliario",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_operacion_id": str(operacion_id),
+                "p_plantilla_id": str(plantilla_id),
+                "p_contenido_generado": contenido_generado,
+                "p_cliente_principal_id": str(cliente_principal_id),
+                "p_archivo_firmado_id": str(archivo_firmado_id) if archivo_firmado_id else None,
+                "p_generado_por": str(generado_por) if generado_por else None,
+            },
+        )
+        if isinstance(result, list):
+            if not result or not isinstance(result[0], dict):
+                raise CRMRepositoryError("property_contract_invalid_response")
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError(f"property_contract_invalid_response:{result!r}")
 
     async def get_propiedad_hierarquia(self, *, organizacion_id: UUID) -> dict[str, Any]:
         payload = {"p_organizacion": str(organizacion_id)}
