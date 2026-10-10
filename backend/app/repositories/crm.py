@@ -1586,6 +1586,72 @@ class CRMRepository:
             return result
         raise CRMRepositoryError(f"property_reserva_avance_invalid_response:{result!r}")
 
+    async def list_inmobiliaria_contrato_plantillas(
+        self,
+        *,
+        organizacion_id: UUID,
+        tipo_operacion: str | None = None,
+        solo_activas: bool = True,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": "id,organizacion_id,nombre,tipo_operacion,version,contenido_plantilla,activo,creado_por,creado_en,actualizado_en",
+            "order": "nombre.asc,version.desc",
+            "limit": "200",
+        }
+        if tipo_operacion:
+            params["tipo_operacion"] = f"eq.{tipo_operacion}"
+        if solo_activas:
+            params["activo"] = "eq.true"
+        response = await self._request(
+            "GET",
+            "/rest/v1/inmobiliaria_contrato_plantillas",
+            params=params,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"inmobiliaria_contract_templates_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def create_inmobiliaria_contrato_plantilla(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            "/rest/v1/inmobiliaria_contrato_plantillas",
+            json={"organizacion_id": str(organizacion_id), **payload},
+            prefer="return=representation",
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"inmobiliaria_contract_template_invalid_response:{data!r}")
+        return data[0]
+
+    async def update_inmobiliaria_contrato_plantilla(
+        self,
+        *,
+        organizacion_id: UUID,
+        plantilla_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "PATCH",
+            "/rest/v1/inmobiliaria_contrato_plantillas",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{plantilla_id}",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("inmobiliaria_contract_template_not_found")
+        return data[0]
+
     async def get_propiedad_hierarquia(self, *, organizacion_id: UUID) -> dict[str, Any]:
         payload = {"p_organizacion": str(organizacion_id)}
         result = await self._rpc("crm_propiedad_hierarquia", payload)

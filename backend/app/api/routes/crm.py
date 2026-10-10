@@ -6807,6 +6807,39 @@ class PropiedadUnidadReservaAvanceRequest(BaseModel):
     condiciones_reserva: str | None = Field(default=None, max_length=4000)
 
 
+class InmobiliariaContratoPlantilla(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    nombre: str
+    tipo_operacion: Literal["reserva", "compraventa", "otro"]
+    version: int
+    contenido_plantilla: str
+    activo: bool
+    creado_por: UUID | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class InmobiliariaContratoPlantillaCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(..., min_length=1, max_length=160)
+    tipo_operacion: Literal["reserva", "compraventa", "otro"] = "reserva"
+    version: int = Field(default=1, ge=1)
+    contenido_plantilla: str = Field(..., min_length=1, max_length=250_000)
+    activo: bool = True
+
+
+class InmobiliariaContratoPlantillaUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str | None = Field(default=None, min_length=1, max_length=160)
+    tipo_operacion: Literal["reserva", "compraventa", "otro"] | None = None
+    version: int | None = Field(default=None, ge=1)
+    contenido_plantilla: str | None = Field(default=None, min_length=1, max_length=250_000)
+    activo: bool | None = None
+
+
 class CRMPropertySaleRequest(BaseModel):
     catalog_item_id: UUID
     propiedad_id: UUID
@@ -53162,6 +53195,77 @@ async def guardar_avance_reserva_propiedad_unidad(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_reserva_avance_failed") from exc
     return {"ok": True, "operacion": operation}
+
+
+@router.get("/inmobiliaria/contratos/plantillas", response_model=list[InmobiliariaContratoPlantilla])
+async def listar_plantillas_contrato_inmobiliario(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("settings.manage")),
+    tipo_operacion: Literal["reserva", "compraventa", "otro"] | None = Query(default=None),
+    solo_activas: bool = Query(default=True),
+) -> list[InmobiliariaContratoPlantilla]:
+    try:
+        rows = await repo.list_inmobiliaria_contrato_plantillas(
+            organizacion_id=organizacion_id,
+            tipo_operacion=tipo_operacion,
+            solo_activas=solo_activas,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="inmobiliaria_contract_templates_failed") from exc
+    return [InmobiliariaContratoPlantilla.model_validate(row) for row in rows]
+
+
+@router.post("/inmobiliaria/contratos/plantillas", response_model=InmobiliariaContratoPlantilla, status_code=status.HTTP_201_CREATED)
+async def crear_plantilla_contrato_inmobiliario(
+    *,
+    payload: InmobiliariaContratoPlantillaCreate,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("settings.manage")),
+) -> InmobiliariaContratoPlantilla:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    body["creado_por"] = str(usuario_id) if usuario_id else None
+    try:
+        row = await repo.create_inmobiliaria_contrato_plantilla(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "duplicate key" in message or "unique" in message.lower():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="inmobiliaria_contract_template_version_exists") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="inmobiliaria_contract_template_create_failed") from exc
+    return InmobiliariaContratoPlantilla.model_validate(row)
+
+
+@router.patch("/inmobiliaria/contratos/plantillas/{plantilla_id}", response_model=InmobiliariaContratoPlantilla)
+async def actualizar_plantilla_contrato_inmobiliario(
+    *,
+    plantilla_id: UUID,
+    payload: InmobiliariaContratoPlantillaUpdate,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("settings.manage")),
+) -> InmobiliariaContratoPlantilla:
+    body = payload.model_dump(mode="json", exclude_unset=True)
+    if not body:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="inmobiliaria_contract_template_update_required")
+    body["actualizado_en"] = datetime.now(timezone.utc).isoformat()
+    try:
+        row = await repo.update_inmobiliaria_contrato_plantilla(
+            organizacion_id=organizacion_id,
+            plantilla_id=plantilla_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "not_found" in message or "duplicate key" in message or "unique" in message.lower():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="inmobiliaria_contract_template_update_conflict") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="inmobiliaria_contract_template_update_failed") from exc
+    return InmobiliariaContratoPlantilla.model_validate(row)
 
 
 @router.delete("/propiedad-unidades/{unidad_id}")
