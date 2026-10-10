@@ -1661,6 +1661,51 @@ class CRMRepository:
             raise CRMRepositoryError("inmobiliaria_active_operation_invalid_response")
         return data[0] if data and isinstance(data[0], dict) else None
 
+    async def guardar_pago_reserva(
+        self,
+        *,
+        organizacion_id: UUID,
+        operacion_id: UUID,
+        importe: Decimal,
+        moneda: str,
+        fecha_pago: datetime | None,
+        forma_pago: str | None,
+        estado: str,
+        referencia: str | None,
+        aplicado_al_precio: bool,
+        fecha_aplicacion: datetime | None,
+        recibido_por: str | None,
+        archivo_comprobante_id: UUID | None,
+        observaciones: str | None,
+        creado_por: UUID | None,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_guardar_pago_reserva",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_operacion_id": str(operacion_id),
+                "p_importe": str(importe),
+                "p_moneda": moneda,
+                "p_fecha_pago": fecha_pago.isoformat() if fecha_pago else None,
+                "p_forma_pago": forma_pago,
+                "p_estado": estado,
+                "p_referencia": referencia,
+                "p_aplicado_al_precio": aplicado_al_precio,
+                "p_fecha_aplicacion": fecha_aplicacion.isoformat() if fecha_aplicacion else None,
+                "p_recibido_por": recibido_por,
+                "p_archivo_comprobante_id": str(archivo_comprobante_id) if archivo_comprobante_id else None,
+                "p_observaciones": observaciones,
+                "p_creado_por": str(creado_por) if creado_por else None,
+            },
+        )
+        if isinstance(result, list):
+            if not result or not isinstance(result[0], dict):
+                raise CRMRepositoryError("property_payment_invalid_response")
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError(f"property_payment_invalid_response:{result!r}")
+
     async def list_inmobiliaria_contrato_plantillas(
         self,
         *,

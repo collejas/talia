@@ -554,6 +554,12 @@ export function PropertyMap() {
   const [reservaFechaLimite, setReservaFechaLimite] = useState("");
   const [reservaForma, setReservaForma] = useState("por_definir");
   const [reservaImporte, setReservaImporte] = useState("");
+  const [reservaPagoEstado, setReservaPagoEstado] = useState("reportado");
+  const [reservaPagoFecha, setReservaPagoFecha] = useState("");
+  const [reservaPagoForma, setReservaPagoForma] = useState("transferencia");
+  const [reservaPagoReferencia, setReservaPagoReferencia] = useState("");
+  const [reservaPagoRecibidoPor, setReservaPagoRecibidoPor] = useState("");
+  const [reservaPagoFile, setReservaPagoFile] = useState(null);
   const [reservaCondiciones, setReservaCondiciones] = useState("");
   const [reservaError, setReservaError] = useState(null);
   const [reservaLoading, setReservaLoading] = useState(false);
@@ -2103,6 +2109,12 @@ export function PropertyMap() {
     setReservaFechaLimite(deadline.toISOString().slice(0, 10));
     setReservaForma("por_definir");
     setReservaImporte("");
+    setReservaPagoEstado("reportado");
+    setReservaPagoFecha("");
+    setReservaPagoForma("transferencia");
+    setReservaPagoReferencia("");
+    setReservaPagoRecibidoPor("");
+    setReservaPagoFile(null);
     setReservaCondiciones("");
     setReservaError(null);
     setContratoPlantillaId("");
@@ -2257,6 +2269,29 @@ export function PropertyMap() {
         throw new Error(payload?.error || payload?.detail || "property_reserva_avance_failed");
       }
       const operationId = payload?.operacion?.id;
+      if (operationId && reservaImporte) {
+        const paymentForm = new FormData();
+        paymentForm.set("operacion_id", operationId);
+        paymentForm.set("importe", String(Number(reservaImporte)));
+        paymentForm.set("moneda", "MXN");
+        paymentForm.set("estado", reservaPagoEstado);
+        paymentForm.set("forma_pago", reservaPagoForma);
+        paymentForm.set("aplicado_al_precio", "true");
+        if (reservaPagoFecha) paymentForm.set("fecha_pago", `${reservaPagoFecha}T12:00:00Z`);
+        if (reservaPagoReferencia.trim()) paymentForm.set("referencia", reservaPagoReferencia.trim());
+        if (reservaPagoRecibidoPor.trim()) paymentForm.set("recibido_por", reservaPagoRecibidoPor.trim());
+        if (reservaPagoFile) paymentForm.set("file", reservaPagoFile);
+        const paymentResponse = await fetch("/api/crm/inmobiliaria/pagos/operaciones", {
+          method: "POST",
+          body: paymentForm,
+        });
+        const paymentPayload = await paymentResponse.json().catch(() => null);
+        if (!paymentResponse.ok) {
+          throw new Error(paymentPayload?.error || "property_payment_save_failed");
+        }
+      } else if (reservaPagoFile) {
+        throw new Error("Captura el importe de la reserva antes de adjuntar el comprobante.");
+      }
       const signerId = apartadoClient?.id || payload?.operacion?.cliente_principal_id;
       const contractContent = renderContratoPreview();
       if (operationId && contratoPlantillaId && signerId && contractContent) {
@@ -2282,7 +2317,7 @@ export function PropertyMap() {
     } finally {
       setReservaLoading(false);
     }
-  }, [apartadoClient?.id, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, renderContratoPreview, reservaCondiciones, reservaFechaLimite, reservaForma, reservaImporte, reservaPrecio, unidadId]);
+  }, [apartadoClient?.id, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, renderContratoPreview, reservaCondiciones, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, unidadId]);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
@@ -5051,6 +5086,51 @@ export function PropertyMap() {
                                 <div className="space-y-1">
                                   <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-importe">Importe de reserva</label>
                                   <Input id="reserva-importe" value={reservaImporte} onChange={(event) => setReservaImporte(event.target.value)} inputMode="decimal" placeholder="Ej. 30,000" />
+                                </div>
+                                <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                  <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Pago de la reserva</p>
+                                    <p className="mt-1 text-xs text-slate-500">Registra el pago si ya fue reportado. Guardar avance no lo confirma automáticamente.</p>
+                                  </div>
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-400" htmlFor="reserva-pago-estado">Estado</label>
+                                      <select id="reserva-pago-estado" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaPagoEstado} onChange={(event) => setReservaPagoEstado(event.target.value)}>
+                                        <option value="reportado">Reportado</option>
+                                        <option value="pendiente">Pendiente</option>
+                                        <option value="confirmado">Confirmado</option>
+                                        <option value="rechazado">Rechazado</option>
+                                      </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-400" htmlFor="reserva-pago-forma">Forma de pago</label>
+                                      <select id="reserva-pago-forma" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaPagoForma} onChange={(event) => setReservaPagoForma(event.target.value)}>
+                                        <option value="transferencia">Transferencia</option>
+                                        <option value="deposito">Depósito</option>
+                                        <option value="efectivo">Efectivo</option>
+                                        <option value="cheque">Cheque</option>
+                                        <option value="tarjeta">Tarjeta</option>
+                                        <option value="otro">Otro</option>
+                                      </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-400" htmlFor="reserva-pago-fecha">Fecha de pago</label>
+                                      <Input id="reserva-pago-fecha" type="date" value={reservaPagoFecha} onChange={(event) => setReservaPagoFecha(event.target.value)} />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-400" htmlFor="reserva-pago-referencia">Referencia</label>
+                                      <Input id="reserva-pago-referencia" value={reservaPagoReferencia} onChange={(event) => setReservaPagoReferencia(event.target.value)} placeholder="Opcional" />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-slate-400" htmlFor="reserva-pago-recibido-por">Recibido por</label>
+                                    <Input id="reserva-pago-recibido-por" value={reservaPagoRecibidoPor} onChange={(event) => setReservaPagoRecibidoPor(event.target.value)} placeholder="Persona o entidad que recibió el pago" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-slate-400" htmlFor="reserva-pago-comprobante">Comprobante de pago</label>
+                                    <Input id="reserva-pago-comprobante" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => setReservaPagoFile(event.target.files?.[0] || null)} />
+                                    {reservaPagoFile && <p className="text-xs text-emerald-300">Listo para adjuntar: {reservaPagoFile.name}</p>}
+                                  </div>
                                 </div>
                                 <div className="space-y-1">
                                   <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-condiciones">Condiciones acordadas</label>

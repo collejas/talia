@@ -53417,6 +53417,116 @@ async def guardar_contrato_operacion_inmobiliaria(
     return {"ok": True, "contrato": contract, "archivo_firmado_id": str(archivo_id) if archivo_id else None}
 
 
+@router.post("/inmobiliaria/pagos/operaciones", status_code=status.HTTP_201_CREATED)
+async def guardar_pago_operacion_inmobiliaria(
+    *,
+    operacion_id: UUID = Form(...),
+    importe: Decimal = Form(..., gt=0),
+    moneda: str = Form(default="MXN", min_length=3, max_length=3),
+    fecha_pago: datetime | None = Form(default=None),
+    forma_pago: Literal["transferencia", "deposito", "efectivo", "cheque", "tarjeta", "otro"] | None = Form(default=None),
+    estado: Literal["pendiente", "reportado", "confirmado", "rechazado"] = Form(default="reportado"),
+    referencia: str | None = Form(default=None, max_length=160),
+    aplicado_al_precio: bool = Form(default=True),
+    fecha_aplicacion: datetime | None = Form(default=None),
+    recibido_por: str | None = Form(default=None, max_length=160),
+    observaciones: str | None = Form(default=None, max_length=2000),
+    file: UploadFile | None = File(default=None),
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+) -> dict[str, Any]:
+    normalized_currency = moneda.strip().upper()
+    if len(normalized_currency) != 3:
+        raise HTTPException(status_code=400, detail="property_payment_currency_invalid")
+
+    archivo_id: UUID | None = None
+    storage_path: str | None = None
+    if file is not None:
+        original_name = Path(file.filename or "").name
+        content_type = (file.content_type or "").lower()
+        allowed_types = {"application/pdf", "image/jpeg", "image/png"}
+        if not original_name or content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="property_payment_receipt_invalid_type")
+        content = await file.read(10 * 1024 * 1024 + 1)
+        if not content:
+            raise HTTPException(status_code=400, detail="property_payment_receipt_empty")
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="property_payment_receipt_too_large")
+        valid_signature = (
+            (content_type == "application/pdf" and content.lstrip().startswith(b"%PDF-"))
+            or (content_type == "image/jpeg" and content.startswith(b"\xff\xd8\xff"))
+            or (content_type == "image/png" and content.startswith(b"\x89PNG\r\n\x1a\n"))
+        )
+        if not valid_signature:
+            raise HTTPException(status_code=415, detail="property_payment_receipt_invalid_file")
+        try:
+            storage_path = await repo.upload_storage_object(
+                bucket="quotes",
+                object_key=f"{organizacion_id}/{operacion_id}/pago_reserva/{uuid4().hex}_{original_name}",
+                content=content,
+                content_type=content_type,
+            )
+            archivo = await repo.create_file(
+                organizacion_id=organizacion_id,
+                payload={
+                    "relacion_tipo": "inmobiliaria_pago_operacion",
+                    "relacion_id": str(operacion_id),
+                    "nombre_original": original_name[:255],
+                    "content_type": content_type,
+                    "tamano_bytes": len(content),
+                    "storage_path": storage_path,
+                    "metadata": {"bucket": "quotes", "tipo": "comprobante_pago_reserva"},
+                    "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+                },
+            )
+            archivo_id = _safe_uuid(archivo.get("id"))
+            if archivo_id is None:
+                raise CRMRepositoryError("property_payment_receipt_record_invalid")
+        except (CRMRepositoryError, StorageError) as exc:
+            if storage_path:
+                try:
+                    await repo.delete_storage_object(bucket="quotes", object_path=storage_path)
+                except CRMRepositoryError:
+                    logger.warning("property_payment_receipt_storage_cleanup_failed", extra={"operacion_id": str(operacion_id)})
+            raise HTTPException(status_code=502, detail="property_payment_receipt_upload_failed") from exc
+
+    try:
+        payment = await repo.guardar_pago_reserva(
+            organizacion_id=organizacion_id,
+            operacion_id=operacion_id,
+            importe=importe,
+            moneda=normalized_currency,
+            fecha_pago=fecha_pago,
+            forma_pago=forma_pago,
+            estado=estado,
+            referencia=referencia,
+            aplicado_al_precio=aplicado_al_precio,
+            fecha_aplicacion=fecha_aplicacion,
+            recibido_por=recibido_por,
+            archivo_comprobante_id=archivo_id,
+            observaciones=observaciones,
+            creado_por=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        if archivo_id is not None:
+            try:
+                await repo.delete_file(organizacion_id=organizacion_id, archivo_id=archivo_id)
+            except CRMRepositoryError:
+                logger.warning("property_payment_receipt_record_cleanup_failed", extra={"archivo_id": str(archivo_id)})
+        if storage_path:
+            try:
+                await repo.delete_storage_object(bucket="quotes", object_path=storage_path)
+            except CRMRepositoryError:
+                logger.warning("property_payment_receipt_storage_cleanup_failed", extra={"operacion_id": str(operacion_id)})
+        message = str(exc)
+        if message.startswith("property_payment_"):
+            raise HTTPException(status_code=409, detail=message) from exc
+        raise HTTPException(status_code=502, detail="property_payment_save_failed") from exc
+    return {"ok": True, "pago": payment, "archivo_comprobante_id": str(archivo_id) if archivo_id else None}
+
+
 @router.delete("/propiedad-unidades/{unidad_id}")
 async def eliminar_propiedad_unidad(
     *,
