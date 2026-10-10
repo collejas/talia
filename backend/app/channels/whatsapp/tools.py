@@ -3320,6 +3320,45 @@ async def _notify_sales_rep(
         )
         return
 
+    sales_rep_notification_id: UUID | None = None
+    if trigger == "followup_escalate" and not force_retry:
+        try:
+            reservation = await repo.claim_whatsapp_sales_rep_notification(
+                organizacion_id=org_uuid,
+                conversacion_id=UUID(str(context.conversation_id)),
+                oportunidad_id=opp_uuid,
+                seller_id=UUID(str(seller_id)),
+                trigger=trigger,
+            )
+        except (ValueError, CRMRepositoryError) as exc:
+            logger.warning(
+                "whatsapp.notify_sales.idempotency_reservation_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "trigger": trigger,
+                    "error": str(exc),
+                },
+            )
+            return
+        if not reservation:
+            logger.info(
+                "whatsapp.notify_sales.already_reserved",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "trigger": trigger,
+                    "seller_id": seller_id,
+                },
+            )
+            return
+        try:
+            sales_rep_notification_id = UUID(str(reservation.get("id")))
+        except (TypeError, ValueError):
+            logger.warning(
+                "whatsapp.notify_sales.reservation_missing_id",
+                extra={"conversation_id": context.conversation_id, "trigger": trigger},
+            )
+            return
+
     recent_attachments = attachments
     if recent_attachments is None:
         try:
@@ -3459,6 +3498,15 @@ async def _notify_sales_rep(
                 "error": str(exc),
             },
         )
+        if sales_rep_notification_id:
+            try:
+                await repo.mark_whatsapp_sales_rep_notification(
+                    notification_id=sales_rep_notification_id,
+                    estado="fallido",
+                    error=str(exc),
+                )
+            except CRMRepositoryError:
+                pass
         return
 
     send_error = getattr(send_result, "error", None) if send_result else None
@@ -3471,6 +3519,15 @@ async def _notify_sales_rep(
                 "error": send_error,
             },
         )
+        if sales_rep_notification_id:
+            try:
+                await repo.mark_whatsapp_sales_rep_notification(
+                    notification_id=sales_rep_notification_id,
+                    estado="fallido",
+                    error=str(send_error),
+                )
+            except CRMRepositoryError:
+                pass
         return
 
     message_sid = getattr(send_result, "sid", None) if send_result else None
@@ -3495,6 +3552,22 @@ async def _notify_sales_rep(
             "whatsapp.notify_sales.billing_registration_failed",
             extra={"trigger": trigger, "message_sid": message_sid, "error": str(exc)},
         )
+    if sales_rep_notification_id and message_sid:
+        try:
+            await repo.mark_whatsapp_sales_rep_notification(
+                notification_id=sales_rep_notification_id,
+                estado="enviado",
+                provider_message_id=str(message_sid),
+            )
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "whatsapp.notify_sales.idempotency_mark_failed",
+                extra={
+                    "conversation_id": context.conversation_id,
+                    "trigger": trigger,
+                    "error": str(exc),
+                },
+            )
     logger.info(
         "whatsapp.notify_sales.result",
         extra={

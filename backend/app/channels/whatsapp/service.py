@@ -68,6 +68,8 @@ from . import schemas
 
 logger = get_logger("app.channels.whatsapp")
 
+_PERMANENT_SALES_NOTIFICATION_ERROR_CODES = {"131026", "131049"}
+
 DEFAULT_FALLBACK = (
     "En este momento no pude procesar tu mensaje. Por favor, inténtalo nuevamente en unos segundos."
 )
@@ -3762,6 +3764,15 @@ async def _retry_failed_sales_notification(
 ) -> None:
     sid = str(message_sid or "").strip()
     if not sid:
+        return
+    normalized_error_code = str(error_code or "").strip()
+    if normalized_error_code in _PERMANENT_SALES_NOTIFICATION_ERROR_CODES:
+        log_event(
+            logger,
+            "whatsapp.retry_notification.skipped_permanent_provider_error",
+            message_sid=sid,
+            error_code=normalized_error_code,
+        )
         return
     try:
         repo = CRMRepository()

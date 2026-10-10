@@ -8575,6 +8575,70 @@ class CRMRepository:
         data = resp.json() or []
         return data[0] if data and isinstance(data[0], dict) else None
 
+    async def claim_whatsapp_sales_rep_notification(
+        self,
+        *,
+        organizacion_id: UUID,
+        conversacion_id: UUID,
+        oportunidad_id: UUID,
+        seller_id: UUID,
+        trigger: str,
+    ) -> dict[str, Any] | None:
+        """Reserva un aviso al vendedor una sola vez por evento de negocio."""
+        payload = {
+            "organizacion_id": str(organizacion_id),
+            "conversacion_id": str(conversacion_id),
+            "oportunidad_id": str(oportunidad_id),
+            "seller_id": str(seller_id),
+            "trigger": str(trigger or "unknown").strip()[:80] or "unknown",
+            "estado": "reservado",
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/whatsapp_sales_rep_notifications",
+            params={
+                "on_conflict": "organizacion_id,conversacion_id,oportunidad_id,seller_id,trigger",
+            },
+            json=[payload],
+            prefer="resolution=ignore-duplicates,return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError("whatsapp_sales_rep_notification_invalid_response")
+        return data[0] if data and isinstance(data[0], dict) else None
+
+    async def mark_whatsapp_sales_rep_notification(
+        self,
+        *,
+        notification_id: UUID,
+        estado: str,
+        provider_message_id: str | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any] | None:
+        normalized_state = str(estado or "").strip().lower()
+        if normalized_state not in {"enviado", "fallido"}:
+            raise CRMRepositoryError("whatsapp_sales_rep_notification_invalid_state")
+        now = datetime.now(timezone.utc).isoformat()
+        payload: dict[str, Any] = {
+            "estado": normalized_state,
+            "actualizado_en": now,
+        }
+        if normalized_state == "enviado":
+            payload["proveedor_mensaje_id"] = provider_message_id
+            payload["enviado_en"] = now
+            payload["ultimo_error"] = None
+        else:
+            payload["ultimo_error"] = str(error or "provider_send_failed")[:1000]
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/whatsapp_sales_rep_notifications",
+            params={"id": f"eq.{notification_id}", "estado": "eq.reservado"},
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        return data[0] if data and isinstance(data[0], dict) else None
+
     async def create_conversation_summary(
         self,
         *,
