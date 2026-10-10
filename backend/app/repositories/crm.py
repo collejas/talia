@@ -22029,19 +22029,6 @@ class CRMRepository:
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
 
-        if cursor_created_at is not None and cursor_id is not None:
-            cursor_value = cursor_created_at.astimezone(timezone.utc).isoformat()
-            cursor_filter = (
-                f"or(creado_en.lt.{cursor_value},"
-                f"and(creado_en.eq.{cursor_value},id.lt.{cursor_id}))"
-            )
-            existing_and = params.get("and")
-            params["and"] = (
-                f"{existing_and[:-1]},{cursor_filter})"
-                if existing_and and existing_and.endswith(")")
-                else f"({cursor_filter})"
-            )
-
         include_ids: set[str] | None = (
             {str(value) for value in prospecto_ids}
             if prospecto_ids
@@ -22096,6 +22083,23 @@ class CRMRepository:
 
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
+
+        # Aplicar el cursor después de consolidar todos los filtros. Algunos
+        # filtros opcionales (por ejemplo opt_out_correo) vuelven a construir
+        # `and`; si el cursor se agrega antes, se pierde y la siguiente página
+        # repite la misma respuesta.
+        if cursor_created_at is not None and cursor_id is not None:
+            cursor_value = cursor_created_at.astimezone(timezone.utc).isoformat()
+            cursor_filter = (
+                f"or(creado_en.lt.{cursor_value},"
+                f"and(creado_en.eq.{cursor_value},id.lt.{cursor_id}))"
+            )
+            existing_and = params.get("and")
+            params["and"] = (
+                f"{existing_and[:-1]},{cursor_filter})"
+                if existing_and and existing_and.endswith(")")
+                else f"({cursor_filter})"
+            )
 
         if opt_out_canal:
             opt_out_ids = await self._list_prospecto_ids_with_contact_suppressions(

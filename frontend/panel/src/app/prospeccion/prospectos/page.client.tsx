@@ -1814,15 +1814,24 @@ function ProspectosView() {
   )
 
   const fetchAllFilteredProspectos = useCallback(async () => {
-    const pageSize = 5000
+    // PostgREST/Supabase aplica un máximo efectivo de 1,000 filas por
+    // respuesta aunque el parámetro limit sea mayor. Usar ese tamaño evita
+    // interpretar una respuesta truncada como el final de la exportación.
+    const pageSize = 1000
     let page = await listProspectos(buildExportParams(pageSize))
     const allItems = [...(page.items ?? [])]
+    // `has_more` puede venir false cuando el proxy/PostgREST recorta la
+    // respuesta al máximo efectivo de 1,000 filas. La cantidad recibida es
+    // la señal confiable para continuar el cursor.
     while ((page.items?.length ?? 0) === pageSize) {
       const pageItems = page.items ?? []
       const lastItem = pageItems[pageItems.length - 1]
       if (!lastItem?.creado_en || !lastItem.id) break
-      page = await listProspectos(buildExportParams(pageSize, { createdAt: lastItem.creado_en, id: lastItem.id }))
-      allItems.push(...(page.items ?? []))
+      const nextPage = await listProspectos(buildExportParams(pageSize, { createdAt: lastItem.creado_en, id: lastItem.id }))
+      const nextItems = nextPage.items ?? []
+      if (!nextItems.length || nextItems[nextItems.length - 1]?.id === lastItem.id) break
+      allItems.push(...nextItems)
+      page = nextPage
     }
     return { items: allItems, total: allItems.length }
   }, [buildExportParams])
