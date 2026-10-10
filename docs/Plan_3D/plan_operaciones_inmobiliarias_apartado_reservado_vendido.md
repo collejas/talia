@@ -136,7 +136,9 @@ de formas y fuentes de financiamiento.
 
 - Importe de reserva.
 - Comprobante de pago.
-- Contrato firmado.
+- Plantilla de contrato.
+- Datos de las personas que firmarán.
+- Contrato generado y contrato firmado.
 - Condiciones acordadas.
 
 La reserva debe ofrecer dos acciones:
@@ -152,6 +154,81 @@ se consultan en **Detalles de la operación**, sin saturar el formulario inicial
 La propiedad solo cambia a `reservada` cuando se cumplen los requisitos de
 formalización definidos. Un borrador de reserva no prolonga automáticamente el
 apartado.
+
+El contrato debe estar dentro del mismo panel que abre el botón `Reservar`.
+El agente no debe salir al módulo de documentos ni navegar a otra pantalla para
+prepararlo. Desde ese panel debe poder:
+
+- Seleccionar la plantilla del tenant.
+- Revisar los datos que se insertarán del comprador o compradores.
+- Generar el contrato con la información de la operación.
+- Imprimirlo o descargarlo para firma.
+- Adjuntar el contrato firmado.
+- Guardar el avance junto con los datos de la reserva y sus documentos.
+
+`Guardar avance` conserva el contrato generado o adjunto, pero no cambia la
+propiedad a `Reservada`. `Confirmar reserva` valida que exista el contrato
+firmado, el pago confirmado y los demás requisitos obligatorios antes de
+realizar el cambio de estado.
+
+#### Contrato de la reserva
+
+El contrato forma parte de la formalización de `Reservada`. Cada inmobiliaria
+debe poder capturar sus propias plantillas, porque Tal-IA no debe imponer un
+contrato legal universal para todos los tenants, tipos de inmueble u
+operaciones.
+
+El tenant podrá administrar:
+
+- Nombre de la plantilla.
+- Tipo de operación.
+- Texto editable del contrato.
+- Variables disponibles.
+- Versión de la plantilla.
+- Estado activo o inactivo.
+
+La plantilla podrá utilizar variables que Tal-IA sustituirá con información
+registrada en la operación, por ejemplo:
+
+```text
+{{comprador.nombre_completo}}
+{{comprador.domicilio}}
+{{propiedad.nombre}}
+{{propiedad.direccion}}
+{{operacion.precio_acordado}}
+{{operacion.importe_reserva}}
+{{operacion.fecha_reserva}}
+{{inmobiliaria.nombre}}
+```
+
+Al preparar una reserva, el agente debe poder:
+
+1. Seleccionar la plantilla del tenant.
+2. Revisar o completar los datos del comprador o compradores.
+3. Identificar a todas las personas que firmarán y su calidad en el contrato.
+4. Generar una vista previa con los datos sustituidos.
+5. Generar y descargar el contrato.
+6. Adjuntar la versión firmada.
+7. Confirmar la reserva cuando el contrato, el pago y los demás requisitos
+   obligatorios estén completos.
+
+Los firmantes no deben limitarse a un único comprador. La operación debe poder
+registrar, cuando corresponda:
+
+- Comprador principal.
+- Compradores adicionales.
+- Representante legal.
+- Propietario o vendedor.
+- Representante de la inmobiliaria.
+
+El contrato generado debe conservar una copia inmutable del texto, los datos
+utilizados, la versión de la plantilla, la fecha de generación y los
+firmantes. Si el tenant modifica posteriormente la plantilla, ese cambio no
+debe alterar contratos ya generados.
+
+La firma electrónica integrada puede incorporarse posteriormente. En la
+primera versión, Tal-IA debe permitir generar el contrato y adjuntar el
+archivo firmado, registrando al menos su estado, fecha y evidencia asociada.
 
 ### Finalizar venta
 
@@ -490,6 +567,8 @@ partir de fechas, documentos, financiamiento, pagos y condiciones contractuales.
 - Una oportunidad ganada o una oferta aceptada no cambia por sí sola el estado
   de la propiedad.
 - La cancelación debe conservar el historial, los pagos y los documentos.
+- Los contratos generados deben conservar su versión y no deben modificarse
+  cuando cambie la plantilla del tenant.
 - La liberación automática no debe borrar la operación histórica.
 - Los requisitos documentales pueden configurarse por inmobiliaria y tipo de
   inmueble, manteniendo columnas y relaciones explícitas para los datos
@@ -499,7 +578,8 @@ partir de fechas, documentos, financiamiento, pagos y condiciones contractuales.
 
 - Crear todavía las tablas o migraciones.
 - Implementar el expediente financiero.
-- Definir contratos legales universales.
+- Definir el contenido legal de los contratos; cada tenant debe proporcionar y
+  revisar sus propias plantillas.
 - Recibir o custodiar dinero en Tal-IA.
 - Crear un estado comercial adicional para escrituración.
 - Hacer obligatorias las oportunidades u ofertas para iniciar un apartado o
