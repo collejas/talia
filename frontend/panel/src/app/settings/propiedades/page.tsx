@@ -1,5 +1,7 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
 import { PropiedadForm } from "@/components/settings/propiedades/propiedad-form";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import {
   fetchLineasDeNegocio,
   fetchFamiliasDeProductos,
@@ -40,6 +42,11 @@ export default async function SettingsPropiedadesPage() {
   return (
     <AppViewLayout title="Settings · Propiedades inmobiliarias">
       <div className="px-4 py-0 lg:px-6">
+        <div className="flex justify-end py-4">
+          <Button asChild variant="outline">
+            <Link href="/settings/propiedades/contratos">Administrar contratos</Link>
+          </Button>
+        </div>
         <section className="space-y-0">
           <PropiedadForm lineas={lineas} familias={familias} modelos={modelos} tipos={tipos} />
         </section>
