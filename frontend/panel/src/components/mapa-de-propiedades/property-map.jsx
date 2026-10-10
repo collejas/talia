@@ -2086,6 +2086,11 @@ export function PropertyMap() {
   const handleOpenReservaPanel = useCallback(() => {
     const deadline = new Date();
     deadline.setDate(deadline.getDate() + 30);
+    if ((mapboxProps?.status ?? "").toString().toLowerCase() === "disponible") {
+      setApartadoClientQuery("");
+      setApartadoClients([]);
+      setApartadoClient(null);
+    }
     setReservaPrecio(mapboxProps?.precio != null ? String(mapboxProps.precio) : "");
     setReservaFechaLimite(deadline.toISOString().slice(0, 10));
     setReservaForma("por_definir");
@@ -2093,7 +2098,7 @@ export function PropertyMap() {
     setReservaCondiciones("");
     setReservaError(null);
     setReservaPanelOpen(true);
-  }, [mapboxProps?.precio]);
+  }, [mapboxProps?.precio, mapboxProps?.status]);
 
   const handleSaveReservaAvance = useCallback(async () => {
     if (!unidadId) return;
@@ -2211,7 +2216,8 @@ export function PropertyMap() {
 
   useEffect(() => {
     const query = apartadoClientQuery.trim();
-    if (!isApartadoPanelOpen || query.length < 2) {
+    const directReservation = isReservaPanelOpen && (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible";
+    if ((!isApartadoPanelOpen && !directReservation) || query.length < 2) {
       setApartadoClients([]);
       setApartadoClientsLoading(false);
       return undefined;
@@ -2239,7 +2245,7 @@ export function PropertyMap() {
         if (!controller.signal.aborted) setApartadoClientsLoading(false);
       });
     return () => controller.abort();
-  }, [apartadoClientQuery, isApartadoPanelOpen]);
+  }, [apartadoClientQuery, isApartadoPanelOpen, isReservaPanelOpen, mapboxProps?.status]);
 
   useEffect(() => {
     if (isSaleModalOpen && availableOpportunities.length && !saleModalOpportunityId) {
@@ -4811,6 +4817,45 @@ export function PropertyMap() {
                                       : "Completa los datos iniciales de la reserva para continuar con la operación."}
                                   </p>
                                 </div>
+                                {(mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
+                                  <div className="space-y-2">
+                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-cliente-search">
+                                      Contacto o comprador
+                                    </label>
+                                    {apartadoClient ? (
+                                      <div className="flex items-center justify-between rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+                                        <span className="truncate">{apartadoClient.nombre || apartadoClient.nombre_completo}</span>
+                                        <button type="button" className="text-xs text-emerald-300 underline" onClick={() => setApartadoClient(null)}>
+                                          Cambiar
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <Input
+                                          id="reserva-cliente-search"
+                                          value={apartadoClientQuery}
+                                          onChange={(event) => setApartadoClientQuery(event.target.value)}
+                                          placeholder="Buscar por nombre, teléfono o correo"
+                                        />
+                                        {apartadoClientsLoading && <p className="text-xs text-slate-400">Buscando...</p>}
+                                        {apartadoClients.length > 0 && (
+                                          <div className="max-h-36 overflow-y-auto rounded border border-slate-800">
+                                            {apartadoClients.map((client) => (
+                                              <button
+                                                type="button"
+                                                key={client.id}
+                                                className="block w-full px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800"
+                                                onClick={() => setApartadoClient(client)}
+                                              >
+                                                {client.nombre || client.nombre_completo}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                )}
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <div className="space-y-1">
                                     <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-precio">Precio acordado</label>
