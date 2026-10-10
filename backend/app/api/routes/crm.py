@@ -6797,6 +6797,16 @@ class PropiedadUnidadApartarRequest(BaseModel):
         return value.upper()
 
 
+class PropiedadUnidadReservaAvanceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    precio_acordado: Decimal | None = Field(default=None, ge=0)
+    fecha_limite_reserva: datetime | None = None
+    forma_adquisicion: Literal["contado", "credito", "mixto", "otro", "por_definir"] | None = None
+    reserva_importe: Decimal | None = Field(default=None, ge=0)
+    condiciones_reserva: str | None = Field(default=None, max_length=4000)
+
+
 class CRMPropertySaleRequest(BaseModel):
     catalog_item_id: UUID
     propiedad_id: UUID
@@ -53119,6 +53129,38 @@ async def apartar_propiedad_unidad(
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_apartado_failed") from exc
+    return {"ok": True, "operacion": operation}
+
+
+@router.post("/propiedad-unidades/{unidad_id}/reserva/avance")
+async def guardar_avance_reserva_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    payload: PropiedadUnidadReservaAvanceRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("sales.orders.submit")),
+) -> dict[str, Any]:
+    try:
+        operation = await repo.guardar_avance_reserva(
+            organizacion_id=organizacion_id,
+            unidad_id=unidad_id,
+            precio_acordado=payload.precio_acordado,
+            fecha_limite_reserva=payload.fecha_limite_reserva,
+            forma_adquisicion=payload.forma_adquisicion,
+            reserva_importe=payload.reserva_importe,
+            condiciones_reserva=payload.condiciones_reserva,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if any(marker in message for marker in (
+            "property_apartado_not_found",
+            "property_acquisition_method_invalid",
+            "property_agreed_price_invalid",
+            "property_reservation_amount_invalid",
+        )):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_reserva_avance_failed") from exc
     return {"ok": True, "operacion": operation}
 
 

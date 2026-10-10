@@ -549,6 +549,14 @@ export function PropertyMap() {
   const [apartadoError, setApartadoError] = useState(null);
   const [apartadoLoading, setApartadoLoading] = useState(false);
   const [apartadoClientsLoading, setApartadoClientsLoading] = useState(false);
+  const [isReservaPanelOpen, setReservaPanelOpen] = useState(false);
+  const [reservaPrecio, setReservaPrecio] = useState("");
+  const [reservaFechaLimite, setReservaFechaLimite] = useState("");
+  const [reservaForma, setReservaForma] = useState("por_definir");
+  const [reservaImporte, setReservaImporte] = useState("");
+  const [reservaCondiciones, setReservaCondiciones] = useState("");
+  const [reservaError, setReservaError] = useState(null);
+  const [reservaLoading, setReservaLoading] = useState(false);
   const [availableOpportunities, setAvailableOpportunities] = useState([]);
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -2074,6 +2082,47 @@ export function PropertyMap() {
       setApartadoLoading(false);
     }
   }, [apartadoClient?.id, apartadoForma, apartadoHours, apartadoMotivo, mapboxProps?.precio, refreshGeojson, unidadId]);
+
+  const handleOpenReservaPanel = useCallback(() => {
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + 30);
+    setReservaPrecio(mapboxProps?.precio != null ? String(mapboxProps.precio) : "");
+    setReservaFechaLimite(deadline.toISOString().slice(0, 10));
+    setReservaForma("por_definir");
+    setReservaImporte("");
+    setReservaCondiciones("");
+    setReservaError(null);
+    setReservaPanelOpen(true);
+  }, [mapboxProps?.precio]);
+
+  const handleSaveReservaAvance = useCallback(async () => {
+    if (!unidadId) return;
+    setReservaLoading(true);
+    setReservaError(null);
+    try {
+      const response = await fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/avance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          precio_acordado: reservaPrecio ? Number(reservaPrecio) : null,
+          fecha_limite_reserva: reservaFechaLimite ? `${reservaFechaLimite}T23:59:59Z` : null,
+          forma_adquisicion: reservaForma,
+          reserva_importe: reservaImporte ? Number(reservaImporte) : null,
+          condiciones_reserva: reservaCondiciones || null,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || payload?.detail || "property_reserva_avance_failed");
+      }
+      setStatusMessage("Avance de reserva guardado.");
+      setReservaPanelOpen(false);
+    } catch (error) {
+      setReservaError(error instanceof Error ? error.message : "property_reserva_avance_failed");
+    } finally {
+      setReservaLoading(false);
+    }
+  }, [reservaCondiciones, reservaFechaLimite, reservaForma, reservaImporte, reservaPrecio, unidadId]);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
@@ -4714,6 +4763,82 @@ export function PropertyMap() {
                                   {statusLoading
                                     ? "Actualizando..."
                                     : `Confirmar ${statusModalTarget === "apartado" ? "apartado" : "reserva"}`}
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </>
+                      )}
+                      {mapboxKind === "unidad" && unidadId && (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && (
+                        <>
+                          <div className="mt-6 space-y-2 border-t border-slate-800 pt-4">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="flex-1 min-w-[140px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white transition disabled:opacity-50"
+                                style={{ backgroundColor: STATUS_COLORS.reservado }}
+                                onClick={handleOpenReservaPanel}
+                                disabled={reservaLoading}
+                              >
+                                {reservaLoading ? "Guardando..." : "Reservar"}
+                              </button>
+                            </div>
+                            {statusMessage && <p className="text-[0.65rem] text-emerald-300">{statusMessage}</p>}
+                            {statusError && <p className="text-[0.65rem] text-rose-400">{statusError}</p>}
+                          </div>
+                          <Dialog
+                            open={isReservaPanelOpen}
+                            onOpenChange={(open) => {
+                              setReservaPanelOpen(open);
+                              if (!open) setReservaError(null);
+                            }}
+                          >
+                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 rounded-none space-y-4 overflow-y-auto sm:max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Preparar reserva</DialogTitle>
+                                <DialogDescription>
+                                  Guarda el avance mientras reúnes el contrato y el comprobante de pago. Esto no cambia todavía la propiedad a Reservada.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="space-y-1">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Comprador y condiciones</p>
+                                  <p className="text-sm text-slate-200">La información del cliente principal ya está ligada al apartado.</p>
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                  <div className="space-y-1">
+                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-precio">Precio acordado</label>
+                                    <Input id="reserva-precio" value={reservaPrecio} onChange={(event) => setReservaPrecio(event.target.value)} inputMode="decimal" placeholder="Ej. 3,500,000" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-fecha">Fecha límite</label>
+                                    <Input id="reserva-fecha" type="date" value={reservaFechaLimite} onChange={(event) => setReservaFechaLimite(event.target.value)} />
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-forma">Forma de compra</label>
+                                  <select id="reserva-forma" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaForma} onChange={(event) => setReservaForma(event.target.value)}>
+                                    <option value="por_definir">Por definir</option>
+                                    <option value="contado">Contado</option>
+                                    <option value="credito">Crédito</option>
+                                    <option value="mixto">Mixto</option>
+                                    <option value="otro">Otro</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-importe">Importe de reserva</label>
+                                  <Input id="reserva-importe" value={reservaImporte} onChange={(event) => setReservaImporte(event.target.value)} inputMode="decimal" placeholder="Ej. 30,000" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-condiciones">Condiciones acordadas</label>
+                                  <textarea id="reserva-condiciones" className="min-h-24 w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaCondiciones} onChange={(event) => setReservaCondiciones(event.target.value)} placeholder="Notas de la reserva" />
+                                </div>
+                                {reservaError && <p className="text-xs text-rose-400">{reservaError}</p>}
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <Button type="button" variant="secondary" onClick={() => setReservaPanelOpen(false)}>Cancelar</Button>
+                                <Button type="button" onClick={handleSaveReservaAvance} disabled={reservaLoading}>
+                                  {reservaLoading ? "Guardando..." : "Guardar avance"}
                                 </Button>
                               </div>
                             </DialogContent>
