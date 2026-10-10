@@ -6,7 +6,11 @@ import type { BuscadorJob } from "./buscador-client"
 
 export type ProspectoItem = {
   id: string
+  busqueda_id?: string | null
+  resultado_id?: string | null
   display_name: string | null
+  name?: string | null
+  razon_social?: string | null
   nombre_comercial?: string | null
   titulo?: string | null
   nombre?: string | null
@@ -16,6 +20,8 @@ export type ProspectoItem = {
   estrato?: string | null
   phone: string | null
   phone_e164?: string | null
+  phone_national?: string | null
+  carrier_name?: string | null
   telefono_principal_e164?: string | null
   telefono_movil_1_e164?: string | null
   email: string | null
@@ -64,6 +70,7 @@ export type ProspectoItem = {
   fuente_busqueda?: string | null
   segmento?: string | null
   lookup_status?: string | null
+  lookup_error?: string | null
   whatsapp_permitido?: boolean | null
   llamada_permitida?: boolean | null
   carrier_type?: string | null
@@ -76,6 +83,27 @@ export type ProspectoItem = {
   contact_indicators?: ProspectoContactIndicators | null
   busqueda_ref?: string | null
   metadata?: Record<string, unknown> | null
+  query_sort?: string | null
+  stage?: string | null
+  external_id?: string | null
+  lat?: number | null
+  lng?: number | null
+  cvegeo?: string | null
+  telefono_principal_tipo_linea?: string | null
+  telefono_principal_extension?: string | null
+  telefono_movil_1_tipo_linea?: string | null
+  google_primary_type?: string | null
+  google_primary_type_display_name?: string | null
+  google_types?: string[] | null
+  envios_correo_total?: number | null
+  envios_whatsapp_total?: number | null
+  envios_voz_total?: number | null
+  envios_total?: number | null
+  buscador_job_id?: string | null
+  buscador_result_id?: string | null
+  buscador_url?: string | null
+  columnarized_at?: string | null
+  actualizado_en?: string | null
 }
 
 export type ProspectosTableColumnPreference =
@@ -867,7 +895,7 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
 /**
  * List saved prospects with optional filters for fuente, lookup status or search term.
  */
-type ListProspectosParams = {
+export type ListProspectosParams = {
   limit?: number
   offset?: number
   search?: string
@@ -910,6 +938,11 @@ type ListProspectosParams = {
   enviosVozMin?: number
   enviosVozMax?: number
   includeScraperStatus?: boolean
+  includeContactIndicators?: boolean
+  countExact?: boolean
+  exportCursor?: boolean
+  cursorCreatedAt?: string
+  cursorId?: string
   signal?: AbortSignal
 }
 
@@ -917,6 +950,10 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   const url = buildClientUrl(basePath)
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit))
   if (typeof params.offset === "number") url.searchParams.set("offset", String(params.offset))
+  if (typeof params.countExact === "boolean") url.searchParams.set("count_exact", params.countExact ? "true" : "false")
+  if (typeof params.exportCursor === "boolean") url.searchParams.set("export_cursor", params.exportCursor ? "true" : "false")
+  if (params.cursorCreatedAt) url.searchParams.set("cursor_created_at", params.cursorCreatedAt)
+  if (params.cursorId) url.searchParams.set("cursor_id", params.cursorId)
   if (params.search?.trim().length) url.searchParams.set("search", params.search.trim())
   if (params.fuente) url.searchParams.set("fuente", params.fuente)
   if (params.lookupStatus?.trim().length) url.searchParams.set("lookup_status", params.lookupStatus.trim())
@@ -1028,6 +1065,9 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   }
   if (typeof params.includeScraperStatus === "boolean") {
     url.searchParams.set("include_scraper_status", params.includeScraperStatus ? "true" : "false")
+  }
+  if (typeof params.includeContactIndicators === "boolean") {
+    url.searchParams.set("include_contact_indicators", params.includeContactIndicators ? "true" : "false")
   }
   if (params.metadataQueries?.length) {
     for (const value of params.metadataQueries) {

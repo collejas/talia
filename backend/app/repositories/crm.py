@@ -21687,23 +21687,31 @@ class CRMRepository:
         opt_out_correo: bool | None = None,
         timezone_name: str | None = None,
         count_exact: bool = True,
+        cursor_created_at: datetime | None = None,
+        cursor_id: UUID | None = None,
+        skip_total: bool = False,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
 
         # Las estadísticas planificadas pueden quedar obsoletas después de
         # grandes actualizaciones de estados. Para un estado de validación el
-        # total es parte del dato que ve el usuario y debe ser exacto.
-        effective_count_exact = count_exact or any(
+        # total es parte del dato que ve el usuario y debe ser exacto. Las
+        # exportaciones por cursor omiten el conteo para no repetir el scan.
+        effective_count_exact = False if skip_total else (count_exact or any(
             value for value in (lookup_status, email_lookup_status, website_lookup_status)
-        )
+        ))
 
         params: dict[str, str] = {
             "select": ",".join(
                 [
                     "id",
+                    "busqueda_id",
+                    "resultado_id",
                     "fuente",
                     "fuente_busqueda",
                     "display_name",
+                    "name",
+                    "razon_social",
                     "nombre_comercial",
                     "titulo",
                     "nombre",
@@ -21714,6 +21722,8 @@ class CRMRepository:
                     "busqueda_ref",
                     "phone",
                     "phone_e164",
+                    "phone_national",
+                    "carrier_name",
                     "telefono_principal_e164",
                     "telefono_principal_tipo_linea",
                     "telefono_principal_extension",
@@ -21745,17 +21755,46 @@ class CRMRepository:
                     "whatsapp_permitido",
                     "llamada_permitida",
                     "lookup_status",
+                    "lookup_error",
                     "segmento",
+                    "stage",
+                    "query_sort",
+                    "external_id",
+                    "lat",
+                    "lng",
+                    "distancia_m",
                     "google_primary_type",
                     "google_primary_type_display_name",
                     "google_types",
                     "metadata",
                     "creado_en",
                     "email_lookup_status",
+                    "email_lookup_error",
+                    "email_lookup_checked_en",
+                    "email_lookup_details",
+                    "email_quality_tier",
                     "email_risk_score",
                     "email_recommendation",
+                    "email_domain_relation",
                     "website_lookup_status",
+                    "website_lookup_error",
+                    "website_lookup_checked_en",
                     "website_http_status",
+                    "website_final_url",
+                    "website_dns_ok",
+                    "website_reachable",
+                    "website_functional",
+                    "website_tls_ok",
+                    "envios_correo_total",
+                    "envios_whatsapp_total",
+                    "envios_voz_total",
+                    "envios_total",
+                    "cvegeo",
+                    "buscador_job_id",
+                    "buscador_result_id",
+                    "buscador_url",
+                    "columnarized_at",
+                    "actualizado_en",
                 ]
             ),
             "limit": str(limit),
@@ -21989,6 +22028,19 @@ class CRMRepository:
         if and_filters:
             params["and"] = "(" + ",".join(and_filters) + ")"
 
+        if cursor_created_at is not None and cursor_id is not None:
+            cursor_value = cursor_created_at.astimezone(timezone.utc).isoformat()
+            cursor_filter = (
+                f"or(creado_en.lt.{cursor_value},"
+                f"and(creado_en.eq.{cursor_value},id.lt.{cursor_id}))"
+            )
+            existing_and = params.get("and")
+            params["and"] = (
+                f"{existing_and[:-1]},{cursor_filter})"
+                if existing_and and existing_and.endswith(")")
+                else f"({cursor_filter})"
+            )
+
         include_ids: set[str] | None = None
         exclude_ids: set[str] = set()
         envio_prospecto_ids: set[str] | None = None
@@ -22108,11 +22160,13 @@ class CRMRepository:
             "/rest/v1/prospeccion_prospectos",
             token=usuario_token,
             params=params,
-            prefer="count=exact" if effective_count_exact else "count=planned",
+            prefer="count=exact" if effective_count_exact else ("count=none" if skip_total else "count=planned"),
         )
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar prospectos: {data!r}")
+        if skip_total:
+            return data, len(data)
         total_from_header = self._extract_total_count(resp.headers.get("content-range"))
         if total_from_header is not None:
             total = total_from_header

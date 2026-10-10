@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import * as XLSX from "@e965/xlsx"
 import {
   IconAlertTriangle,
   IconCircleCheck,
@@ -99,6 +100,7 @@ import {
   type EmailCapacitySnapshot,
   type ProspectosTablePreferences,
   type ProspectosSavedView,
+  type ListProspectosParams,
   type ProspectoQueryOption,
   type ProspeccionCanalConfigInput,
   saveProspectosTablePreferences,
@@ -110,6 +112,7 @@ import {
   listContactoBatches,
   type ContactoBatch,
 } from "@/lib/prospeccion/prospectos-client"
+import { printProspectos, prospectoExportRow, PROSPECTOS_PDF_COLUMNS } from "./prospectos-print"
 
 type FuenteFilter = "" | "google_places" | "denue" | "usuario"
 type LookupFilter = "" | "pendiente" | "verificado" | "sin_numero" | "error"
@@ -991,6 +994,7 @@ function ProspectosView() {
   const [limitInput, setLimitInput] = useState(String(PROSPECTOS_DEFAULT_LIMIT))
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [exportAction, setExportAction] = useState<"pdf" | "xlsx" | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [banner, setBanner] = useState<BannerState | null>(null)
@@ -1758,6 +1762,105 @@ function ProspectosView() {
     }
     return chips
   }, [campaignLabelMap, filters, geoEstadoLabelMap, geoMunicipioLabelMap, queryLabelMap, templateFilterOptions])
+
+  const buildExportParams = useCallback(
+    (pageLimit: number, cursor?: { createdAt: string; id: string }): ListProspectosParams => {
+      const phonePresent = resolvePresenceFlag(filters.contactFilters.includes("phone_has"), filters.contactFilters.includes("phone_missing"))
+      const emailPresent = resolvePresenceFlag(filters.contactFilters.includes("email_has"), filters.contactFilters.includes("email_missing"))
+      const websitePresent = resolvePresenceFlag(filters.contactFilters.includes("website_has"), filters.contactFilters.includes("website_missing"))
+      const { from: dateFrom, to: dateTo } = getDateRangeFromFilters(filters.dateOption, filters.customDateFrom, filters.customDateTo)
+      return {
+        limit: pageLimit,
+        offset: 0,
+        countExact: false,
+        includeContactIndicators: false,
+        exportCursor: true,
+        cursorCreatedAt: cursor?.createdAt,
+        cursorId: cursor?.id,
+        search: filters.search || undefined,
+        fuente: filters.fuente || undefined,
+        lookupStatus: filters.lookupStatus || undefined,
+        emailLookupStatus: filters.emailLookupStatus || undefined,
+        websiteLookupStatus: filters.websiteLookupStatus || undefined,
+        emailDomainRelation: filters.emailDomainRelation || undefined,
+        campanaId: filters.campanaId || undefined,
+        templateId: filters.plantillaId || undefined,
+        conEnvio: resolveConEnvio(filters.conEnvioModo, filters.conEnvioCanales),
+        conEnvioCanales: filters.conEnvioCanales.length ? filters.conEnvioCanales : undefined,
+        optOutWhatsapp: filters.whatsappOptOut === "si" ? true : filters.whatsappOptOut === "no" ? false : undefined,
+        optOutCorreo: filters.emailOptOut === "si" ? true : filters.emailOptOut === "no" ? false : undefined,
+        conScraper: filters.conScraper === "si" ? true : filters.conScraper === "no" ? false : undefined,
+        segmento: filters.segmento || undefined,
+        segmentos: filters.segmentoFilters.length ? filters.segmentoFilters : undefined,
+        tipoNegocio: filters.tipoNegocioFilters.length ? filters.tipoNegocioFilters : undefined,
+        geoEstado: filters.geoEstado || undefined,
+        geoMunicipio: filters.geoMunicipio || undefined,
+        minRating: filters.minRating ? Number(filters.minRating) : undefined,
+        estratoGroup: filters.estratoGroup || undefined,
+        carrierType: filters.carrierType || undefined,
+        order: filters.order,
+        phonePresent,
+        emailPresent,
+        websitePresent,
+        ...buildEnvioCountFilters(filters),
+        metadataQueries: effectiveMetadataQueries,
+        actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
+        dateFrom,
+        dateTo,
+      }
+    },
+    [effectiveMetadataQueries, filters]
+  )
+
+  const fetchAllFilteredProspectos = useCallback(async () => {
+    const pageSize = 5000
+    let page = await listProspectos(buildExportParams(pageSize))
+    const allItems = [...(page.items ?? [])]
+    while ((page.items?.length ?? 0) === pageSize) {
+      const pageItems = page.items ?? []
+      const lastItem = pageItems[pageItems.length - 1]
+      if (!lastItem?.creado_en || !lastItem.id) break
+      page = await listProspectos(buildExportParams(pageSize, { createdAt: lastItem.creado_en, id: lastItem.id }))
+      allItems.push(...(page.items ?? []))
+    }
+    return { items: allItems, total: allItems.length }
+  }, [buildExportParams])
+
+  const handleExport = useCallback(async (format: "pdf" | "xlsx") => {
+    const printWindow = format === "pdf" ? window.open("", "_blank") : null
+    if (format === "pdf" && !printWindow) {
+      setBanner({ type: "error", message: "El navegador bloqueó la ventana de impresión." })
+      return
+    }
+    if (printWindow) {
+      printWindow.document.write("<p style=\"font:16px Arial;padding:32px\">Preparando el listado de prospectos…</p>")
+      printWindow.document.close()
+    }
+    setExportAction(format)
+    try {
+      const result = await fetchAllFilteredProspectos()
+      if (format === "pdf") {
+        printProspectos(result.items, PROSPECTOS_PDF_COLUMNS, {
+          chips: selectionChips,
+          total: result.total,
+          envioFallback: filters.conEnvioModo === "si" ? "Sí" : filters.conEnvioModo === "no" ? "No" : undefined,
+        }, printWindow as Window)
+      } else {
+        const rows = result.items.map(prospectoExportRow)
+        const worksheet = XLSX.utils.json_to_sheet(rows)
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Prospectos")
+        XLSX.writeFile(workbook, `prospectos_filtrados_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      }
+      setBanner({ type: "success", message: `${format === "pdf" ? "Impresión" : "Excel"} preparado con ${result.total.toLocaleString("es-MX")} prospectos.` })
+    } catch (err) {
+      printWindow?.close()
+      setBanner({ type: "error", message: err instanceof Error ? err.message : "No se pudo preparar la exportación." })
+    } finally {
+      setExportAction(null)
+    }
+  }, [fetchAllFilteredProspectos, filters.conEnvioModo, selectionChips])
+
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
       const requestSeq = ++prospectosRequestSeqRef.current
@@ -4419,6 +4522,12 @@ function ProspectosView() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+              <Button variant="outline" size="sm" onClick={() => void handleExport("pdf")} disabled={exportAction !== null || loading}>
+                {exportAction === "pdf" ? "Preparando…" : "Imprimir PDF"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => void handleExport("xlsx")} disabled={exportAction !== null || loading}>
+                {exportAction === "xlsx" ? "Preparando…" : "Descargar Excel"}
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

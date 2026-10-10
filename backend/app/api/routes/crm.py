@@ -4954,8 +4954,13 @@ class ProspectoListQuery(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    limit: int = Field(default=50, ge=1, le=500)
-    offset: int = Field(default=0, ge=0, le=10_000)
+    limit: int = Field(default=50, ge=1, le=5_000)
+    # Las exportaciones recorren el resultado completo en páginas de 500.
+    # Mantener un límite amplio evita truncar tenants con más de 10k prospectos.
+    offset: int = Field(default=0, ge=0, le=1_000_000)
+    export_cursor: bool = Field(default=False)
+    cursor_created_at: datetime | None = Field(default=None)
+    cursor_id: UUID | None = Field(default=None)
     count_exact: bool = Field(
         default=False,
         description="Solicita conteo exacto; la vista normal usa un conteo estimado para evitar scans costosos.",
@@ -5013,6 +5018,16 @@ class ProspectoListQuery(BaseModel):
         for name, minimum, maximum in ranges:
             if minimum is not None and maximum is not None and minimum > maximum:
                 raise ValueError(f"{name}_min_must_be_less_or_equal_than_max")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_export_cursor(self) -> "ProspectoListQuery":
+        if not self.export_cursor and self.limit > 500:
+            raise ValueError("limit_must_be_at_most_500_for_interactive_listing")
+        if (self.cursor_created_at is None) != (self.cursor_id is None):
+            raise ValueError("cursor_created_at_and_cursor_id_must_be_provided_together")
+        if self.export_cursor and self.order not in (None, "", "creado"):
+            raise ValueError("export_cursor_requires_creado_order")
         return self
 
 
@@ -37521,11 +37536,8 @@ async def listar_prospectos(
     # concreta. Un conteo planificado puede devolver la estimación del universo
     # completo (por ejemplo, ~15k) aunque la lista sí venga filtrada a bajas.
     # Fuerza count=exact para que el total visible corresponda a la consulta.
-    effective_count_exact = (
-        params.count_exact
-        or exact_validation_filter
-        or opt_out_correo is not None
-        or params.opt_out_correo is not None
+    effective_count_exact = False if params.export_cursor else (
+        params.count_exact or exact_validation_filter
     )
     con_envio_canales_values = sorted(
         set((con_envio_canal or []) + _parse_con_envio_canales_param(con_envio_canales))
@@ -37593,7 +37605,7 @@ async def listar_prospectos(
             )
         )
     )
-    total_is_exact = effective_count_exact or fast_count_eligible
+    total_is_exact = False if params.export_cursor else (effective_count_exact or fast_count_eligible)
     try:
         order_value = (
             "display_name.asc.nullslast"
@@ -37656,8 +37668,11 @@ async def listar_prospectos(
                 envios_voz_max=envios_voz_max,
                 timezone_name=effective_timezone,
                 count_exact=effective_count_exact and not fast_count_eligible,
+                cursor_created_at=params.cursor_created_at,
+                cursor_id=params.cursor_id,
+                skip_total=params.export_cursor,
             )
-            if fast_count_eligible:
+            if fast_count_eligible and not params.export_cursor:
                 try:
                     total = await repo.get_prospeccion_recuento_rapido(
                         usuario_token=user_token,
@@ -37742,6 +37757,8 @@ async def listar_prospectos(
                 if fast_count_eligible
                 else "postgrest_exact"
                 if effective_count_exact
+                else "none"
+                if params.export_cursor
                 else "postgrest_planned"
             ),
             "total_exact": total_is_exact,
