@@ -47298,7 +47298,7 @@ async def get_close_lead_policy(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="No se pudo cargar la política de cierre.") from exc
     if row is None:
-        row = {
+        defaults = {
             "organizacion_id": organizacion_id,
             "canal": canal,
             "activo": True,
@@ -47309,6 +47309,10 @@ async def get_close_lead_policy(
             "correo_requerido": False,
             "company_name_requerido": False,
         }
+        try:
+            row = await repo.upsert_close_lead_policy(payload=defaults)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="No se pudo inicializar la política de cierre.") from exc
     return CRMCloseLeadPolicy.model_validate(row)
 
 
