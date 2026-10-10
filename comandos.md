@@ -93,7 +93,7 @@ sudo systemctl restart talia-postmark-preparer.service
 sudo systemctl restart talia-email-worker.service
 sudo systemctl restart talia-mailbox-worker.service
 sudo systemctl restart talia-whatsapp-worker.service
-
+sudo systemctl restart talia-brevo-sync.service
 
 # Permisos Git
 sudo chown -R jorge:jorge /var/www/talia/.git

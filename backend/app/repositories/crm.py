@@ -27472,10 +27472,12 @@ class CRMRepository:
         self,
         *,
         envio_id: UUID,
+        organizacion_id: UUID | None = None,
         estado: str,
         message_id: str,
         event_name: str,
         event_date: str | None = None,
+        canonical_event_at: str | None = None,
     ) -> bool:
         """Verifica si ya existe un log equivalente de webhook Brevo para deduplicar."""
 
@@ -27483,18 +27485,44 @@ class CRMRepository:
         trimmed_event_name = event_name.strip().lower()
         if not trimmed_message_id or not trimmed_event_name:
             return False
+        trimmed_date = event_date.strip() if isinstance(event_date, str) else ""
+        canonical_params: dict[str, str] = {
+            "select": "id",
+            "envio_id": f"eq.{envio_id}",
+            "proveedor": "eq.brevo",
+            # httpx encodes query parameters. Do not pre-encode these values,
+            # otherwise Supabase receives literals such as ``%3A`` instead of
+            # the timestamp separators and returns 400.
+            "mensaje_id": f"eq.{trimmed_message_id.strip('<> ')}",
+            "tipo_evento": f"eq.{trimmed_event_name}",
+            "limit": "1",
+        }
+        canonical_date = canonical_event_at.strip() if isinstance(canonical_event_at, str) else trimmed_date
+        if canonical_date:
+            canonical_params["ocurrido_en"] = f"eq.{canonical_date}"
+        if organizacion_id is not None:
+            canonical_params["organizacion_id"] = f"eq.{organizacion_id}"
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_correo_eventos",
+            params=canonical_params,
+        )
+        data = resp.json() or []
+        if isinstance(data, list) and data:
+            return True
+
+        # Compatibilidad con eventos antiguos que aún no tienen fila canónica.
         params: dict[str, str] = {
             "select": "id",
             "envio_id": f"eq.{envio_id}",
             "canal": "eq.correo",
-            "estado": f"eq.{_postgrest_eq_literal(estado.strip().lower())}",
-            "detalle->>message_id": f"eq.{_postgrest_eq_literal(trimmed_message_id)}",
-            "detalle->>event": f"eq.{_postgrest_eq_literal(trimmed_event_name)}",
+            "estado": f"eq.{estado.strip().lower()}",
+            "detalle->>message_id": f"eq.{trimmed_message_id}",
+            "detalle->>event": f"eq.{trimmed_event_name}",
             "limit": "1",
         }
-        trimmed_date = event_date.strip() if isinstance(event_date, str) else ""
         if trimmed_date:
-            params["detalle->>date"] = f"eq.{_postgrest_eq_literal(trimmed_date)}"
+            params["detalle->>date"] = f"eq.{trimmed_date}"
         resp = await self._request(
             "GET",
             "/rest/v1/prospeccion_contactos_log",
@@ -28072,7 +28100,12 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_contact_suppression_create_invalid:{row!r}")
         return row
 
-    async def worker_insert_contact_logs(self, entries: Sequence[dict[str, Any]]) -> None:
+    async def worker_insert_contact_logs(
+        self,
+        entries: Sequence[dict[str, Any]],
+        *,
+        ignore_duplicates: bool = False,
+    ) -> None:
         """Inserta registros en la bitácora usando service role."""
 
         if not entries:
@@ -28081,8 +28114,14 @@ class CRMRepository:
             "POST",
             "/rest/v1/prospeccion_contactos_log",
             json=list(entries),
-            prefer="return=representation",
+            prefer=(
+                "resolution=ignore-duplicates,return=minimal"
+                if ignore_duplicates
+                else "return=representation"
+            ),
         )
+        if ignore_duplicates:
+            return
         data = resp.json() or []
         if not isinstance(data, list):
             raise CRMRepositoryError(f"worker_insert_log_invalid:{data!r}")

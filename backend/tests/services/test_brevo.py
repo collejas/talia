@@ -31,7 +31,7 @@ class RepoStub:
         self.updates.append((str(envio_id), payload))
         return payload
 
-    async def worker_insert_contact_logs(self, entries):
+    async def worker_insert_contact_logs(self, entries, *, ignore_duplicates=False):
         self.logs.extend(entries)
 
     async def worker_sync_batch_status(self, *, batch_id: uuid.UUID):
@@ -45,10 +45,12 @@ class RepoStub:
         self,
         *,
         envio_id: uuid.UUID,
+        organizacion_id=None,
         estado: str,
         message_id: str,
         event_name: str,
         event_date: str | None = None,
+        canonical_event_at: str | None = None,
     ) -> bool:
         key = (str(envio_id), estado, message_id, event_name.strip().lower(), event_date)
         return key in self.duplicate_keys

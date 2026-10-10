@@ -753,15 +753,22 @@ async def process_brevo_events(
                 "message_id": message_id,
             }
             brevo_info = {k: v for k, v in brevo_info.items() if v}
+            event_at = _brevo_event_at(event)
 
             duplicate_event = False
             try:
                 duplicate_event = await repo.worker_has_brevo_log_event(
                     envio_id=envio_uuid,
+                    organizacion_id=(
+                        UUID(str(envio["organizacion_id"]))
+                        if envio.get("organizacion_id")
+                        else None
+                    ),
                     estado=estado,
                     message_id=message_id,
                     event_name=event_name,
                     event_date=_clean_text(event.get("date")),
+                    canonical_event_at=event_at,
                 )
             except CRMRepositoryError as exc:
                 log_event(logger, "brevo.webhook_duplicate_lookup_failed", error=str(exc))
@@ -781,7 +788,6 @@ async def process_brevo_events(
                 if historical
                 else _should_apply_brevo_state(current_state=current_state, incoming_state=estado)
             )
-            event_at = _brevo_event_at(event)
             record_event = getattr(repo, "worker_record_brevo_event", None)
             if record_event is not None and envio.get("organizacion_id"):
                 try:
@@ -897,7 +903,7 @@ async def process_brevo_events(
                 "envio_id": str(envio_uuid),
             }
             try:
-                await repo.worker_insert_contact_logs([log_entry])
+                await repo.worker_insert_contact_logs([log_entry], ignore_duplicates=True)
             except CRMRepositoryError as exc:
                 log_event(logger, "brevo.webhook_log_failed", error=str(exc))
             else:
