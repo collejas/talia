@@ -539,6 +539,16 @@ export function PropertyMap() {
   const [statusModalTarget, setStatusModalTarget] = useState(null);
   const [statusModalOpportunityId, setStatusModalOpportunityId] = useState(null);
   const [statusModalError, setStatusModalError] = useState(null);
+  const [isApartadoPanelOpen, setApartadoPanelOpen] = useState(false);
+  const [apartadoClientQuery, setApartadoClientQuery] = useState("");
+  const [apartadoClients, setApartadoClients] = useState([]);
+  const [apartadoClient, setApartadoClient] = useState(null);
+  const [apartadoHours, setApartadoHours] = useState("48");
+  const [apartadoForma, setApartadoForma] = useState("por_definir");
+  const [apartadoMotivo, setApartadoMotivo] = useState("");
+  const [apartadoError, setApartadoError] = useState(null);
+  const [apartadoLoading, setApartadoLoading] = useState(false);
+  const [apartadoClientsLoading, setApartadoClientsLoading] = useState(false);
   const [availableOpportunities, setAvailableOpportunities] = useState([]);
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -2020,6 +2030,51 @@ export function PropertyMap() {
     setStatusModalOpen(true);
   }, []);
 
+  const handleOpenApartadoPanel = useCallback(() => {
+    setApartadoClientQuery("");
+    setApartadoClients([]);
+    setApartadoClient(null);
+    setApartadoHours("48");
+    setApartadoForma("por_definir");
+    setApartadoMotivo("");
+    setApartadoError(null);
+    setApartadoPanelOpen(true);
+  }, []);
+
+  const handleConfirmApartado = useCallback(async () => {
+    if (!unidadId || !apartadoClient?.id || !apartadoMotivo) {
+      setApartadoError("Selecciona el cliente y el motivo del apartado.");
+      return;
+    }
+    setApartadoLoading(true);
+    setApartadoError(null);
+    try {
+      const response = await fetch(`/api/crm/propiedad-unidades/${unidadId}/apartar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cliente_principal_id: apartadoClient.id,
+          apartado_horas: Number(apartadoHours),
+          forma_adquisicion: apartadoForma,
+          apartado_motivo: apartadoMotivo,
+          precio_ofrecido: mapboxProps?.precio ?? null,
+          moneda: "MXN",
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || payload?.detail || "property_apartado_failed");
+      }
+      setStatusMessage("Propiedad apartada correctamente.");
+      setApartadoPanelOpen(false);
+      refreshGeojson();
+    } catch (error) {
+      setApartadoError(error instanceof Error ? error.message : "property_apartado_failed");
+    } finally {
+      setApartadoLoading(false);
+    }
+  }, [apartadoClient?.id, apartadoForma, apartadoHours, apartadoMotivo, mapboxProps?.precio, refreshGeojson, unidadId]);
+
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
       return;
@@ -2104,6 +2159,38 @@ export function PropertyMap() {
     })();
     return () => controller.abort();
   }, [isSaleModalOpen, isStatusModalOpen]);
+
+  useEffect(() => {
+    const query = apartadoClientQuery.trim();
+    if (!isApartadoPanelOpen || query.length < 2) {
+      setApartadoClients([]);
+      setApartadoClientsLoading(false);
+      return undefined;
+    }
+    const controller = new AbortController();
+    setApartadoClientsLoading(true);
+    fetch(`/api/personas/search?q=${encodeURIComponent(query)}&limit=8`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("property_clients_search_failed");
+        }
+        return response.json();
+      })
+      .then((payload) => {
+        if (!controller.signal.aborted) {
+          setApartadoClients(Array.isArray(payload?.items) ? payload.items : []);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setApartadoClients([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setApartadoClientsLoading(false);
+      });
+    return () => controller.abort();
+  }, [apartadoClientQuery, isApartadoPanelOpen]);
 
   useEffect(() => {
     if (isSaleModalOpen && availableOpportunities.length && !saleModalOpportunityId) {
@@ -4332,10 +4419,10 @@ export function PropertyMap() {
                                 style={{
                                   backgroundColor: STATUS_COLORS.apartado,
                                 }}
-                                onClick={() => handleOpenStatusModal("apartado")}
-                                disabled={statusLoading}
+                                onClick={handleOpenApartadoPanel}
+                                disabled={statusLoading || apartadoLoading}
                               >
-                                {statusLoading ? "Actualizando..." : "Apartar"}
+                                {apartadoLoading ? "Apartando..." : "Apartar"}
                               </button>
                               <button
                                 type="button"
@@ -4373,6 +4460,113 @@ export function PropertyMap() {
                               <p className="text-[0.65rem] text-emerald-300">{saleSuccess}</p>
                             )}
                           </div>
+                          <Dialog
+                            open={isApartadoPanelOpen}
+                            onOpenChange={(open) => {
+                              setApartadoPanelOpen(open);
+                              if (!open) setApartadoError(null);
+                            }}
+                          >
+                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 rounded-none space-y-4 overflow-y-auto sm:max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Apartar propiedad</DialogTitle>
+                                <DialogDescription>
+                                  Bloqueo temporal sin pago ni contrato. Completa el apartado en menos de un minuto.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="space-y-1">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="apartado-client-search">
+                                    Cliente principal
+                                  </label>
+                                  {apartadoClient ? (
+                                    <div className="flex items-center justify-between rounded border border-emerald-500/50 bg-emerald-950/30 px-3 py-2 text-sm text-white">
+                                      <span className="truncate">{apartadoClient.nombre || apartadoClient.nombre_completo}</span>
+                                      <button type="button" className="ml-2 text-xs text-slate-300 underline" onClick={() => setApartadoClient(null)}>
+                                        Cambiar
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <Input
+                                        id="apartado-client-search"
+                                        value={apartadoClientQuery}
+                                        onChange={(event) => setApartadoClientQuery(event.target.value)}
+                                        placeholder="Busca por nombre, correo o teléfono"
+                                      />
+                                      {apartadoClientsLoading && <p className="text-xs text-slate-400">Buscando...</p>}
+                                      {apartadoClients.length > 0 && (
+                                        <div className="max-h-40 overflow-auto rounded border border-slate-800 bg-slate-950">
+                                          {apartadoClients.map((client) => (
+                                            <button
+                                              key={client.id}
+                                              type="button"
+                                              className="block w-full px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800"
+                                              onClick={() => {
+                                                setApartadoClient(client);
+                                                setApartadoClientQuery("");
+                                                setApartadoClients([]);
+                                              }}
+                                            >
+                                              <span className="block truncate">{client.nombre || "Cliente sin nombre"}</span>
+                                              {(client.telefono || client.correo) && (
+                                                <span className="block truncate text-xs text-slate-400">{client.telefono || client.correo}</span>
+                                              )}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                  <div className="space-y-1">
+                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="apartado-hours">
+                                      Tiempo de apartado
+                                    </label>
+                                    <select id="apartado-hours" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={apartadoHours} onChange={(event) => setApartadoHours(event.target.value)}>
+                                      <option value="24">24 horas</option>
+                                      <option value="48">48 horas</option>
+                                      <option value="72">72 horas</option>
+                                    </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="apartado-forma">
+                                      Forma de compra
+                                    </label>
+                                    <select id="apartado-forma" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={apartadoForma} onChange={(event) => setApartadoForma(event.target.value)}>
+                                      <option value="por_definir">Por definir</option>
+                                      <option value="contado">Contado</option>
+                                      <option value="credito">Crédito</option>
+                                      <option value="mixto">Mixto</option>
+                                      <option value="otro">Otro</option>
+                                    </select>
+                                  </div>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="apartado-reason">
+                                    Motivo
+                                  </label>
+                                  <select id="apartado-reason" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={apartadoMotivo} onChange={(event) => setApartadoMotivo(event.target.value)}>
+                                    <option value="">Selecciona un motivo</option>
+                                    <option value="Validar financiamiento">Validar financiamiento</option>
+                                    <option value="Consultar con la familia">Consultar con la familia</option>
+                                    <option value="Reunir documentación">Reunir documentación</option>
+                                    <option value="Otro">Otro</option>
+                                  </select>
+                                </div>
+                                {apartadoError && <p className="text-xs text-rose-400">{apartadoError}</p>}
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <Button type="button" variant="secondary" onClick={() => setApartadoPanelOpen(false)}>
+                                  Cancelar
+                                </Button>
+                                <Button type="button" onClick={handleConfirmApartado} disabled={apartadoLoading || !apartadoClient || !apartadoMotivo}>
+                                  {apartadoLoading ? "Apartando..." : "Confirmar apartado"}
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                           <Dialog open={isSaleModalOpen} onOpenChange={setSaleModalOpen}>
                             <DialogContent className="min-w-[320px] max-w-lg space-y-4">
                               <DialogHeader>

@@ -6772,6 +6772,31 @@ class PropiedadUnidadStatusUpdateRequest(BaseModel):
         return value.upper()
 
 
+class PropiedadUnidadApartarRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cliente_principal_id: UUID
+    apartado_horas: Literal[24, 48, 72] = 48
+    forma_adquisicion: Literal["contado", "credito", "mixto", "otro", "por_definir"] = "por_definir"
+    apartado_motivo: str = Field(..., min_length=1, max_length=500)
+    precio_ofrecido: Decimal | None = Field(default=None, ge=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    oportunidad_id: UUID | None = None
+
+    @field_validator("apartado_motivo")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("apartado_motivo_required")
+        return normalized
+
+    @field_validator("moneda")
+    @classmethod
+    def uppercase_currency(cls, value: str) -> str:
+        return value.upper()
+
+
 class CRMPropertySaleRequest(BaseModel):
     catalog_item_id: UUID
     propiedad_id: UUID
@@ -52930,6 +52955,11 @@ async def actualizar_status_propiedad_unidad(
     usuario_id: UUID | None = Depends(optional_usuario_id),
     _: str = Depends(require_permission("settings.manage")),
 ) -> dict[str, Any]:
+    if payload.status.value == PropiedadStatus.apartado.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="property_apartado_requires_operation",
+        )
     current_unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
     current_destination = str(current_unidad.get("destino_inventario") or PropiedadDestinoInventario.comercial.value).strip().lower() if current_unidad else PropiedadDestinoInventario.comercial.value
     if current_destination == PropiedadDestinoInventario.patrimonial.value and payload.status.value != PropiedadStatus.bloqueado.value:
@@ -53052,6 +53082,44 @@ async def actualizar_status_propiedad_unidad(
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"ok": True, "unidad": record}
+
+
+@router.post("/propiedad-unidades/{unidad_id}/apartar", status_code=status.HTTP_201_CREATED)
+async def apartar_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    payload: PropiedadUnidadApartarRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+) -> dict[str, Any]:
+    try:
+        operation = await repo.apartar_propiedad(
+            organizacion_id=organizacion_id,
+            unidad_id=unidad_id,
+            cliente_principal_id=payload.cliente_principal_id,
+            agente_usuario_id=usuario_id,
+            oportunidad_id=payload.oportunidad_id,
+            apartado_horas=payload.apartado_horas,
+            forma_adquisicion=payload.forma_adquisicion,
+            apartado_motivo=payload.apartado_motivo,
+            precio_ofrecido=payload.precio_ofrecido,
+            moneda=payload.moneda,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if any(marker in message for marker in (
+            "property_unit_not_available",
+            "property_client_not_found",
+            "property_opportunity_not_found",
+            "property_apartado_hours_invalid",
+            "property_acquisition_method_invalid",
+            "property_apartado_reason_required",
+        )):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_apartado_failed") from exc
+    return {"ok": True, "operacion": operation}
 
 
 @router.delete("/propiedad-unidades/{unidad_id}")

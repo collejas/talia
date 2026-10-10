@@ -1518,6 +1518,43 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_ventas_invalid_response:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def apartar_propiedad(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+        cliente_principal_id: UUID,
+        agente_usuario_id: UUID | None,
+        oportunidad_id: UUID | None,
+        apartado_horas: int,
+        forma_adquisicion: str,
+        apartado_motivo: str,
+        precio_ofrecido: Decimal | None,
+        moneda: str,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_apartar_propiedad",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_unidad_id": str(unidad_id),
+                "p_cliente_principal_id": str(cliente_principal_id),
+                "p_agente_usuario_id": str(agente_usuario_id) if agente_usuario_id else None,
+                "p_oportunidad_id": str(oportunidad_id) if oportunidad_id else None,
+                "p_apartado_horas": apartado_horas,
+                "p_forma_adquisicion": forma_adquisicion,
+                "p_apartado_motivo": apartado_motivo,
+                "p_precio_ofrecido": str(precio_ofrecido) if precio_ofrecido is not None else None,
+                "p_moneda": moneda,
+            },
+        )
+        if isinstance(result, list):
+            if not result or not isinstance(result[0], dict):
+                raise CRMRepositoryError("property_apartado_invalid_response")
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError(f"property_apartado_invalid_response:{result!r}")
+
     async def get_propiedad_hierarquia(self, *, organizacion_id: UUID) -> dict[str, Any]:
         payload = {"p_organizacion": str(organizacion_id)}
         result = await self._rpc("crm_propiedad_hierarquia", payload)
