@@ -557,6 +557,7 @@ export function PropertyMap() {
   const [reservaCondiciones, setReservaCondiciones] = useState("");
   const [reservaError, setReservaError] = useState(null);
   const [reservaLoading, setReservaLoading] = useState(false);
+  const [reservaContactoLoading, setReservaContactoLoading] = useState(false);
   const [contratoPlantillas, setContratoPlantillas] = useState([]);
   const [contratoPlantillaId, setContratoPlantillaId] = useState("");
   const [contratoPlantillaLoading, setContratoPlantillaLoading] = useState(false);
@@ -2095,6 +2096,8 @@ export function PropertyMap() {
       setApartadoClientQuery("");
       setApartadoClients([]);
       setApartadoClient(null);
+    } else {
+      setApartadoClient(null);
     }
     setReservaPrecio(mapboxProps?.precio != null ? String(mapboxProps.precio) : "");
     setReservaFechaLimite(deadline.toISOString().slice(0, 10));
@@ -2107,6 +2110,48 @@ export function PropertyMap() {
     setContratoFirmadoFile(null);
     setReservaPanelOpen(true);
   }, [mapboxProps?.precio, mapboxProps?.status]);
+
+  useEffect(() => {
+    if (!isReservaPanelOpen || !unidadId) return undefined;
+    const controller = new AbortController();
+    const status = (mapboxProps?.status ?? "").toString().toLowerCase();
+    setReservaContactoLoading(true);
+
+    const loadContact = async () => {
+      try {
+        let contactId = apartadoClient?.id;
+        if (status === "apartado" && !contactId) {
+          const operationResponse = await fetch(
+            `/api/crm/propiedad-unidades/${unidadId}/reserva/actual`,
+            { signal: controller.signal },
+          );
+          const operationPayload = await operationResponse.json().catch(() => null);
+          if (operationResponse.ok) {
+            const operation = operationPayload?.operacion;
+            contactId = operation?.cliente_principal_id;
+            if (operation?.cliente) setApartadoClient(operation.cliente);
+          }
+        }
+        if (!contactId) return;
+        const contactResponse = await fetch(`/api/contactos/${contactId}`, {
+          signal: controller.signal,
+        });
+        const contactPayload = await contactResponse.json().catch(() => null);
+        if (contactResponse.ok && contactPayload) {
+          setApartadoClient((current) => ({ ...(current || {}), ...contactPayload }));
+        }
+      } catch (error) {
+        if (error?.name !== "AbortError") {
+          setReservaError("No se pudieron cargar todos los datos del comprador.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setReservaContactoLoading(false);
+      }
+    };
+
+    loadContact();
+    return () => controller.abort();
+  }, [apartadoClient?.id, isReservaPanelOpen, mapboxProps?.status, unidadId]);
 
   useEffect(() => {
     if (!isReservaPanelOpen) return undefined;
@@ -2137,10 +2182,23 @@ export function PropertyMap() {
   const renderContratoPreview = useCallback(() => {
     const template = contratoPlantillas.find((item) => item.id === contratoPlantillaId);
     if (!template?.contenido_plantilla) return "";
-    const clientName = apartadoClient?.nombre || apartadoClient?.nombre_completo || "[Comprador pendiente]";
+    const clientName = apartadoClient?.nombre_completo || apartadoClient?.nombre || "[Comprador pendiente]";
+    const clientAddress = [
+      apartadoClient?.nombre_vialidad,
+      apartadoClient?.numero_exterior,
+      apartadoClient?.letra_exterior,
+      apartadoClient?.numero_interior ? `Int. ${apartadoClient.numero_interior}` : null,
+      apartadoClient?.colonia || apartadoClient?.nombre_asentamiento,
+      apartadoClient?.codigo_postal,
+      apartadoClient?.municipio,
+      apartadoClient?.entidad,
+    ].filter(Boolean).join(", ");
     const replacements = {
       "{{comprador.nombre_completo}}": clientName,
-      "{{comprador.domicilio}}": apartadoClient?.domicilio || "[Domicilio pendiente]",
+      "{{comprador.domicilio}}": clientAddress || apartadoClient?.domicilio || "[Domicilio pendiente]",
+      "{{comprador.rfc}}": apartadoClient?.rfc || "[RFC pendiente]",
+      "{{comprador.correo}}": apartadoClient?.correo_principal || apartadoClient?.correo || "[Correo pendiente]",
+      "{{comprador.telefono}}": apartadoClient?.telefono_principal_e164 || apartadoClient?.telefono_e164 || "[Teléfono pendiente]",
       "{{propiedad.nombre}}": mapboxProps?.nombre || mapboxProps?.unidad || "[Propiedad]",
       "{{propiedad.direccion}}": mapboxProps?.direccion || "[Dirección pendiente]",
       "{{operacion.precio_acordado}}": reservaPrecio || "[Precio pendiente]",
@@ -4913,6 +4971,23 @@ export function PropertyMap() {
                                       ? "La información del cliente principal ya está ligada al apartado."
                                       : "Completa los datos iniciales de la reserva para continuar con la operación."}
                                   </p>
+                                </div>
+                                <div className="space-y-2 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Datos del comprador</p>
+                                    {reservaContactoLoading && <span className="text-xs text-slate-500">Cargando...</span>}
+                                  </div>
+                                  {apartadoClient ? (
+                                    <div className="grid gap-2 text-xs text-slate-300 sm:grid-cols-2">
+                                      <p><span className="text-slate-500">Nombre:</span> {apartadoClient.nombre_completo || apartadoClient.nombre || "Pendiente"}</p>
+                                      <p><span className="text-slate-500">RFC:</span> {apartadoClient.rfc || "Pendiente"}</p>
+                                      <p><span className="text-slate-500">Correo:</span> {apartadoClient.correo_principal || apartadoClient.correo || "Pendiente"}</p>
+                                      <p><span className="text-slate-500">Teléfono:</span> {apartadoClient.telefono_principal_e164 || apartadoClient.telefono_e164 || apartadoClient.telefono || "Pendiente"}</p>
+                                      <p className="sm:col-span-2"><span className="text-slate-500">Domicilio:</span> {[apartadoClient.nombre_vialidad, apartadoClient.numero_exterior, apartadoClient.colonia || apartadoClient.nombre_asentamiento, apartadoClient.codigo_postal, apartadoClient.municipio, apartadoClient.entidad].filter(Boolean).join(", ") || "Pendiente"}</p>
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-amber-300">Selecciona un comprador para cargar sus datos contractuales.</p>
+                                  )}
                                 </div>
                                 {(mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
                                   <div className="space-y-2">

@@ -53202,6 +53202,26 @@ async def guardar_avance_reserva_propiedad_unidad(
     return {"ok": True, "operacion": operation}
 
 
+@router.get("/propiedad-unidades/{unidad_id}/reserva/actual")
+async def obtener_operacion_reserva_actual_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("sales.orders.submit")),
+) -> dict[str, Any]:
+    try:
+        operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
+            organizacion_id=organizacion_id,
+            unidad_id=unidad_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_reserva_actual_failed") from exc
+    if operation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_reserva_actual_not_found")
+    return {"ok": True, "operacion": operation}
+
+
 @router.post("/propiedad-unidades/{unidad_id}/reserva/avance-directo")
 async def guardar_avance_reserva_directa_propiedad_unidad(
     *,

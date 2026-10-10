@@ -1623,6 +1623,44 @@ class CRMRepository:
             return result
         raise CRMRepositoryError(f"property_direct_reservation_invalid_response:{result!r}")
 
+    async def get_operacion_inmobiliaria_activa_por_unidad(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+    ) -> dict[str, Any] | None:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "unidad_id": f"eq.{unidad_id}",
+            "estado": "in.(apartado,borrador,reservado)",
+            "order": "actualizado_en.desc",
+            "limit": "1",
+            "select": (
+                "id,organizacion_id,unidad_id,oportunidad_id,cliente_principal_id,"
+                "agente_usuario_id,estado,apartado_horas,apartado_iniciado_en,"
+                "apartado_vencimiento_en,apartado_motivo,forma_adquisicion,"
+                "precio_ofrecido,precio_acordado,precio_final,moneda,"
+                "fecha_limite_reserva,reserva_importe,condiciones_reserva,"
+                "cliente:personas!operaciones_inmobiliarias_cliente_principal_id_fkey("
+                "id,nombre,nombre_completo,apellido_paterno,apellido_materno,"
+                "persona_fisica_moral,razon_social,rfc,correo_principal,"
+                "correo_secundario,telefono_principal_e164,telefono_movil_1_e164,"
+                "tipo_vialidad,nombre_vialidad,numero_exterior,letra_exterior,"
+                "numero_interior,letra_interior,tipo_asentamiento,nombre_asentamiento,"
+                "colonia,codigo_postal,entidad,municipio,localidad,pais"
+                ")"
+            ),
+        }
+        response = await self._request(
+            "GET",
+            "/rest/v1/operaciones_inmobiliarias",
+            params=params,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("inmobiliaria_active_operation_invalid_response")
+        return data[0] if data and isinstance(data[0], dict) else None
+
     async def list_inmobiliaria_contrato_plantillas(
         self,
         *,
