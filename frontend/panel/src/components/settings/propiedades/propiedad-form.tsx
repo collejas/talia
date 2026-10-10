@@ -819,8 +819,8 @@ function buildPropertyExportCsv(
 const UNIDAD_STATUS_OPTIONS = [
   { value: "disponible", label: "Disponible" },
   { value: "apartado", label: "Apartado" },
-  { value: "vendido", label: "Vendido" },
   { value: "reservado", label: "Reservado" },
+  { value: "vendido", label: "Vendido" },
   { value: "bloqueado", label: "Bloqueado" },
 ] as const;
 type UnidadStatus = (typeof UNIDAD_STATUS_OPTIONS)[number]["value"];
@@ -2543,7 +2543,7 @@ export function PropiedadForm({ lineas, familias, modelos, tipos }: PropiedadFor
     disponible: "text-emerald-600",
     apartado: "text-amber-500",
     vendido: "text-rose-500",
-    reservado: "text-slate-400",
+    reservado: "text-orange-500",
     bloqueado: "text-slate-600",
   };
 

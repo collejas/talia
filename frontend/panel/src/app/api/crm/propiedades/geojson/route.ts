@@ -5,8 +5,8 @@ import { callCrmApi } from "@/lib/api/crm";
 const STATUS_COLORS: Record<string, string> = {
   disponible: "#2ECC71",
   apartado: "#F1C40F",
+  reservado: "#F97316",
   vendido: "#E74C3C",
-  reservado: "#9B59B6",
 };
 
 const buildError = (message: string, status = 500) =>
@@ -15,10 +15,10 @@ const buildError = (message: string, status = 500) =>
 const normalizeFeature = (feature: Record<string, unknown>) => {
   const properties = (feature?.properties ?? {}) as Record<string, unknown>;
   const status = typeof properties.status === "string" ? properties.status : undefined;
-  const statusColor = typeof properties.status_color === "string"
-    ? properties.status_color
-    : status && STATUS_COLORS[status]
+  const statusColor = status && STATUS_COLORS[status]
     ? STATUS_COLORS[status]
+    : typeof properties.status_color === "string"
+    ? properties.status_color
     : "#95A5A6";
   const color =
     (typeof properties.color === "string" && properties.color) ||

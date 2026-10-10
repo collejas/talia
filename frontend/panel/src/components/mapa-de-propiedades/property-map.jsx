@@ -46,8 +46,8 @@ function buildOpportunityOptionLabel(opportunity) {
 const STATUS_COLORS = {
   disponible: "#2ECC71",
   apartado: "#F1C40F",
+  reservado: "#F97316",
   vendido: "#E74C3C",
-  reservado: "#9B59B6",
 };
 
 const DEFAULT_CENTER_MAPBOX = [-99.1332, 19.4326];
