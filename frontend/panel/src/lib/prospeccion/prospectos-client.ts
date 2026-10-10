@@ -943,6 +943,7 @@ export type ListProspectosParams = {
   exportCursor?: boolean
   cursorCreatedAt?: string
   cursorId?: string
+  prospectoIds?: string[]
   signal?: AbortSignal
 }
 
@@ -954,6 +955,11 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   if (typeof params.exportCursor === "boolean") url.searchParams.set("export_cursor", params.exportCursor ? "true" : "false")
   if (params.cursorCreatedAt) url.searchParams.set("cursor_created_at", params.cursorCreatedAt)
   if (params.cursorId) url.searchParams.set("cursor_id", params.cursorId)
+  if (params.prospectoIds?.length) {
+    for (const value of params.prospectoIds) {
+      if (value?.trim()) url.searchParams.append("prospecto_ids", value.trim())
+    }
+  }
   if (params.search?.trim().length) url.searchParams.set("search", params.search.trim())
   if (params.fuente) url.searchParams.set("fuente", params.fuente)
   if (params.lookupStatus?.trim().length) url.searchParams.set("lookup_status", params.lookupStatus.trim())

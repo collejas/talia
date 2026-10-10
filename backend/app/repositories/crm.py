@@ -21689,6 +21689,7 @@ class CRMRepository:
         count_exact: bool = True,
         cursor_created_at: datetime | None = None,
         cursor_id: UUID | None = None,
+        prospecto_ids: Sequence[UUID] | None = None,
         skip_total: bool = False,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista prospectos con filtros de búsqueda y totalizador."""
@@ -22041,7 +22042,11 @@ class CRMRepository:
                 else f"({cursor_filter})"
             )
 
-        include_ids: set[str] | None = None
+        include_ids: set[str] | None = (
+            {str(value) for value in prospecto_ids}
+            if prospecto_ids
+            else None
+        )
         exclude_ids: set[str] = set()
         envio_prospecto_ids: set[str] | None = None
         # Los filtros generales de envío y canal usan los contadores columnarizados

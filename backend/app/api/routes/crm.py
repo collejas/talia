@@ -4961,6 +4961,7 @@ class ProspectoListQuery(BaseModel):
     export_cursor: bool = Field(default=False)
     cursor_created_at: datetime | None = Field(default=None)
     cursor_id: UUID | None = Field(default=None)
+    prospecto_ids: list[UUID] | None = Field(default=None, max_length=500)
     count_exact: bool = Field(
         default=False,
         description="Solicita conteo exacto; la vista normal usa un conteo estimado para evitar scans costosos.",
@@ -37670,6 +37671,7 @@ async def listar_prospectos(
                 count_exact=effective_count_exact and not fast_count_eligible,
                 cursor_created_at=params.cursor_created_at,
                 cursor_id=params.cursor_id,
+                prospecto_ids=params.prospecto_ids,
                 skip_total=params.export_cursor,
             )
             if fast_count_eligible and not params.export_cursor:

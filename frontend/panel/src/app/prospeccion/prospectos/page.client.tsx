@@ -1777,6 +1777,7 @@ function ProspectosView() {
         exportCursor: true,
         cursorCreatedAt: cursor?.createdAt,
         cursorId: cursor?.id,
+        prospectoIds: selectedIds.length ? selectedIds : undefined,
         search: filters.search || undefined,
         fuente: filters.fuente || undefined,
         lookupStatus: filters.lookupStatus || undefined,
@@ -1809,7 +1810,7 @@ function ProspectosView() {
         dateTo,
       }
     },
-    [effectiveMetadataQueries, filters]
+    [effectiveMetadataQueries, filters, selectedIds]
   )
 
   const fetchAllFilteredProspectos = useCallback(async () => {
@@ -1839,27 +1840,35 @@ function ProspectosView() {
     setExportAction(format)
     try {
       const result = await fetchAllFilteredProspectos()
+      const selectedSet = new Set(selectedIds)
+      const exportItems = selectedIds.length
+        ? result.items.filter((item) => selectedSet.has(item.id))
+        : result.items
+      const exportTotal = exportItems.length
+      const exportFilters = selectedIds.length
+        ? [...selectionChips, `Seleccionados: ${exportTotal.toLocaleString("es-MX")}`]
+        : selectionChips
       if (format === "pdf") {
-        printProspectos(result.items, PROSPECTOS_PDF_COLUMNS, {
-          chips: selectionChips,
-          total: result.total,
+        printProspectos(exportItems, PROSPECTOS_PDF_COLUMNS, {
+          chips: exportFilters,
+          total: exportTotal,
           envioFallback: filters.conEnvioModo === "si" ? "Sí" : filters.conEnvioModo === "no" ? "No" : undefined,
         }, printWindow as Window)
       } else {
-        const rows = result.items.map(prospectoExportRow)
+        const rows = exportItems.map(prospectoExportRow)
         const worksheet = XLSX.utils.json_to_sheet(rows)
         const workbook = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(workbook, worksheet, "Prospectos")
         XLSX.writeFile(workbook, `prospectos_filtrados_${new Date().toISOString().slice(0, 10)}.xlsx`)
       }
-      setBanner({ type: "success", message: `${format === "pdf" ? "Impresión" : "Excel"} preparado con ${result.total.toLocaleString("es-MX")} prospectos.` })
+      setBanner({ type: "success", message: `${format === "pdf" ? "Impresión" : "Excel"} preparado con ${exportTotal.toLocaleString("es-MX")} prospectos.` })
     } catch (err) {
       printWindow?.close()
       setBanner({ type: "error", message: err instanceof Error ? err.message : "No se pudo preparar la exportación." })
     } finally {
       setExportAction(null)
     }
-  }, [fetchAllFilteredProspectos, filters.conEnvioModo, selectionChips])
+  }, [fetchAllFilteredProspectos, filters.conEnvioModo, selectedIds, selectionChips])
 
   const fetchProspectos = useCallback(
     async (nextOffset = 0) => {
