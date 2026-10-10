@@ -547,6 +547,21 @@ La RPC de atribución sigue requiriendo una reescritura específica para evitar
 el procesamiento histórico antes del límite; esta corrección reduce dos
 fuentes independientes de presión, pero no declara resuelto ese último punto.
 
+### Cierre operativo de atribución y tablas (2026-10-10)
+
+- Los trabajos globales de atribución sin campaña ahora se fragmentan en
+  trabajos individuales por campaña antes de ejecutar el refresh. Esto evita
+  que una reconstrucción anual de todos los envíos alcance el timeout de
+  Supabase.
+- La tabla de visitas del mapa carga inicialmente una sola página de 1,000
+  filas y permite continuar con `Cargar más visitas`. Se mantiene el acceso al
+  conjunto completo sin bloquear la primera pintura con miles de sesiones.
+- La respuesta de tablas incluye indicadores de disponibilidad de páginas para
+  que el panel no confunda una primera página con el total.
+- Pendiente de validación en producción: reiniciar el worker de atribución,
+  confirmar que los trabajos por campaña terminan y medir p50/p95/p99 de la
+  recarga fría del mapa.
+
 ### Reescritura de RPC de atribución (2026-10-01)
 
 Se aplicó `20261001_214500_prospeccion_campana_template_atribucion_rango_scoped.sql`.

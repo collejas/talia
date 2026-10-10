@@ -26754,6 +26754,32 @@ class CRMRepository:
             raise CRMRepositoryError(f"prospeccion_campana_atribucion_job_claim_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def worker_list_campaign_ids(self, *, organizacion_id: UUID) -> list[UUID]:
+        """Obtiene campañas del tenant para fragmentar refreshes pesados."""
+
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/campanas",
+            params={
+                "select": "id",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "order": "creado_en.asc",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"worker_list_campaign_ids_invalid:{data!r}")
+        result: list[UUID] = []
+        for row in data:
+            if not isinstance(row, dict) or not row.get("id"):
+                continue
+            try:
+                result.append(UUID(str(row["id"])))
+            except (TypeError, ValueError):
+                continue
+        return result
+
     async def worker_finish_prospeccion_campana_atribution_job(
         self,
         *,

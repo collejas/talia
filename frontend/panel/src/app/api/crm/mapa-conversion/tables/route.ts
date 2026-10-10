@@ -19,6 +19,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const table = searchParams.get("table")?.trim().toLowerCase();
   const section = table === "visits" || table === "conversations" ? table : "both";
+  const parsedOffset = Number.parseInt(searchParams.get("offset") || "0", 10);
+  const offset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
   const filters = {
     canales: parseList(searchParams.get("canales")),
     estado: searchParams.get("estado")?.trim() || null,
@@ -43,7 +45,11 @@ export async function GET(request: Request) {
     decodeJwtUserId(accessToken) || "unknown-user",
   ].join(":");
 
-  const response = await loadConversionMapTablesForConversionMap(filters, { cacheScope, section });
+  const response = await loadConversionMapTablesForConversionMap(filters, {
+    cacheScope,
+    section,
+    offset,
+  });
   const durationMs = performance.now() - started;
   const payload = {
     ok: true,
@@ -53,6 +59,7 @@ export async function GET(request: Request) {
   const conversationsRows = response.conversationsTable?.length ?? 0;
   console.info("crm.mapa_conversion.tables.request", {
     section,
+    offset,
     duration_ms: Math.round(durationMs * 100) / 100,
     visits_rows: visitsRows,
     conversations_rows: conversationsRows,

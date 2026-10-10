@@ -409,3 +409,12 @@ Todos los demas cambios historicos o explicativos deben reflejarse aqui cuando a
   histórica ya no se ejecuta al abrir la vista.
 - Pendiente operativo: programar el refresco incremental de los snapshots para
   todos los tenants y periodos activos.
+
+## 2026-10-10 — Fragmentación de atribución y carga incremental de tablas
+
+- Los refreshes globales de atribución ahora se dividen por campaña en el
+  worker, evitando una RPC anual única que podía terminar en `57014`.
+- La tabla de visitas del mapa solicita una primera página de 1,000 filas y
+  permite cargar páginas adicionales bajo demanda.
+- La validación final depende del reinicio del worker y de una medición fría
+  autenticada en producción.

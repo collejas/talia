@@ -39,6 +39,8 @@ type ResponsePayload = {
   ok: boolean;
   visitsTable?: VisitTableRow[];
   conversationsTable?: VisitTableRow[];
+  visitsHasMore?: boolean;
+  conversationsHasMore?: boolean;
   errors?: string[];
 };
 
@@ -46,6 +48,7 @@ type SectionState = {
   data: VisitTableRow[] | null;
   error: string | null;
   loading: boolean;
+  hasMore: boolean;
 };
 
 const VISITS_WEB_COLUMN_LABELS = {
@@ -102,57 +105,79 @@ export function DeferredConversionTables({
     data: null,
     error: null,
     loading: false,
+    hasMore: false,
   });
   const [conversations, setConversations] = React.useState<SectionState>({
     data: null,
     error: null,
     loading: false,
+    hasMore: false,
   });
+
+  const controllerRef = React.useRef<AbortController | null>(null);
+  const loadSection = React.useCallback(async (
+    table: "visits" | "conversations",
+    offset: number,
+    append: boolean,
+  ) => {
+    if (!enabled) return;
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    const params = buildParams(filters);
+    const baseQuery = params.toString();
+    const query = new URLSearchParams(baseQuery);
+    query.set("table", table);
+    query.set("offset", String(offset));
+    if (table === "visits") {
+      setVisits((current) => ({ ...current, error: null, loading: true }));
+    } else {
+      setConversations((current) => ({ ...current, error: null, loading: true }));
+    }
+    try {
+      const response = await fetch(`/api/crm/mapa-conversion/tables?${query.toString()}`, {
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as ResponsePayload;
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.errors?.[0] || "No se pudieron cargar las tablas.");
+      }
+      const rows = table === "visits" ? payload.visitsTable ?? [] : payload.conversationsTable ?? [];
+      if (table === "visits") {
+        setVisits((current) => ({
+          data: append ? [...(current.data ?? []), ...rows] : rows,
+          error: null,
+          loading: false,
+          hasMore: Boolean(payload.visitsHasMore),
+        }));
+      } else {
+        setConversations((current) => ({
+          data: append ? [...(current.data ?? []), ...rows] : rows,
+          error: null,
+          loading: false,
+          hasMore: Boolean(payload.conversationsHasMore),
+        }));
+      }
+    } catch (fetchError: unknown) {
+      if (controller.signal.aborted) return;
+      const message = fetchError instanceof Error ? fetchError.message : "No se pudieron cargar las tablas.";
+      if (table === "visits") {
+        setVisits((current) => ({ ...current, error: message, loading: false }));
+      } else {
+        setConversations((current) => ({ ...current, error: message, loading: false }));
+      }
+    }
+  }, [enabled, filters]);
 
   React.useEffect(() => {
     if (!enabled) return;
-    const controller = new AbortController();
-    const params = buildParams(filters);
-    const baseQuery = params.toString();
-
-    setVisits({ data: null, error: null, loading: mode === "traffic" });
-    setConversations({ data: null, error: null, loading: mode === "conversations" });
-
-    const fetchSection = async (table: "visits" | "conversations") => {
-      const query = new URLSearchParams(baseQuery);
-      query.set("table", table);
-      try {
-        const response = await fetch(`/api/crm/mapa-conversion/tables?${query.toString()}`, {
-          signal: controller.signal,
-          cache: "no-store",
-        });
-        const payload = (await response.json()) as ResponsePayload;
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.errors?.[0] || "No se pudieron cargar las tablas.");
-        }
-        const rows = table === "visits" ? payload.visitsTable ?? [] : payload.conversationsTable ?? [];
-        if (table === "visits") {
-          setVisits({ data: rows, error: null, loading: false });
-        } else {
-          setConversations({ data: rows, error: null, loading: false });
-        }
-      } catch (fetchError: unknown) {
-        if (controller.signal.aborted) return;
-        const message =
-          fetchError instanceof Error ? fetchError.message : "No se pudieron cargar las tablas.";
-        if (table === "visits") {
-          setVisits({ data: null, error: message, loading: false });
-        } else {
-          setConversations({ data: null, error: message, loading: false });
-        }
-      }
-    };
-
-    if (mode === "traffic") void fetchSection("visits");
-    if (mode === "conversations") void fetchSection("conversations");
-
-    return () => controller.abort();
-  }, [enabled, filters, mode]);
+    setVisits({ data: null, error: null, loading: mode === "traffic", hasMore: false });
+    setConversations({ data: null, error: null, loading: mode === "conversations", hasMore: false });
+    if (mode === "traffic") void loadSection("visits", 0, false);
+    if (mode === "conversations") void loadSection("conversations", 0, false);
+    return () => controllerRef.current?.abort();
+  }, [enabled, mode, loadSection]);
 
   if (!enabled || !mode) return null;
 
@@ -187,7 +212,19 @@ export function DeferredConversionTables({
             Cargando visitas...
           </div>
         ) : visits.data?.length ? (
-          <VisitsDataTable data={visits.data} columnLabels={VISITS_WEB_COLUMN_LABELS} />
+          <>
+            <VisitsDataTable data={visits.data} columnLabels={VISITS_WEB_COLUMN_LABELS} />
+            {visits.hasMore ? (
+              <button
+                type="button"
+                className="mt-3 rounded-md border px-3 py-2 text-sm"
+                disabled={visits.loading}
+                onClick={() => void loadSection("visits", visits.data?.length ?? 0, true)}
+              >
+                {visits.loading ? "Cargando..." : "Cargar más visitas"}
+              </button>
+            ) : null}
+          </>
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             No hay visitas para mostrar.
@@ -207,7 +244,19 @@ export function DeferredConversionTables({
             Cargando conversaciones...
           </div>
         ) : webchatConversationRows.length ? (
-          <VisitsDataTable data={webchatConversationRows} columnLabels={WEBCHAT_COLUMN_LABELS} />
+          <>
+            <VisitsDataTable data={webchatConversationRows} columnLabels={WEBCHAT_COLUMN_LABELS} />
+            {conversations.hasMore ? (
+              <button
+                type="button"
+                className="mt-3 rounded-md border px-3 py-2 text-sm"
+                disabled={conversations.loading}
+                onClick={() => void loadSection("conversations", conversations.data?.length ?? 0, true)}
+              >
+                {conversations.loading ? "Cargando..." : "Cargar más conversaciones"}
+              </button>
+            ) : null}
+          </>
         ) : (
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             No hay conversaciones de webchat para mostrar.

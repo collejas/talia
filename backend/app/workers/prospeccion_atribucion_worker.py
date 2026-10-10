@@ -37,10 +37,38 @@ async def _run() -> None:
             )
             for job in jobs:
                 job_id = UUID(str(job["id"]))
+                organizacion_id = UUID(str(job["organizacion_id"]))
                 started = time.perf_counter()
                 try:
+                    # Un refresh global puede recorrer todo el histórico del
+                    # tenant y alcanzar el timeout de PostgREST. Se convierte
+                    # en trabajos por campaña, cada uno acotado por el mismo
+                    # periodo y protegido por la idempotencia de la cola.
+                    if not job.get("campana_id"):
+                        campaign_ids = await repo.worker_list_campaign_ids(
+                            organizacion_id=organizacion_id
+                        )
+                        for campaign_id in campaign_ids:
+                            await repo.enqueue_prospeccion_campana_atribucion_job(
+                                organizacion_id=organizacion_id,
+                                date_from_iso=str(job["periodo_desde"]),
+                                date_to_iso=str(job["periodo_hasta"]),
+                                campana_id=campaign_id,
+                            )
+                        await repo.worker_finish_prospeccion_campana_atribution_job(
+                            job_id=job_id, success=True
+                        )
+                        logger.info(
+                            "prospeccion_atribucion_job.split",
+                            extra={
+                                "job_id": str(job_id),
+                                "campaigns": len(campaign_ids),
+                                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                            },
+                        )
+                        continue
                     await repo.refresh_prospeccion_campana_atribucion_cache(
-                        organizacion_id=UUID(str(job["organizacion_id"])),
+                        organizacion_id=organizacion_id,
                         date_from_iso=str(job["periodo_desde"]),
                         date_to_iso=str(job["periodo_hasta"]),
                         campana_id=UUID(str(job["campana_id"])) if job.get("campana_id") else None,

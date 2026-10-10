@@ -456,9 +456,17 @@ function normalizeWebSessionRows(rows: WebSessionAttributionRow[]): VisitDetailR
   return normalized;
 }
 
+type WebchatRowsResult = {
+  rows: VisitDetailRaw[];
+  errors: string[];
+  hasMore: boolean;
+};
+
 async function loadWebchatConversationRows(
   filters: VisitsFilters = {},
-): Promise<{ rows: VisitDetailRaw[]; errors: string[] }> {
+  options: { offset?: number; pageSize?: number } = {},
+): Promise<WebchatRowsResult> {
+  const pageSize = options.pageSize ?? 1000;
   const result = await callCrmApi<WebSessionAttributionRow[]>(
     "/crm/visitas/webchat/conversaciones",
     {
@@ -467,13 +475,17 @@ async function loadWebchatConversationRows(
         rango: filters.rango || undefined,
         desde: filters.desde || undefined,
         hasta: filters.hasta || undefined,
-        limit: 5000,
-        offset: 0,
+        limit: pageSize,
+        offset: options.offset ?? 0,
       },
     },
   );
-  if (!result.ok) return { rows: [], errors: [result.error] };
-  return { rows: normalizeWebSessionRows(result.data), errors: [] };
+  if (!result.ok) return { rows: [], errors: [result.error], hasMore: false };
+  return {
+    rows: normalizeWebSessionRows(result.data),
+    errors: [],
+    hasMore: result.data.length >= pageSize,
+  };
 }
 
 function buildTemplateLookup(
@@ -551,12 +563,14 @@ function enrichVisitRows(
 
 async function loadWebchatVisitRows(
   filters: VisitsFilters = {},
+  options: { offset?: number; maxPages?: number } = {},
 ): Promise<{
   rows: VisitDetailRaw[];
   shape: "array" | "items" | "other" | "none";
   detailOk: boolean;
   detailRows: number;
   errors: string[];
+  hasMore: boolean;
 }> {
   // PostgREST may enforce a 1,000-row server page even when a larger limit is requested.
   // Continue until a short page so detail consumers never mistake a page for the total.
@@ -574,10 +588,15 @@ async function loadWebchatVisitRows(
   // parallel so a 2–3 page tenant does not pay an extra serial round-trip.
   // If all pages are full, continue with another window to preserve the
   // complete result for larger tenants.
-  let nextOffset = 0;
+  let nextOffset = options.offset ?? 0;
+  let pagesFetched = 0;
   let hasFullPage = true;
-  while (hasFullPage) {
-    const offsets = [0, 1, 2, 3].map((pageIndex) => nextOffset + pageIndex * pageSize);
+  const maxPages = options.maxPages ?? Number.POSITIVE_INFINITY;
+  while (hasFullPage && pagesFetched < maxPages) {
+    const windowSize = Math.min(4, maxPages - pagesFetched);
+    const offsets = Array.from({ length: windowSize }, (_, pageIndex) =>
+      nextOffset + pageIndex * pageSize,
+    );
     const results = await Promise.all(offsets.map(fetchPage));
     for (let index = 0; index < results.length; index += 1) {
       const result = results[index];
@@ -588,6 +607,7 @@ async function loadWebchatVisitRows(
           detailOk: false,
           detailRows: 0,
           errors: [result.error],
+          hasMore: false,
         };
       }
       const page = unwrapWebSessionsPayload(result.data);
@@ -598,6 +618,7 @@ async function loadWebchatVisitRows(
         break;
       }
     }
+    pagesFetched += offsets.length;
     nextOffset += pageSize * offsets.length;
   }
   const normalized = normalizeWebSessionRows(rawRows);
@@ -607,6 +628,7 @@ async function loadWebchatVisitRows(
     detailOk: true,
     detailRows: rawRows.length,
     errors: [],
+    hasMore: hasFullPage,
   };
 }
 
@@ -657,6 +679,8 @@ export type ConversionMapTablesResult = {
   visitsTable: VisitTableRow[];
   conversationsTable: VisitTableRow[];
   errors: string[];
+  visitsHasMore: boolean;
+  conversationsHasMore: boolean;
 };
 
 export type ConversionMapTableSection = "visits" | "conversations" | "both";
@@ -678,10 +702,12 @@ function buildConversionMapTablesCacheKey(
   filters: VisitsFilters,
   cacheScope: string | null | undefined,
   section: ConversionMapTableSection,
+  offset: number,
 ): string {
   return JSON.stringify({
     scope: (cacheScope || "global").trim() || "global",
     section,
+    offset,
     canales: (filters.canales || [])
       .map((value) => value.trim())
       .filter(Boolean)
@@ -709,10 +735,11 @@ function cloneConversionMapTablesResult(result: ConversionMapTablesResult): Conv
 
 export async function loadConversionMapTablesForConversionMap(
   filters: VisitsFilters = {},
-  options: { cacheScope?: string | null; section?: ConversionMapTableSection } = {},
+  options: { cacheScope?: string | null; section?: ConversionMapTableSection; offset?: number } = {},
 ): Promise<ConversionMapTablesResult> {
   const section = options.section || "both";
-  const cacheKey = buildConversionMapTablesCacheKey(filters, options.cacheScope, section)
+  const offset = Math.max(0, options.offset ?? 0);
+  const cacheKey = buildConversionMapTablesCacheKey(filters, options.cacheScope, section, offset)
   const now = Date.now()
   const cached = _CONVERSION_MAP_TABLES_CACHE.get(cacheKey)
   if (cached && cached.expiresAt > now) {
@@ -732,8 +759,8 @@ export async function loadConversionMapTablesForConversionMap(
       : Promise.resolve(null);
     const webchatPromise =
       section === "conversations"
-        ? loadWebchatConversationRows(filters)
-        : loadWebchatVisitRows(filters);
+        ? loadWebchatConversationRows(filters, { offset })
+        : loadWebchatVisitRows(filters, { offset, maxPages: 1 });
     const whatsappPromise =
       section === "visits"
         ? Promise.resolve(null)
@@ -779,6 +806,8 @@ export async function loadConversionMapTablesForConversionMap(
     visitsTable: finalVisitsTable,
     conversationsTable: finalConversationsTable,
     errors: Array.from(new Set(errors)),
+    visitsHasMore: section !== "conversations" && webchat.hasMore,
+    conversationsHasMore: section !== "visits" && webchat.hasMore,
   };
     _CONVERSION_MAP_TABLES_CACHE.set(cacheKey, {
       expiresAt: Date.now() + CONVERSION_MAP_TABLES_CACHE_TTL_MS,
