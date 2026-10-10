@@ -271,9 +271,12 @@ type VisitsFilters = {
   soloEntrantes?: boolean;
 };
 
-function buildVisitsSearchParams(filters: VisitsFilters) {
+function buildVisitsSearchParams(
+  filters: VisitsFilters,
+  options: { limit?: number } = {},
+) {
   return {
-    limit: 5000,
+    limit: options.limit ?? 5000,
     offset: 0,
     estado: filters.estado || undefined,
     source_class: filters.sourceClass || undefined,
@@ -581,7 +584,10 @@ async function loadWebchatVisitRows(
     "/crm/visitas/web-sessions",
     {
       withUserToken: true,
-      searchParams: { ...buildVisitsSearchParams(filters), offset },
+      searchParams: {
+        ...buildVisitsSearchParams(filters, { limit: pageSize }),
+        offset,
+      },
     },
   );
   // PostgREST caps each response at 1,000 rows. Fetch the first window in
