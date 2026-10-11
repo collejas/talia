@@ -304,6 +304,39 @@ Variables disponibles para las plantillas:
 {{contrato.seccion_firmas}}
 ```
 
+### Datos del comprador para contrato
+
+El primer dato del comprador es la forma en que comparece en la operación:
+
+- Persona física.
+- Persona física con actividad empresarial (PFAE).
+- Empresa o persona moral.
+
+El modal de Reserva carga la información existente y permite completar solo los
+datos faltantes sin salir del flujo. Los datos personales se guardan en
+`personas`; los datos fiscales de PFAE o persona moral permanecen en `cuentas`;
+el tipo elegido se guarda también en `operaciones_inmobiliarias`.
+
+Datos personales disponibles para contrato:
+
+```text
+{{comprador.nacionalidad}}
+{{comprador.ocupacion}}
+{{comprador.estado_civil}}
+{{comprador.curp}}
+{{comprador.rfc_persona}}
+{{comprador.tipo_identificacion}}
+{{comprador.numero_identificacion}}
+{{comprador.razon_social}}
+{{comprador.nombre_comercial}}
+{{comprador.regimen_capital}}
+{{operacion.tipo_comprador}}
+```
+
+Al generar el contrato se conserva la información utilizada como snapshot para
+que un cambio posterior en el contacto o en la empresa no modifique el
+documento histórico.
+
 `{{contrato.seccion_firmas}}` permite colocar la sección en un punto específico.
 Si la plantilla no la incluye, Tal-IA la agrega automáticamente al final del
 texto generado con el comprador y la parte vendedora.

@@ -26,10 +26,16 @@ const VARIABLE_GROUPS = [
     description: "Datos que Tal-IA toma del contacto seleccionado.",
     variables: [
       ["Nombre completo", "{{comprador.nombre_completo}}"],
+      ["Nacionalidad", "{{comprador.nacionalidad}}"],
+      ["Ocupación", "{{comprador.ocupacion}}"],
+      ["Estado civil", "{{comprador.estado_civil}}"],
       ["RFC", "{{comprador.rfc}}"],
+      ["CURP", "{{comprador.curp}}"],
       ["Correo", "{{comprador.correo}}"],
       ["Teléfono", "{{comprador.telefono}}"],
       ["Domicilio", "{{comprador.domicilio}}"],
+      ["Tipo de identificación", "{{comprador.tipo_identificacion}}"],
+      ["Número de identificación", "{{comprador.numero_identificacion}}"],
     ],
   },
   {
@@ -41,6 +47,7 @@ const VARIABLE_GROUPS = [
       ["Precio acordado", "{{operacion.precio_acordado}}"],
       ["Importe de reserva", "{{operacion.importe_reserva}}"],
       ["Fecha de reserva", "{{operacion.fecha_reserva}}"],
+      ["Tipo de comprador", "{{operacion.tipo_comprador}}"],
     ],
   },
   {
@@ -54,6 +61,9 @@ const VARIABLE_GROUPS = [
       ["Cargo del firmante", "{{parte_vendedora.firmante_cargo}}"],
       ["Sección de firmas", "{{contrato.seccion_firmas}}"],
       ["Nombre de la inmobiliaria", "{{inmobiliaria.nombre}}"],
+      ["Razón social compradora", "{{comprador.razon_social}}"],
+      ["Nombre comercial comprador", "{{comprador.nombre_comercial}}"],
+      ["Régimen de capital comprador", "{{comprador.regimen_capital}}"],
     ],
   },
 ] as const;

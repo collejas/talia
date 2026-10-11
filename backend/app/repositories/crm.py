@@ -221,7 +221,7 @@ PERSONA_SELECT_FIELDS = (
     "correo_principal,correo_secundario,correo_institucional,correo_personal_3,"
     "telefono_principal_e164,telefono_principal_tipo_linea,telefono_principal_extension,telefono_movil_1_e164,telefono_movil_1_tipo_linea,telefono_movil_2_e164,telefono_movil_2_tipo_linea,telefono_movil_2_extension,telefono_secundario_e164,telefono_secundario_tipo_linea,telefono_secundario_extension,"
     "telefono_empresa_1_e164,telefono_empresa_1_extension,telefono_empresa_2_e164,telefono_empresa_2_extension,"
-    "puesto,area,rol_decision,estado,"
+    "puesto,area,rol_decision,estado,nacionalidad,ocupacion,estado_civil,curp,rfc,tipo_identificacion,numero_identificacion,"
     "clave_entidad,entidad,clave_municipio,municipio,pais,"
     "origen,notas,metadata,persona_datos,propietario_usuario_id,creado_en,actualizado_en,"
     "archived_at,merged_into_persona_id,merge_metadata"
@@ -1565,6 +1565,7 @@ class CRMRepository:
         forma_adquisicion: str | None,
         reserva_importe: Decimal | None,
         condiciones_reserva: str | None,
+        tipo_comprador: str | None,
     ) -> dict[str, Any]:
         result = await self._rpc(
             "crm_guardar_avance_reserva",
@@ -1576,6 +1577,7 @@ class CRMRepository:
                 "p_forma_adquisicion": forma_adquisicion,
                 "p_reserva_importe": str(reserva_importe) if reserva_importe is not None else None,
                 "p_condiciones_reserva": condiciones_reserva,
+                "p_tipo_comprador": tipo_comprador,
             },
         )
         if isinstance(result, list):
@@ -1599,6 +1601,7 @@ class CRMRepository:
         forma_adquisicion: str | None,
         reserva_importe: Decimal | None,
         condiciones_reserva: str | None,
+        tipo_comprador: str | None,
     ) -> dict[str, Any]:
         result = await self._rpc(
             "crm_guardar_avance_reserva_directa",
@@ -1613,6 +1616,7 @@ class CRMRepository:
                 "p_forma_adquisicion": forma_adquisicion,
                 "p_reserva_importe": str(reserva_importe) if reserva_importe is not None else None,
                 "p_condiciones_reserva": condiciones_reserva,
+                "p_tipo_comprador": tipo_comprador,
             },
         )
         if isinstance(result, list):
@@ -1640,14 +1644,12 @@ class CRMRepository:
                 "agente_usuario_id,estado,apartado_horas,apartado_iniciado_en,"
                 "apartado_vencimiento_en,apartado_motivo,forma_adquisicion,"
                 "precio_ofrecido,precio_acordado,precio_final,moneda,"
-                "fecha_limite_reserva,reserva_importe,condiciones_reserva,"
+                "fecha_limite_reserva,reserva_importe,condiciones_reserva,tipo_comprador,"
                 "cliente:personas!operaciones_inmobiliarias_cliente_principal_id_fkey("
                 "id,nombre,nombre_completo,apellido_paterno,apellido_materno,"
-                "persona_fisica_moral,razon_social,rfc,correo_principal,"
-                "correo_secundario,telefono_principal_e164,telefono_movil_1_e164,"
-                "tipo_vialidad,nombre_vialidad,numero_exterior,letra_exterior,"
-                "numero_interior,letra_interior,tipo_asentamiento,nombre_asentamiento,"
-                "colonia,codigo_postal,entidad,municipio,localidad,pais"
+                "nacionalidad,ocupacion,estado_civil,curp,rfc,tipo_identificacion,"
+                "numero_identificacion,correo_principal,correo_secundario,"
+                "telefono_principal_e164,telefono_movil_1_e164,entidad,municipio,pais"
                 ")"
             ),
         }
@@ -11981,6 +11983,13 @@ class CRMRepository:
             # account is authoritative for the opportunity form. The
             # persona-level company_name is only a fallback without a relation.
             "company_name": account_name or persona_company_name,
+            "nacionalidad": persona.get("nacionalidad"),
+            "ocupacion": persona.get("ocupacion"),
+            "estado_civil": persona.get("estado_civil"),
+            "curp": persona.get("curp"),
+            "rfc_persona": persona.get("rfc"),
+            "tipo_identificacion": persona.get("tipo_identificacion"),
+            "numero_identificacion": persona.get("numero_identificacion"),
             "notes": persona.get("notas"),
             "necesidad_proposito": persona_need
             or (account.get("necesidad_proposito") if isinstance(account, dict) else None),
@@ -12304,6 +12313,13 @@ class CRMRepository:
             ),
             "correo": self._pick_text(merged, "correo_principal", "correo", "email"),
             "puesto": self._pick_text(merged, "puesto"),
+            "nacionalidad": self._pick_text(merged, "nacionalidad"),
+            "ocupacion": self._pick_text(merged, "ocupacion"),
+            "estado_civil": self._pick_text(merged, "estado_civil"),
+            "curp": self._pick_text(merged, "curp"),
+            "rfc": self._pick_text(merged, "rfc_persona"),
+            "tipo_identificacion": self._pick_text(merged, "tipo_identificacion"),
+            "numero_identificacion": self._pick_text(merged, "numero_identificacion"),
             "area": self._pick_text(merged, "area"),
             "rol_decision": self._pick_text(merged, "rol_decision"),
             "estado": _normalize_persona_estado(self._pick_text(merged, "estado")),
@@ -13987,6 +14003,37 @@ class CRMRepository:
         if not resolved_persona_id:
             raise CRMRepositoryError("contact_not_found")
         return await self.update_persona_by_id(persona_id=resolved_persona_id, patch=patch)
+
+    async def update_persona_contract_profile(
+        self,
+        *,
+        organizacion_id: UUID,
+        persona_id: UUID,
+        persona_patch: dict[str, Any],
+        cuenta_patch: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        existing = await self.get_persona(organizacion_id=organizacion_id, persona_id=persona_id)
+        if not existing:
+            raise CRMRepositoryError("contact_not_found")
+        if persona_patch:
+            response = await self._request(
+                "PATCH",
+                "/rest/v1/personas",
+                params={"id": f"eq.{persona_id}", "organizacion_id": f"eq.{organizacion_id}"},
+                json=persona_patch,
+                prefer="return=representation",
+            )
+            rows = response.json()
+            if not isinstance(rows, list) or not rows:
+                raise CRMRepositoryError("contact_contract_profile_update_empty")
+        cuenta_id = existing.get("cuenta_id")
+        if cuenta_patch and cuenta_id:
+            await self.update_account(
+                organizacion_id=organizacion_id,
+                account_id=UUID(str(cuenta_id)),
+                payload=cuenta_patch,
+            )
+        return await self.get_persona(organizacion_id=organizacion_id, persona_id=persona_id) or {}
 
     async def create_persona(
         self,

@@ -103,6 +103,13 @@ function normalizeValue(value) {
   return value;
 }
 
+function inferBuyerContractType(contact) {
+  const accountType = String(contact?.cuenta_tipo || contact?.tipo_cuenta || "").toLowerCase();
+  if (accountType === "persona_fisica_actividad_empresarial") return "pfae";
+  if (accountType === "empresa" || contact?.persona_fisica_moral === "moral") return "persona_moral";
+  return "persona_fisica";
+}
+
 function buildChoroplethColor(value, max = 5000) {
   const clamped = Math.min(normalizeValue(value), max);
   if (clamped <= 0) {
@@ -564,6 +571,22 @@ export function PropertyMap() {
   const [reservaError, setReservaError] = useState(null);
   const [reservaLoading, setReservaLoading] = useState(false);
   const [reservaContactoLoading, setReservaContactoLoading] = useState(false);
+  const [reservaTipoComprador, setReservaTipoComprador] = useState("persona_fisica");
+  const [reservaCompradorDatos, setReservaCompradorDatos] = useState({
+    nacionalidad: "",
+    ocupacion: "",
+    estado_civil: "",
+    curp: "",
+    rfc_persona: "",
+    tipo_identificacion: "",
+    numero_identificacion: "",
+  });
+  const [reservaCuentaDatos, setReservaCuentaDatos] = useState({
+    nombre_comercial: "",
+    razon_social: "",
+    rfc: "",
+    regimen_capital: "",
+  });
   const [contratoPlantillas, setContratoPlantillas] = useState([]);
   const [contratoPlantillaId, setContratoPlantillaId] = useState("");
   const [contratoPlantillaLoading, setContratoPlantillaLoading] = useState(false);
@@ -2121,6 +2144,9 @@ export function PropertyMap() {
     setReservaPagoFile(null);
     setReservaCondiciones("");
     setReservaError(null);
+    setReservaTipoComprador("persona_fisica");
+    setReservaCompradorDatos({ nacionalidad: "", ocupacion: "", estado_civil: "", curp: "", rfc_persona: "", tipo_identificacion: "", numero_identificacion: "" });
+    setReservaCuentaDatos({ nombre_comercial: "", razon_social: "", rfc: "", regimen_capital: "" });
     setContratoPlantillaId("");
     setContratoPreviewOpen(false);
     setContratoFirmadoFile(null);
@@ -2159,6 +2185,22 @@ export function PropertyMap() {
         const contactPayload = await contactResponse.json().catch(() => null);
         if (contactResponse.ok && contactPayload) {
           setApartadoClient((current) => ({ ...(current || {}), ...contactPayload }));
+          setReservaTipoComprador(inferBuyerContractType(contactPayload));
+          setReservaCompradorDatos({
+            nacionalidad: contactPayload.nacionalidad || "",
+            ocupacion: contactPayload.ocupacion || contactPayload.puesto || "",
+            estado_civil: contactPayload.estado_civil || "",
+            curp: contactPayload.curp || "",
+            rfc_persona: contactPayload.rfc_persona || (inferBuyerContractType(contactPayload) === "persona_fisica" ? contactPayload.rfc || "" : ""),
+            tipo_identificacion: contactPayload.tipo_identificacion || "",
+            numero_identificacion: contactPayload.numero_identificacion || "",
+          });
+          setReservaCuentaDatos({
+            nombre_comercial: contactPayload.nombre_comercial || contactPayload.company_name || "",
+            razon_social: contactPayload.razon_social || "",
+            rfc: contactPayload.rfc || "",
+            regimen_capital: contactPayload.regimen_capital || "",
+          });
         }
       } catch (error) {
         if (error?.name !== "AbortError") {
@@ -2227,15 +2269,26 @@ export function PropertyMap() {
     ].join("\n");
     const replacements = {
       "{{comprador.nombre_completo}}": clientName,
+      "{{comprador.nacionalidad}}": reservaCompradorDatos.nacionalidad || "[Nacionalidad pendiente]",
+      "{{comprador.ocupacion}}": reservaCompradorDatos.ocupacion || "[Ocupación pendiente]",
+      "{{comprador.estado_civil}}": reservaCompradorDatos.estado_civil || "[Estado civil pendiente]",
+      "{{comprador.curp}}": reservaCompradorDatos.curp || "[CURP pendiente]",
       "{{comprador.domicilio}}": clientAddress || apartadoClient?.domicilio || "[Domicilio pendiente]",
-      "{{comprador.rfc}}": apartadoClient?.rfc || "[RFC pendiente]",
+      "{{comprador.rfc}}": reservaTipoComprador === "persona_fisica" ? (reservaCompradorDatos.rfc_persona || "[RFC pendiente]") : (reservaCuentaDatos.rfc || "[RFC pendiente]"),
+      "{{comprador.rfc_persona}}": reservaCompradorDatos.rfc_persona || "[RFC de persona pendiente]",
+      "{{comprador.tipo_identificacion}}": reservaCompradorDatos.tipo_identificacion || "[Identificación pendiente]",
+      "{{comprador.numero_identificacion}}": reservaCompradorDatos.numero_identificacion || "[Número de identificación pendiente]",
       "{{comprador.correo}}": apartadoClient?.correo_principal || apartadoClient?.correo || "[Correo pendiente]",
       "{{comprador.telefono}}": apartadoClient?.telefono_principal_e164 || apartadoClient?.telefono_e164 || "[Teléfono pendiente]",
+      "{{comprador.razon_social}}": reservaCuentaDatos.razon_social || "[Razón social pendiente]",
+      "{{comprador.nombre_comercial}}": reservaCuentaDatos.nombre_comercial || "[Nombre comercial pendiente]",
+      "{{comprador.regimen_capital}}": reservaCuentaDatos.regimen_capital || "[Régimen pendiente]",
       "{{propiedad.nombre}}": mapboxProps?.nombre || mapboxProps?.unidad || "[Propiedad]",
       "{{propiedad.direccion}}": mapboxProps?.direccion || "[Dirección pendiente]",
       "{{operacion.precio_acordado}}": reservaPrecio || "[Precio pendiente]",
       "{{operacion.importe_reserva}}": reservaImporte || "[Importe pendiente]",
       "{{operacion.fecha_reserva}}": new Date().toLocaleDateString("es-MX"),
+      "{{operacion.tipo_comprador}}": reservaTipoComprador === "persona_moral" ? "Persona moral" : reservaTipoComprador === "pfae" ? "Persona física con actividad empresarial" : "Persona física",
       "{{contrato.fecha_firma}}": contratoFechaFirma
         ? new Date(`${contratoFechaFirma}T12:00:00Z`).toLocaleDateString("es-MX")
         : "[Fecha de firma pendiente]",
@@ -2253,7 +2306,7 @@ export function PropertyMap() {
     return renderedContent.includes(signatureSection.trim())
       ? renderedContent
       : `${renderedContent.trimEnd()}\n\n${signatureSection.trimStart()}`;
-  }, [apartadoClient, contratoFechaFirma, contratoPlantillaId, contratoPlantillas, mapboxProps, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, reservaImporte, reservaPrecio]);
+  }, [apartadoClient, contratoFechaFirma, contratoPlantillaId, contratoPlantillas, mapboxProps, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, reservaCompradorDatos, reservaCuentaDatos, reservaImporte, reservaPrecio, reservaTipoComprador]);
 
   const printContratoPreview = useCallback(() => {
     const content = renderContratoPreview();
@@ -2295,14 +2348,29 @@ export function PropertyMap() {
 
   const handleSaveReservaAvance = useCallback(async () => {
     if (!unidadId) return;
-    const directReservation = (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible";
-    if (directReservation && !apartadoClient?.id) {
-      setReservaError("Selecciona el contacto o comprador para guardar la reserva directa.");
+    if (!apartadoClient?.id) {
+      setReservaError("Selecciona el contacto o comprador principal antes de guardar la reserva.");
       return;
     }
+    const directReservation = (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible";
     setReservaLoading(true);
     setReservaError(null);
     try {
+      const buyerProfileResponse = await fetch(`/api/contactos/${apartadoClient.id}/contract-profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo_comprador: reservaTipoComprador,
+          persona: Object.fromEntries(Object.entries(reservaCompradorDatos).map(([key, value]) => [key, value.trim() || null])),
+          cuenta: reservaTipoComprador === "persona_fisica"
+            ? null
+            : Object.fromEntries(Object.entries(reservaCuentaDatos).map(([key, value]) => [key, value.trim() || null])),
+        }),
+      });
+      const buyerProfilePayload = await buyerProfileResponse.json().catch(() => null);
+      if (!buyerProfileResponse.ok) {
+        throw new Error(buyerProfilePayload?.detail || buyerProfilePayload?.error || "No se pudieron guardar los datos del comprador.");
+      }
       const response = await fetch(
         `/api/crm/propiedad-unidades/${unidadId}/reserva/${directReservation ? "avance-directo" : "avance"}`,
         {
@@ -2315,6 +2383,7 @@ export function PropertyMap() {
           forma_adquisicion: reservaForma,
           reserva_importe: reservaImporte ? Number(reservaImporte) : null,
           condiciones_reserva: reservaCondiciones || null,
+          tipo_comprador: reservaTipoComprador,
         }),
         },
       );
@@ -2375,7 +2444,7 @@ export function PropertyMap() {
     } finally {
       setReservaLoading(false);
     }
-  }, [apartadoClient?.id, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, renderContratoPreview, reservaCondiciones, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, unidadId]);
+  }, [apartadoClient?.id, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, renderContratoPreview, reservaCompradorDatos, reservaCondiciones, reservaCuentaDatos, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, reservaTipoComprador, unidadId]);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
@@ -5073,7 +5142,7 @@ export function PropertyMap() {
                                   {apartadoClient ? (
                                     <div className="grid gap-2 text-xs text-slate-300 sm:grid-cols-2">
                                       <p><span className="text-slate-500">Nombre:</span> {apartadoClient.nombre_completo || apartadoClient.nombre || "Pendiente"}</p>
-                                      <p><span className="text-slate-500">RFC:</span> {apartadoClient.rfc || "Pendiente"}</p>
+                                      <p><span className="text-slate-500">RFC:</span> {(reservaTipoComprador === "persona_fisica" ? apartadoClient.rfc_persona : apartadoClient.rfc) || "Pendiente"}</p>
                                       <p><span className="text-slate-500">Correo:</span> {apartadoClient.correo_principal || apartadoClient.correo || "Pendiente"}</p>
                                       <p><span className="text-slate-500">Teléfono:</span> {apartadoClient.telefono_principal_e164 || apartadoClient.telefono_e164 || apartadoClient.telefono || "Pendiente"}</p>
                                       <p className="sm:col-span-2"><span className="text-slate-500">Domicilio:</span> {[apartadoClient.nombre_vialidad, apartadoClient.numero_exterior, apartadoClient.colonia || apartadoClient.nombre_asentamiento, apartadoClient.codigo_postal, apartadoClient.municipio, apartadoClient.entidad].filter(Boolean).join(", ") || "Pendiente"}</p>
@@ -5121,6 +5190,87 @@ export function PropertyMap() {
                                     )}
                                   </div>
                                 )}
+                                <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                  <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Cómo celebrará el contrato</p>
+                                    <p className="mt-1 text-xs text-slate-500">Esto define qué datos del comprador se usarán en el contrato.</p>
+                                  </div>
+                                  <select
+                                    id="reserva-tipo-comprador"
+                                    className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white"
+                                    value={reservaTipoComprador}
+                                    onChange={(event) => setReservaTipoComprador(event.target.value)}
+                                    disabled={!apartadoClient}
+                                  >
+                                    <option value="persona_fisica">Persona física</option>
+                                    <option value="pfae">Persona física con actividad empresarial (PFAE)</option>
+                                    <option value="persona_moral">Empresa / persona moral</option>
+                                  </select>
+                                  {apartadoClient ? (
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400" htmlFor="reserva-nacionalidad">Nacionalidad</label>
+                                        <Input id="reserva-nacionalidad" value={reservaCompradorDatos.nacionalidad} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, nacionalidad: event.target.value }))} placeholder="Ej. Mexicana" />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400" htmlFor="reserva-ocupacion">Ocupación</label>
+                                        <Input id="reserva-ocupacion" value={reservaCompradorDatos.ocupacion} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, ocupacion: event.target.value }))} />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400" htmlFor="reserva-estado-civil">Estado civil</label>
+                                        <Input id="reserva-estado-civil" value={reservaCompradorDatos.estado_civil} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, estado_civil: event.target.value }))} placeholder="Ej. Soltero(a)" />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400" htmlFor="reserva-curp">CURP</label>
+                                        <Input id="reserva-curp" value={reservaCompradorDatos.curp} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, curp: event.target.value.toUpperCase() }))} maxLength={18} />
+                                      </div>
+                                      {reservaTipoComprador === "persona_fisica" || reservaTipoComprador === "pfae" ? (
+                                        <div className="space-y-1">
+                                          <label className="text-xs text-slate-400" htmlFor="reserva-rfc-persona">RFC de la persona</label>
+                                          <Input id="reserva-rfc-persona" value={reservaCompradorDatos.rfc_persona} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, rfc_persona: event.target.value.toUpperCase() }))} maxLength={13} />
+                                        </div>
+                                      ) : null}
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400" htmlFor="reserva-tipo-identificacion">Identificación</label>
+                                        <select id="reserva-tipo-identificacion" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaCompradorDatos.tipo_identificacion} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, tipo_identificacion: event.target.value }))}>
+                                          <option value="">Selecciona una opción</option>
+                                          <option value="ine">INE</option>
+                                          <option value="pasaporte">Pasaporte</option>
+                                          <option value="cedula_profesional">Cédula profesional</option>
+                                          <option value="otro">Otra</option>
+                                        </select>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400" htmlFor="reserva-numero-identificacion">Número de identificación</label>
+                                        <Input id="reserva-numero-identificacion" value={reservaCompradorDatos.numero_identificacion} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, numero_identificacion: event.target.value }))} />
+                                      </div>
+                                    </div>
+                                  ) : <p className="text-xs text-amber-300">Selecciona primero al comprador.</p>}
+                                  {reservaTipoComprador !== "persona_fisica" ? (
+                                    <div className="space-y-3 border-t border-slate-800 pt-3">
+                                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Datos de la cuenta vinculada</p>
+                                      <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-1">
+                                          <label className="text-xs text-slate-400" htmlFor="reserva-razon-social">Razón social</label>
+                                          <Input id="reserva-razon-social" value={reservaCuentaDatos.razon_social} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, razon_social: event.target.value }))} />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <label className="text-xs text-slate-400" htmlFor="reserva-cuenta-rfc">RFC de la cuenta</label>
+                                          <Input id="reserva-cuenta-rfc" value={reservaCuentaDatos.rfc} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, rfc: event.target.value.toUpperCase() }))} maxLength={13} />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <label className="text-xs text-slate-400" htmlFor="reserva-regimen-capital">Régimen de capital</label>
+                                          <Input id="reserva-regimen-capital" value={reservaCuentaDatos.regimen_capital} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, regimen_capital: event.target.value }))} />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <label className="text-xs text-slate-400" htmlFor="reserva-nombre-comercial">Nombre comercial</label>
+                                          <Input id="reserva-nombre-comercial" value={reservaCuentaDatos.nombre_comercial} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, nombre_comercial: event.target.value }))} />
+                                        </div>
+                                      </div>
+                                      <p className="text-xs text-slate-500">Estos datos se actualizan en la empresa o cuenta vinculada, no en el contacto.</p>
+                                    </div>
+                                  ) : null}
+                                </div>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <div className="space-y-1">
                                     <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-precio">Precio acordado</label>

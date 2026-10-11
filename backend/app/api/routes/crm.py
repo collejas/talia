@@ -6805,6 +6805,7 @@ class PropiedadUnidadReservaAvanceRequest(BaseModel):
     forma_adquisicion: Literal["contado", "credito", "mixto", "otro", "por_definir"] | None = None
     reserva_importe: Decimal | None = Field(default=None, ge=0)
     condiciones_reserva: str | None = Field(default=None, max_length=4000)
+    tipo_comprador: Literal["persona_fisica", "pfae", "persona_moral"] | None = None
 
 
 class PropiedadUnidadReservaDirectaRequest(PropiedadUnidadReservaAvanceRequest):
@@ -13914,6 +13915,13 @@ class CRMContact(BaseModel):
     apellido_paterno: str | None = None
     apellido_materno: str | None = None
     nombre_completo: str | None = None
+    nacionalidad: str | None = None
+    ocupacion: str | None = None
+    estado_civil: str | None = None
+    curp: str | None = None
+    rfc_persona: str | None = None
+    tipo_identificacion: str | None = None
+    numero_identificacion: str | None = None
     persona_fisica_moral: str | None = None
     razon_social: str | None = None
     rfc: str | None = None
@@ -14005,6 +14013,13 @@ class CRMContactCreate(BaseModel):
     apellido_paterno: str | None = Field(default=None, max_length=160)
     apellido_materno: str | None = Field(default=None, max_length=160)
     nombre_completo: str | None = Field(default=None, max_length=160)
+    nacionalidad: str | None = Field(default=None, max_length=120)
+    ocupacion: str | None = Field(default=None, max_length=160)
+    estado_civil: str | None = Field(default=None, max_length=80)
+    curp: str | None = Field(default=None, max_length=18)
+    rfc_persona: str | None = Field(default=None, max_length=13)
+    tipo_identificacion: str | None = Field(default=None, max_length=80)
+    numero_identificacion: str | None = Field(default=None, max_length=80)
     persona_fisica_moral: str | None = Field(default=None, max_length=20)
     razon_social: str | None = Field(default=None, max_length=255)
     rfc: str | None = Field(default=None, max_length=64)
@@ -14090,6 +14105,13 @@ class CRMContactUpdate(BaseModel):
     apellido_paterno: str | None = Field(default=None, max_length=160)
     apellido_materno: str | None = Field(default=None, max_length=160)
     nombre_completo: str | None = Field(default=None, max_length=160)
+    nacionalidad: str | None = Field(default=None, max_length=120)
+    ocupacion: str | None = Field(default=None, max_length=160)
+    estado_civil: str | None = Field(default=None, max_length=80)
+    curp: str | None = Field(default=None, max_length=18)
+    rfc_persona: str | None = Field(default=None, max_length=13)
+    tipo_identificacion: str | None = Field(default=None, max_length=80)
+    numero_identificacion: str | None = Field(default=None, max_length=80)
     persona_fisica_moral: str | None = Field(default=None, max_length=20)
     razon_social: str | None = Field(default=None, max_length=255)
     rfc: str | None = Field(default=None, max_length=64)
@@ -14185,6 +14207,13 @@ class CRMPersonaAltaPersona(BaseModel):
     apellido_paterno: str = Field(..., max_length=160)
     apellido_materno: str | None = Field(default=None, max_length=160)
     nombre_completo: str | None = Field(default=None, max_length=255)
+    nacionalidad: str | None = Field(default=None, max_length=120)
+    ocupacion: str | None = Field(default=None, max_length=160)
+    estado_civil: str | None = Field(default=None, max_length=80)
+    curp: str | None = Field(default=None, max_length=18)
+    rfc_persona: str | None = Field(default=None, max_length=13)
+    tipo_identificacion: str | None = Field(default=None, max_length=80)
+    numero_identificacion: str | None = Field(default=None, max_length=80)
     correo_principal: str | None = Field(default=None, max_length=255)
     correo_secundario: str | None = Field(default=None, max_length=255)
     correo_institucional: str | None = Field(default=None, max_length=255)
@@ -14718,6 +14747,29 @@ class CRMPersonaEditRequest(BaseModel):
     dedupe: CRMPersonaAltaDedupeDecision | None = None
 
 
+class CRMContratoCompradorPersonaUpdate(BaseModel):
+    nacionalidad: str | None = Field(default=None, max_length=120)
+    ocupacion: str | None = Field(default=None, max_length=160)
+    estado_civil: str | None = Field(default=None, max_length=80)
+    curp: str | None = Field(default=None, max_length=18)
+    rfc_persona: str | None = Field(default=None, max_length=13)
+    tipo_identificacion: str | None = Field(default=None, max_length=80)
+    numero_identificacion: str | None = Field(default=None, max_length=80)
+
+
+class CRMContratoCompradorCuentaUpdate(BaseModel):
+    nombre_comercial: str | None = Field(default=None, max_length=255)
+    razon_social: str | None = Field(default=None, max_length=255)
+    rfc: str | None = Field(default=None, max_length=64)
+    regimen_capital: str | None = Field(default=None, max_length=120)
+
+
+class CRMContratoCompradorProfileUpdate(BaseModel):
+    tipo_comprador: Literal["persona_fisica", "pfae", "persona_moral"]
+    persona: CRMContratoCompradorPersonaUpdate
+    cuenta: CRMContratoCompradorCuentaUpdate | None = None
+
+
 class CRMPersonaMergeRequest(BaseModel):
     target_persona_id: UUID
 
@@ -14955,6 +15007,13 @@ def _persona_alta_normalize_persona(payload: CRMPersonaAltaPersona) -> CRMPerson
             "apellido_paterno": _persona_alta_clean_text(payload.apellido_paterno, compact_spaces=True),
             "apellido_materno": _persona_alta_clean_text(payload.apellido_materno, compact_spaces=True),
             "nombre_completo": _persona_alta_clean_text(payload.nombre_completo, compact_spaces=True),
+            "nacionalidad": _persona_alta_clean_text(payload.nacionalidad, compact_spaces=True),
+            "ocupacion": _persona_alta_clean_text(payload.ocupacion, compact_spaces=True),
+            "estado_civil": _persona_alta_clean_text(payload.estado_civil, compact_spaces=True),
+            "curp": _persona_alta_clean_text(payload.curp, compact_spaces=True).upper() if payload.curp else None,
+            "rfc_persona": _persona_alta_clean_text(payload.rfc_persona, compact_spaces=True).upper() if payload.rfc_persona else None,
+            "tipo_identificacion": _persona_alta_clean_text(payload.tipo_identificacion, compact_spaces=True),
+            "numero_identificacion": _persona_alta_clean_text(payload.numero_identificacion, compact_spaces=True),
             "correo_principal": _persona_alta_normalize_email(payload.correo_principal)
             or _persona_alta_normalize_email(getattr(payload, "correo", None))
             or _persona_alta_normalize_email(getattr(payload, "email", None)),
@@ -29564,6 +29623,52 @@ async def get_persona_legacy(
         can_view_sensitive_fields=can_view_sensitive_fields,
     )
     return CRMPersona.model_validate(payload)
+
+
+@router.patch("/contacts/{contacto_id}/contract-profile", response_model=CRMPersona)
+async def update_persona_contract_profile(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("contacts.write")),
+    contacto_id: UUID,
+    payload: CRMContratoCompradorProfileUpdate,
+) -> CRMPersona:
+    existing = await repo.get_persona(organizacion_id=organizacion_id, persona_id=contacto_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="contacto_no_encontrado")
+    await _require_record_owner_or_privileged(
+        repo=repo,
+        owner_user_id=_contact_owner_user_id(existing),
+    )
+    persona_patch = payload.persona.model_dump(exclude_none=True)
+    if "curp" in persona_patch:
+        persona_patch["curp"] = _persona_alta_clean_text(persona_patch["curp"], compact_spaces=True).upper()
+    if "rfc_persona" in persona_patch:
+        value = _persona_alta_clean_text(persona_patch["rfc_persona"], compact_spaces=True)
+        if value and len(value) != 13:
+            raise HTTPException(status_code=400, detail="rfc_persona_invalido")
+        persona_patch["rfc"] = value.upper() if value else None
+        persona_patch.pop("rfc_persona", None)
+    for key in ("nacionalidad", "ocupacion", "estado_civil", "tipo_identificacion", "numero_identificacion"):
+        if key in persona_patch:
+            persona_patch[key] = _persona_alta_clean_text(persona_patch[key], compact_spaces=True)
+    cuenta_patch = payload.cuenta.model_dump(exclude_none=True) if payload.cuenta else None
+    if payload.tipo_comprador in {"pfae", "persona_moral"} and not existing.get("cuenta_id"):
+        raise HTTPException(status_code=409, detail="comprador_cuenta_requerida")
+    if payload.tipo_comprador in {"pfae", "persona_moral"} and cuenta_patch:
+        if cuenta_patch.get("rfc"):
+            cuenta_patch["rfc"] = _persona_alta_clean_text(cuenta_patch["rfc"], compact_spaces=True).upper()
+    try:
+        row = await repo.update_persona_contract_profile(
+            organizacion_id=organizacion_id,
+            persona_id=contacto_id,
+            persona_patch=persona_patch,
+            cuenta_patch=cuenta_patch,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="comprador_contract_profile_update_failed") from exc
+    return CRMPersona.model_validate(row)
 
 
 @router.get("/personas/{persona_id}", response_model=CRMPersona)
@@ -53188,6 +53293,7 @@ async def guardar_avance_reserva_propiedad_unidad(
             forma_adquisicion=payload.forma_adquisicion,
             reserva_importe=payload.reserva_importe,
             condiciones_reserva=payload.condiciones_reserva,
+            tipo_comprador=payload.tipo_comprador,
         )
     except CRMRepositoryError as exc:
         message = str(exc)
@@ -53244,6 +53350,7 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
             forma_adquisicion=payload.forma_adquisicion,
             reserva_importe=payload.reserva_importe,
             condiciones_reserva=payload.condiciones_reserva,
+            tipo_comprador=payload.tipo_comprador,
         )
     except CRMRepositoryError as exc:
         message = str(exc)
