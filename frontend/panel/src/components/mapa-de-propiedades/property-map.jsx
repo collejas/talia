@@ -4839,7 +4839,7 @@ export function PropertyMap() {
                               if (!open) setApartadoError(null);
                             }}
                           >
-                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 rounded-none space-y-4 overflow-y-auto sm:max-w-md">
+                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-white text-slate-900 sm:max-w-md dark:bg-slate-950 dark:text-slate-100">
                               <DialogHeader>
                                 <DialogTitle>Apartar propiedad</DialogTitle>
                                 <DialogDescription>
@@ -5118,7 +5118,7 @@ export function PropertyMap() {
                               if (!open) setReservaError(null);
                             }}
                           >
-                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 rounded-none space-y-4 overflow-y-auto sm:max-w-md">
+                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
                               <DialogHeader>
                                 <DialogTitle>Preparar reserva</DialogTitle>
                                 <DialogDescription>
@@ -5127,39 +5127,39 @@ export function PropertyMap() {
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div className="space-y-1">
-                                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Comprador y condiciones</p>
-                                  <p className="text-sm text-slate-200">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Comprador y condiciones</p>
+                                  <p className="text-sm text-foreground">
                                     {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
                                       ? "La información del cliente principal ya está ligada al apartado."
                                       : "Completa los datos iniciales de la reserva para continuar con la operación."}
                                   </p>
                                 </div>
-                                <div className="space-y-2 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                <div className="space-y-2 rounded border border-border bg-muted/40 p-3">
                                   <div className="flex items-center justify-between">
-                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Datos del comprador</p>
-                                    {reservaContactoLoading && <span className="text-xs text-slate-500">Cargando...</span>}
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Datos del comprador</p>
+                                    {reservaContactoLoading && <span className="text-xs text-muted-foreground">Cargando...</span>}
                                   </div>
                                   {apartadoClient ? (
-                                    <div className="grid gap-2 text-xs text-slate-300 sm:grid-cols-2">
-                                      <p><span className="text-slate-500">Nombre:</span> {apartadoClient.nombre_completo || apartadoClient.nombre || "Pendiente"}</p>
-                                      <p><span className="text-slate-500">RFC:</span> {(reservaTipoComprador === "persona_fisica" ? apartadoClient.rfc_persona : apartadoClient.rfc) || "Pendiente"}</p>
-                                      <p><span className="text-slate-500">Correo:</span> {apartadoClient.correo_principal || apartadoClient.correo || "Pendiente"}</p>
-                                      <p><span className="text-slate-500">Teléfono:</span> {apartadoClient.telefono_principal_e164 || apartadoClient.telefono_e164 || apartadoClient.telefono || "Pendiente"}</p>
-                                      <p className="sm:col-span-2"><span className="text-slate-500">Domicilio:</span> {[apartadoClient.nombre_vialidad, apartadoClient.numero_exterior, apartadoClient.colonia || apartadoClient.nombre_asentamiento, apartadoClient.codigo_postal, apartadoClient.municipio, apartadoClient.entidad].filter(Boolean).join(", ") || "Pendiente"}</p>
+                                    <div className="grid gap-2 text-xs text-foreground sm:grid-cols-2">
+                                      <p><span className="text-muted-foreground">Nombre:</span> {apartadoClient.nombre_completo || apartadoClient.nombre || "Pendiente"}</p>
+                                      <p><span className="text-muted-foreground">RFC:</span> {(reservaTipoComprador === "persona_fisica" ? apartadoClient.rfc_persona : apartadoClient.rfc) || "Pendiente"}</p>
+                                      <p><span className="text-muted-foreground">Correo:</span> {apartadoClient.correo_principal || apartadoClient.correo || "Pendiente"}</p>
+                                      <p><span className="text-muted-foreground">Teléfono:</span> {apartadoClient.telefono_principal_e164 || apartadoClient.telefono_e164 || apartadoClient.telefono || "Pendiente"}</p>
+                                      <p className="sm:col-span-2"><span className="text-muted-foreground">Domicilio:</span> {[apartadoClient.nombre_vialidad, apartadoClient.numero_exterior, apartadoClient.colonia || apartadoClient.nombre_asentamiento, apartadoClient.codigo_postal, apartadoClient.municipio, apartadoClient.entidad].filter(Boolean).join(", ") || "Pendiente"}</p>
                                     </div>
                                   ) : (
-                                    <p className="text-xs text-amber-300">Selecciona un comprador para cargar sus datos contractuales.</p>
+                                    <p className="text-xs text-amber-700 dark:text-amber-300">Selecciona un comprador para cargar sus datos contractuales.</p>
                                   )}
                                 </div>
                                 {(mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
                                   <div className="space-y-2">
-                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-cliente-search">
+                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-cliente-search">
                                       Contacto o comprador
                                     </label>
                                     {apartadoClient ? (
-                                      <div className="flex items-center justify-between rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+                                        <div className="flex items-center justify-between rounded border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">
                                         <span className="truncate">{apartadoClient.nombre || apartadoClient.nombre_completo}</span>
-                                        <button type="button" className="text-xs text-emerald-300 underline" onClick={() => setApartadoClient(null)}>
+                                        <button type="button" className="text-xs text-primary underline" onClick={() => setApartadoClient(null)}>
                                           Cambiar
                                         </button>
                                       </div>
@@ -5171,14 +5171,14 @@ export function PropertyMap() {
                                           onChange={(event) => setApartadoClientQuery(event.target.value)}
                                           placeholder="Buscar por nombre, teléfono o correo"
                                         />
-                                        {apartadoClientsLoading && <p className="text-xs text-slate-400">Buscando...</p>}
+                                        {apartadoClientsLoading && <p className="text-xs text-muted-foreground">Buscando...</p>}
                                         {apartadoClients.length > 0 && (
-                                          <div className="max-h-36 overflow-y-auto rounded border border-slate-800">
+                                          <div className="max-h-36 overflow-y-auto rounded border border-border bg-card">
                                             {apartadoClients.map((client) => (
                                               <button
                                                 type="button"
                                                 key={client.id}
-                                                className="block w-full px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800"
+                                                className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
                                                 onClick={() => setApartadoClient(client)}
                                               >
                                                 {client.nombre || client.nombre_completo}
@@ -5190,14 +5190,14 @@ export function PropertyMap() {
                                     )}
                                   </div>
                                 )}
-                                <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
                                   <div>
-                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Cómo celebrará el contrato</p>
-                                    <p className="mt-1 text-xs text-slate-500">Esto define qué datos del comprador se usarán en el contrato.</p>
+                                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Cómo celebrará el contrato</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">Esto define qué datos del comprador se usarán en el contrato.</p>
                                   </div>
                                   <select
                                     id="reserva-tipo-comprador"
-                                    className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white"
+                                    className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground"
                                     value={reservaTipoComprador}
                                     onChange={(event) => setReservaTipoComprador(event.target.value)}
                                     disabled={!apartadoClient}
@@ -5209,30 +5209,30 @@ export function PropertyMap() {
                                   {apartadoClient ? (
                                     <div className="grid gap-3 sm:grid-cols-2">
                                       <div className="space-y-1">
-                                        <label className="text-xs text-slate-400" htmlFor="reserva-nacionalidad">Nacionalidad</label>
+                                        <label className="text-xs font-medium text-foreground" htmlFor="reserva-nacionalidad">Nacionalidad <span className="font-normal text-muted-foreground">(Ej. Mexicana)</span></label>
                                         <Input id="reserva-nacionalidad" value={reservaCompradorDatos.nacionalidad} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, nacionalidad: event.target.value }))} placeholder="Ej. Mexicana" />
                                       </div>
                                       <div className="space-y-1">
-                                        <label className="text-xs text-slate-400" htmlFor="reserva-ocupacion">Ocupación</label>
-                                        <Input id="reserva-ocupacion" value={reservaCompradorDatos.ocupacion} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, ocupacion: event.target.value }))} />
+                                        <label className="text-xs font-medium text-foreground" htmlFor="reserva-ocupacion">Ocupación <span className="font-normal text-muted-foreground">(Ej. Ingeniero civil)</span></label>
+                                        <Input id="reserva-ocupacion" value={reservaCompradorDatos.ocupacion} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, ocupacion: event.target.value }))} placeholder="Ej. Ingeniero civil" />
                                       </div>
                                       <div className="space-y-1">
-                                        <label className="text-xs text-slate-400" htmlFor="reserva-estado-civil">Estado civil</label>
+                                        <label className="text-xs font-medium text-foreground" htmlFor="reserva-estado-civil">Estado civil <span className="font-normal text-muted-foreground">(Ej. Soltero(a))</span></label>
                                         <Input id="reserva-estado-civil" value={reservaCompradorDatos.estado_civil} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, estado_civil: event.target.value }))} placeholder="Ej. Soltero(a)" />
                                       </div>
                                       <div className="space-y-1">
-                                        <label className="text-xs text-slate-400" htmlFor="reserva-curp">CURP</label>
-                                        <Input id="reserva-curp" value={reservaCompradorDatos.curp} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, curp: event.target.value.toUpperCase() }))} maxLength={18} />
+                                        <label className="text-xs font-medium text-foreground" htmlFor="reserva-curp">CURP <span className="font-normal text-muted-foreground">(Ej. GARC800101HSLRNN09)</span></label>
+                                        <Input id="reserva-curp" value={reservaCompradorDatos.curp} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, curp: event.target.value.toUpperCase() }))} maxLength={18} placeholder="Ej. GARC800101HSLRNN09" />
                                       </div>
                                       {reservaTipoComprador === "persona_fisica" || reservaTipoComprador === "pfae" ? (
                                         <div className="space-y-1">
-                                          <label className="text-xs text-slate-400" htmlFor="reserva-rfc-persona">RFC de la persona</label>
-                                          <Input id="reserva-rfc-persona" value={reservaCompradorDatos.rfc_persona} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, rfc_persona: event.target.value.toUpperCase() }))} maxLength={13} />
+                                          <label className="text-xs font-medium text-foreground" htmlFor="reserva-rfc-persona">RFC de la persona <span className="font-normal text-muted-foreground">(Ej. GARC800101AB1)</span></label>
+                                          <Input id="reserva-rfc-persona" value={reservaCompradorDatos.rfc_persona} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, rfc_persona: event.target.value.toUpperCase() }))} maxLength={13} placeholder="Ej. GARC800101AB1" />
                                         </div>
                                       ) : null}
                                       <div className="space-y-1">
-                                        <label className="text-xs text-slate-400" htmlFor="reserva-tipo-identificacion">Identificación</label>
-                                        <select id="reserva-tipo-identificacion" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaCompradorDatos.tipo_identificacion} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, tipo_identificacion: event.target.value }))}>
+                                        <label className="text-xs font-medium text-foreground" htmlFor="reserva-tipo-identificacion">Tipo de identificación oficial <span className="font-normal text-muted-foreground">(Ej. INE)</span></label>
+                                        <select id="reserva-tipo-identificacion" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={reservaCompradorDatos.tipo_identificacion} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, tipo_identificacion: event.target.value }))}>
                                           <option value="">Selecciona una opción</option>
                                           <option value="ine">INE</option>
                                           <option value="pasaporte">Pasaporte</option>
@@ -5241,49 +5241,49 @@ export function PropertyMap() {
                                         </select>
                                       </div>
                                       <div className="space-y-1">
-                                        <label className="text-xs text-slate-400" htmlFor="reserva-numero-identificacion">Número de identificación</label>
-                                        <Input id="reserva-numero-identificacion" value={reservaCompradorDatos.numero_identificacion} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, numero_identificacion: event.target.value }))} />
+                                        <label className="text-xs font-medium text-foreground" htmlFor="reserva-numero-identificacion">Número de identificación <span className="font-normal text-muted-foreground">(Ej. 123456789)</span></label>
+                                        <Input id="reserva-numero-identificacion" value={reservaCompradorDatos.numero_identificacion} onChange={(event) => setReservaCompradorDatos((current) => ({ ...current, numero_identificacion: event.target.value }))} placeholder="Ej. 123456789" />
                                       </div>
                                     </div>
-                                  ) : <p className="text-xs text-amber-300">Selecciona primero al comprador.</p>}
+                                  ) : <p className="text-xs text-amber-700 dark:text-amber-300">Selecciona primero al comprador.</p>}
                                   {reservaTipoComprador !== "persona_fisica" ? (
-                                    <div className="space-y-3 border-t border-slate-800 pt-3">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Datos de la cuenta vinculada</p>
+                                    <div className="space-y-3 border-t border-border pt-3">
+                                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Datos de la cuenta vinculada</p>
                                       <div className="grid gap-3 sm:grid-cols-2">
                                         <div className="space-y-1">
-                                          <label className="text-xs text-slate-400" htmlFor="reserva-razon-social">Razón social</label>
-                                          <Input id="reserva-razon-social" value={reservaCuentaDatos.razon_social} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, razon_social: event.target.value }))} />
+                                          <label className="text-xs font-medium text-foreground" htmlFor="reserva-razon-social">Razón social <span className="font-normal text-muted-foreground">(Ej. Constructora del Centro, S.A. de C.V.)</span></label>
+                                          <Input id="reserva-razon-social" value={reservaCuentaDatos.razon_social} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, razon_social: event.target.value }))} placeholder="Ej. Constructora del Centro, S.A. de C.V." />
                                         </div>
                                         <div className="space-y-1">
-                                          <label className="text-xs text-slate-400" htmlFor="reserva-cuenta-rfc">RFC de la cuenta</label>
-                                          <Input id="reserva-cuenta-rfc" value={reservaCuentaDatos.rfc} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, rfc: event.target.value.toUpperCase() }))} maxLength={13} />
+                                          <label className="text-xs font-medium text-foreground" htmlFor="reserva-cuenta-rfc">RFC de la cuenta <span className="font-normal text-muted-foreground">(Ej. CCE010101AB1)</span></label>
+                                          <Input id="reserva-cuenta-rfc" value={reservaCuentaDatos.rfc} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, rfc: event.target.value.toUpperCase() }))} maxLength={13} placeholder="Ej. CCE010101AB1" />
                                         </div>
                                         <div className="space-y-1">
-                                          <label className="text-xs text-slate-400" htmlFor="reserva-regimen-capital">Régimen de capital</label>
-                                          <Input id="reserva-regimen-capital" value={reservaCuentaDatos.regimen_capital} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, regimen_capital: event.target.value }))} />
+                                          <label className="text-xs font-medium text-foreground" htmlFor="reserva-regimen-capital">Régimen de capital <span className="font-normal text-muted-foreground">(Ej. S.A. de C.V. / PFAE)</span></label>
+                                          <Input id="reserva-regimen-capital" value={reservaCuentaDatos.regimen_capital} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, regimen_capital: event.target.value }))} placeholder="Ej. S.A. de C.V. / PFAE" />
                                         </div>
                                         <div className="space-y-1">
-                                          <label className="text-xs text-slate-400" htmlFor="reserva-nombre-comercial">Nombre comercial</label>
-                                          <Input id="reserva-nombre-comercial" value={reservaCuentaDatos.nombre_comercial} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, nombre_comercial: event.target.value }))} />
+                                          <label className="text-xs font-medium text-foreground" htmlFor="reserva-nombre-comercial">Nombre comercial <span className="font-normal text-muted-foreground">(Ej. Casas del Centro)</span></label>
+                                          <Input id="reserva-nombre-comercial" value={reservaCuentaDatos.nombre_comercial} onChange={(event) => setReservaCuentaDatos((current) => ({ ...current, nombre_comercial: event.target.value }))} placeholder="Ej. Casas del Centro" />
                                         </div>
                                       </div>
-                                      <p className="text-xs text-slate-500">Estos datos se actualizan en la empresa o cuenta vinculada, no en el contacto.</p>
+                                      <p className="text-xs text-muted-foreground">Estos datos se actualizan en la empresa o cuenta vinculada, no en el contacto.</p>
                                     </div>
                                   ) : null}
                                 </div>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <div className="space-y-1">
-                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-precio">Precio acordado</label>
+                                    <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-precio">Precio acordado <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. 3,500,000)</span></label>
                                     <Input id="reserva-precio" value={reservaPrecio} onChange={(event) => setReservaPrecio(event.target.value)} inputMode="decimal" placeholder="Ej. 3,500,000" />
                                   </div>
                                   <div className="space-y-1">
-                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-fecha">Fecha límite</label>
+                                    <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-fecha">Fecha límite <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. 30/11/2026)</span></label>
                                     <Input id="reserva-fecha" type="date" value={reservaFechaLimite} onChange={(event) => setReservaFechaLimite(event.target.value)} />
                                   </div>
                                 </div>
                                 <div className="space-y-1">
-                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-forma">Forma de compra</label>
-                                  <select id="reserva-forma" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaForma} onChange={(event) => setReservaForma(event.target.value)}>
+                                  <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-forma">Forma de compra <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. Crédito)</span></label>
+                                    <select id="reserva-forma" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={reservaForma} onChange={(event) => setReservaForma(event.target.value)}>
                                     <option value="por_definir">Por definir</option>
                                     <option value="contado">Contado</option>
                                     <option value="credito">Crédito</option>
@@ -5292,18 +5292,18 @@ export function PropertyMap() {
                                   </select>
                                 </div>
                                 <div className="space-y-1">
-                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-importe">Importe de reserva</label>
+                                  <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-importe">Importe de reserva <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. 30,000)</span></label>
                                   <Input id="reserva-importe" value={reservaImporte} onChange={(event) => setReservaImporte(event.target.value)} inputMode="decimal" placeholder="Ej. 30,000" />
                                 </div>
-                                <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
                                   <div>
-                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Pago de la reserva</p>
-                                    <p className="mt-1 text-xs text-slate-500">Registra el pago si ya fue reportado. Guardar avance no lo confirma automáticamente.</p>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Pago de la reserva</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">Registra el pago si ya fue reportado. Guardar avance no lo confirma automáticamente.</p>
                                   </div>
                                   <div className="grid gap-3 sm:grid-cols-2">
                                     <div className="space-y-1">
-                                      <label className="text-xs text-slate-400" htmlFor="reserva-pago-estado">Estado</label>
-                                      <select id="reserva-pago-estado" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaPagoEstado} onChange={(event) => setReservaPagoEstado(event.target.value)}>
+                                      <label className="text-xs font-medium text-foreground" htmlFor="reserva-pago-estado">Estado <span className="font-normal text-muted-foreground">(Ej. Reportado)</span></label>
+                                      <select id="reserva-pago-estado" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={reservaPagoEstado} onChange={(event) => setReservaPagoEstado(event.target.value)}>
                                         <option value="reportado">Reportado</option>
                                         <option value="pendiente">Pendiente</option>
                                         <option value="confirmado">Confirmado</option>
@@ -5311,8 +5311,8 @@ export function PropertyMap() {
                                       </select>
                                     </div>
                                     <div className="space-y-1">
-                                      <label className="text-xs text-slate-400" htmlFor="reserva-pago-forma">Forma de pago</label>
-                                      <select id="reserva-pago-forma" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaPagoForma} onChange={(event) => setReservaPagoForma(event.target.value)}>
+                                      <label className="text-xs font-medium text-foreground" htmlFor="reserva-pago-forma">Forma de pago <span className="font-normal text-muted-foreground">(Ej. Transferencia)</span></label>
+                                      <select id="reserva-pago-forma" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={reservaPagoForma} onChange={(event) => setReservaPagoForma(event.target.value)}>
                                         <option value="transferencia">Transferencia</option>
                                         <option value="deposito">Depósito</option>
                                         <option value="efectivo">Efectivo</option>
@@ -5322,60 +5322,60 @@ export function PropertyMap() {
                                       </select>
                                     </div>
                                     <div className="space-y-1">
-                                      <label className="text-xs text-slate-400" htmlFor="reserva-pago-fecha">Fecha de pago</label>
+                                      <label className="text-xs font-medium text-foreground" htmlFor="reserva-pago-fecha">Fecha de pago <span className="font-normal text-muted-foreground">(Ej. 15/10/2026)</span></label>
                                       <Input id="reserva-pago-fecha" type="date" value={reservaPagoFecha} onChange={(event) => setReservaPagoFecha(event.target.value)} />
                                     </div>
                                     <div className="space-y-1">
-                                      <label className="text-xs text-slate-400" htmlFor="reserva-pago-referencia">Referencia</label>
+                                      <label className="text-xs font-medium text-foreground" htmlFor="reserva-pago-referencia">Referencia <span className="font-normal text-muted-foreground">(Ej. Folio de transferencia)</span></label>
                                       <Input id="reserva-pago-referencia" value={reservaPagoReferencia} onChange={(event) => setReservaPagoReferencia(event.target.value)} placeholder="Opcional" />
                                     </div>
                                   </div>
                                   <div className="space-y-1">
-                                    <label className="text-xs text-slate-400" htmlFor="reserva-pago-recibido-por">Recibido por</label>
+                                    <label className="text-xs font-medium text-foreground" htmlFor="reserva-pago-recibido-por">Recibido por <span className="font-normal text-muted-foreground">(Ej. Nombre de la empresa o persona)</span></label>
                                     <Input id="reserva-pago-recibido-por" value={reservaPagoRecibidoPor} onChange={(event) => setReservaPagoRecibidoPor(event.target.value)} placeholder="Persona o entidad que recibió el pago" />
                                   </div>
                                   <div className="space-y-1">
-                                    <label className="text-xs text-slate-400" htmlFor="reserva-pago-comprobante">Comprobante de pago</label>
+                                    <label className="text-xs font-medium text-foreground" htmlFor="reserva-pago-comprobante">Comprobante de pago <span className="font-normal text-muted-foreground">(PDF, JPG o PNG)</span></label>
                                     <Input id="reserva-pago-comprobante" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => setReservaPagoFile(event.target.files?.[0] || null)} />
-                                    {reservaPagoFile && <p className="text-xs text-emerald-300">Listo para adjuntar: {reservaPagoFile.name}</p>}
+                                    {reservaPagoFile && <p className="text-xs text-primary">Listo para adjuntar: {reservaPagoFile.name}</p>}
                                   </div>
                                 </div>
                                 <div className="space-y-1">
-                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-condiciones">Condiciones acordadas</label>
-                                  <textarea id="reserva-condiciones" className="min-h-24 w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaCondiciones} onChange={(event) => setReservaCondiciones(event.target.value)} placeholder="Notas de la reserva" />
+                                  <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-condiciones">Condiciones acordadas <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. La reserva se aplicará al precio final)</span></label>
+                                  <textarea id="reserva-condiciones" className="min-h-24 w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={reservaCondiciones} onChange={(event) => setReservaCondiciones(event.target.value)} placeholder="Escribe las condiciones acordadas" />
                                 </div>
-                                <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
                                   <div>
-                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Datos de firma</p>
-                                    <p className="mt-1 text-xs text-slate-500">Estos datos se colocan en la sección de firmas del contrato. Puedes guardarlos como avance y completarlos después.</p>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Datos de firma</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">Estos datos se colocan en la sección de firmas del contrato. Puedes guardarlos como avance y completarlos después.</p>
                                   </div>
                                   <div className="space-y-1">
-                                    <label className="text-xs text-slate-400" htmlFor="reserva-fecha-firma">Fecha de firma</label>
+                                    <label className="text-xs font-medium text-foreground" htmlFor="reserva-fecha-firma">Fecha de firma <span className="font-normal text-muted-foreground">(Ej. 15/10/2026)</span></label>
                                     <Input id="reserva-fecha-firma" type="date" value={contratoFechaFirma} onChange={(event) => setContratoFechaFirma(event.target.value)} />
                                   </div>
                                   <div className="space-y-1">
-                                    <label className="text-xs text-slate-400" htmlFor="reserva-parte-vendedora">Empresa o persona que firma por la parte vendedora</label>
+                                    <label className="text-xs font-medium text-foreground" htmlFor="reserva-parte-vendedora">Empresa o persona que firma por la parte vendedora <span className="font-normal text-muted-foreground">(Ej. Desarrollos Lomas, S.A. de C.V.)</span></label>
                                     <Input id="reserva-parte-vendedora" value={parteVendedoraNombre} onChange={(event) => setParteVendedoraNombre(event.target.value)} placeholder="Ej. Desarrollos Lomas, S.A. de C.V." />
                                   </div>
                                   <div className="grid gap-3 sm:grid-cols-2">
                                     <div className="space-y-1">
-                                      <label className="text-xs text-slate-400" htmlFor="reserva-firmante-vendedor">Nombre del firmante</label>
+                                      <label className="text-xs font-medium text-foreground" htmlFor="reserva-firmante-vendedor">Nombre del firmante <span className="font-normal text-muted-foreground">(Ej. Ana López)</span></label>
                                       <Input id="reserva-firmante-vendedor" value={parteVendedoraFirmante} onChange={(event) => setParteVendedoraFirmante(event.target.value)} placeholder="Nombre completo" />
                                     </div>
                                     <div className="space-y-1">
-                                      <label className="text-xs text-slate-400" htmlFor="reserva-cargo-firmante">Cargo</label>
+                                      <label className="text-xs font-medium text-foreground" htmlFor="reserva-cargo-firmante">Cargo <span className="font-normal text-muted-foreground">(Ej. Representante legal)</span></label>
                                       <Input id="reserva-cargo-firmante" value={parteVendedoraCargo} onChange={(event) => setParteVendedoraCargo(event.target.value)} placeholder="Ej. Representante legal" />
                                     </div>
                                   </div>
                                 </div>
-                                <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
                                   <div>
-                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Contrato</p>
-                                    <p className="mt-1 text-xs text-slate-400">Selecciona una plantilla después de completar los datos de la reserva.</p>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Contrato</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">Selecciona una plantilla después de completar los datos de la reserva.</p>
                                   </div>
                                   <select
                                     id="reserva-contrato-plantilla"
-                                    className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white"
+                                    className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground"
                                     value={contratoPlantillaId}
                                     onChange={(event) => setContratoPlantillaId(event.target.value)}
                                     disabled={contratoPlantillaLoading || contratoPlantillas.length === 0}
@@ -5394,17 +5394,17 @@ export function PropertyMap() {
                                     </Button>
                                   </div>
                                   <div className="space-y-2">
-                                    <label className="text-xs text-slate-400" htmlFor="reserva-contrato-firmado">Contrato firmado (PDF)</label>
+                                    <label className="text-xs font-medium text-foreground" htmlFor="reserva-contrato-firmado">Contrato firmado (PDF) <span className="font-normal text-muted-foreground">(Adjunta el documento firmado)</span></label>
                                     <Input
                                       id="reserva-contrato-firmado"
                                       type="file"
                                       accept="application/pdf,.pdf"
                                       onChange={(event) => setContratoFirmadoFile(event.target.files?.[0] || null)}
                                     />
-                                    {contratoFirmadoFile && <p className="text-xs text-emerald-300">Listo para adjuntar: {contratoFirmadoFile.name}</p>}
+                                    {contratoFirmadoFile && <p className="text-xs text-primary">Listo para adjuntar: {contratoFirmadoFile.name}</p>}
                                   </div>
                                   {contratoPreviewOpen && (
-                                    <pre className="max-h-64 overflow-y-auto rounded border border-slate-800 bg-white p-4 text-xs leading-5 text-slate-900 whitespace-pre-wrap">
+                                    <pre className="max-h-64 overflow-y-auto rounded border border-border bg-card p-4 text-xs leading-5 text-card-foreground whitespace-pre-wrap">
                                       {renderContratoPreview()}
                                     </pre>
                                   )}
