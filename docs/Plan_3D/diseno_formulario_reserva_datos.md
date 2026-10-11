@@ -279,6 +279,35 @@ El formulario debe permitir:
 - Registrar la fecha de firma.
 - Mantener el texto generado como copia inmutable.
 
+También debe permitir capturar los datos específicos de la parte que firma por
+el vendedor o la inmobiliaria:
+
+- Empresa o persona que comparece en el contrato.
+- Nombre de la persona firmante.
+- Cargo de la persona firmante.
+- Fecha de firma definida para ese contrato.
+
+Estos datos no pertenecen a la plantilla global. Son datos de cada operación y
+deben conservarse como snapshot del contrato.
+
+Variables disponibles para las plantillas:
+
+```text
+{{comprador.rfc}}
+{{comprador.correo}}
+{{comprador.telefono}}
+{{contrato.fecha_firma}}
+{{contrato.fecha_generacion}}
+{{parte_vendedora.nombre}}
+{{parte_vendedora.firmante_nombre}}
+{{parte_vendedora.firmante_cargo}}
+{{contrato.seccion_firmas}}
+```
+
+`{{contrato.seccion_firmas}}` permite colocar la sección en un punto específico.
+Si la plantilla no la incluye, Tal-IA la agrega automáticamente al final del
+texto generado con el comprador y la parte vendedora.
+
 Estados del contrato:
 
 - Borrador.

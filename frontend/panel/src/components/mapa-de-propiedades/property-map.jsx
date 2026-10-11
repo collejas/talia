@@ -569,6 +569,10 @@ export function PropertyMap() {
   const [contratoPlantillaLoading, setContratoPlantillaLoading] = useState(false);
   const [contratoPreviewOpen, setContratoPreviewOpen] = useState(false);
   const [contratoFirmadoFile, setContratoFirmadoFile] = useState(null);
+  const [contratoFechaFirma, setContratoFechaFirma] = useState("");
+  const [parteVendedoraNombre, setParteVendedoraNombre] = useState("");
+  const [parteVendedoraFirmante, setParteVendedoraFirmante] = useState("");
+  const [parteVendedoraCargo, setParteVendedoraCargo] = useState("");
   const [availableOpportunities, setAvailableOpportunities] = useState([]);
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -2120,6 +2124,10 @@ export function PropertyMap() {
     setContratoPlantillaId("");
     setContratoPreviewOpen(false);
     setContratoFirmadoFile(null);
+    setContratoFechaFirma(new Date().toISOString().slice(0, 10));
+    setParteVendedoraNombre("");
+    setParteVendedoraFirmante("");
+    setParteVendedoraCargo("");
     setReservaPanelOpen(true);
   }, [mapboxProps?.precio, mapboxProps?.status]);
 
@@ -2205,6 +2213,18 @@ export function PropertyMap() {
       apartadoClient?.municipio,
       apartadoClient?.entidad,
     ].filter(Boolean).join(", ");
+    const signatureSection = [
+      "",
+      "____________________________________________",
+      `COMPRADOR: ${clientName}`,
+      "Firma: _____________________________________",
+      "",
+      "____________________________________________",
+      `PARTE VENDEDORA / INMOBILIARIA: ${parteVendedoraNombre || "[Empresa o persona pendiente]"}`,
+      `FIRMANTE: ${parteVendedoraFirmante || "[Nombre del firmante pendiente]"}`,
+      `CARGO: ${parteVendedoraCargo || "[Cargo pendiente]"}`,
+      "Firma: _____________________________________",
+    ].join("\n");
     const replacements = {
       "{{comprador.nombre_completo}}": clientName,
       "{{comprador.domicilio}}": clientAddress || apartadoClient?.domicilio || "[Domicilio pendiente]",
@@ -2216,27 +2236,61 @@ export function PropertyMap() {
       "{{operacion.precio_acordado}}": reservaPrecio || "[Precio pendiente]",
       "{{operacion.importe_reserva}}": reservaImporte || "[Importe pendiente]",
       "{{operacion.fecha_reserva}}": new Date().toLocaleDateString("es-MX"),
-      "{{inmobiliaria.nombre}}": "[Inmobiliaria]",
+      "{{contrato.fecha_firma}}": contratoFechaFirma
+        ? new Date(`${contratoFechaFirma}T12:00:00Z`).toLocaleDateString("es-MX")
+        : "[Fecha de firma pendiente]",
+      "{{contrato.fecha_generacion}}": new Date().toLocaleDateString("es-MX"),
+      "{{parte_vendedora.nombre}}": parteVendedoraNombre || "[Empresa o persona pendiente]",
+      "{{parte_vendedora.firmante_nombre}}": parteVendedoraFirmante || "[Nombre del firmante pendiente]",
+      "{{parte_vendedora.firmante_cargo}}": parteVendedoraCargo || "[Cargo pendiente]",
+      "{{contrato.seccion_firmas}}": signatureSection,
+      "{{inmobiliaria.nombre}}": parteVendedoraNombre || "[Inmobiliaria]",
     };
-    return Object.entries(replacements).reduce(
+    const renderedContent = Object.entries(replacements).reduce(
       (content, [variable, value]) => content.split(variable).join(String(value)),
       template.contenido_plantilla,
     );
-  }, [apartadoClient, contratoPlantillaId, contratoPlantillas, mapboxProps, reservaImporte, reservaPrecio]);
+    return renderedContent.includes(signatureSection.trim())
+      ? renderedContent
+      : `${renderedContent.trimEnd()}\n\n${signatureSection.trimStart()}`;
+  }, [apartadoClient, contratoFechaFirma, contratoPlantillaId, contratoPlantillas, mapboxProps, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, reservaImporte, reservaPrecio]);
 
   const printContratoPreview = useCallback(() => {
     const content = renderContratoPreview();
     if (!content) return;
-    const printWindow = window.open("", "_blank", "noopener,noreferrer");
+    const printWindow = window.open("", "_blank", "width=900,height=700");
     if (!printWindow) {
       setReservaError("Permite ventanas emergentes para imprimir el contrato.");
       return;
     }
-    const escaped = content.replace(/[&<>]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character]);
-    printWindow.document.write(`<html><head><title>Contrato inmobiliario</title><style>body{font-family:Arial,sans-serif;white-space:pre-wrap;line-height:1.5;margin:40px;color:#111}</style></head><body>${escaped}</body></html>`);
+    printWindow.opener = null;
+    const escaped = content.replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[character]);
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+      <html lang="es">
+        <head>
+          <meta charset="utf-8">
+          <meta name="color-scheme" content="light">
+          <title>Contrato inmobiliario</title>
+          <style>
+            @page { size: auto; margin: 20mm; }
+            :root { color-scheme: light; background: #ffffff; }
+            html, body { min-height: 100%; background: #ffffff !important; }
+            body { margin: 0; color: #111827 !important; font-family: Arial, sans-serif; line-height: 1.55; }
+            pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; color: #111827 !important; }
+          </style>
+        </head>
+        <body><pre>${escaped}</pre></body>
+      </html>`);
     printWindow.document.close();
     printWindow.focus();
-    printWindow.print();
+    printWindow.setTimeout(() => printWindow.print(), 250);
   }, [renderContratoPreview]);
 
   const handleSaveReservaAvance = useCallback(async () => {
@@ -2300,6 +2354,10 @@ export function PropertyMap() {
         contractForm.set("plantilla_id", contratoPlantillaId);
         contractForm.set("cliente_principal_id", signerId);
         contractForm.set("contenido_generado", contractContent);
+        if (contratoFechaFirma) contractForm.set("fecha_firma", contratoFechaFirma);
+        if (parteVendedoraNombre.trim()) contractForm.set("parte_vendedora_nombre", parteVendedoraNombre.trim());
+        if (parteVendedoraFirmante.trim()) contractForm.set("parte_vendedora_firmante", parteVendedoraFirmante.trim());
+        if (parteVendedoraCargo.trim()) contractForm.set("parte_vendedora_cargo", parteVendedoraCargo.trim());
         if (contratoFirmadoFile) contractForm.set("file", contratoFirmadoFile);
         const contractResponse = await fetch("/api/crm/inmobiliaria/contratos/operaciones", {
           method: "POST",
@@ -2317,7 +2375,7 @@ export function PropertyMap() {
     } finally {
       setReservaLoading(false);
     }
-  }, [apartadoClient?.id, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, renderContratoPreview, reservaCondiciones, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, unidadId]);
+  }, [apartadoClient?.id, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, renderContratoPreview, reservaCondiciones, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, unidadId]);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
@@ -5135,6 +5193,30 @@ export function PropertyMap() {
                                 <div className="space-y-1">
                                   <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="reserva-condiciones">Condiciones acordadas</label>
                                   <textarea id="reserva-condiciones" className="min-h-24 w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={reservaCondiciones} onChange={(event) => setReservaCondiciones(event.target.value)} placeholder="Notas de la reserva" />
+                                </div>
+                                <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
+                                  <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Datos de firma</p>
+                                    <p className="mt-1 text-xs text-slate-500">Estos datos se colocan en la sección de firmas del contrato. Puedes guardarlos como avance y completarlos después.</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-slate-400" htmlFor="reserva-fecha-firma">Fecha de firma</label>
+                                    <Input id="reserva-fecha-firma" type="date" value={contratoFechaFirma} onChange={(event) => setContratoFechaFirma(event.target.value)} />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-slate-400" htmlFor="reserva-parte-vendedora">Empresa o persona que firma por la parte vendedora</label>
+                                    <Input id="reserva-parte-vendedora" value={parteVendedoraNombre} onChange={(event) => setParteVendedoraNombre(event.target.value)} placeholder="Ej. Desarrollos Lomas, S.A. de C.V." />
+                                  </div>
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-400" htmlFor="reserva-firmante-vendedor">Nombre del firmante</label>
+                                      <Input id="reserva-firmante-vendedor" value={parteVendedoraFirmante} onChange={(event) => setParteVendedoraFirmante(event.target.value)} placeholder="Nombre completo" />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-400" htmlFor="reserva-cargo-firmante">Cargo</label>
+                                      <Input id="reserva-cargo-firmante" value={parteVendedoraCargo} onChange={(event) => setParteVendedoraCargo(event.target.value)} placeholder="Ej. Representante legal" />
+                                    </div>
+                                  </div>
                                 </div>
                                 <div className="space-y-3 rounded border border-slate-800 bg-slate-950/40 p-3">
                                   <div>

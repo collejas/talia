@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,16 +20,43 @@ type ContractTemplate = {
 
 type Props = { initialTemplates: ContractTemplate[] };
 
-const VARIABLES = [
-  "{{comprador.nombre_completo}}",
-  "{{comprador.domicilio}}",
-  "{{propiedad.nombre}}",
-  "{{propiedad.direccion}}",
-  "{{operacion.precio_acordado}}",
-  "{{operacion.importe_reserva}}",
-  "{{operacion.fecha_reserva}}",
-  "{{inmobiliaria.nombre}}",
-];
+const VARIABLE_GROUPS = [
+  {
+    title: "Comprador",
+    description: "Datos que Tal-IA toma del contacto seleccionado.",
+    variables: [
+      ["Nombre completo", "{{comprador.nombre_completo}}"],
+      ["RFC", "{{comprador.rfc}}"],
+      ["Correo", "{{comprador.correo}}"],
+      ["Teléfono", "{{comprador.telefono}}"],
+      ["Domicilio", "{{comprador.domicilio}}"],
+    ],
+  },
+  {
+    title: "Propiedad y operación",
+    description: "Información de la unidad y de la reserva.",
+    variables: [
+      ["Nombre de la propiedad", "{{propiedad.nombre}}"],
+      ["Dirección de la propiedad", "{{propiedad.direccion}}"],
+      ["Precio acordado", "{{operacion.precio_acordado}}"],
+      ["Importe de reserva", "{{operacion.importe_reserva}}"],
+      ["Fecha de reserva", "{{operacion.fecha_reserva}}"],
+    ],
+  },
+  {
+    title: "Contrato y firma",
+    description: "Datos que el vendedor completa al preparar la reserva.",
+    variables: [
+      ["Fecha de firma", "{{contrato.fecha_firma}}"],
+      ["Fecha de generación", "{{contrato.fecha_generacion}}"],
+      ["Empresa o persona vendedora", "{{parte_vendedora.nombre}}"],
+      ["Nombre del firmante", "{{parte_vendedora.firmante_nombre}}"],
+      ["Cargo del firmante", "{{parte_vendedora.firmante_cargo}}"],
+      ["Sección de firmas", "{{contrato.seccion_firmas}}"],
+      ["Nombre de la inmobiliaria", "{{inmobiliaria.nombre}}"],
+    ],
+  },
+] as const;
 
 const EMPTY_FORM = {
   nombre: "",
@@ -46,6 +73,26 @@ export function InmobiliariaContractTemplates({ initialTemplates }: Props) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const contentRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function insertVariable(variable: string) {
+    const textarea = contentRef.current;
+    if (!textarea) {
+      setForm((current) => ({ ...current, contenido_plantilla: `${current.contenido_plantilla}${variable}` }));
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = form.contenido_plantilla.slice(0, start);
+    const after = form.contenido_plantilla.slice(end);
+    const contenido_plantilla = `${before}${variable}${after}`;
+    setForm((current) => ({ ...current, contenido_plantilla }));
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursor = start + variable.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  }
 
   function selectTemplate(template: ContractTemplate) {
     setSelectedId(template.id);
@@ -131,7 +178,7 @@ export function InmobiliariaContractTemplates({ initialTemplates }: Props) {
       <Card>
         <CardHeader>
           <CardTitle>{selectedId ? "Editar plantilla" : "Nueva plantilla"}</CardTitle>
-          <CardDescription>El texto legal lo proporciona y revisa la inmobiliaria.</CardDescription>
+          <CardDescription>Escribe el contrato como un documento normal. Para insertar datos automáticos, selecciona un campo de las opciones disponibles.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-[1fr_180px_110px]">
@@ -153,14 +200,50 @@ export function InmobiliariaContractTemplates({ initialTemplates }: Props) {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="contract-template-content">Texto del contrato</label>
-            <Textarea id="contract-template-content" className="min-h-[420px] font-mono text-xs" value={form.contenido_plantilla} onChange={(event) => setForm({ ...form, contenido_plantilla: event.target.value })} placeholder="Escribe aquí el contrato y usa las variables disponibles." />
-          </div>
-          <div className="rounded-lg border bg-muted/20 p-3">
-            <p className="text-sm font-medium">Variables disponibles</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {VARIABLES.map((variable) => <code key={variable} className="rounded bg-muted px-2 py-1 text-xs">{variable}</code>)}
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <label className="text-sm font-medium" htmlFor="contract-template-content">Texto del contrato</label>
+                <p className="mt-1 text-xs text-muted-foreground">Coloca el cursor en el lugar donde quieres insertar un dato.</p>
+              </div>
+              <Badge variant="outline">Editor de contrato</Badge>
             </div>
+            <Textarea
+              ref={contentRef}
+              id="contract-template-content"
+              className="min-h-[420px] resize-y leading-6"
+              value={form.contenido_plantilla}
+              onChange={(event) => setForm({ ...form, contenido_plantilla: event.target.value })}
+              placeholder="Ejemplo:\n\nCONTRATO DE RESERVA\n\nEn {{propiedad.direccion}}, comparecen..."
+            />
+          </div>
+          <div className="rounded-lg border bg-muted/20 p-4">
+            <div>
+              <p className="text-sm font-medium">Insertar información</p>
+              <p className="mt-1 text-xs text-muted-foreground">No necesitas memorizar códigos. Haz clic en un campo y Tal-IA lo colocará donde está el cursor.</p>
+            </div>
+            <div className="mt-4 space-y-4">
+              {VARIABLE_GROUPS.map((group) => (
+                <div key={group.title}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{group.description}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {group.variables.map(([label, variable]) => (
+                      <Button
+                        key={variable}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => insertVariable(variable)}
+                      >
+                        + {label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">La sección de firmas se agrega automáticamente al final del contrato si no insertas el campo “Sección de firmas”.</p>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.activo} onChange={(event) => setForm({ ...form, activo: event.target.checked })} />
