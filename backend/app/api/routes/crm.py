@@ -5288,6 +5288,7 @@ class WhatsProspTemplateCreatePayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    campana_id: UUID
     slug: str | None = Field(default=None, max_length=160)
     nombre: str = Field(..., min_length=3, max_length=160)
     descripcion: str | None = Field(default=None, max_length=400)
@@ -5306,6 +5307,7 @@ class WhatsProspTemplateUpdatePayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    campana_id: UUID | None = None
     slug: str | None = Field(default=None, max_length=160)
     nombre: str | None = Field(default=None, min_length=3, max_length=160)
     descripcion: str | None = Field(default=None, max_length=400)
@@ -12010,6 +12012,20 @@ def _build_whats_prosp_template_payload(
         slug_base = _clean_text(payload.get("nombre")) or _clean_text(payload.get("template_name")) or "whats-prosp-meta"
         payload["slug"] = _slugify(str(slug_base))
     return payload
+
+
+async def _validate_whats_prosp_template_campaign(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    campana_id: UUID,
+) -> None:
+    campaign = await repo.get_campaign(organizacion_id=organizacion_id, campana_id=campana_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="campana_not_found")
+    campaign_channel = _clean_text(campaign.get("canal")).lower()
+    if campaign_channel != "whatsapp":
+        raise HTTPException(status_code=400, detail="template_canal_mismatch_with_campana")
 
 
 def _build_whatsapp_atribucion_rule_payload(
@@ -39971,6 +39987,11 @@ async def crear_whats_prosp_template(
     organizacion_id: UUID = Depends(require_organizacion_id),
     payload: WhatsProspTemplateCreatePayload,
 ) -> dict[str, Any]:
+    await _validate_whats_prosp_template_campaign(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        campana_id=payload.campana_id,
+    )
     raw = payload.model_dump(mode="json", exclude_none=True)
     images = raw.pop("imagenes", [])
     images = await _maybe_auto_bind_whats_prosp_template_images(
@@ -40027,6 +40048,13 @@ async def actualizar_whats_prosp_template(
     if not current:
         raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
     raw_data = payload.model_dump(mode="json", exclude_unset=True)
+    effective_campana_id = payload.campana_id or current.get("campana_id")
+    if effective_campana_id:
+        await _validate_whats_prosp_template_campaign(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            campana_id=UUID(str(effective_campana_id)),
+        )
     images = raw_data.pop("imagenes", None)
     if images is not None:
         images = await _maybe_auto_bind_whats_prosp_template_images(

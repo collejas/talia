@@ -664,6 +664,7 @@ export type ContactoTemplateVersion = {
 }
 
 export type WhatsProspTemplateInput = {
+  campana_id: string
   slug?: string | null
   nombre: string
   descripcion?: string | null

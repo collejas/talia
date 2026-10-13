@@ -191,7 +191,9 @@ def _is_persona_request_id_duplicate_error(exc: Exception) -> bool:
 def _is_whats_prosp_template_duplicate_error(exc: Exception) -> bool:
     message = str(exc).lower()
     return (
-        "prospeccion_contacto_templates_whats_prosp_meta_unique" in message
+        "prospeccion_contacto_templates_org_slug_key" in message
+        or "prospeccion_contacto_templates_slug_key" in message
+        or "prospeccion_contacto_templates_whats_prosp_meta_unique" in message
         or (
             "duplicate key value violates unique constraint" in message
             and "template_name" in message

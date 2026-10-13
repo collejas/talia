@@ -619,8 +619,10 @@ export function CampanasMetricsClient() {
 
   const effectiveTemplateSlug = useMemo(() => {
     const preferred = templateForm.slug.trim() || templateForm.nombre.trim() || templatesCampanaNombre || "plantilla"
-    return buildSafeTemplateSlug(preferred, templateForm.canal, templatesCampanaNombre)
-  }, [buildSafeTemplateSlug, templateForm.canal, templateForm.nombre, templateForm.slug, templatesCampanaNombre])
+    const baseSlug = buildSafeTemplateSlug(preferred, templateForm.canal, templatesCampanaNombre)
+    if (templateForm.canal !== "whatsapp" || !templatesCampanaId) return baseSlug
+    return `${baseSlug}-${templatesCampanaId.replace(/-/g, "").slice(0, 8)}`.slice(0, 120)
+  }, [buildSafeTemplateSlug, templateForm.canal, templateForm.nombre, templateForm.slug, templatesCampanaId, templatesCampanaNombre])
 
   const insertCorreoLogo = useCallback(
     async (logoUrl: string) => {
@@ -1396,6 +1398,7 @@ ${secondCellHtml}
     try {
       if (canalToSave === "whatsapp") {
         const whatsPayload = {
+          campana_id: templatesCampanaId,
           nombre,
           slug,
           descripcion: templateForm.descripcion.trim() || null,

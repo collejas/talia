@@ -77,6 +77,7 @@ type FormState = {
   id: string
   canal: Channel
   campanaId: string
+  slug: string
   nombre: string
   descripcion: string
   asunto: string
@@ -100,6 +101,7 @@ const emptyForm = (campaign?: CrmCampaign): FormState => ({
   id: "",
   canal: campaign?.canal === "whatsapp" ? "whatsapp" : "correo",
   campanaId: campaign?.id ?? "",
+  slug: "",
   nombre: "",
   descripcion: "",
   asunto: "",
@@ -119,7 +121,7 @@ const emptyForm = (campaign?: CrmCampaign): FormState => ({
   internalLinkUrl: "",
 })
 
-function slugify(value: string, canal: Channel): string {
+function slugify(value: string, canal: Channel, campaignId?: string): string {
   const slug = value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -127,7 +129,8 @@ function slugify(value: string, canal: Channel): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 90)
-  return `${canal}-${slug || "plantilla"}`.slice(0, 120)
+  const campaignSuffix = canal === "whatsapp" && campaignId ? `-${campaignId.replace(/-/g, "").slice(0, 8)}` : ""
+  return `${canal}-${slug || "plantilla"}${campaignSuffix}`.slice(0, 120)
 }
 
 function formFromTemplate(template: ContactoTemplate, campaignId: string): FormState {
@@ -135,6 +138,7 @@ function formFromTemplate(template: ContactoTemplate, campaignId: string): FormS
     id: template.id,
     canal: template.canal === "whatsapp" ? "whatsapp" : "correo",
     campanaId: campaignId,
+    slug: template.slug ?? "",
     nombre: template.nombre ?? "",
     descripcion: template.descripcion ?? "",
     asunto: template.asunto ?? "",
@@ -817,7 +821,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
         canal: form.canal,
         campana_id: form.campanaId,
         nombre: name,
-        slug: slugify(name, form.canal),
+        slug: form.id ? form.slug || slugify(name, form.canal, form.campanaId) : slugify(name, form.canal, form.campanaId),
         descripcion: form.descripcion.trim() || null,
         asunto: form.canal === "correo" ? form.asunto.trim() || null : null,
         email_message_kind: form.canal === "correo" ? form.emailMessageKind : null,
@@ -843,6 +847,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
       let savedTemplateId = form.id
       if (form.canal === "whatsapp") {
         const whatsPayload = {
+          campana_id: form.campanaId,
           nombre: name,
           slug: payload.slug,
           descripcion: payload.descripcion,
@@ -856,7 +861,10 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
           imagenes,
         }
         if (form.id) await updateWhatsProspTemplate(form.id, whatsPayload)
-        else await createWhatsProspTemplate(whatsPayload)
+        else {
+          const response = await createWhatsProspTemplate(whatsPayload)
+          savedTemplateId = response?.template?.id ?? savedTemplateId
+        }
       } else if (form.id) {
         await updateContactoTemplate(form.id, payload)
       } else {
@@ -915,7 +923,16 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
 
       setNotice(form.canal === "correo" ? "Borrador de versión guardado correctamente." : form.id ? "Plantilla actualizada correctamente." : "Plantilla guardada correctamente.")
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "No se pudo guardar la plantilla.")
+      const message = reason instanceof Error ? reason.message : "No se pudo guardar la plantilla."
+      if (message === "whats_prosp_template_duplicate") {
+        setError("Ya existe una plantilla WhatsApp con ese nombre técnico e idioma, o con ese identificador local, dentro de esta organización.")
+      } else if (message === "campana_not_found") {
+        setError("La campaña seleccionada ya no existe o no pertenece a tu organización.")
+      } else if (message === "template_canal_mismatch_with_campana") {
+        setError("La plantilla WhatsApp solo puede asociarse a una campaña de WhatsApp.")
+      } else {
+        setError(message)
+      }
     } finally {
       setSaving(false)
     }

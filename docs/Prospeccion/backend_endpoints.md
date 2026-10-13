@@ -90,6 +90,16 @@ Repositorio principal: `backend/app/repositories/crm.py`
   `GET /crm/prospeccion/metricas`; el detalle operativo vive en los endpoints
   de lotes, envíos y logs.
 - `GET /crm/prospeccion/whatsapp/readiness`
+- `POST /crm/prospeccion/whatsapp/templates`
+  - Requiere `campana_id` de una campaña WhatsApp perteneciente a la organización autenticada.
+  - Body principal: `campana_id`, `nombre`, `slug`, `template_name`, `language_code`,
+    `meta_category`, `template_status`, `cuerpo_texto` e `imagenes`.
+  - `slug` es único por organización. Un conflicto de slug o de
+    `template_name + language_code` responde `409` con
+    `whats_prosp_template_duplicate`.
+- `PATCH /crm/prospeccion/whatsapp/templates/{template_id}`
+  - Valida nuevamente la campaña y conserva la asociación existente si no se
+    envía `campana_id`.
 - `GET /crm/prospeccion/whatsapp/atribucion/reglas`
   - Soporta `include_historial=true` para incluir versiones cerradas (`vigente_hasta` no nulo).
 - `POST /crm/prospeccion/whatsapp/atribucion/reglas`
