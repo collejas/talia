@@ -16578,6 +16578,63 @@ class CRMProveedorUpdate(BaseModel):
     observaciones: str | None = Field(default=None, max_length=2000)
 
 
+class CRMProveedorItem(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    proveedor_id: UUID
+    catalog_item_id: UUID
+    sku_proveedor: str | None = None
+    nombre_proveedor: str | None = None
+    costo_ultimo: float | None = None
+    costo_referencial: float | None = None
+    moneda: str
+    compra_minima: float | None = None
+    lead_time_dias: int | None = None
+    es_principal: bool
+    vigente_desde: date | None = None
+    vigente_hasta: date | None = None
+    activo: bool
+    observaciones: str | None = None
+    creado_en: datetime
+    actualizado_en: datetime
+    proveedor: dict[str, Any] | None = None
+    catalog_item: dict[str, Any] | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CRMProveedorItemCreate(BaseModel):
+    proveedor_id: UUID
+    catalog_item_id: UUID
+    sku_proveedor: str | None = Field(default=None, max_length=160)
+    nombre_proveedor: str | None = Field(default=None, max_length=255)
+    costo_ultimo: float | None = Field(default=None, ge=0)
+    costo_referencial: float | None = Field(default=None, ge=0)
+    moneda: str = Field(default="MXN", min_length=3, max_length=3)
+    compra_minima: float | None = Field(default=None, ge=0)
+    lead_time_dias: int | None = Field(default=None, ge=0)
+    es_principal: bool = False
+    vigente_desde: date | None = None
+    vigente_hasta: date | None = None
+    activo: bool = True
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
+class CRMProveedorItemUpdate(BaseModel):
+    sku_proveedor: str | None = Field(default=None, max_length=160)
+    nombre_proveedor: str | None = Field(default=None, max_length=255)
+    costo_ultimo: float | None = Field(default=None, ge=0)
+    costo_referencial: float | None = Field(default=None, ge=0)
+    moneda: str | None = Field(default=None, min_length=3, max_length=3)
+    compra_minima: float | None = Field(default=None, ge=0)
+    lead_time_dias: int | None = Field(default=None, ge=0)
+    es_principal: bool | None = None
+    vigente_desde: date | None = None
+    vigente_hasta: date | None = None
+    activo: bool | None = None
+    observaciones: str | None = Field(default=None, max_length=2000)
+
+
 class CRMProveedorContacto(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -23126,6 +23183,153 @@ async def list_compras_proveedores(
     return [CRMProveedor.model_validate(row) for row in rows]
 
 
+@router.get("/compras/proveedor-items", response_model=list[CRMProveedorItem])
+async def list_compras_proveedor_items(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.view")),
+    proveedor_id: UUID | None = Query(default=None),
+    catalog_item_id: UUID | None = Query(default=None),
+    include_inactive: bool = Query(default=False),
+    limit: Annotated[int, Query(ge=1, le=5000)] = 500,
+) -> list[CRMProveedorItem]:
+    try:
+        rows = await repo.list_proveedor_items(
+            organizacion_id=organizacion_id,
+            proveedor_id=proveedor_id,
+            catalog_item_id=catalog_item_id,
+            include_inactive=include_inactive,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="supplier_items_unavailable") from exc
+    return [CRMProveedorItem.model_validate(row) for row in rows]
+
+
+@router.post("/compras/proveedor-items", response_model=CRMProveedorItem, status_code=status.HTTP_201_CREATED)
+async def create_compras_proveedor_item(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMProveedorItemCreate,
+) -> CRMProveedorItem:
+    try:
+        proveedor = await repo.get_proveedor(
+            organizacion_id=organizacion_id,
+            proveedor_id=payload.proveedor_id,
+        )
+        item = await repo.get_catalog_item(
+            organizacion_id=organizacion_id,
+            item_id=payload.catalog_item_id,
+        )
+        if not proveedor or not item:
+            raise HTTPException(status_code=404, detail="proveedor_o_producto_no_encontrado")
+        if payload.es_principal:
+            await repo.clear_proveedor_item_principals(
+                organizacion_id=organizacion_id,
+                catalog_item_id=payload.catalog_item_id,
+            )
+        row = await repo.create_proveedor_item(
+            organizacion_id=organizacion_id,
+            payload=payload.model_dump(mode="json"),
+        )
+        if payload.es_principal:
+            await repo.update_catalog_item(
+                item_id=payload.catalog_item_id,
+                payload={
+                    "organizacion_id": str(organizacion_id),
+                    "proveedor_principal_id": str(payload.proveedor_id),
+                },
+            )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        detail = str(exc).lower()
+        if "duplicate" in detail or "unique" in detail:
+            raise HTTPException(status_code=409, detail="proveedor_producto_ya_asociado") from exc
+        raise HTTPException(status_code=502, detail="supplier_item_not_created") from exc
+    return CRMProveedorItem.model_validate(row)
+
+
+@router.patch("/compras/proveedor-items/{proveedor_item_id}", response_model=CRMProveedorItem)
+async def update_compras_proveedor_item(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    proveedor_item_id: UUID,
+    payload: CRMProveedorItemUpdate,
+) -> CRMProveedorItem:
+    try:
+        current = await repo.get_proveedor_item(
+            organizacion_id=organizacion_id,
+            proveedor_item_id=proveedor_item_id,
+        )
+        if not current:
+            raise HTTPException(status_code=404, detail="proveedor_producto_no_encontrado")
+        row = await repo.update_proveedor_item(
+            organizacion_id=organizacion_id,
+            proveedor_item_id=proveedor_item_id,
+            payload=payload.model_dump(mode="json", exclude_unset=True),
+        )
+        if payload.es_principal is True:
+            await repo.clear_proveedor_item_principals(
+                organizacion_id=organizacion_id,
+                catalog_item_id=UUID(str(current["catalog_item_id"])),
+                exclude_id=proveedor_item_id,
+            )
+            await repo.update_catalog_item(
+                item_id=UUID(str(current["catalog_item_id"])),
+                payload={
+                    "organizacion_id": str(organizacion_id),
+                    "proveedor_principal_id": str(current["proveedor_id"]),
+                },
+            )
+        elif (payload.activo is False or payload.es_principal is False) and bool(current.get("es_principal")):
+            await repo.update_catalog_item(
+                item_id=UUID(str(current["catalog_item_id"])),
+                payload={"organizacion_id": str(organizacion_id), "proveedor_principal_id": None},
+            )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="supplier_item_not_updated") from exc
+    return CRMProveedorItem.model_validate(row)
+
+
+@router.delete("/compras/proveedor-items/{proveedor_item_id}", response_model=CRMProveedorItem)
+async def delete_compras_proveedor_item(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    proveedor_item_id: UUID,
+) -> CRMProveedorItem:
+    try:
+        current = await repo.get_proveedor_item(
+            organizacion_id=organizacion_id,
+            proveedor_item_id=proveedor_item_id,
+        )
+        if not current:
+            raise HTTPException(status_code=404, detail="proveedor_producto_no_encontrado")
+        row = await repo.delete_proveedor_item(
+            organizacion_id=organizacion_id,
+            proveedor_item_id=proveedor_item_id,
+        )
+        if bool(current.get("es_principal")):
+            await repo.update_catalog_item(
+                item_id=UUID(str(current["catalog_item_id"])),
+                payload={"organizacion_id": str(organizacion_id), "proveedor_principal_id": None},
+            )
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="supplier_item_not_deleted") from exc
+    return CRMProveedorItem.model_validate(row)
+
+
 @router.get("/compras/catalogos/incoterms", response_model=list[dict[str, Any]])
 async def list_compras_incoterms(
     *,
@@ -24414,6 +24618,7 @@ async def get_compras_ordenes_bootstrap(
         tasks = await asyncio.gather(
             repo.list_almacenes(organizacion_id=organizacion_id, include_inactive=False, limit=100),
             repo.list_proveedores(organizacion_id=organizacion_id, include_inactive=False, limit=100),
+            repo.list_proveedor_items(organizacion_id=organizacion_id, include_inactive=False, limit=5000),
             repo.list_catalog_items(organizacion_id=organizacion_id, include_inactive=False, limit=1000),
             repo.list_incoterms(limit=200),
             repo.list_monedas(limit=200),
@@ -24429,6 +24634,7 @@ async def get_compras_ordenes_bootstrap(
     (
         almacenes,
         proveedores,
+        proveedor_items,
         catalog_items,
         incoterms,
         monedas,
@@ -24445,6 +24651,7 @@ async def get_compras_ordenes_bootstrap(
             "duration_ms": round(duration_ms, 2),
             "almacenes": len(almacenes),
             "proveedores": len(proveedores),
+            "proveedor_items": len(proveedor_items),
             "catalog_items": len(catalog_items),
             "incoterms": len(incoterms),
             "monedas": len(monedas),
@@ -24460,6 +24667,7 @@ async def get_compras_ordenes_bootstrap(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "almacenes": almacenes,
         "proveedores": proveedores,
+        "proveedor_items": proveedor_items,
         "catalog_items": catalog_items,
         "incoterms": incoterms,
         "monedas": monedas,

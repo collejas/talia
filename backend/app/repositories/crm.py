@@ -16173,6 +16173,27 @@ class CRMRepository:
             raise CRMRepositoryError(f"Respuesta inesperada al listar proveedores: {data!r}")
         return data
 
+    async def get_proveedor(
+        self,
+        *,
+        organizacion_id: UUID,
+        proveedor_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/proveedores",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{proveedor_id}",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar proveedor: {data!r}")
+        return data[0] if data and isinstance(data[0], dict) else None
+
     async def create_proveedor(
         self,
         *,
@@ -16244,6 +16265,142 @@ class CRMRepository:
         row = data[0]
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al eliminar proveedor: {row!r}")
+        return row
+
+    async def list_proveedor_items(
+        self,
+        *,
+        organizacion_id: UUID,
+        proveedor_id: UUID | None = None,
+        catalog_item_id: UUID | None = None,
+        include_inactive: bool = False,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "es_principal.desc,activo.desc,creado_en.desc",
+            "limit": str(max(1, min(limit, 5000))),
+            "select": (
+                "*,proveedor:proveedores(id,organizacion_id,codigo_proveedor,razon_social,nombre_comercial,activo),"
+                "catalog_item:catalog_items(id,organizacion_id,codigo,nombre,unidad,activo,activo_compra)"
+            ),
+        }
+        if proveedor_id is not None:
+            params["proveedor_id"] = f"eq.{proveedor_id}"
+        if catalog_item_id is not None:
+            params["catalog_item_id"] = f"eq.{catalog_item_id}"
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        resp = await self._request("GET", "/rest/v1/proveedor_items", params=params)
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar relaciones proveedor-producto: {data!r}")
+        return data
+
+    async def get_proveedor_item(
+        self,
+        *,
+        organizacion_id: UUID,
+        proveedor_item_id: UUID,
+    ) -> dict[str, Any] | None:
+        resp = await self._request(
+            "GET",
+            "/rest/v1/proveedor_items",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{proveedor_item_id}",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al buscar relación proveedor-producto: {data!r}")
+        return data[0] if data and isinstance(data[0], dict) else None
+
+    async def create_proveedor_item(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), **payload}
+        resp = await self._request(
+            "POST",
+            "/rest/v1/proveedor_items",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("proveedor_item_not_created")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al crear relación proveedor-producto: {row!r}")
+        return row
+
+    async def update_proveedor_item(
+        self,
+        *,
+        organizacion_id: UUID,
+        proveedor_item_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "PATCH",
+            f"/rest/v1/proveedor_items?id=eq.{proveedor_item_id}&organizacion_id=eq.{organizacion_id}",
+            json=payload,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("proveedor_item_not_updated")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar relación proveedor-producto: {row!r}")
+        return row
+
+    async def clear_proveedor_item_principals(
+        self,
+        *,
+        organizacion_id: UUID,
+        catalog_item_id: UUID,
+        exclude_id: UUID | None = None,
+    ) -> None:
+        params = (
+            f"organizacion_id=eq.{organizacion_id}&catalog_item_id=eq.{catalog_item_id}"
+            "&es_principal=eq.true"
+        )
+        if exclude_id is not None:
+            params += f"&id=not.eq.{exclude_id}"
+        await self._request(
+            "PATCH",
+            f"/rest/v1/proveedor_items?{params}",
+            json={"es_principal": False},
+            prefer="return=minimal",
+            organizacion_id=organizacion_id,
+        )
+
+    async def delete_proveedor_item(
+        self,
+        *,
+        organizacion_id: UUID,
+        proveedor_item_id: UUID,
+    ) -> dict[str, Any]:
+        resp = await self._request(
+            "DELETE",
+            f"/rest/v1/proveedor_items?id=eq.{proveedor_item_id}&organizacion_id=eq.{organizacion_id}",
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            raise CRMRepositoryError("proveedor_item_not_deleted")
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al eliminar relación proveedor-producto: {row!r}")
         return row
 
     async def list_proveedor_contactos(

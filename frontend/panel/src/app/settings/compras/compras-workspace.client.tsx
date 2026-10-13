@@ -193,6 +193,7 @@ type ComprasOrdenesBootstrapResponse = {
   almacenes?: AnyRecord[]
   proveedores?: AnyRecord[]
   catalog_items?: AnyRecord[]
+  proveedor_items?: AnyRecord[]
   incoterms?: AnyRecord[]
   monedas?: AnyRecord[]
   modos_transporte?: AnyRecord[]
@@ -1030,6 +1031,7 @@ export function ComprasWorkspace({
   const proveedorCuentasBancarias = initialProveedorCuentasBancarias
   const personas = initialPersonas
   const [catalogItems, setCatalogItems] = useState<AnyRecord[]>(() => initialCatalogItems)
+  const [proveedorItems, setProveedorItems] = useState<AnyRecord[]>([])
   const [ordenes, setOrdenes] = useState<AnyRecord[]>(() => initialOrdenes)
   const recepciones = initialRecepciones
   const existencias = initialExistencias
@@ -1368,6 +1370,7 @@ export function ComprasWorkspace({
         const nextAlmacenes = Array.isArray(bootstrapPayload.almacenes) ? bootstrapPayload.almacenes : []
         const nextProveedores = Array.isArray(bootstrapPayload.proveedores) ? bootstrapPayload.proveedores : []
         const nextCatalogItems = Array.isArray(bootstrapPayload.catalog_items) ? bootstrapPayload.catalog_items : []
+        const nextProveedorItems = Array.isArray(bootstrapPayload.proveedor_items) ? bootstrapPayload.proveedor_items : []
         const nextIncoterms = Array.isArray(bootstrapPayload.incoterms) ? bootstrapPayload.incoterms : []
         const nextMonedas = Array.isArray(bootstrapPayload.monedas) ? bootstrapPayload.monedas : []
         const nextModosTransporte = Array.isArray(bootstrapPayload.modos_transporte) ? bootstrapPayload.modos_transporte : []
@@ -1378,6 +1381,7 @@ export function ComprasWorkspace({
         setAlmacenes(nextAlmacenes)
         setProveedores(nextProveedores)
         setCatalogItems(nextCatalogItems)
+        setProveedorItems(nextProveedorItems)
         setIncoterms(nextIncoterms)
         setMonedas(nextMonedas)
         setModosTransporte(nextModosTransporte)
@@ -1978,11 +1982,14 @@ export function ComprasWorkspace({
 
   const setOrderLineFromCatalog = (index: number, catalogItemId: string) => {
     const item = catalogItems.find((entry) => String(entry.id) === catalogItemId) ?? null
+    const supplierLink = proveedorItems.find(
+      (entry) => String(entry.catalog_item_id) === catalogItemId && String(entry.proveedor_id) === orderProviderId,
+    ) ?? null
     const unidad = asString(item?.unidad, "unidad")
-    const costo = asNumber(item?.costo_ultimo ?? item?.costoUltimo ?? item?.costo_promedio ?? item?.costoPromedio)
+    const costo = asNumber(supplierLink?.costo_referencial ?? supplierLink?.costo_ultimo ?? item?.costo_ultimo ?? item?.costoUltimo ?? item?.costo_promedio ?? item?.costoPromedio)
     updateOrderLine(index, {
       catalog_item_id: catalogItemId,
-      proveedor_item_id: "",
+      proveedor_item_id: asString(supplierLink?.id, ""),
       numero_partida: orderLines[index]?.numero_partida || String(index + 1),
       nombre: asString(item?.nombre, "Producto"),
       unidad,
@@ -1991,6 +1998,16 @@ export function ComprasWorkspace({
       descripcion: orderLines[index]?.descripcion || asString(item?.nombre, "Producto"),
     })
   }
+
+  const availableOrderCatalogItems = useMemo(() => {
+    if (!orderProviderId) return []
+    const allowedIds = new Set(
+      proveedorItems
+        .filter((entry) => String(entry.proveedor_id) === orderProviderId && entry.activo !== false)
+        .map((entry) => String(entry.catalog_item_id)),
+    )
+    return catalogItems.filter((item) => allowedIds.has(String(item.id)) && item.activo !== false && item.activo_compra !== false)
+  }, [catalogItems, orderProviderId, proveedorItems])
 
   const fillRemaining = () => {
     setLines((current) =>
@@ -2926,7 +2943,7 @@ export function ComprasWorkspace({
                 <label className="text-sm font-medium" htmlFor="orden-proveedor">
                   Proveedor
                 </label>
-                <select id="orden-proveedor" name="proveedor_id" value={orderProviderId} onChange={(event) => setOrderProviderId(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+                <select id="orden-proveedor" name="proveedor_id" value={orderProviderId} onChange={(event) => { setOrderProviderId(event.target.value); setOrderLines([]) }} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
                   <option value="">Selecciona un proveedor</option>
                   {proveedores.map((proveedor) => (
                     <option key={String(proveedor.id)} value={String(proveedor.id)}>
@@ -2995,12 +3012,17 @@ export function ComprasWorkspace({
                             required
                           >
                             <option value="">Selecciona producto</option>
-                            {catalogItems.map((item) => (
+                            {availableOrderCatalogItems.map((item) => (
                               <option key={String(item.id)} value={String(item.id)}>
                                 {asString(item.nombre)} · {asString(item.unidad, "unidad")}
                               </option>
                             ))}
                           </select>
+                          {!availableOrderCatalogItems.length ? (
+                            <p className="text-xs text-muted-foreground">
+                              Este proveedor todavía no tiene productos asociados.
+                            </p>
+                          ) : null}
                           <div className="text-xs text-muted-foreground">
                             {line.unidad || "unidad"} · costo sugerido {formatCurrency(line.costo_unitario)}
                           </div>

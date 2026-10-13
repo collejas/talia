@@ -84,6 +84,46 @@ export type CatalogItemInput = {
   modeloId?: string | null;
 };
 
+export type CatalogSupplierLink = {
+  id: string;
+  organizacion_id: string;
+  proveedor_id: string;
+  catalog_item_id: string;
+  sku_proveedor: string | null;
+  nombre_proveedor: string | null;
+  costo_ultimo: number | null;
+  costo_referencial: number | null;
+  moneda: string;
+  compra_minima: number | null;
+  lead_time_dias: number | null;
+  es_principal: boolean;
+  vigente_desde: string | null;
+  vigente_hasta: string | null;
+  activo: boolean;
+  observaciones: string | null;
+  proveedor?: Record<string, unknown> | null;
+  catalog_item?: Record<string, unknown> | null;
+};
+
+export type CatalogSupplierLinkInput = {
+  proveedorId: string;
+  catalogItemId: string;
+  skuProveedor?: string | null;
+  nombreProveedor?: string | null;
+  costoUltimo?: number | null;
+  costoReferencial?: number | null;
+  moneda?: string;
+  compraMinima?: number | null;
+  leadTimeDias?: number | null;
+  esPrincipal?: boolean;
+  vigenteDesde?: string | null;
+  vigenteHasta?: string | null;
+  activo?: boolean;
+  observaciones?: string | null;
+};
+
+export type CatalogSupplierLinkUpdate = Omit<CatalogSupplierLinkInput, "proveedorId" | "catalogItemId">;
+
 type FetchOptions = {
   includeInactive?: boolean;
   search?: string | null;
@@ -365,6 +405,83 @@ export async function fetchCatalogItems(options?: FetchOptions): Promise<Catalog
   }
 
   return response.data.map((row) => normalizeCatalogItem(row));
+}
+
+export async function fetchCatalogSupplierLinks(options?: {
+  catalogItemId?: string;
+  proveedorId?: string;
+  includeInactive?: boolean;
+  limit?: number;
+}): Promise<CatalogSupplierLink[]> {
+  const response = await callCrmApi<CatalogSupplierLink[]>("/crm/compras/proveedor-items", {
+    searchParams: {
+      catalog_item_id: options?.catalogItemId,
+      proveedor_id: options?.proveedorId,
+      include_inactive: options?.includeInactive ? "true" : undefined,
+      limit: String(options?.limit ?? 5000),
+    },
+  });
+  if (!response.ok || !Array.isArray(response.data)) {
+    console.warn("[catalog] fetchCatalogSupplierLinks failed", "error" in response ? response.error : "invalid_response");
+    return [];
+  }
+  return response.data;
+}
+
+export async function fetchCatalogSuppliers(): Promise<Record<string, unknown>[]> {
+  const response = await callCrmApi<Record<string, unknown>[]>("/crm/compras/proveedores", {
+    searchParams: { include_inactive: "false", limit: "500" },
+  });
+  if (!response.ok || !Array.isArray(response.data)) {
+    console.warn("[catalog] fetchCatalogSuppliers failed", "error" in response ? response.error : "invalid_response");
+    return [];
+  }
+  return response.data;
+}
+
+function buildCatalogSupplierLinkPayload(input: CatalogSupplierLinkInput | CatalogSupplierLinkUpdate) {
+  const payload: Record<string, unknown> = {};
+  if ("proveedorId" in input) payload.proveedor_id = input.proveedorId;
+  if ("catalogItemId" in input) payload.catalog_item_id = input.catalogItemId;
+  if (input.skuProveedor !== undefined) payload.sku_proveedor = input.skuProveedor?.trim() || null;
+  if (input.nombreProveedor !== undefined) payload.nombre_proveedor = input.nombreProveedor?.trim() || null;
+  if (input.costoUltimo !== undefined) payload.costo_ultimo = input.costoUltimo ?? null;
+  if (input.costoReferencial !== undefined) payload.costo_referencial = input.costoReferencial ?? null;
+  if (input.moneda !== undefined) payload.moneda = input.moneda;
+  if (input.compraMinima !== undefined) payload.compra_minima = input.compraMinima ?? null;
+  if (input.leadTimeDias !== undefined) payload.lead_time_dias = input.leadTimeDias ?? null;
+  if (input.esPrincipal !== undefined) payload.es_principal = Boolean(input.esPrincipal);
+  if (input.vigenteDesde !== undefined) payload.vigente_desde = input.vigenteDesde || null;
+  if (input.vigenteHasta !== undefined) payload.vigente_hasta = input.vigenteHasta || null;
+  if (input.activo !== undefined) payload.activo = Boolean(input.activo);
+  if (input.observaciones !== undefined) payload.observaciones = input.observaciones?.trim() || null;
+  return payload;
+}
+
+export async function createCatalogSupplierLink(input: CatalogSupplierLinkInput): Promise<CatalogSupplierLink> {
+  const response = await callCrmApi<CatalogSupplierLink>("/crm/compras/proveedor-items", {
+    method: "POST",
+    body: buildCatalogSupplierLinkPayload(input),
+  });
+  if (!response.ok || !response.data) throw new Error("error" in response ? response.error : "No se pudo asociar el proveedor.");
+  return response.data;
+}
+
+export async function updateCatalogSupplierLink(id: string, input: CatalogSupplierLinkUpdate): Promise<CatalogSupplierLink> {
+  const response = await callCrmApi<CatalogSupplierLink>(`/crm/compras/proveedor-items/${id}`, {
+    method: "PATCH",
+    body: buildCatalogSupplierLinkPayload(input),
+  });
+  if (!response.ok || !response.data) throw new Error("error" in response ? response.error : "No se pudo actualizar el proveedor.");
+  return response.data;
+}
+
+export async function deleteCatalogSupplierLink(id: string): Promise<CatalogSupplierLink> {
+  const response = await callCrmApi<CatalogSupplierLink>(`/crm/compras/proveedor-items/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok || !response.data) throw new Error("error" in response ? response.error : "No se pudo quitar el proveedor.");
+  return response.data;
 }
 
 export async function fetchCatalogPriceLists(): Promise<CatalogPriceList[]> {

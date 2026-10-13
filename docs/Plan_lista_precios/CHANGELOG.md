@@ -157,3 +157,14 @@ El historial de cambios comienza desde la aplicación de la migración. Los camb
 - La consulta comercial del embudo solicita únicamente productos activos y
   vendibles; las líneas nuevas de cotización tampoco permiten productos
   archivados o no vendibles.
+
+## 2026-10-13 — Relación de productos con proveedores
+
+- Se habilitó la relación muchos-a-muchos mediante `proveedor_items`.
+- La edición de productos permite asociar varios proveedores, SKU, costo,
+  moneda, compra mínima, tiempo de entrega y proveedor principal.
+- Se agregó validación tenant-safe en la API y una restricción para permitir un
+  solo proveedor principal activo por producto.
+- La orden de compra carga únicamente los productos asociados al proveedor
+  seleccionado y toma de esa relación el costo sugerido y el identificador del
+  proveedor-producto.

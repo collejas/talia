@@ -3,7 +3,7 @@ import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { CatalogItemsPanel } from "@/components/settings/catalog-items-panel"
-import { fetchCatalogItemPriceListsBatch, fetchCatalogItems, fetchCatalogPriceLists } from "@/app/settings/catalogo/actions"
+import { fetchCatalogItemPriceListsBatch, fetchCatalogItems, fetchCatalogPriceLists, fetchCatalogSupplierLinks, fetchCatalogSuppliers } from "@/app/settings/catalogo/actions"
 import {
   fetchFamiliasDeProductos,
   fetchLineasDeNegocio,
@@ -12,13 +12,15 @@ import {
 } from "@/app/settings/productos/actions"
 
 export default async function SettingsProductosItemsPage() {
-  const [items, lineas, familias, modelos, unidadesMedida, priceLists] = await Promise.all([
+  const [items, lineas, familias, modelos, unidadesMedida, priceLists, proveedores, proveedorItems] = await Promise.all([
     fetchCatalogItems({ includeInactive: true }),
     fetchLineasDeNegocio({ includeInactive: true }),
     fetchFamiliasDeProductos({ includeInactive: true }),
     fetchModelosProductos({ includeInactive: true }),
     fetchUnidadesMedida({ includeInactive: true }),
     fetchCatalogPriceLists(),
+    fetchCatalogSuppliers(),
+    fetchCatalogSupplierLinks({ includeInactive: true }),
   ])
   const priceListValues = await fetchCatalogItemPriceListsBatch(items.map((item) => item.id))
   return (
@@ -61,6 +63,8 @@ export default async function SettingsProductosItemsPage() {
           unidadesMedida={unidadesMedida}
           priceLists={priceLists}
           initialPriceListValues={priceListValues}
+          proveedores={proveedores}
+          initialProveedorItems={proveedorItems}
         />
       </div>
     </AppViewLayout>

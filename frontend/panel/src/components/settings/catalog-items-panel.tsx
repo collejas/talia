@@ -34,7 +34,10 @@ import {
   type CatalogItemInput,
   type CatalogItemPriceListBatch,
   type CatalogPriceList,
+  type CatalogSupplierLink,
+  createCatalogSupplierLink,
   createCatalogItem,
+  deleteCatalogSupplierLink,
   deleteCatalogItem,
   fetchCatalogItemPriceLists,
   fetchCatalogItemPriceListsBatch,
@@ -42,6 +45,7 @@ import {
   updateCatalogItemBasePriceCell,
   updateCatalogItemPriceListCell,
   fetchCatalogItems,
+  updateCatalogSupplierLink,
   updateCatalogItem,
 } from "@/app/settings/catalogo/actions"
 import { Button } from "@/components/ui/button"
@@ -81,6 +85,12 @@ import {
 } from "@/components/settings/productos/media-editor"
 
 type StatusBanner = { type: "success" | "error"; message: string } | null
+
+type SupplierOption = Record<string, unknown>
+type SupplierDraft = Omit<CatalogSupplierLink, "id" | "catalog_item_id" | "organizacion_id"> & {
+  id?: string
+  catalog_item_id?: string
+}
 
 const DESCRIPCION_CORTA_MAX = 400
 const DESCRIPCION_LARGA_MAX = 4000
@@ -704,6 +714,8 @@ export function CatalogItemsPanel({
   unidadesMedida,
   priceLists,
   initialPriceListValues,
+  proveedores,
+  initialProveedorItems,
 }: {
   initialItems: CatalogItem[]
   lineas: LineaOption[]
@@ -712,6 +724,8 @@ export function CatalogItemsPanel({
   unidadesMedida: UnidadMedidaOption[]
   priceLists: CatalogPriceList[]
   initialPriceListValues: CatalogItemPriceListBatch
+  proveedores: SupplierOption[]
+  initialProveedorItems: CatalogSupplierLink[]
   }) {
   const [items, setItems] = useState<CatalogItem[]>(() => sortItems(initialItems))
   const [catalogPriceListValues, setCatalogPriceListValues] = useState<CatalogItemPriceListBatch>(initialPriceListValues)
@@ -729,6 +743,8 @@ export function CatalogItemsPanel({
   const [editing, setEditing] = useState<CatalogItem | null>(null)
   const [feedback, setFeedback] = useState<StatusBanner>(null)
   const [descriptionLimitMessage, setDescriptionLimitMessage] = useState<string | null>(null)
+  const [supplierDrafts, setSupplierDrafts] = useState<SupplierDraft[]>([])
+  const [removedSupplierLinkIds, setRemovedSupplierLinkIds] = useState<string[]>([])
   const [pendingAction, setPendingAction] = useState<"save" | "delete" | "refresh" | "toggle" | null>(null)
   const [isPending, startTransition] = useTransition()
   const { context: permissionContext } = usePermissions()
@@ -1026,6 +1042,8 @@ export function CatalogItemsPanel({
     setMetadataSeed({})
     setMediaItems([])
     setPriceListValues({})
+    setSupplierDrafts([])
+    setRemovedSupplierLinkIds([])
   }, [form])
 
   const openCreateSheet = useCallback(() => {
@@ -1037,6 +1055,12 @@ export function CatalogItemsPanel({
     async (item: CatalogItem) => {
       setEditing(item)
       form.reset(mapItemToFormValues(item))
+      setSupplierDrafts(
+        initialProveedorItems
+          .filter((link) => link.catalog_item_id === item.id)
+          .map((link) => ({ ...link })),
+      )
+      setRemovedSupplierLinkIds([])
       const baseMetadata =
         item.metadatos && typeof item.metadatos === "object"
           ? JSON.parse(JSON.stringify(item.metadatos))
@@ -1055,7 +1079,7 @@ export function CatalogItemsPanel({
       }
       setSheetOpen(true)
     },
-    [form],
+    [form, initialProveedorItems],
   )
 
   const closeSheet = useCallback(() => {
@@ -1064,6 +1088,55 @@ export function CatalogItemsPanel({
       resetForm()
     }, 200)
   }, [resetForm])
+
+  const addSupplierDraft = useCallback(() => {
+    const available = proveedores.find(
+      (provider) => !supplierDrafts.some((draft) => draft.proveedor_id === String(provider.id ?? "")),
+    )
+    if (!available?.id) return
+    setSupplierDrafts((current) => [
+      ...current,
+      {
+        proveedor_id: String(available.id),
+        sku_proveedor: null,
+        nombre_proveedor: null,
+        costo_ultimo: null,
+        costo_referencial: null,
+        moneda: "MXN",
+        compra_minima: null,
+        lead_time_dias: null,
+        es_principal: current.length === 0,
+        vigente_desde: null,
+        vigente_hasta: null,
+        activo: true,
+        observaciones: null,
+      },
+    ])
+  }, [proveedores, supplierDrafts])
+
+  const updateSupplierDraft = useCallback((index: number, patch: Partial<SupplierDraft>) => {
+    setSupplierDrafts((current) =>
+      current.map((draft, currentIndex) => {
+        if (currentIndex !== index) return draft
+        const next = { ...draft, ...patch }
+        if (patch.es_principal === true) {
+          return next
+        }
+        return next
+      }),
+    )
+    if (patch.es_principal === true) {
+      setSupplierDrafts((current) => current.map((draft, currentIndex) => ({ ...draft, es_principal: currentIndex === index })))
+    }
+  }, [])
+
+  const removeSupplierDraft = useCallback((index: number) => {
+    setSupplierDrafts((current) => {
+      const target = current[index]
+      if (target?.id) setRemovedSupplierLinkIds((ids) => ids.includes(target.id as string) ? ids : [...ids, target.id as string])
+      return current.filter((_, currentIndex) => currentIndex !== index)
+    })
+  }, [])
 
   const upsertItem = useCallback((next: CatalogItem) => {
     setItems((prev) => sortItems([...prev.filter((row) => row.id !== next.id), next]))
@@ -1132,6 +1205,39 @@ export function CatalogItemsPanel({
       action
         .then(async (item) => {
           upsertItem(item)
+          for (const linkId of removedSupplierLinkIds) {
+            await deleteCatalogSupplierLink(linkId)
+          }
+          for (const draft of supplierDrafts) {
+            if (!draft.proveedor_id) continue
+            const input = {
+              proveedorId: draft.proveedor_id,
+              catalogItemId: item.id,
+              skuProveedor: draft.sku_proveedor,
+              nombreProveedor: draft.nombre_proveedor,
+              costoUltimo: draft.costo_ultimo,
+              costoReferencial: draft.costo_referencial,
+              moneda: draft.moneda || "MXN",
+              compraMinima: draft.compra_minima,
+              leadTimeDias: draft.lead_time_dias,
+              esPrincipal: draft.es_principal,
+              vigenteDesde: draft.vigente_desde,
+              vigenteHasta: draft.vigente_hasta,
+              activo: draft.activo,
+              observaciones: draft.observaciones,
+            }
+            if (draft.id) {
+              await updateCatalogSupplierLink(draft.id, input)
+            } else {
+              await createCatalogSupplierLink(input)
+            }
+          }
+          const primarySupplier = supplierDrafts.find((draft) => draft.es_principal && draft.proveedor_id)
+          const refreshedItem = await updateCatalogItem(item.id, {
+            nombre: item.nombre,
+            proveedorPrincipalId: primarySupplier?.proveedor_id ?? null,
+          })
+          upsertItem(refreshedItem)
           const priceValues = priceLists.flatMap((list) => {
             const raw = priceListValues[list.id]?.trim() ?? ""
             if (!raw) return []
@@ -2004,6 +2110,59 @@ const handleDelete = useCallback(
                 <Label htmlFor="catalog-clave-sat">Clave SAT</Label>
                 <Input id="catalog-clave-sat" {...form.register("claveSat")} placeholder="81112100" />
               </div>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Compras y proveedores</p>
+                  <p className="text-xs text-muted-foreground">
+                    Asocia uno o varios proveedores. Estas condiciones se usarán al crear órdenes de compra.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addSupplierDraft} disabled={!proveedores.length || supplierDrafts.length >= proveedores.length}>
+                  <IconPlus className="me-2 size-4" /> Agregar proveedor
+                </Button>
+              </div>
+              {!proveedores.length ? (
+                <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  Primero registra un proveedor en Compras.
+                </p>
+              ) : !supplierDrafts.length ? (
+                <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  Este producto todavía no tiene proveedores asociados.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {supplierDrafts.map((draft, index) => (
+                    <div key={draft.id ?? `supplier-${index}`} className="rounded-lg border bg-background p-3">
+                      <div className="grid gap-3 md:grid-cols-[1.3fr_1fr_1fr_auto]">
+                        <div className="space-y-1">
+                          <Label htmlFor={`catalog-proveedor-${index}`}>Proveedor</Label>
+                          <Select value={draft.proveedor_id} onValueChange={(value) => updateSupplierDraft(index, { proveedor_id: value })}>
+                            <SelectTrigger id={`catalog-proveedor-${index}`}><SelectValue placeholder="Selecciona proveedor" /></SelectTrigger>
+                            <SelectContent>
+                              {proveedores.map((provider) => (
+                                <SelectItem key={String(provider.id)} value={String(provider.id)} disabled={supplierDrafts.some((row, rowIndex) => rowIndex !== index && row.proveedor_id === String(provider.id))}>
+                                  {String(provider.codigo_proveedor ?? "")} · {String(provider.nombre_comercial ?? provider.razon_social ?? "Proveedor")}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1"><Label htmlFor={`catalog-sku-proveedor-${index}`}>SKU del proveedor</Label><Input id={`catalog-sku-proveedor-${index}`} value={draft.sku_proveedor ?? ""} onChange={(event) => updateSupplierDraft(index, { sku_proveedor: event.target.value })} placeholder="Código externo" /></div>
+                        <div className="space-y-1"><Label htmlFor={`catalog-costo-proveedor-${index}`}>Costo referencial</Label><Input id={`catalog-costo-proveedor-${index}`} type="number" min="0" step="0.0001" value={draft.costo_referencial ?? ""} onChange={(event) => updateSupplierDraft(index, { costo_referencial: event.target.value ? Number(event.target.value) : null })} placeholder="0.00" /></div>
+                        <Button type="button" variant="ghost" size="icon" className="mt-6" onClick={() => removeSupplierDraft(index)} aria-label="Quitar proveedor"><IconTrash className="size-4" /></Button>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-4">
+                        <div className="space-y-1"><Label htmlFor={`catalog-moneda-proveedor-${index}`}>Moneda</Label><Input id={`catalog-moneda-proveedor-${index}`} maxLength={3} value={draft.moneda} onChange={(event) => updateSupplierDraft(index, { moneda: event.target.value.toUpperCase() })} /></div>
+                        <div className="space-y-1"><Label htmlFor={`catalog-minimo-proveedor-${index}`}>Compra mínima</Label><Input id={`catalog-minimo-proveedor-${index}`} type="number" min="0" step="0.001" value={draft.compra_minima ?? ""} onChange={(event) => updateSupplierDraft(index, { compra_minima: event.target.value ? Number(event.target.value) : null })} /></div>
+                        <div className="space-y-1"><Label htmlFor={`catalog-lead-proveedor-${index}`}>Entrega (días)</Label><Input id={`catalog-lead-proveedor-${index}`} type="number" min="0" step="1" value={draft.lead_time_dias ?? ""} onChange={(event) => updateSupplierDraft(index, { lead_time_dias: event.target.value ? Number(event.target.value) : null })} /></div>
+                        <label className="flex items-center gap-2 rounded-md border px-3 text-sm"><Checkbox checked={draft.es_principal} onCheckedChange={(checked) => updateSupplierDraft(index, { es_principal: Boolean(checked) })} />Proveedor principal</label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="rounded-2xl border border-border/70 bg-muted/30 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
