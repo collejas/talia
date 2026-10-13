@@ -2,6 +2,16 @@
 
 Registro de avances, cambios aplicados, verificaciones y pendientes de la funcionalidad de listas de precios.
 
+## 2026-10-13
+
+### Precio negociado en cotizaciones — implementado localmente
+
+- El precio de cotización ahora puede ser igual o mayor al precio oficial del catálogo o de la lista seleccionada.
+- El backend conserva el precio oficial en `precio_lista_unitario`, el precio negociado en `precio_unitario` y calcula el descuento sobre el precio negociado.
+- Se agregó una constraint PostgreSQL para impedir precios de cotización inferiores al precio oficial cuando existe el snapshot.
+- La pantalla de Embudo permite editar el precio y bloquea guardar o enviar cuando queda por debajo del precio oficial.
+- Pendiente: aplicar la migración y desplegar backend/panel para verificar el flujo autenticado en producción.
+
 ## 2026-09-27
 
 ### Existencias y columnas configurables en Catálogo de precios — implementado localmente

@@ -177,11 +177,13 @@ Conservar el comportamiento actual de selección de productos y agregar por cada
 
 El usuario podrá usar listas diferentes en líneas diferentes de la misma cotización, siempre que tenga permiso para todas ellas.
 
-El precio unitario será de solo lectura en el módulo de cotizaciones. No se aceptará
-un precio manual enviado por el cliente ni se permitirá modificarlo desde Embudo o
-Inbox. El único lugar para cambiar el precio de un producto será su ficha en
-`settings/productos/items`; la cotización solo resolverá el precio base o de la lista
-seleccionada y aplicará el descuento autorizado.
+El precio oficial del catálogo o de la lista será la referencia de la cotización. En
+Embudo, el vendedor podrá capturar un precio de cotización igual o mayor al precio
+oficial para negociar un importe comercial y después aplicar el descuento autorizado.
+No se permitirá reducirlo por debajo del precio oficial. La cotización conservará
+`precio_lista_unitario` como snapshot del precio oficial y `precio_unitario` como
+snapshot del precio negociado; cambiar el catálogo o las listas no reescribe
+cotizaciones históricas.
 
 Al guardar o enviar la cotización, se debe conservar una instantánea de la lista y del precio aplicados en cada línea. Los cambios futuros del catálogo no deben alterar una cotización histórica.
 

@@ -9910,10 +9910,13 @@ async def _resolve_authorized_quote_price_lists(
         if price is None:
             raise HTTPException(status_code=409, detail="catalog_item_price_missing")
         submitted_price = _decimal_from_value(item.get("precio_unitario"))
-        if submitted_price is not None and _round_currency_decimal(submitted_price) != price:
-            raise HTTPException(status_code=409, detail="quote_price_must_match_catalog")
+        quote_price = price
+        if submitted_price is not None:
+            quote_price = _round_currency_decimal(submitted_price)
+            if quote_price < price:
+                raise HTTPException(status_code=409, detail="quote_price_below_catalog")
         quantity = _decimal_from_value(item.get("cantidad")) or Decimal("1")
-        gross = _round_currency_decimal(quantity * price)
+        gross = _round_currency_decimal(quantity * quote_price)
         requested_discount_input = _decimal_from_value(item.get("descuento"))
         requested_percent_input = _decimal_from_value(item.get("descuento_porcentaje"))
         if requested_percent_input is not None:
@@ -9954,13 +9957,13 @@ async def _resolve_authorized_quote_price_lists(
             if abs(requested_discount_input - requested_discount) > Decimal("0.02"):
                 raise HTTPException(status_code=400, detail="quote_discount_values_mismatch")
         final_unit_price = _round_currency_decimal(
-            price - (requested_discount / quantity if quantity > 0 else Decimal("0"))
+            quote_price - (requested_discount / quantity if quantity > 0 else Decimal("0"))
         )
         final_total = _round_currency_decimal(gross - requested_discount)
         resolved_item = dict(item)
         resolved_item["lista_precio_id"] = str(lista_id) if lista_id else None
         resolved_item["lista_precio_nombre"] = str((price_list or {}).get("nombre") or "") or None
-        resolved_item["precio_unitario"] = float(price)
+        resolved_item["precio_unitario"] = float(quote_price)
         resolved_item["precio_lista_unitario"] = float(price)
         resolved_item["descuento"] = float(requested_discount)
         resolved_item["descuento_porcentaje"] = float(requested_percent.quantize(Decimal("0.01")))

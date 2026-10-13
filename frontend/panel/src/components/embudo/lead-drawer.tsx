@@ -348,6 +348,7 @@ type LeadQuoteItemEntry = {
   unit: string | null;
   quantity: number | null;
   unitPrice: number | null;
+  catalogUnitPrice: number | null;
   discount: number | null;
   discountPercent: number | null;
   discountLimitPercent: number | null;
@@ -368,6 +369,7 @@ type QuoteItemForm = {
   unidad: string;
   cantidad: string;
   precioUnitario: string;
+  precioListaUnitario: string;
   descuento: string;
   descuentoPorcentaje: string;
   moneda: string;
@@ -2663,6 +2665,7 @@ export function LeadDrawer({
                           descripcion: typeof item.descripcion === "string" ? item.descripcion : "",
                           listaPrecioId: typeof item.listaPrecioId === "string" ? item.listaPrecioId : null,
                           listaPrecioNombre: typeof item.listaPrecioNombre === "string" ? item.listaPrecioNombre : null,
+                          precioListaUnitario: typeof item.precioListaUnitario === "string" ? item.precioListaUnitario : "",
                           unidad: typeof item.unidad === "string" ? item.unidad : "unidad",
                       cantidad: typeof item.cantidad === "string" ? item.cantidad : "1",
                       precioUnitario: typeof item.precioUnitario === "string" ? item.precioUnitario : "",
@@ -2846,6 +2849,13 @@ export function LeadDrawer({
     })) {
       alerts.push("El descuento debe estar entre 0% y el importe de la partida.");
     }
+    if (quoteItems.some((item) => {
+      const enteredPrice = parseNumberInput(item.precioUnitario);
+      const catalogPrice = parseNumberInput(item.precioListaUnitario);
+      return enteredPrice != null && catalogPrice != null && enteredPrice < catalogPrice;
+    })) {
+      alerts.push("El precio de cotización no puede ser menor al precio oficial.");
+    }
     return alerts;
   }, [quoteChannel, quoteEmailTo, quoteItems, quoteValidoHasta, quoteWhatsappTo]);
   const quoteDiscountBlocked = Boolean(quoteDiscountWarning) || quoteItems.some((item) => {
@@ -2857,6 +2867,11 @@ export function LeadDrawer({
     const configuredLimit = quoteDiscountLimits[limitKey];
     return amount < 0 || amount > quantity * price || percent < 0 || percent > 100 ||
       (configuredLimit != null && percent > configuredLimit);
+  });
+  const quotePriceBlocked = quoteItems.some((item) => {
+    const enteredPrice = parseNumberInput(item.precioUnitario);
+    const catalogPrice = parseNumberInput(item.precioListaUnitario);
+    return enteredPrice != null && catalogPrice != null && enteredPrice < catalogPrice;
   });
   const quoteRecentHistory = quotesState.data.slice(0, 4);
   const quoteCompactInputClass =
@@ -2948,6 +2963,12 @@ export function LeadDrawer({
     setQuoteDiscountLineNotice({ index: lineIndex, maxPercent, maxAmount });
     setQuoteDiscountWarning(message);
     setQuoteError(null);
+    return true;
+  };
+
+  const showQuotePriceNotice = (errorValue: unknown) => {
+    if (errorValue !== "quote_price_below_catalog") return false;
+    setQuoteError("El precio de cotización no puede ser menor al precio oficial del catálogo o de la lista.");
     return true;
   };
 
@@ -3047,6 +3068,9 @@ export function LeadDrawer({
           if (showDiscountLimitNotice(responseBody?.error)) {
             return;
           }
+          if (showQuotePriceNotice(responseBody?.error)) {
+            return;
+          }
           const message =
             typeof responseBody?.error === "string" && responseBody.error ? responseBody.error : `Error ${response.status}`;
           setQuoteError(message);
@@ -3127,6 +3151,9 @@ export function LeadDrawer({
         const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) {
           if (showDiscountLimitNotice(responseBody?.error)) {
+            return;
+          }
+          if (showQuotePriceNotice(responseBody?.error)) {
             return;
           }
           const message =
@@ -5287,6 +5314,7 @@ export function LeadDrawer({
                                               listaPrecioId: null,
                                               listaPrecioNombre: null,
                                               precioUnitario: base?.precioBase != null ? String(base.precioBase) : entry.precioUnitario,
+                                              precioListaUnitario: base?.precioBase != null ? String(base.precioBase) : entry.precioListaUnitario,
                                               moneda: base?.moneda || entry.moneda,
                                             };
                                           }
@@ -5295,6 +5323,7 @@ export function LeadDrawer({
                                             listaPrecioId: selected.id,
                                             listaPrecioNombre: selected.nombre,
                                             precioUnitario: String(selected.precio),
+                                            precioListaUnitario: String(selected.precio),
                                             moneda: selected.moneda,
                                           };
                                         }));
@@ -5332,12 +5361,17 @@ export function LeadDrawer({
                               />
                               <Input
                                 value={item.precioUnitario}
+                                onChange={(event) => handleItemFieldChange(index, "precioUnitario", event.target.value)}
                                 disabled={quotePending}
-                                readOnly
-                                aria-readonly="true"
                                 placeholder="0.00"
-                                title="El precio se modifica únicamente desde el producto del catálogo."
-                                className={quoteCompactInputClass}
+                                title="Precio de cotización. Puede ser igual o mayor al precio oficial."
+                                className={`${quoteCompactInputClass} ${(() => {
+                                  const catalogPrice = parseNumberInput(item.precioListaUnitario);
+                                  const enteredPrice = parseNumberInput(item.precioUnitario);
+                                  return catalogPrice != null && enteredPrice != null && enteredPrice < catalogPrice
+                                    ? "border border-red-500 bg-red-50 text-red-900"
+                                    : "";
+                                })()}`}
                               />
                               <Input
                                 value={item.descuento}
@@ -5578,10 +5612,10 @@ export function LeadDrawer({
                         <Button type="button" variant="outline" onClick={handleOpenQuotePreview} disabled={quoteActionsDisabled}>
                           Vista previa PDF
                         </Button>
-                        <Button type="button" variant="secondary" onClick={handleCreateQuote} disabled={quoteActionsDisabled || quoteDiscountBlocked}>
+                        <Button type="button" variant="secondary" onClick={handleCreateQuote} disabled={quoteActionsDisabled || quoteDiscountBlocked || quotePriceBlocked}>
                           {quotePending ? "Creando..." : quoteVendorSettingsLoading ? "Cargando..." : "Crear cotización"}
                         </Button>
-                        <Button type="button" onClick={handleSendQuote} disabled={quoteActionsDisabled || quoteDiscountBlocked}>
+                        <Button type="button" onClick={handleSendQuote} disabled={quoteActionsDisabled || quoteDiscountBlocked || quotePriceBlocked}>
                           {quotePending ? "Enviando..." : quoteVendorSettingsLoading ? "Cargando..." : "Enviar cotización"}
                         </Button>
                         <Button type="button" variant="ghost" onClick={handleSaveQuoteDraft} disabled={quoteVendorSettingsLoading}>
@@ -6982,6 +7016,7 @@ function mapQuoteItemEntry(input: unknown): LeadQuoteItemEntry {
     unit: typeof row.unidad === "string" ? row.unidad : null,
     quantity: toNumber(row.cantidad),
     unitPrice: toNumber(row.precio_unitario ?? row.precioUnitario),
+    catalogUnitPrice: toNumber(row.precio_lista_unitario),
     discount: toNumber(row.descuento),
     discountPercent: toNumber(row.descuento_porcentaje_aplicado ?? row.descuento_porcentaje),
     discountLimitPercent: toNumber(row.limite_descuento_porcentaje),
@@ -7181,6 +7216,7 @@ function createQuoteItemForm(initial?: Partial<QuoteItemForm>): QuoteItemForm {
     unidad: initial?.unidad ?? "unidad",
     cantidad: initial?.cantidad ?? "1",
     precioUnitario: formatPresetNumberString(initial?.precioUnitario),
+    precioListaUnitario: formatPresetNumberString(initial?.precioListaUnitario),
     descuento: initial?.descuento ?? "",
     descuentoPorcentaje: initial?.descuentoPorcentaje ?? "",
     moneda: (initial?.moneda ?? "MXN").toUpperCase(),
@@ -7213,6 +7249,7 @@ function catalogOptionToQuoteItem(
     unidad: option.unidad,
     cantidad: "1",
     precioUnitario: priceOption ? String(priceOption.precio) : option.precioBase != null ? String(option.precioBase) : "",
+    precioListaUnitario: priceOption ? String(priceOption.precio) : option.precioBase != null ? String(option.precioBase) : "",
     moneda: priceOption?.moneda || option.moneda || fallbackCurrency,
     listaPrecioId: priceOption?.id ?? null,
     listaPrecioNombre: priceOption?.nombre ?? null,
@@ -7299,8 +7336,8 @@ function buildQuoteItemsPayload(forms: QuoteItemForm[]): Array<Record<string, un
         cantidad: quantity ?? null,
         precio_unitario: unitPrice ?? null,
         // El porcentaje es la fuente única cuando está capturado. El backend
-        // recalcula el importe sobre el precio vigente del catálogo y evita
-        // inconsistencias con importes guardados en borradores anteriores.
+        // recalcula el importe sobre el precio negociado y conserva el precio
+        // oficial como snapshot separado.
         descuento: discountPercent != null ? null : discount ?? null,
         descuento_porcentaje: discountPercent,
         total,
@@ -7331,6 +7368,7 @@ function quoteEntryToItemForms(
         unidad: item.unit ?? "unidad",
         cantidad: item.quantity != null ? String(item.quantity) : "1",
         precioUnitario: item.unitPrice != null ? String(item.unitPrice) : "",
+        precioListaUnitario: item.catalogUnitPrice != null ? String(item.catalogUnitPrice) : "",
         descuento: item.discount != null ? String(item.discount) : "",
         descuentoPorcentaje: item.discountPercent != null ? String(item.discountPercent) : "",
         moneda: item.currency ?? fallbackCurrency,
@@ -7374,6 +7412,7 @@ function convertConceptsToItemForms(
         descripcion: description,
         cantidad: "1",
         precioUnitario: total != null ? String(total) : "",
+        precioListaUnitario: "",
         moneda: fallbackCurrency,
         listaPrecioId: null,
         listaPrecioNombre: null,
