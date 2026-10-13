@@ -16168,6 +16168,19 @@ class CRMCatalogPriceBrand(BaseModel):
     accent_color: str
 
 
+class CRMCatalogMarca(BaseModel):
+    id: UUID
+    organizacion_id: UUID
+    nombre: str
+    activo: bool = True
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+class CRMCatalogMarcaCreate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=160)
+
+
 class CRMCatalogItem(BaseModel):
     id: UUID
     codigo: str | None = None
@@ -16182,6 +16195,7 @@ class CRMCatalogItem(BaseModel):
     moneda: str
     impuestos: list[dict[str, Any]] | None = None
     activo: bool
+    es_vendible: bool = True
     requiere_factura: bool
     clave_sat: str | None = None
     unidad_sat: str | None = None
@@ -16196,6 +16210,8 @@ class CRMCatalogItem(BaseModel):
     requiere_serie: bool = False
     proveedor_principal_id: UUID | None = None
     activo_compra: bool = True
+    marca_id: UUID | None = None
+    marca: CRMCatalogMarca | None = None
     created_by: UUID | None = None
     updated_by: UUID | None = None
     creado_en: datetime
@@ -16223,6 +16239,7 @@ class CRMCatalogItemCreate(BaseModel):
     moneda: str = Field(default="MXN", min_length=3, max_length=3)
     impuestos: list[dict[str, Any]] | None = Field(default_factory=list)
     activo: bool = True
+    es_vendible: bool = True
     requiere_factura: bool = False
     clave_sat: str | None = Field(default=None, max_length=100)
     unidad_sat: str | None = Field(default=None, max_length=100)
@@ -16237,6 +16254,8 @@ class CRMCatalogItemCreate(BaseModel):
     requiere_serie: bool = False
     proveedor_principal_id: UUID | None = None
     activo_compra: bool = True
+    marca_id: UUID | None = None
+    marca_nombre: str | None = Field(default=None, max_length=160)
     linea_id: UUID | None = None
     familia_id: UUID | None = None
     modelo_id: UUID | None = None
@@ -16255,6 +16274,7 @@ class CRMCatalogItemUpdate(BaseModel):
     moneda: str | None = Field(default=None, min_length=3, max_length=3)
     impuestos: list[dict[str, Any]] | None = None
     activo: bool | None = None
+    es_vendible: bool | None = None
     requiere_factura: bool | None = None
     clave_sat: str | None = Field(default=None, max_length=100)
     unidad_sat: str | None = Field(default=None, max_length=100)
@@ -16269,6 +16289,8 @@ class CRMCatalogItemUpdate(BaseModel):
     requiere_serie: bool | None = None
     proveedor_principal_id: UUID | None = None
     activo_compra: bool | None = None
+    marca_id: UUID | None = None
+    marca_nombre: str | None = Field(default=None, max_length=160)
     linea_id: UUID | None = None
     familia_id: UUID | None = None
     modelo_id: UUID | None = None
@@ -21830,7 +21852,7 @@ async def import_product_catalog_items(
                     raise ValueError("El campo impuestos debe contener una lista JSON.")
                 payload["impuestos"] = impuestos
             for field_name in (
-                "activo", "requiere_factura", "maneja_inventario", "requiere_lote", "requiere_serie", "activo_compra",
+                "activo", "es_vendible", "requiere_factura", "maneja_inventario", "requiere_lote", "requiere_serie", "activo_compra",
             ):
                 parsed_value = _parse_metadata_value(
                     _pick_value(row, BASE_HEADER_CANDIDATES[field_name]),
@@ -21838,6 +21860,13 @@ async def import_product_catalog_items(
                 )
                 if parsed_value is not None:
                     payload[field_name] = parsed_value
+            marca_nombre = _pick_value(row, BASE_HEADER_CANDIDATES["marca"])
+            if marca_nombre and marca_nombre.strip():
+                marca = await repo.get_or_create_catalog_marca(
+                    organizacion_id=organizacion_id,
+                    nombre=marca_nombre,
+                )
+                payload["marca_id"] = marca["id"]
             for field_name in ("stock_minimo", "stock_objetivo", "costo_ultimo", "costo_promedio"):
                 parsed_value = _parse_metadata_value(
                     _pick_value(row, BASE_HEADER_CANDIDATES[field_name]),
@@ -22716,6 +22745,7 @@ def _catalog_export_row(
             "modelo_codigo": modelo.get("codigo"),
             "modelo": modelo.get("nombre"),
             "modelo_descripcion": modelo.get("descripcion"),
+            "marca": (row.get("marca") or {}).get("nombre") if isinstance(row.get("marca"), dict) else row.get("marca_nombre"),
         }
     )
     output = [_catalog_csv_value(values.get(header)) for header in CATALOG_IMPORT_HEADERS]
@@ -22847,6 +22877,7 @@ async def list_catalog_items(
     repo: CRMRepository = Depends(get_repository),
     _: str = Depends(require_any_permission(["settings.view", "propuesta.view"])),
     include_inactive: bool = Query(default=False),
+    solo_vendibles: bool = Query(default=False),
     tipo: Literal["producto", "servicio", "paquete"] | None = Query(default=None),
     search: str | None = Query(default=None, max_length=200),
     limit: Annotated[int, Query(ge=1, le=5000)] = 2000,
@@ -22854,6 +22885,7 @@ async def list_catalog_items(
     try:
         rows = await repo.list_catalog_items(
             include_inactive=include_inactive,
+            solo_vendibles=solo_vendibles,
             tipo=tipo,
             search=search,
             limit=limit,
@@ -22863,16 +22895,71 @@ async def list_catalog_items(
     return [CRMCatalogItem.model_validate(row) for row in rows]
 
 
+@router.get("/catalog/marcas", response_model=list[CRMCatalogMarca])
+async def list_catalog_marcas(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_any_permission(["settings.view", "settings.manage"])),
+    include_inactive: bool = Query(default=False),
+    search: str | None = Query(default=None, max_length=160),
+    limit: Annotated[int, Query(ge=1, le=5000)] = 500,
+) -> list[CRMCatalogMarca]:
+    try:
+        rows = await repo.list_catalog_marcas(
+            organizacion_id=organizacion_id,
+            include_inactive=include_inactive,
+            search=search,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="catalog_brands_unavailable") from exc
+    return [CRMCatalogMarca.model_validate(row) for row in rows]
+
+
+@router.post("/catalog/marcas", response_model=CRMCatalogMarca, status_code=status.HTTP_201_CREATED)
+async def create_catalog_marca(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("settings.manage")),
+    payload: CRMCatalogMarcaCreate,
+) -> CRMCatalogMarca:
+    try:
+        row = await repo.get_or_create_catalog_marca(
+            organizacion_id=organizacion_id,
+            nombre=payload.nombre,
+        )
+    except CRMRepositoryError as exc:
+        detail = str(exc)
+        if "required" in detail:
+            raise HTTPException(status_code=422, detail="marca_nombre_required") from exc
+        raise HTTPException(status_code=502, detail="catalog_brand_not_created") from exc
+    return CRMCatalogMarca.model_validate(row)
+
+
 @router.post("/catalog/items", response_model=CRMCatalogItem, status_code=status.HTTP_201_CREATED)
 async def create_catalog_item(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMCatalogItemCreate,
     usuario_id: UUID | None = Depends(optional_usuario_id),
     background_tasks: BackgroundTasks,
 ) -> CRMCatalogItem:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    marca_nombre = body.pop("marca_nombre", None)
+    if marca_nombre is not None:
+        if str(marca_nombre).strip():
+            marca = await repo.get_or_create_catalog_marca(
+                organizacion_id=organizacion_id,
+                nombre=str(marca_nombre),
+            )
+            body["marca_id"] = marca["id"]
+        else:
+            body["marca_id"] = None
+    body["organizacion_id"] = str(organizacion_id)
     if body.get("codigo") is not None:
         body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     if isinstance(body.get("metadatos"), dict):
@@ -22907,6 +22994,16 @@ async def update_catalog_item(
     background_tasks: BackgroundTasks,
 ) -> CRMCatalogItem:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    marca_nombre = body.pop("marca_nombre", None)
+    if marca_nombre is not None:
+        if str(marca_nombre).strip():
+            marca = await repo.get_or_create_catalog_marca(
+                organizacion_id=organizacion_id,
+                nombre=str(marca_nombre),
+            )
+            body["marca_id"] = marca["id"]
+        else:
+            body["marca_id"] = None
     if body.get("codigo") is not None:
         body["codigo"] = _normalize_stable_code(body["codigo"]) or None
     if not body:
@@ -26791,6 +26888,7 @@ BASE_HEADER_CANDIDATES = {
     "moneda": ["moneda", "currency"],
     "impuestos": ["impuestos", "taxes"],
     "activo": ["activo", "active"],
+    "es_vendible": ["es_vendible", "vendible", "sellable", "available_for_sale"],
     "requiere_factura": ["requiere_factura", "requiere factura", "requires_invoice"],
     "clave_sat": ["clave_sat", "sat_key"],
     "unidad_sat": ["unidad_sat", "sat_unit"],
@@ -26805,6 +26903,7 @@ BASE_HEADER_CANDIDATES = {
     "requiere_serie": ["requiere_serie", "requiere serie", "requires_serial"],
     "proveedor_principal_id": ["proveedor_principal_id", "main_supplier_id"],
     "activo_compra": ["activo_compra", "purchase_active"],
+    "marca": ["marca", "brand", "marca_nombre", "brand_name"],
     "creado_en": ["creado_en", "created_at"],
     "actualizado_en": ["actualizado_en", "updated_at"],
     "linea": ["linea", "línea", "line", "linea_nombre", "línea_nombre"],
@@ -26832,6 +26931,7 @@ CATALOG_IMPORT_HEADERS = [
     "moneda",
     "impuestos",
     "activo",
+    "es_vendible",
     "requiere_factura",
     "clave_sat",
     "unidad_sat",
@@ -26846,6 +26946,7 @@ CATALOG_IMPORT_HEADERS = [
     "requiere_serie",
     "proveedor_principal_id",
     "activo_compra",
+    "marca",
     "linea_codigo",
     "linea",
     "linea_descripcion",

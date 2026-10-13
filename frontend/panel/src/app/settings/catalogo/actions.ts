@@ -22,6 +22,7 @@ export type CatalogItem = {
   moneda: string;
   impuestos: Record<string, unknown>[];
   activo: boolean;
+  esVendible: boolean;
   requiereFactura: boolean;
   claveSat: string | null;
   unidadSat: string | null;
@@ -35,6 +36,8 @@ export type CatalogItem = {
   requiereSerie: boolean;
   proveedorPrincipalId: string | null;
   activoCompra: boolean;
+  marcaId: string | null;
+  marcaNombre: string | null;
   createdBy: string | null;
   updatedBy: string | null;
   creadoEn: string | null;
@@ -60,6 +63,7 @@ export type CatalogItemInput = {
   moneda?: string | null;
   impuestos?: Record<string, unknown>[] | null;
   activo?: boolean;
+  esVendible?: boolean;
   requiereFactura?: boolean;
   claveSat?: string | null;
   unidadSat?: string | null;
@@ -73,6 +77,8 @@ export type CatalogItemInput = {
   requiereSerie?: boolean;
   proveedorPrincipalId?: string | null;
   activoCompra?: boolean;
+  marcaId?: string | null;
+  marcaNombre?: string | null;
   lineaId?: string | null;
   familiaId?: string | null;
   modeloId?: string | null;
@@ -97,6 +103,7 @@ type CrmCatalogItem = {
   moneda: string;
   impuestos: Record<string, unknown>[] | null;
   activo: boolean;
+  es_vendible: boolean;
   requiere_factura: boolean;
   clave_sat: string | null;
   unidad_sat: string | null;
@@ -108,6 +115,8 @@ type CrmCatalogItem = {
   linea_id: string | null;
   familia_id: string | null;
   modelo_id: string | null;
+  marca_id: string | null;
+  marca: { id: string; organizacion_id: string; nombre: string; activo: boolean } | null;
   linea: { id: string; nombre: string } | null;
   familia: { id: string; nombre: string } | null;
   modelo: { id: string; nombre: string } | null;
@@ -215,6 +224,7 @@ function normalizeCatalogItem(record: Record<string, unknown>): CatalogItem {
     moneda: normalizeCurrency(record.moneda),
     impuestos: normalizeJsonArray(record.impuestos),
     activo: normalizeBoolean(record.activo, true),
+    esVendible: normalizeBoolean(record.es_vendible ?? record.esVendible, true),
     requiereFactura: normalizeBoolean(record.requiere_factura ?? record.requiereFactura, false),
     claveSat: normalizeString(record.clave_sat ?? record.claveSat),
     unidadSat: normalizeString(record.unidad_sat ?? record.unidadSat),
@@ -231,6 +241,11 @@ function normalizeCatalogItem(record: Record<string, unknown>): CatalogItem {
     requiereSerie: normalizeBoolean(record.requiere_serie ?? record.requiereSerie, false),
     proveedorPrincipalId: normalizeString(record.proveedor_principal_id ?? record.proveedorPrincipalId),
     activoCompra: normalizeBoolean(record.activo_compra ?? record.activoCompra, true),
+    marcaId: normalizeString(record.marca_id ?? record.marcaId),
+    marcaNombre: normalizeString(
+      (record.marca && typeof record.marca === "object" ? (record.marca as Record<string, unknown>).nombre : null) ??
+        record.marcaNombre,
+    ),
     createdBy: normalizeString(record.created_by ?? record.createdBy),
     updatedBy: normalizeString(record.updated_by ?? record.updatedBy),
     creadoEn: normalizeString(record.creado_en ?? record.creadoEn),
@@ -304,6 +319,7 @@ function buildPayload(input: CatalogItemInput): Record<string, unknown> {
     payload.moneda = input.moneda ? input.moneda.trim().toUpperCase() : DEFAULT_MONEDA
   if (input.impuestos !== undefined) payload.impuestos = input.impuestos ?? []
   if (input.activo !== undefined) payload.activo = Boolean(input.activo)
+  if (input.esVendible !== undefined) payload.es_vendible = Boolean(input.esVendible)
   if (input.requiereFactura !== undefined) payload.requiere_factura = Boolean(input.requiereFactura)
   if (input.claveSat !== undefined) payload.clave_sat = sanitizeText(input.claveSat)
   if (input.unidadSat !== undefined) payload.unidad_sat = sanitizeText(input.unidadSat)
@@ -320,6 +336,8 @@ function buildPayload(input: CatalogItemInput): Record<string, unknown> {
   if (input.requiereSerie !== undefined) payload.requiere_serie = Boolean(input.requiereSerie)
   if (input.proveedorPrincipalId !== undefined) payload.proveedor_principal_id = input.proveedorPrincipalId ?? null
   if (input.activoCompra !== undefined) payload.activo_compra = Boolean(input.activoCompra)
+  if (input.marcaId !== undefined) payload.marca_id = input.marcaId ?? null
+  if (input.marcaNombre !== undefined) payload.marca_nombre = sanitizeText(input.marcaNombre)
   if (input.lineaId !== undefined) payload.linea_id = input.lineaId ?? null
   if (input.familiaId !== undefined) payload.familia_id = input.familiaId ?? null
   if (input.modeloId !== undefined) payload.modelo_id = input.modeloId ?? null

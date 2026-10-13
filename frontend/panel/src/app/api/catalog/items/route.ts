@@ -12,6 +12,7 @@ export async function GET(request: Request) {
   const includeInactive = searchParams.get("include_inactive");
   const search = searchParams.get("search");
   const tipo = searchParams.get("tipo");
+  const soloVendibles = searchParams.get("solo_vendibles");
 
   const response = await callCrmApi<unknown[]>("/crm/catalog/items", {
     searchParams: {
@@ -19,6 +20,7 @@ export async function GET(request: Request) {
       include_inactive: includeInactive === "true" ? "true" : undefined,
       search: search ?? undefined,
       tipo: tipo ?? undefined,
+      solo_vendibles: soloVendibles === "false" ? undefined : "true",
     },
   });
 

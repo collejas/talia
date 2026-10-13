@@ -121,8 +121,10 @@ type CatalogItemFormValues = {
   unidad: string
   precioBase: string
   moneda: string
+  marcaNombre: string
   requiereFactura: boolean
   activo: boolean
+  esVendible: boolean
   manejaInventario: boolean
   activoCompra: boolean
   requiereLote: boolean
@@ -146,8 +148,10 @@ const EMPTY_FORM: CatalogItemFormValues = {
   unidad: "unidad",
   precioBase: "",
   moneda: "MXN",
+  marcaNombre: "",
   requiereFactura: false,
   activo: true,
+  esVendible: true,
   manejaInventario: false,
   activoCompra: true,
   requiereLote: false,
@@ -402,6 +406,11 @@ function renderCatalogColumnCell(item: CatalogItem, columnId: CatalogColumnId): 
             </div>
           </div>
           <div className="mt-2 flex max-w-full gap-2 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+            {item.marcaNombre ? (
+              <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                Marca: {item.marcaNombre}
+              </span>
+            ) : null}
             {item.lineaNombre ? (
               <span className="max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
                 Línea: {item.lineaNombre}
@@ -443,6 +452,12 @@ function renderCatalogColumnCell(item: CatalogItem, columnId: CatalogColumnId): 
               className="text-[10px] uppercase tracking-wide"
             >
               {item.activoCompra ? "Compra activa" : "No compra"}
+            </Badge>
+            <Badge
+              variant={item.esVendible ? "default" : "outline"}
+              className="text-[10px] uppercase tracking-wide"
+            >
+              {item.esVendible ? "Vendible" : "No vendible"}
             </Badge>
           </div>
         </div>
@@ -600,6 +615,7 @@ function mapItemToFormValues(item: CatalogItem): CatalogItemFormValues {
   return {
     codigo: item.codigo ?? "",
     nombre: item.nombre,
+    marcaNombre: item.marcaNombre ?? "",
     slug: item.slug ?? "",
     tipo: item.tipo,
     descripcionCorta: item.descripcionCorta ?? "",
@@ -609,6 +625,7 @@ function mapItemToFormValues(item: CatalogItem): CatalogItemFormValues {
     moneda: item.moneda || "MXN",
     requiereFactura: item.requiereFactura,
     activo: item.activo,
+    esVendible: item.esVendible,
     manejaInventario: item.manejaInventario,
     activoCompra: item.activoCompra,
     requiereLote: item.requiereLote,
@@ -636,6 +653,8 @@ function formValuesToInput(values: CatalogItemFormValues, impuestos?: CatalogIte
     moneda: values.moneda || "MXN",
     impuestos: impuestos ?? [],
     activo: values.activo,
+    esVendible: values.esVendible,
+    marcaNombre: values.marcaNombre.trim() || null,
     requiereFactura: values.requiereFactura,
     manejaInventario: values.manejaInventario,
     activoCompra: values.activoCompra,
@@ -665,6 +684,8 @@ function catalogItemToInput(item: CatalogItem): CatalogItemInput {
     moneda: item.moneda,
     impuestos: item.impuestos,
     activo: item.activo,
+    esVendible: item.esVendible,
+    marcaNombre: item.marcaNombre,
     requiereFactura: item.requiereFactura,
     claveSat: item.claveSat,
     unidadSat: item.unidadSat,
@@ -1828,6 +1849,13 @@ const handleDelete = useCallback(
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="catalog-marca">Marca</Label>
+                <Input id="catalog-marca" {...form.register("marcaNombre")} placeholder="Ej. Philips" />
+                <p className="text-xs text-muted-foreground">
+                  Se reutiliza la marca existente o se crea una nueva dentro de este tenant.
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="catalog-slug">Slug / código</Label>
                 <Input id="catalog-slug" {...form.register("slug")} placeholder="tal-ia-implementacion" />
               </div>
@@ -2006,6 +2034,16 @@ const handleDelete = useCallback(
                   />
                   <Label htmlFor="catalog-activo-compra" className="text-sm font-normal">
                     Habilitado para compra
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">
+                  <Checkbox
+                    id="catalog-es-vendible"
+                    checked={form.watch("esVendible")}
+                    onCheckedChange={(checked) => form.setValue("esVendible", Boolean(checked))}
+                  />
+                  <Label htmlFor="catalog-es-vendible" className="text-sm font-normal">
+                    Disponible para venta
                   </Label>
                 </div>
                 <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2">

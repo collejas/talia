@@ -1706,7 +1706,7 @@ export function LeadDrawer({
       return { status: "loading", items: prev.items };
     });
     try {
-      const response = await fetch(`/api/catalog/items?limit=500`);
+      const response = await fetch(`/api/catalog/items?limit=500&solo_vendibles=true`);
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         const message = typeof body?.error === "string" ? body.error : `Error ${response.status}`;

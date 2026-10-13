@@ -144,3 +144,16 @@ El historial de cambios comienza desde la aplicación de la migración. Los camb
 - `En progreso`: trabajo iniciado y no terminado.
 - `Completado`: implementado y verificado.
 - `Bloqueado`: requiere una decisión o dependencia externa.
+
+## 2026-10-13 — Vendibilidad y marcas en productos
+
+- `catalog_items` ahora distingue `activo`, `es_vendible`, `activo_compra` y
+  `maneja_inventario` como conceptos independientes.
+- Se agregó el catálogo tenant-safe `catalog_marcas` y la relación explícita
+  `catalog_items.marca_id`.
+- El formulario de productos permite capturar marca y controlar si el producto
+  está disponible para venta.
+- El importador/exportador CSV incluye `marca` y `es_vendible`.
+- La consulta comercial del embudo solicita únicamente productos activos y
+  vendibles; las líneas nuevas de cotización tampoco permiten productos
+  archivados o no vendibles.

@@ -14691,6 +14691,7 @@ class CRMRepository:
         *,
         organizacion_id: UUID | None = None,
         include_inactive: bool = False,
+        solo_vendibles: bool = False,
         tipo: str | None = None,
         linea_id: UUID | None = None,
         familia_id: UUID | None = None,
@@ -14710,12 +14711,15 @@ class CRMRepository:
             "*,"
             "linea:lineas_de_negocio(id,codigo,nombre,activo,descripcion,metadata,creado_en,actualizado_en),"
             "familia:familias_productos(id,codigo,linea_id,nombre,descripcion,activo,metadata,creado_en,actualizado_en),"
-            "modelo:modelos_productos(id,codigo,nombre,descripcion,activo,metadata,creado_en,actualizado_en,familia_id)"
+            "modelo:modelos_productos(id,codigo,nombre,descripcion,activo,metadata,creado_en,actualizado_en,familia_id),"
+            "marca:catalog_marcas(id,organizacion_id,nombre,activo,creado_en,actualizado_en)"
         )
         if organizacion_id:
             params["organizacion_id"] = f"eq.{organizacion_id}"
         if not include_inactive:
             params["activo"] = "eq.true"
+        if solo_vendibles:
+            params["es_vendible"] = "eq.true"
         if tipo:
             params["tipo"] = f"eq.{tipo}"
         if linea_id:
@@ -15961,6 +15965,90 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al crear catálogo: {row!r}")
         return row
+
+    async def list_catalog_marcas(
+        self,
+        *,
+        organizacion_id: UUID,
+        include_inactive: bool = False,
+        search: str | None = None,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "nombre.asc",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        if search and search.strip():
+            value = search.strip().replace("%", "").replace("*", "")
+            if value:
+                params["nombre"] = f"ilike.*{value}*"
+        response = await self._request("GET", "/rest/v1/catalog_marcas", params=params)
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al listar marcas: {data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def create_catalog_marca(
+        self,
+        *,
+        organizacion_id: UUID,
+        nombre: str,
+    ) -> dict[str, Any]:
+        body = {"organizacion_id": str(organizacion_id), "nombre": nombre.strip(), "activo": True}
+        response = await self._request(
+            "POST",
+            "/rest/v1/catalog_marcas",
+            json=body,
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"Respuesta inesperada al crear marca: {data!r}")
+        return data[0]
+
+    async def get_or_create_catalog_marca(
+        self,
+        *,
+        organizacion_id: UUID,
+        nombre: str,
+    ) -> dict[str, Any]:
+        normalized = nombre.strip()
+        if not normalized:
+            raise CRMRepositoryError("marca_nombre_required")
+        existing = await self.list_catalog_marcas(
+            organizacion_id=organizacion_id,
+            include_inactive=True,
+            search=normalized,
+            limit=50,
+        )
+        exact = next(
+            (row for row in existing if str(row.get("nombre") or "").strip().casefold() == normalized.casefold()),
+            None,
+        )
+        if exact:
+            return exact
+        try:
+            return await self.create_catalog_marca(organizacion_id=organizacion_id, nombre=normalized)
+        except CRMRepositoryError as exc:
+            if "duplicate" not in str(exc).lower() and "unique" not in str(exc).lower():
+                raise
+            existing = await self.list_catalog_marcas(
+                organizacion_id=organizacion_id,
+                include_inactive=True,
+                search=normalized,
+                limit=50,
+            )
+            exact = next(
+                (row for row in existing if str(row.get("nombre") or "").strip().casefold() == normalized.casefold()),
+                None,
+            )
+            if not exact:
+                raise
+            return exact
 
     async def update_catalog_item(
         self,
