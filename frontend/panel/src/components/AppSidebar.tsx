@@ -380,6 +380,12 @@ export function AppSidebar({
     const items = NAVIGATION.navMain.map((item) =>
       item.title === "Settings" ? { ...item, children: settingsChildren } : item,
     ).filter((item) => {
+      // Operación corresponde a inventarios, envíos y transformaciones. El flujo
+      // inmobiliario se valida desde la ficha de la propiedad y no debe aparecer
+      // como operación logística en tenants con propiedades habilitadas.
+      if (item.url === "/operacion" && moduleFlags.propiedadesEnabled) {
+        return false
+      }
       if (item.url === "/propiedades" && !moduleFlags.propiedadesEnabled) {
         return false
       }

@@ -59,6 +59,15 @@ const STATUS_LABELS = {
   vendido: "Vendido",
 };
 
+const APARTADO_DOCUMENT_TYPES = [
+  ["acta_nacimiento", "Acta de nacimiento", "PDF, JPG o PNG"],
+  ["acta_matrimonio", "Acta de matrimonio", "Si aplica"],
+  ["ine", "INE", "Frente y reverso en un archivo"],
+  ["constancia_situacion_fiscal", "Constancia de situación fiscal", "PDF o imagen legible"],
+  ["curp", "CURP", "PDF o imagen legible"],
+  ["comprobante_domicilio", "Comprobante de domicilio", "No mayor a 3 meses"],
+];
+
 function getStatusLabel(status) {
   const normalized = (status ?? "").toString().trim().toLowerCase();
   return STATUS_LABELS[normalized] ?? (normalized ? normalized : "Sin estado");
@@ -607,6 +616,12 @@ export function PropertyMap() {
   const [contratoPreviewOpen, setContratoPreviewOpen] = useState(false);
   const [contratoFirmadoFile, setContratoFirmadoFile] = useState(null);
   const [contratoFechaFirma, setContratoFechaFirma] = useState("");
+  const [canValidateApartado, setCanValidateApartado] = useState(false);
+  const [apartadoDocuments, setApartadoDocuments] = useState([]);
+  const [apartadoOperationId, setApartadoOperationId] = useState(null);
+  const [apartadoValidationStatus, setApartadoValidationStatus] = useState(null);
+  const [apartadoDocumentFiles, setApartadoDocumentFiles] = useState({});
+  const [apartadoDocumentsLoading, setApartadoDocumentsLoading] = useState(false);
   const [parteVendedoraNombre, setParteVendedoraNombre] = useState("");
   const [parteVendedoraFirmante, setParteVendedoraFirmante] = useState("");
   const [parteVendedoraCargo, setParteVendedoraCargo] = useState("");
@@ -661,6 +676,21 @@ export function PropertyMap() {
     }).catch(() => {
       // ignore logging failures
     });
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/permissions", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        if (!mounted) return;
+        const permissions = Array.isArray(payload?.permisos) ? payload.permisos.map((value) => String(value).toLowerCase()) : [];
+        setCanValidateApartado(Boolean(payload?.es_admin || payload?.es_owner || permissions.includes("inmobiliaria.apartados.validate")));
+      })
+      .catch(() => {
+        if (mounted) setCanValidateApartado(false);
+      });
+    return () => { mounted = false; };
   }, []);
 
   const waitForMapboxInstance = useCallback(() => {
@@ -2158,6 +2188,10 @@ export function PropertyMap() {
     setReservaPagoFile(null);
     setReservaCondiciones("");
     setReservaError(null);
+    setApartadoDocuments([]);
+    setApartadoOperationId(null);
+    setApartadoValidationStatus(null);
+    setApartadoDocumentFiles({});
     setReservaTipoComprador("persona_fisica");
     setReservaCompradorDatos({ nacionalidad: "", ocupacion: "", estado_civil: "", curp: "", rfc_persona: "", tipo_identificacion: "", numero_identificacion: "" });
     setReservaCuentaDatos({ nombre_comercial: "", razon_social: "", rfc: "", regimen_capital: "" });
@@ -2170,6 +2204,56 @@ export function PropertyMap() {
     setParteVendedoraCargo("");
     setReservaPanelOpen(true);
   }, [mapboxProps?.precio, mapboxProps?.status]);
+
+  useEffect(() => {
+    if (!isReservaPanelOpen || !unidadId || (mapboxProps?.status ?? "").toString().toLowerCase() !== "apartado") return undefined;
+    const controller = new AbortController();
+    setApartadoDocumentsLoading(true);
+    fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/documentos`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.detail || "No se pudieron cargar los documentos.");
+        if (!controller.signal.aborted) {
+          setApartadoOperationId(payload?.operacion?.id || null);
+          setApartadoValidationStatus(payload?.operacion?.estado_validacion || null);
+          setApartadoDocuments(Array.isArray(payload?.documentos) ? payload.documentos : []);
+        }
+      })
+      .catch((error) => {
+        if (error?.name !== "AbortError") setReservaError(error instanceof Error ? error.message : "No se pudieron cargar los documentos.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setApartadoDocumentsLoading(false);
+      });
+    return () => controller.abort();
+  }, [isReservaPanelOpen, mapboxProps?.status, unidadId]);
+
+  const handleReviewApartadoDocument = useCallback(async (documentId, reviewStatus) => {
+    const form = new FormData();
+    form.set("estado_revision", reviewStatus);
+    const response = await fetch(`/api/crm/inmobiliaria/operaciones/documentos/${documentId}/revision`, { method: "PATCH", body: form });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error || payload?.detail || "No se pudo actualizar el documento.");
+    setApartadoDocuments((current) => current.map((document) => document.id === documentId ? { ...document, ...payload.documento } : document));
+  }, []);
+
+  const handleMarkApartadoFirme = useCallback(async () => {
+    if (!apartadoOperationId) return;
+    setReservaLoading(true);
+    try {
+      const form = new FormData();
+      const response = await fetch(`/api/crm/inmobiliaria/operaciones/${apartadoOperationId}/validar-firme`, { method: "POST", body: form });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || payload?.detail || "No se pudo marcar el apartado como firme.");
+      setStatusMessage("Apartado validado y marcado como firme.");
+      setReservaPanelOpen(false);
+      refreshGeojson();
+    } catch (error) {
+      setReservaError(error instanceof Error ? error.message : "No se pudo marcar el apartado como firme.");
+    } finally {
+      setReservaLoading(false);
+    }
+  }, [apartadoOperationId, refreshGeojson]);
 
   useEffect(() => {
     if (!isReservaPanelOpen || !unidadId) return undefined;
@@ -2406,6 +2490,45 @@ export function PropertyMap() {
         throw new Error(payload?.error || payload?.detail || "property_reserva_avance_failed");
       }
       const operationId = payload?.operacion?.id;
+      const requiresApartadoValidation = !canValidateApartado && !directReservation;
+      if (requiresApartadoValidation) {
+        const requiredDocumentTypes = APARTADO_DOCUMENT_TYPES
+          .filter(([type]) => type !== "acta_matrimonio")
+          .map(([type]) => type);
+        const missingDocuments = requiredDocumentTypes.filter((type) => {
+          if (apartadoDocumentFiles[type]) return false;
+          const existing = apartadoDocuments.find((document) => document.tipo_documento === type);
+          return !existing || existing.estado_revision === "requiere_correccion";
+        });
+        if (missingDocuments.length) {
+          throw new Error("Adjunta todos los documentos obligatorios antes de enviar el apartado a validación.");
+        }
+        const documentsToUpload = APARTADO_DOCUMENT_TYPES
+          .map(([type]) => type)
+          .filter((type) => apartadoDocumentFiles[type]);
+        for (const type of documentsToUpload) {
+          const documentForm = new FormData();
+          documentForm.set("tipo_documento", type);
+          documentForm.set("file", apartadoDocumentFiles[type]);
+          const documentResponse = await fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/documentos`, {
+            method: "POST",
+            body: documentForm,
+          });
+          const documentPayload = await documentResponse.json().catch(() => null);
+          if (!documentResponse.ok) {
+            throw new Error(documentPayload?.error || documentPayload?.detail || `No se pudo subir ${type}.`);
+          }
+        }
+        const validationResponse = await fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/enviar-validacion`, { method: "POST" });
+        const validationPayload = await validationResponse.json().catch(() => null);
+        if (!validationResponse.ok) {
+          throw new Error(validationPayload?.error || validationPayload?.detail || "No se pudo enviar el apartado a validación.");
+        }
+        setStatusMessage("Apartado enviado a revisión. El usuario autorizado continuará con el contrato.");
+        setReservaPanelOpen(false);
+        refreshGeojson();
+        return;
+      }
       if (operationId && reservaImporte) {
         const paymentForm = new FormData();
         paymentForm.set("operacion_id", operationId);
@@ -2458,7 +2581,7 @@ export function PropertyMap() {
     } finally {
       setReservaLoading(false);
     }
-  }, [apartadoClient?.id, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, renderContratoPreview, reservaCompradorDatos, reservaCondiciones, reservaCuentaDatos, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, reservaTipoComprador, unidadId]);
+  }, [apartadoClient?.id, apartadoDocumentFiles, canValidateApartado, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, refreshGeojson, renderContratoPreview, reservaCompradorDatos, reservaCondiciones, reservaCuentaDatos, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, reservaTipoComprador, unidadId]);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
@@ -5136,7 +5259,9 @@ export function PropertyMap() {
                               <DialogHeader>
                                 <DialogTitle>Preparar apartado</DialogTitle>
                                 <DialogDescription>
-                                  Guarda el avance mientras reúnes el contrato y el comprobante de pago. Esto no cambia todavía la propiedad a Apartada.
+                                  {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
+                                    ? `Completa el expediente del apartado. Estado: ${apartadoValidationStatus === "firme" ? "Firme" : apartadoValidationStatus === "pendiente_revision" ? "Pendiente de validación" : "Pendiente de captura"}.`
+                                    : "Completa los datos iniciales para preparar el apartado de esta propiedad."}
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
@@ -5358,6 +5483,40 @@ export function PropertyMap() {
                                   <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-condiciones">Condiciones acordadas <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. La reserva se aplicará al precio final)</span></label>
                                   <textarea id="reserva-condiciones" className="min-h-24 w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={reservaCondiciones} onChange={(event) => setReservaCondiciones(event.target.value)} placeholder="Escribe las condiciones acordadas" />
                                 </div>
+                                {!canValidateApartado ? (
+                                  <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
+                                    <div>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Documentos del comprador</p>
+                                      <p className="mt-1 text-xs text-muted-foreground">Adjunta los documentos para que un usuario autorizado revise y formalice el apartado.</p>
+                                    </div>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                      {APARTADO_DOCUMENT_TYPES.map(([type, label, hint]) => (
+                                        <div key={type} className="space-y-1">
+                                          <label className="text-xs font-medium text-foreground" htmlFor={`apartado-document-${type}`}>{label}{type !== "acta_matrimonio" ? " *" : ""}</label>
+                                          <Input id={`apartado-document-${type}`} type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => setApartadoDocumentFiles((current) => ({ ...current, [type]: event.target.files?.[0] || null }))} />
+                                          <p className="text-[0.68rem] text-muted-foreground">{hint}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
+                                    <div>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Revisión del expediente</p>
+                                      <p className="mt-1 text-xs text-muted-foreground">Aprueba cada documento y después valida el apartado como firme.</p>
+                                    </div>
+                                    {apartadoDocumentsLoading ? <p className="text-xs text-muted-foreground">Cargando documentos...</p> : null}
+                                    <div className="space-y-2">
+                                      {APARTADO_DOCUMENT_TYPES.map(([type, label]) => {
+                                        const document = apartadoDocuments.find((item) => item.tipo_documento === type);
+                                        return <div key={type} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border bg-background p-2 text-xs"><span className="font-medium text-foreground">{label}</span><span className={document?.estado_revision === "aprobado" ? "text-emerald-600" : document?.estado_revision === "requiere_correccion" ? "text-rose-600" : "text-amber-600"}>{document?.estado_revision === "aprobado" ? "Aprobado" : document?.estado_revision === "requiere_correccion" ? "Requiere corrección" : document ? "Pendiente" : "No adjunto"}</span>{document ? <div className="flex gap-1">{document.archivo_id ? <a className="rounded border border-input px-2 py-1 text-primary underline" href={`/api/crm/inmobiliaria/operaciones/documentos/archivo/${document.archivo_id}`} target="_blank" rel="noreferrer">Ver</a> : null}<Button type="button" size="sm" variant="outline" onClick={() => void handleReviewApartadoDocument(document.id, "aprobado")}>Aprobar</Button><Button type="button" size="sm" variant="outline" onClick={() => void handleReviewApartadoDocument(document.id, "requiere_correccion")}>Solicitar corrección</Button></div> : null}</div>;
+                                      })}
+                                    </div>
+                                    <Button type="button" onClick={() => void handleMarkApartadoFirme()} disabled={reservaLoading || !apartadoOperationId}>{reservaLoading ? "Validando..." : "Marcar apartado como firme"}</Button>
+                                  </div>
+                                )}
+                                {canValidateApartado && (
+                                <>
                                 <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
                                   <div>
                                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Datos de firma</p>
@@ -5423,12 +5582,14 @@ export function PropertyMap() {
                                     </pre>
                                   )}
                                 </div>
+                                </>
+                                )}
                                 {reservaError && <p className="text-xs text-rose-400">{reservaError}</p>}
                               </div>
                               <div className="flex justify-end gap-2">
                                 <Button type="button" variant="secondary" onClick={() => setReservaPanelOpen(false)}>Cancelar</Button>
                                 <Button type="button" onClick={handleSaveReservaAvance} disabled={reservaLoading}>
-                                  {reservaLoading ? "Guardando..." : "Guardar avance"}
+                                  {reservaLoading ? "Guardando..." : canValidateApartado ? "Guardar avance" : "Enviar a validación"}
                                 </Button>
                               </div>
                             </DialogContent>

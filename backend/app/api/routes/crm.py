@@ -53654,7 +53654,7 @@ async def obtener_operacion_reserva_actual_propiedad_unidad(
     unidad_id: UUID,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
-    _: str = Depends(require_permission("sales.orders.submit")),
+    _: str = Depends(require_any_permission(["sales.orders.submit", "inmobiliaria.apartados.validate"])),
 ) -> dict[str, Any]:
     try:
         operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
@@ -53665,6 +53665,213 @@ async def obtener_operacion_reserva_actual_propiedad_unidad(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_reserva_actual_failed") from exc
     if operation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_reserva_actual_not_found")
+    return {"ok": True, "operacion": operation}
+
+
+@router.get("/propiedad-unidades/{unidad_id}/reserva/documentos")
+async def listar_documentos_apartado_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_any_permission(["sales.orders.submit", "inmobiliaria.apartados.validate"])),
+) -> dict[str, Any]:
+    operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
+        organizacion_id=organizacion_id, unidad_id=unidad_id
+    )
+    if not operation:
+        raise HTTPException(status_code=404, detail="property_reserva_actual_not_found")
+    try:
+        documents = await repo.list_inmobiliaria_operacion_documentos(
+            organizacion_id=organizacion_id,
+            operacion_id=_safe_uuid(operation.get("id")),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="property_apartado_documents_failed") from exc
+    return {"ok": True, "operacion": operation, "documentos": documents}
+
+
+@router.post("/propiedad-unidades/{unidad_id}/reserva/documentos", status_code=status.HTTP_201_CREATED)
+async def subir_documento_apartado_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    tipo_documento: Literal[
+        "acta_nacimiento", "acta_matrimonio", "ine",
+        "constancia_situacion_fiscal", "curp", "comprobante_domicilio"
+    ] = Form(...),
+    file: UploadFile = File(...),
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+) -> dict[str, Any]:
+    operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
+        organizacion_id=organizacion_id, unidad_id=unidad_id
+    )
+    if not operation or not operation.get("id") or not operation.get("cliente_principal_id"):
+        raise HTTPException(status_code=404, detail="property_reserva_actual_not_found")
+    if operation.get("estado") != "apartada":
+        raise HTTPException(status_code=409, detail="property_apartado_document_upload_not_allowed")
+
+    original_name = Path(file.filename or "").name
+    content_type = (file.content_type or "application/octet-stream").lower()
+    allowed_types = {"application/pdf", "image/jpeg", "image/png"}
+    allowed_suffixes = {".pdf", ".jpg", ".jpeg", ".png"}
+    if not original_name or Path(original_name).suffix.lower() not in allowed_suffixes or content_type not in allowed_types:
+        raise HTTPException(status_code=415, detail="property_document_type_not_supported")
+    content = await file.read(10 * 1024 * 1024 + 1)
+    if not content:
+        raise HTTPException(status_code=400, detail="property_document_file_empty")
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="property_document_file_too_large")
+
+    operation_id = _safe_uuid(operation.get("id"))
+    persona_id = _safe_uuid(operation.get("cliente_principal_id"))
+    if not operation_id or not persona_id:
+        raise HTTPException(status_code=502, detail="property_apartado_operation_invalid")
+    storage_path: str | None = None
+    archivo_id: UUID | None = None
+    try:
+        storage_path = await repo.upload_storage_object(
+            bucket="quotes",
+            object_key=f"{organizacion_id}/{operation_id}/documentos_comprador/{tipo_documento}-{uuid4().hex}{Path(original_name).suffix.lower()}",
+            content=content,
+            content_type=content_type,
+        )
+        archivo = await repo.create_file(
+            organizacion_id=organizacion_id,
+            payload={
+                "relacion_tipo": "inmobiliaria_operacion_documento",
+                "relacion_id": str(operation_id),
+                "nombre_original": original_name[:255],
+                "content_type": content_type,
+                "tamano_bytes": len(content),
+                "storage_path": storage_path,
+                "metadata": {"bucket": "quotes", "tipo": tipo_documento},
+                "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+            },
+        )
+        archivo_id = _safe_uuid(archivo.get("id"))
+        if not archivo_id:
+            raise CRMRepositoryError("property_document_file_record_invalid")
+        document = await repo.create_inmobiliaria_operacion_documento(
+            organizacion_id=organizacion_id,
+            payload={
+                "operacion_id": str(operation_id),
+                "persona_id": str(persona_id),
+                "tipo_documento": tipo_documento,
+                "archivo_id": str(archivo_id),
+                "estado_revision": "pendiente",
+                "subido_por_usuario_id": str(usuario_id) if usuario_id else None,
+            },
+        )
+    except (CRMRepositoryError, StorageError) as exc:
+        if archivo_id:
+            try:
+                await repo.delete_file(organizacion_id=organizacion_id, archivo_id=archivo_id)
+            except CRMRepositoryError:
+                logger.warning("property_document_record_cleanup_failed", extra={"archivo_id": str(archivo_id)})
+        if storage_path:
+            try:
+                await repo.delete_storage_object(bucket="quotes", object_path=storage_path)
+            except CRMRepositoryError:
+                logger.warning("property_document_storage_cleanup_failed", extra={"operacion_id": str(operation_id)})
+        raise HTTPException(status_code=502, detail="property_apartado_document_upload_failed") from exc
+    return {"ok": True, "documento": document}
+
+
+@router.post("/propiedad-unidades/{unidad_id}/reserva/enviar-validacion")
+async def enviar_apartado_propiedad_unidad_a_validacion(
+    *,
+    unidad_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+) -> dict[str, Any]:
+    try:
+        operation = await repo.enviar_apartado_validacion(
+            organizacion_id=organizacion_id, unidad_id=unidad_id, usuario_id=usuario_id
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "documents_required" in message:
+            raise HTTPException(status_code=409, detail=message) from exc
+        raise HTTPException(status_code=502, detail="property_apartado_validation_submit_failed") from exc
+    return {"ok": True, "operacion": operation}
+
+
+@router.patch("/inmobiliaria/operaciones/documentos/{documento_id}/revision")
+async def revisar_documento_apartado_inmobiliario(
+    *,
+    documento_id: UUID,
+    estado_revision: Literal["aprobado", "requiere_correccion"] = Form(...),
+    observaciones_revision: str | None = Form(default=None, max_length=2000),
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inmobiliaria.apartados.validate")),
+) -> dict[str, Any]:
+    if not usuario_id:
+        raise HTTPException(status_code=401, detail="auth_required")
+    try:
+        document = await repo.review_inmobiliaria_operacion_documento(
+            organizacion_id=organizacion_id,
+            documento_id=documento_id,
+            estado_revision=estado_revision,
+            usuario_id=usuario_id,
+            observaciones_revision=observaciones_revision,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="property_apartado_document_review_failed") from exc
+    return {"ok": True, "documento": document}
+
+
+@router.get("/inmobiliaria/operaciones/documentos/archivo/{archivo_id}")
+async def descargar_documento_apartado_inmobiliario(
+    *,
+    archivo_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_any_permission(["sales.orders.submit", "inmobiliaria.apartados.validate"])),
+) -> dict[str, Any]:
+    archivo = await repo.get_file(organizacion_id=organizacion_id, archivo_id=archivo_id)
+    storage_path = _clean_text(archivo.get("storage_path")) if archivo else ""
+    if not storage_path:
+        raise HTTPException(status_code=404, detail="property_document_not_found")
+    try:
+        signed_url = await repo.create_signed_storage_url(
+            bucket="quotes", object_path=storage_path, expires_in=300
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="property_document_signed_url_failed") from exc
+    return {"url": signed_url, "expires_in": 300}
+
+
+@router.post("/inmobiliaria/operaciones/{operacion_id}/validar-firme")
+async def validar_apartado_inmobiliario_firme(
+    *,
+    operacion_id: UUID,
+    observaciones: str | None = Form(default=None, max_length=2000),
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inmobiliaria.apartados.validate")),
+) -> dict[str, Any]:
+    if not usuario_id:
+        raise HTTPException(status_code=401, detail="auth_required")
+    try:
+        operation = await repo.validar_apartado_firme(
+            organizacion_id=organizacion_id,
+            operacion_id=operacion_id,
+            usuario_id=usuario_id,
+            observaciones=observaciones,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if any(marker in message for marker in ("documents_not_approved", "signed_contract_required")):
+            raise HTTPException(status_code=409, detail=message) from exc
+        raise HTTPException(status_code=502, detail="property_apartado_firm_validation_failed") from exc
     return {"ok": True, "operacion": operation}
 
 
@@ -53710,7 +53917,7 @@ async def listar_plantillas_contrato_inmobiliario(
     *,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
-    _: str = Depends(require_permission("settings.manage")),
+    _: str = Depends(require_any_permission(["settings.manage", "sales.orders.submit", "inmobiliaria.apartados.validate"])),
     tipo_operacion: Literal["reserva", "compraventa", "otro"] | None = Query(default=None),
     solo_activas: bool = Query(default=True),
 ) -> list[InmobiliariaContratoPlantilla]:
@@ -53791,7 +53998,7 @@ async def guardar_contrato_operacion_inmobiliaria(
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     usuario_id: UUID | None = Depends(optional_usuario_id),
-    _: str = Depends(require_permission("sales.orders.submit")),
+    _: str = Depends(require_any_permission(["sales.orders.submit", "inmobiliaria.apartados.validate"])),
 ) -> dict[str, Any]:
     if not contenido_generado.strip():
         raise HTTPException(status_code=400, detail="property_contract_content_required")

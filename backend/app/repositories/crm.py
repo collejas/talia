@@ -1647,10 +1647,11 @@ class CRMRepository:
                 "apartado_vencimiento_en,apartado_motivo,forma_adquisicion,"
                 "precio_ofrecido,precio_acordado,precio_final,moneda,"
                 "fecha_limite_reserva,reserva_importe,condiciones_reserva,tipo_comprador,"
+                "estado_validacion,enviado_a_validacion_en,enviado_a_validacion_por,"
+                "validado_en,validado_por_usuario_id,observaciones_validacion,"
                 "cliente:personas!operaciones_inmobiliarias_cliente_principal_id_fkey("
                 "id,nombre,nombre_completo,apellido_paterno,apellido_materno,"
                 "nacionalidad,ocupacion,estado_civil,curp,rfc,tipo_identificacion,"
-                "numero_identificacion,correo_principal,correo_secundario,"
                 "telefono_principal_e164,telefono_movil_1_e164,entidad,municipio,pais"
                 ")"
             ),
@@ -1664,6 +1665,124 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError("inmobiliaria_active_operation_invalid_response")
         return data[0] if data and isinstance(data[0], dict) else None
+
+    async def enviar_apartado_validacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+        usuario_id: UUID | None,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_enviar_apartado_validacion",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_unidad_id": str(unidad_id),
+                "p_usuario_id": str(usuario_id) if usuario_id else None,
+            },
+        )
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError("property_apartado_validation_invalid_response")
+
+    async def validar_apartado_firme(
+        self,
+        *,
+        organizacion_id: UUID,
+        operacion_id: UUID,
+        usuario_id: UUID,
+        observaciones: str | None,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_validar_apartado_firme",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_operacion_id": str(operacion_id),
+                "p_usuario_id": str(usuario_id),
+                "p_observaciones": observaciones,
+            },
+        )
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError("property_apartado_firme_invalid_response")
+
+    async def create_inmobiliaria_operacion_documento(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            "/rest/v1/inmobiliaria_operacion_documentos",
+            params={"on_conflict": "organizacion_id,operacion_id,persona_id,tipo_documento"},
+            json={"organizacion_id": str(organizacion_id), **payload},
+            prefer="return=representation,resolution=merge-duplicates",
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"inmobiliaria_operation_document_invalid_response:{data!r}")
+        return data[0]
+
+    async def list_inmobiliaria_operacion_documentos(
+        self,
+        *,
+        organizacion_id: UUID,
+        operacion_id: UUID | None = None,
+        estado_revision: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "select": (
+                "id,operacion_id,persona_id,tipo_documento,archivo_id,estado_revision,"
+                "observaciones_revision,subido_por_usuario_id,revisado_por_usuario_id,"
+                "subido_en,revisado_en"
+            ),
+            "order": "subido_en.desc",
+            "limit": str(max(1, min(limit, 500))),
+        }
+        if operacion_id:
+            params["operacion_id"] = f"eq.{operacion_id}"
+        if estado_revision:
+            params["estado_revision"] = f"eq.{estado_revision}"
+        response = await self._request(
+            "GET", "/rest/v1/inmobiliaria_operacion_documentos", params=params
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"inmobiliaria_operation_documents_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def review_inmobiliaria_operacion_documento(
+        self,
+        *,
+        organizacion_id: UUID,
+        documento_id: UUID,
+        estado_revision: str,
+        usuario_id: UUID,
+        observaciones_revision: str | None,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "PATCH",
+            "/rest/v1/inmobiliaria_operacion_documentos",
+            params={"organizacion_id": f"eq.{organizacion_id}", "id": f"eq.{documento_id}"},
+            json={
+                "estado_revision": estado_revision,
+                "observaciones_revision": observaciones_revision,
+                "revisado_por_usuario_id": str(usuario_id),
+                "revisado_en": datetime.now(timezone.utc).isoformat(),
+            },
+            prefer="return=representation",
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError("inmobiliaria_operation_document_not_found")
+        return data[0]
 
     async def guardar_pago_reserva(
         self,
@@ -3891,6 +4010,25 @@ class CRMRepository:
         if not isinstance(row, dict):
             raise CRMRepositoryError(f"Respuesta inválida al crear archivo: {row!r}")
         return row
+
+    async def get_file(
+        self,
+        *,
+        organizacion_id: UUID,
+        archivo_id: UUID,
+    ) -> dict[str, Any] | None:
+        response = await self._request(
+            "GET",
+            "/rest/v1/archivos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{archivo_id}",
+                "select": "id,storage_path,metadata,nombre_original,content_type",
+                "limit": "1",
+            },
+        )
+        data = response.json()
+        return data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
 
     async def delete_file(
         self,
