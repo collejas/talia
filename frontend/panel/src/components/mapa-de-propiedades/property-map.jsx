@@ -2317,12 +2317,14 @@ export function PropertyMap() {
     if (!isReservaPanelOpen || !unidadId) return undefined;
     const controller = new AbortController();
     const status = (mapboxProps?.status ?? "").toString().toLowerCase();
+    const operationStatus = (mapboxProps?.operation_status ?? "").toString().toLowerCase();
     setReservaContactoLoading(true);
 
     const loadContact = async () => {
       try {
         let contactId = apartadoClient?.id;
-        if (status === "apartado" && !contactId) {
+        const shouldLoadOperation = status === "apartado" || operationStatus === "borrador";
+        if (shouldLoadOperation) {
           const operationResponse = await fetch(
             `/api/crm/propiedad-unidades/${unidadId}/reserva/actual`,
             { signal: controller.signal },
@@ -2331,6 +2333,14 @@ export function PropertyMap() {
           if (operationResponse.ok) {
             const operation = operationPayload?.operacion;
             contactId = operation?.cliente_principal_id;
+            if (operation?.id) setApartadoOperationId(operation.id);
+            if (operation?.estado_validacion) setApartadoValidationStatus(operation.estado_validacion);
+            if (operation?.precio_acordado != null) setReservaPrecio(String(operation.precio_acordado));
+            if (operation?.fecha_limite_reserva) setReservaFechaLimite(String(operation.fecha_limite_reserva).slice(0, 10));
+            if (operation?.forma_adquisicion) setReservaForma(operation.forma_adquisicion);
+            if (operation?.reserva_importe != null) setReservaImporte(String(operation.reserva_importe));
+            if (operation?.condiciones_reserva) setReservaCondiciones(operation.condiciones_reserva);
+            if (operation?.tipo_comprador) setReservaTipoComprador(operation.tipo_comprador);
             if (operation?.cliente) setApartadoClient(operation.cliente);
           }
         }
@@ -2369,7 +2379,7 @@ export function PropertyMap() {
 
     loadContact();
     return () => controller.abort();
-  }, [apartadoClient?.id, isReservaPanelOpen, mapboxProps?.status, unidadId]);
+  }, [apartadoClient?.id, isReservaPanelOpen, mapboxProps?.operation_status, mapboxProps?.status, unidadId]);
 
   useEffect(() => {
     if (!isReservaPanelOpen) return undefined;
@@ -5225,10 +5235,14 @@ export function PropertyMap() {
                                 style={{
                                   backgroundColor: STATUS_COLORS.apartado,
                                 }}
-                                onClick={handleOpenApartadoPanel}
+                                onClick={mapboxProps?.operation_status === "borrador" ? handleOpenReservaPanel : handleOpenApartadoPanel}
                                 disabled={statusLoading || apartadoLoading}
                               >
-                                {apartadoLoading ? "Guardando..." : "Reservado"}
+                                {apartadoLoading
+                                  ? "Guardando..."
+                                  : mapboxProps?.operation_status === "borrador"
+                                    ? "Continuar reservado"
+                                    : "Reservado"}
                               </button>
                               <button
                                 type="button"

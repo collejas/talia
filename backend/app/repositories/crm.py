@@ -1674,8 +1674,7 @@ class CRMRepository:
     ) -> tuple[list[dict[str, Any]], int]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "estado": "eq.apartada",
-            "estado_validacion": "eq.pendiente_revision",
+            "or": "(estado.eq.borrador,and(estado.eq.apartada,estado_validacion.eq.pendiente_revision))",
             "order": "enviado_a_validacion_en.asc,actualizado_en.asc",
             "limit": str(max(1, min(limit, 100))),
             "select": (

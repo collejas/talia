@@ -6,6 +6,9 @@ const STATUS_COLORS: Record<string, string> = {
   disponible: "#2ECC71",
   apartado: "#F1C40F",
   reservado: "#F97316",
+  reservado_borrador: "#F59E0B",
+  apartado_revision: "#F8D568",
+  apartado_firme: "#F1C40F",
   vendido: "#E74C3C",
 };
 
@@ -14,11 +17,14 @@ const buildError = (message: string, status = 500) =>
 
 const normalizeFeature = (feature: Record<string, unknown>) => {
   const properties = (feature?.properties ?? {}) as Record<string, unknown>;
+  const displayStatus = typeof properties.display_status === "string" ? properties.display_status : undefined;
   const status = typeof properties.status === "string" ? properties.status : undefined;
-  const statusColor = status && STATUS_COLORS[status]
-    ? STATUS_COLORS[status]
+  const statusColor = displayStatus && STATUS_COLORS[displayStatus]
+    ? STATUS_COLORS[displayStatus]
     : typeof properties.status_color === "string"
     ? properties.status_color
+    : status && STATUS_COLORS[status]
+    ? STATUS_COLORS[status]
     : "#95A5A6";
   const color =
     (typeof properties.color === "string" && properties.color) ||
