@@ -1799,16 +1799,6 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
           </Card>
         </main>
 
-        {form.canal === "whatsapp" ? (
-          <aside className="space-y-6 xl:sticky xl:top-4">
-            <TemplateAiAssistant
-              canal={form.canal}
-              campanaId={form.campanaId || null}
-              variableValues={aiVariableValues}
-              onApply={applyDraft}
-            />
-          </aside>
-        ) : null}
       </div> : null}
 
       {!needsEmailCreationMode && form.canal !== "correo" ? <Card>
