@@ -104,7 +104,7 @@
 
 {
   "name": "close_lead",
-  "description": "Persistir el avance operativo del lead cuando ya existe teléfono de WhatsApp y hay contexto explícito suficiente para redactar una necesidad/interés y notas breves. En este tenant no esperes nombre, correo ni empresa para llamar esta función. La función puede notificar al vendedor asignado, pero no termina ni bloquea la conversación: el asistente debe seguir preguntando y registrando datos de la oportunidad. Si WhatsApp tiene habilitado el envío de datos del asesor al cliente, el backend lo realiza una sola vez y no debe repetirse en el escalamiento.",
+  "description": "Persistir el avance operativo del lead en cuanto exista el teléfono de WhatsApp; en este tenant el número de origen es suficiente para llamar esta función, incluso si el primer mensaje solo es un saludo. Usa necesidad_proposito y notes neutrales y breves cuando todavía no haya contexto comercial. No esperes nombre, correo, empresa ni interés adicional. La función puede notificar al vendedor asignado, pero no termina ni bloquea la conversación: el asistente debe seguir preguntando y registrando datos de la oportunidad. Si WhatsApp tiene habilitado el envío de datos del asesor al cliente, el backend lo realiza una sola vez y no debe repetirse en el escalamiento.",
   "strict": true,
   "parameters": {
     "type": "object",
