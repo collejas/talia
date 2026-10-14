@@ -5511,7 +5511,44 @@ class CRMRepository:
         if not quote_id:
             raise CRMRepositoryError("quote_create_missing_id")
         if items:
-            await self._insert_quote_items(quote_id=UUID(str(quote_id)), items=items)
+            try:
+                await self._insert_quote_items(
+                    organizacion_id=organizacion_id,
+                    quote_id=UUID(str(quote_id)),
+                    items=items,
+                )
+            except Exception:
+                # La cabecera acaba de crearse y todavía no se ha entregado al
+                # cliente. Evitamos dejar una cotización huérfana si falla el
+                # lote de conceptos.
+                try:
+                    cleanup_response = await self._request_service_role(
+                        "DELETE",
+                        "/rest/v1/cotizaciones",
+                        params={
+                            "id": f"eq.{quote_id}",
+                            "organizacion_id": f"eq.{organizacion_id}",
+                        },
+                        organizacion_id=organizacion_id,
+                    )
+                    if cleanup_response.status_code >= 400:
+                        logger.error(
+                            "quote_header_cleanup_failed",
+                            extra={
+                                "quote_id": str(quote_id),
+                                "organizacion_id": str(organizacion_id),
+                                "status_code": cleanup_response.status_code,
+                            },
+                        )
+                except Exception:
+                    logger.exception(
+                        "quote_header_cleanup_exception",
+                        extra={
+                            "quote_id": str(quote_id),
+                            "organizacion_id": str(organizacion_id),
+                        },
+                    )
+                raise
         return await self.get_quote_entry(
             organizacion_id=organizacion_id,
             quote_id=UUID(str(quote_id)),
@@ -5520,6 +5557,7 @@ class CRMRepository:
     async def _insert_quote_items(
         self,
         *,
+        organizacion_id: UUID,
         quote_id: UUID,
         items: list[dict[str, Any]],
     ) -> None:
@@ -5527,6 +5565,7 @@ class CRMRepository:
         for index, item in enumerate(items, start=1):
             payload = dict(item)
             payload["cotizacion_id"] = str(quote_id)
+            payload["organizacion_id"] = str(organizacion_id)
             if not isinstance(payload.get("orden"), int) or payload["orden"] <= 0:
                 payload["orden"] = index
             rows.append(payload)

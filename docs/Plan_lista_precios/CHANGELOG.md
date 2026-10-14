@@ -178,3 +178,14 @@ El historial de cambios comienza desde la aplicación de la migración. Los camb
 - La orden de compra carga únicamente los productos asociados al proveedor
   seleccionado y toma de esa relación el costo sugerido y el identificador del
   proveedor-producto.
+
+## 2026-10-14 — Líneas de conceptos en cotizaciones
+
+- Se corrigió la validación de vendibilidad de productos en líneas de
+  cotización: ahora resuelve la organización desde la cotización aunque el
+  cliente no envíe `organizacion_id` en cada línea.
+- El repositorio envía explícitamente la organización en cada concepto y
+  elimina la cabecera recién creada si falla la inserción del lote, evitando
+  cotizaciones huérfanas que después generen PDFs sin conceptos.
+- Se reparó la cotización de Adriana afectada por este error con la línea del
+  producto registrado en la solicitud original.
