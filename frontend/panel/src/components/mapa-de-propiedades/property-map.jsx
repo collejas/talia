@@ -4931,7 +4931,7 @@ export function PropertyMap() {
                                 onClick={handleOpenApartadoPanel}
                                 disabled={statusLoading || apartadoLoading}
                               >
-                                {apartadoLoading ? "Reservando..." : "Reservar"}
+                                {apartadoLoading ? "Guardando..." : "Reservado"}
                               </button>
                               <button
                                 type="button"
@@ -4942,7 +4942,7 @@ export function PropertyMap() {
                                 onClick={handleOpenReservaPanel}
                                 disabled={statusLoading || reservaLoading}
                               >
-                                {reservaLoading ? "Preparando..." : "Apartar"}
+                                {reservaLoading ? "Preparando..." : "Apartado"}
                               </button>
                               <button
                                 type="button"
@@ -5241,7 +5241,7 @@ export function PropertyMap() {
                                   onClick={handleOpenReservaPanel}
                                   disabled={reservaLoading}
                                 >
-                                  {reservaLoading ? "Guardando..." : "Apartar"}
+                                  {reservaLoading ? "Guardando..." : "Apartado"}
                                 </button>
                               </div>
                               {statusMessage && <p className="text-[0.65rem] text-emerald-300">{statusMessage}</p>}
@@ -5257,12 +5257,17 @@ export function PropertyMap() {
                           >
                             <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
                               <DialogHeader>
-                                <DialogTitle>Preparar apartado</DialogTitle>
+                                <DialogTitle>Completar apartado</DialogTitle>
                                 <DialogDescription>
                                   {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
                                     ? `Completa el expediente del apartado. Estado: ${apartadoValidationStatus === "firme" ? "Firme" : apartadoValidationStatus === "pendiente_revision" ? "Pendiente de validación" : "Pendiente de captura"}.`
                                     : "Completa los datos iniciales para preparar el apartado de esta propiedad."}
                                 </DialogDescription>
+                                {!canValidateApartado && (
+                                  <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
+                                    En este formulario, después de los datos del comprador, encontrarás la sección <strong>Documentos del comprador</strong> para adjuntar acta de nacimiento, acta de matrimonio si aplica, INE, constancia fiscal, CURP y comprobante de domicilio.
+                                  </p>
+                                )}
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div className="space-y-1">
@@ -5410,6 +5415,21 @@ export function PropertyMap() {
                                     </div>
                                   ) : null}
                                 </div>
+                                <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
+                                  <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Documentos del comprador</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">Adjunta aquí la documentación del comprador para que el usuario autorizado revise y formalice el apartado.</p>
+                                  </div>
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    {APARTADO_DOCUMENT_TYPES.map(([type, label, hint]) => (
+                                      <div key={type} className="space-y-1">
+                                        <label className="text-xs font-medium text-foreground" htmlFor={`apartado-document-${type}`}>{label}{type !== "acta_matrimonio" ? " *" : ""}</label>
+                                        <Input id={`apartado-document-${type}`} type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => setApartadoDocumentFiles((current) => ({ ...current, [type]: event.target.files?.[0] || null }))} />
+                                        <p className="text-[0.68rem] text-muted-foreground">{hint}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <div className="space-y-1">
                                     <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-precio">Precio acordado <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. 3,500,000)</span></label>
@@ -5483,23 +5503,7 @@ export function PropertyMap() {
                                   <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-condiciones">Condiciones acordadas <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. La reserva se aplicará al precio final)</span></label>
                                   <textarea id="reserva-condiciones" className="min-h-24 w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={reservaCondiciones} onChange={(event) => setReservaCondiciones(event.target.value)} placeholder="Escribe las condiciones acordadas" />
                                 </div>
-                                {!canValidateApartado ? (
-                                  <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
-                                    <div>
-                                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Documentos del comprador</p>
-                                      <p className="mt-1 text-xs text-muted-foreground">Adjunta los documentos para que un usuario autorizado revise y formalice el apartado.</p>
-                                    </div>
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                      {APARTADO_DOCUMENT_TYPES.map(([type, label, hint]) => (
-                                        <div key={type} className="space-y-1">
-                                          <label className="text-xs font-medium text-foreground" htmlFor={`apartado-document-${type}`}>{label}{type !== "acta_matrimonio" ? " *" : ""}</label>
-                                          <Input id={`apartado-document-${type}`} type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" onChange={(event) => setApartadoDocumentFiles((current) => ({ ...current, [type]: event.target.files?.[0] || null }))} />
-                                          <p className="text-[0.68rem] text-muted-foreground">{hint}</p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : (
+                                {canValidateApartado && (
                                   <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
                                     <div>
                                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Revisión del expediente</p>
