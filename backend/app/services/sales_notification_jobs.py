@@ -233,7 +233,10 @@ class SalesNotificationJobsRunner:
         persona_id = _clean_text(context_payload.get("persona_id"))
         if not persona_id:
             persona_id = _clean_text(context_payload.get("contact_id"))
-        channel = _clean_text(context_payload.get("channel")) or "webchat"
+        # El canal de la fila es la fuente persistida del job. El payload se
+        # conserva como compatibilidad para jobs antiguos, pero no debe poder
+        # cambiar el enrutamiento ni la auditoría del canal.
+        channel = _clean_text(row.get("channel")) or _clean_text(context_payload.get("channel")) or "webchat"
         trigger = _clean_text(payload.get("trigger")) or _clean_text(row.get("trigger")) or "unknown_trigger"
         if not conversation_id or not persona_id:
             await self._fail_job(

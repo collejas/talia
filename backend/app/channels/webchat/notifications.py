@@ -298,6 +298,7 @@ async def notify_sales_rep(
     raise_on_delivery_error: bool = False,
 ) -> None:
     channel_value = str(getattr(context, "channel", None) or "webchat").strip().lower() or "webchat"
+    notification_channel = channel_value if channel_value in {"whatsapp", "webchat"} else "webchat"
     persona_value = getattr(context, "persona_id", None)
     persona_id = str(persona_value) if persona_value else ""
     if not persona_id:
@@ -635,7 +636,7 @@ async def notify_sales_rep(
                 "meta_template_name": template_name,
                 "meta_template_language": template_language,
                 "message_role": "notification",
-                "notification_channel": "webchat",
+                "notification_channel": notification_channel,
             },
         )
     except StorageError as exc:
@@ -708,7 +709,7 @@ async def notify_sales_rep(
                 trigger=f"notify_{trigger}",
                 metadata=assignment_metadata,
                 notification_sid=message_sid,
-                canal="webchat",
+                canal=notification_channel,
             )
     except (CRMRepositoryError, ValueError, TypeError, AttributeError) as exc:
         logger.warning(
