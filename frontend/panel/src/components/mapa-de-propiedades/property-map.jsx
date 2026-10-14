@@ -50,6 +50,20 @@ const STATUS_COLORS = {
   vendido: "#E74C3C",
 };
 
+// Los valores internos conservan su significado y compatibilidad histórica.
+// La etiqueta visible cambia para reflejar el flujo actual: Reservado → Apartado.
+const STATUS_LABELS = {
+  disponible: "Disponible",
+  apartado: "Reservado",
+  reservado: "Apartado",
+  vendido: "Vendido",
+};
+
+function getStatusLabel(status) {
+  const normalized = (status ?? "").toString().trim().toLowerCase();
+  return STATUS_LABELS[normalized] ?? (normalized ? normalized : "Sin estado");
+}
+
 const DEFAULT_CENTER_MAPBOX = [-99.1332, 19.4326];
 const DEFAULT_CENTER_LEAFLET = [23.6345, -102.5528];
 const TILE_SOURCE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -1705,7 +1719,7 @@ export function PropertyMap() {
           )}</div>
           <div class="mt-1 space-y-0.5 text-[0.7rem] text-slate-700">
             <div><span class="font-semibold text-emerald-700">Vendidas:</span> ${stats.vendidas ?? 0}</div>
-            <div><span class="font-semibold text-amber-700">Apartadas:</span> ${stats.apartadas ?? 0}</div>
+            <div><span class="font-semibold text-amber-700">Bloqueadas:</span> ${stats.apartadas ?? 0}</div>
             <div><span class="font-semibold text-sky-700">Disponibles:</span> ${stats.disponibles ?? 0}</div>
           </div>
         </div>
@@ -1951,7 +1965,7 @@ export function PropertyMap() {
     return saleLogs.filter((sale) => allowedUnitIds.has(String(sale?.unidad_id ?? "")));
   }, [mapboxKind, mapboxPanelFeature, mapboxSalesSummary, saleLogs, unidadId]);
   const mapboxStatusLabel =
-    typeof mapboxProps?.status === "string" ? mapboxProps.status.toUpperCase() : null;
+    typeof mapboxProps?.status === "string" ? getStatusLabel(mapboxProps.status).toUpperCase() : null;
   const mapboxPriceLabel =
     mapboxProps?.precio != null
       ? new Intl.NumberFormat("es-MX", {
@@ -2090,7 +2104,7 @@ export function PropertyMap() {
 
   const handleConfirmApartado = useCallback(async () => {
     if (!unidadId || !apartadoClient?.id || !apartadoMotivo) {
-      setApartadoError("Selecciona el cliente y el motivo del apartado.");
+      setApartadoError("Selecciona el cliente y el motivo del bloqueo temporal.");
       return;
     }
     setApartadoLoading(true);
@@ -2112,11 +2126,11 @@ export function PropertyMap() {
       if (!response.ok) {
         throw new Error(payload?.error || payload?.detail || "property_apartado_failed");
       }
-      setStatusMessage("Propiedad apartada correctamente.");
+      setStatusMessage("Propiedad reservada correctamente.");
       setApartadoPanelOpen(false);
       refreshGeojson();
     } catch (error) {
-      setApartadoError(error instanceof Error ? error.message : "property_apartado_failed");
+      setApartadoError(error instanceof Error ? error.message : "property_reservado_failed");
     } finally {
       setApartadoLoading(false);
     }
@@ -2477,7 +2491,7 @@ export function PropertyMap() {
         throw new Error(payload?.detail || payload?.error || "update_status_failed");
       }
       setStatusMessage(
-        `Unidad ${statusModalTarget === "apartado" ? "apartada" : "reservada"} correctamente.`,
+        `Unidad ${getStatusLabel(statusModalTarget).toLowerCase()} correctamente.`,
       );
       setStatusModalOpen(false);
       setStatusModalTarget(null);
@@ -4706,7 +4720,7 @@ export function PropertyMap() {
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                              <span>Apartado:</span>
+                              <span>Reservado:</span>
                               <span className="font-semibold">
                                 {mapboxApartadoValueLabel ?? "Sin precio"}
                                 {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
@@ -4717,7 +4731,7 @@ export function PropertyMap() {
                               </span>
                             </div>
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
-                              <span>Reservado:</span>
+                              <span>Apartado:</span>
                               <span className="font-semibold">
                                 {mapboxReservadoValueLabel ?? "Sin precio"}
                                 {mapboxSalesSummary && mapboxSalesSummary.totalValue > 0
@@ -4794,7 +4808,7 @@ export function PropertyMap() {
                                 onClick={handleOpenApartadoPanel}
                                 disabled={statusLoading || apartadoLoading}
                               >
-                                {apartadoLoading ? "Apartando..." : "Apartar"}
+                                {apartadoLoading ? "Reservando..." : "Reservar"}
                               </button>
                               <button
                                 type="button"
@@ -4805,7 +4819,7 @@ export function PropertyMap() {
                                 onClick={handleOpenReservaPanel}
                                 disabled={statusLoading || reservaLoading}
                               >
-                                {reservaLoading ? "Preparando..." : "Reservar"}
+                                {reservaLoading ? "Preparando..." : "Apartar"}
                               </button>
                               <button
                                 type="button"
@@ -4839,22 +4853,22 @@ export function PropertyMap() {
                               if (!open) setApartadoError(null);
                             }}
                           >
-                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-white text-slate-900 sm:max-w-md dark:bg-slate-950 dark:text-slate-100">
+                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
                               <DialogHeader>
-                                <DialogTitle>Apartar propiedad</DialogTitle>
+                                <DialogTitle>Reservar propiedad</DialogTitle>
                                 <DialogDescription>
-                                  Bloqueo temporal sin pago ni contrato. Completa el apartado en menos de un minuto.
+                                  Bloqueo temporal sin pago ni contrato. Completa el bloqueo en menos de un minuto.
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
                                 <div className="space-y-1">
-                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="apartado-client-search">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-foreground" htmlFor="apartado-client-search">
                                     Cliente principal
                                   </label>
                                   {apartadoClient ? (
-                                    <div className="flex items-center justify-between rounded border border-emerald-500/50 bg-emerald-950/30 px-3 py-2 text-sm text-white">
+                                    <div className="flex items-center justify-between rounded border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">
                                       <span className="truncate">{apartadoClient.nombre || apartadoClient.nombre_completo}</span>
-                                      <button type="button" className="ml-2 text-xs text-slate-300 underline" onClick={() => setApartadoClient(null)}>
+                                      <button type="button" className="ml-2 text-xs text-primary underline" onClick={() => setApartadoClient(null)}>
                                         Cambiar
                                       </button>
                                     </div>
@@ -4866,14 +4880,14 @@ export function PropertyMap() {
                                         onChange={(event) => setApartadoClientQuery(event.target.value)}
                                         placeholder="Busca por nombre, correo o teléfono"
                                       />
-                                      {apartadoClientsLoading && <p className="text-xs text-slate-400">Buscando...</p>}
+                                      {apartadoClientsLoading && <p className="text-xs text-muted-foreground">Buscando...</p>}
                                       {apartadoClients.length > 0 && (
-                                        <div className="max-h-40 overflow-auto rounded border border-slate-800 bg-slate-950">
+                                          <div className="max-h-40 overflow-auto rounded border border-border bg-card">
                                           {apartadoClients.map((client) => (
                                             <button
                                               key={client.id}
                                               type="button"
-                                              className="block w-full px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800"
+                                              className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
                                               onClick={() => {
                                                 setApartadoClient(client);
                                                 setApartadoClientQuery("");
@@ -4893,20 +4907,20 @@ export function PropertyMap() {
                                 </div>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <div className="space-y-1">
-                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="apartado-hours">
+                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-foreground" htmlFor="apartado-hours">
                                       Tiempo de apartado
                                     </label>
-                                    <select id="apartado-hours" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={apartadoHours} onChange={(event) => setApartadoHours(event.target.value)}>
+                                    <select id="apartado-hours" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={apartadoHours} onChange={(event) => setApartadoHours(event.target.value)}>
                                       <option value="24">24 horas</option>
                                       <option value="48">48 horas</option>
                                       <option value="72">72 horas</option>
                                     </select>
                                   </div>
                                   <div className="space-y-1">
-                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="apartado-forma">
+                                    <label className="text-[0.65rem] uppercase tracking-[0.2em] text-foreground" htmlFor="apartado-forma">
                                       Forma de compra
                                     </label>
-                                    <select id="apartado-forma" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={apartadoForma} onChange={(event) => setApartadoForma(event.target.value)}>
+                                    <select id="apartado-forma" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={apartadoForma} onChange={(event) => setApartadoForma(event.target.value)}>
                                       <option value="por_definir">Por definir</option>
                                       <option value="contado">Contado</option>
                                       <option value="credito">Crédito</option>
@@ -4916,10 +4930,10 @@ export function PropertyMap() {
                                   </div>
                                 </div>
                                 <div className="space-y-1">
-                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-slate-400" htmlFor="apartado-reason">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-foreground" htmlFor="apartado-reason">
                                     Motivo
                                   </label>
-                                  <select id="apartado-reason" className="w-full rounded border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm text-white" value={apartadoMotivo} onChange={(event) => setApartadoMotivo(event.target.value)}>
+                                  <select id="apartado-reason" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={apartadoMotivo} onChange={(event) => setApartadoMotivo(event.target.value)}>
                                     <option value="">Selecciona un motivo</option>
                                     <option value="Validar financiamiento">Validar financiamiento</option>
                                     <option value="Consultar con la familia">Consultar con la familia</option>
@@ -4934,7 +4948,7 @@ export function PropertyMap() {
                                   Cancelar
                                 </Button>
                                 <Button type="button" onClick={handleConfirmApartado} disabled={apartadoLoading || !apartadoClient || !apartadoMotivo}>
-                                  {apartadoLoading ? "Apartando..." : "Confirmar apartado"}
+                                  {apartadoLoading ? "Reservando..." : "Confirmar reserva"}
                                 </Button>
                               </div>
                             </DialogContent>
@@ -5025,7 +5039,7 @@ export function PropertyMap() {
                               <DialogHeader>
                                 <DialogTitle>
                                   Vincular oportunidad para{" "}
-                                  {statusModalTarget === "apartado" ? "apartado" : "reserva"}
+                                  {getStatusLabel(statusModalTarget).toLowerCase()}
                                 </DialogTitle>
                                 <DialogDescription>
                                   Antes de guardar el estado comercial, selecciona la oportunidad que respalda
@@ -5085,7 +5099,7 @@ export function PropertyMap() {
                                 >
                                   {statusLoading
                                     ? "Actualizando..."
-                                    : `Confirmar ${statusModalTarget === "apartado" ? "apartado" : "reserva"}`}
+                                    : `Confirmar ${getStatusLabel(statusModalTarget).toLowerCase()}`}
                                 </Button>
                               </div>
                             </DialogContent>
@@ -5104,7 +5118,7 @@ export function PropertyMap() {
                                   onClick={handleOpenReservaPanel}
                                   disabled={reservaLoading}
                                 >
-                                  {reservaLoading ? "Guardando..." : "Reservar"}
+                                  {reservaLoading ? "Guardando..." : "Apartar"}
                                 </button>
                               </div>
                               {statusMessage && <p className="text-[0.65rem] text-emerald-300">{statusMessage}</p>}
@@ -5120,9 +5134,9 @@ export function PropertyMap() {
                           >
                             <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
                               <DialogHeader>
-                                <DialogTitle>Preparar reserva</DialogTitle>
+                                <DialogTitle>Preparar apartado</DialogTitle>
                                 <DialogDescription>
-                                  Guarda el avance mientras reúnes el contrato y el comprobante de pago. Esto no cambia todavía la propiedad a Reservada.
+                                  Guarda el avance mientras reúnes el contrato y el comprobante de pago. Esto no cambia todavía la propiedad a Apartada.
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
@@ -5130,7 +5144,7 @@ export function PropertyMap() {
                                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Comprador y condiciones</p>
                                   <p className="text-sm text-foreground">
                                     {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
-                                      ? "La información del cliente principal ya está ligada al apartado."
+                                      ? "La información del cliente principal ya está ligada al reservado."
                                       : "Completa los datos iniciales de la reserva para continuar con la operación."}
                                   </p>
                                 </div>

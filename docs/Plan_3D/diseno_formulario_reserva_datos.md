@@ -3,9 +3,19 @@
 Fecha: 2026-10-10 (UTC)  
 Estado: Definición funcional
 
+## Nombres visibles vigentes
+
+Este documento conserva los nombres técnicos de reserva para identificar la
+operación, pero en la interfaz se muestran así:
+
+- **Reservado:** bloqueo temporal inicial, sin pago ni contrato.
+- **Apartado:** formalización con contrato, pago y expediente.
+
+El orden visible es: **Disponible → Reservado → Apartado → Vendido**.
+
 ## Objetivo
 
-Definir los datos que debe mostrar y solicitar el formulario de **Reservar
+Definir los datos que debe mostrar y solicitar el formulario de **Apartar
 propiedad**, evitando que el agente vuelva a capturar información que ya existe
 en el CRM.
 
@@ -40,8 +50,8 @@ debe existir internamente, pero no debe saturar el formulario inicial.
 
 Como referencia de usabilidad:
 
-- **Apartado:** debe completarse en aproximadamente 30 a 60 segundos.
-- **Reserva:** debe avanzar por secciones cortas y progresivas.
+- **Reservado:** debe completarse en aproximadamente 30 a 60 segundos.
+- **Apartado:** debe avanzar por secciones cortas y progresivas.
 - **Contrato:** debe utilizar los datos ya capturados, sin volver a escribirlos.
 - **Confirmación:** debe explicar los pendientes en lenguaje directo.
 
@@ -436,7 +446,7 @@ No debe:
 - Extender automáticamente el apartado.
 - Considerar confirmado un pago únicamente porque se capturó un importe.
 
-### Confirmar reserva
+### Confirmar apartado
 
 Debe validar los requisitos configurados para la inmobiliaria antes de cambiar
 la propiedad a `reservada`.

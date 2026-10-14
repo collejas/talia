@@ -818,8 +818,8 @@ function buildPropertyExportCsv(
 
 const UNIDAD_STATUS_OPTIONS = [
   { value: "disponible", label: "Disponible" },
-  { value: "apartado", label: "Apartado" },
-  { value: "reservado", label: "Reservado" },
+  { value: "apartado", label: "Reservado" },
+  { value: "reservado", label: "Apartado" },
   { value: "vendido", label: "Vendido" },
   { value: "bloqueado", label: "Bloqueado" },
 ] as const;

@@ -1,7 +1,27 @@
-# Plan de operaciones inmobiliarias: Apartado, Reservado y Vendido
+# Plan de operaciones inmobiliarias: Reservado, Apartado y Vendido
 
-Fecha: 2026-10-10 (UTC)  
+Fecha: 2026-10-14 (UTC)
 Estado: Definición funcional base
+
+## Nomenclatura visible vigente
+
+Los nombres visibles se actualizaron sin modificar los valores internos ni las
+funciones existentes:
+
+| Valor interno | Nombre visible | Función |
+| --- | --- | --- |
+| `apartado` | **Reservado** | Bloqueo temporal inicial, sin pago ni contrato. |
+| `reservado` | **Apartado** | Formalización con pago, contrato y expediente. |
+| `vendido` | **Vendido** | Cierre comercial y documental final. |
+
+Por lo tanto, el flujo que verá el agente es:
+
+```text
+Disponible → Reservado → Apartado → Vendido
+```
+
+Las referencias técnicas a `apartado` y `reservado` dentro de APIs, base de
+datos y nombres de funciones se conservan para no romper compatibilidad.
 
 ## Objetivo
 
@@ -9,7 +29,7 @@ Definir el flujo operativo común para las propiedades inmobiliarias de Tal-IA,
 separando la disponibilidad comercial de la propiedad del expediente y del
 seguimiento de la operación.
 
-La operación inmobiliaria comienza en **Apartado**. La etapa **Reservado**
+La operación inmobiliaria comienza en **Reservado**. La etapa **Apartado**
 concentra la formalización contractual, el pago y el expediente principal.
 **Vendido** representa el cierre comercial y documental final.
 
@@ -31,12 +51,12 @@ principal que cambie según su disponibilidad:
 
 | Estado | Acción principal |
 | --- | --- |
-| `disponible` | Apartar propiedad |
-| `apartada` | Reservar propiedad |
+| `disponible` | Reservar propiedad |
+| `apartada` | Apartar propiedad |
 | `reservada` | Finalizar venta |
 | `vendida` | Consultar expediente |
 
-También debe estar disponible **Reservar propiedad** desde `disponible` cuando
+También debe estar disponible **Apartar propiedad** desde `disponible` cuando
 no sea necesario crear un apartado previo.
 
 No se deben mostrar como acciones del usuario conceptos técnicos como:
@@ -57,7 +77,7 @@ operación, sin obligar al agente a navegar por módulos separados.
 La vista debe mostrar una progresión sencilla:
 
 ```text
-Apartado  ━━━  Reservado  ━━━  Vendido
+Reservado  ━━━  Apartado  ━━━  Vendido
 ```
 
 Debajo se muestra únicamente la información relevante para la etapa actual,
@@ -72,8 +92,8 @@ por ejemplo:
 
 Las acciones secundarias deben depender del estado y de los permisos:
 
-- Apartada: `Reservar`, `Liberar`, `Extender`.
-- Reservada: `Continuar operación`, `Finalizar venta`.
+- Reservada: `Apartar`, `Liberar`, `Extender`.
+- Apartada: `Continuar operación`, `Finalizar venta`.
 - Vendida: `Consultar expediente`.
 
 La acción `Extender` debe respetar el límite y la autorización definidos para
@@ -86,7 +106,7 @@ El detalle de los datos precargados desde el contacto y la oportunidad, los
 datos propios de la reserva y el orden definitivo del cuestionario se encuentra
 en [Diseño del formulario de reserva inmobiliaria](./diseno_formulario_reserva_datos.md).
 
-### Apartar propiedad
+### Reservar propiedad
 
 El formulario debe poder completarse en menos de un minuto. Solo debe mostrar:
 
@@ -106,7 +126,7 @@ seleccionar el cliente y el motivo antes de confirmar el apartado.
 No se deben solicitar todavía todos los compradores, el expediente financiero,
 el contrato ni el comprobante de pago.
 
-### Reservar propiedad
+### Apartar propiedad
 
 La reserva debe ser un formulario guiado y progresivo, no una pantalla con todo
 el expediente visible al mismo tiempo.
@@ -149,17 +169,17 @@ La reserva debe ofrecer dos acciones:
 
 - **Guardar avance:** conserva la información capturada como borrador, no
   cambia el estado de la propiedad y no extiende el apartado.
-- **Confirmar reserva:** valida los requisitos obligatorios y cambia la
+- **Confirmar apartado:** valida los requisitos obligatorios y cambia la
   propiedad a `reservada` cuando todos estén cumplidos.
 
 Los calendarios, documentos adicionales, actividades y seguimientos posteriores
 se consultan en **Detalles de la operación**, sin saturar el formulario inicial.
 
-La propiedad solo cambia a `reservada` cuando se cumplen los requisitos de
+La propiedad solo cambia a `reservada` (visible como **Apartada**) cuando se cumplen los requisitos de
 formalización definidos. Un borrador de reserva no prolonga automáticamente el
 apartado.
 
-El contrato debe estar dentro del mismo panel que abre el botón `Reservar`.
+El contrato debe estar dentro del mismo panel que abre el botón `Apartar`.
 El agente no debe salir al módulo de documentos ni navegar a otra pantalla para
 prepararlo. Desde ese panel debe poder:
 
@@ -171,13 +191,13 @@ prepararlo. Desde ese panel debe poder:
 - Guardar el avance junto con los datos de la reserva y sus documentos.
 
 `Guardar avance` conserva el contrato generado o adjunto, pero no cambia la
-propiedad a `Reservada`. `Confirmar reserva` valida que exista el contrato
+propiedad a **Apartada**. `Confirmar apartado` valida que exista el contrato
 firmado, el pago confirmado y los demás requisitos obligatorios antes de
 realizar el cambio de estado.
 
 #### Contrato de la reserva
 
-El contrato forma parte de la formalización de `Reservada`. Cada inmobiliaria
+El contrato forma parte de la formalización de **Apartada** (`reservado`). Cada inmobiliaria
 debe poder capturar sus propias plantillas, porque Tal-IA no debe imponer un
 contrato legal universal para todos los tenants, tipos de inmueble u
 operaciones.
@@ -277,8 +297,8 @@ mostrar el siguiente paso recomendado.
 Las acciones de la operación deben abrirse en un panel lateral (*drawer*) desde
 el detalle de la propiedad:
 
-- `Apartar propiedad` abre el panel corto de apartado.
-- `Reservar propiedad` abre el panel guiado de reserva.
+- `Reservar propiedad` abre el panel corto de reservado.
+- `Apartar propiedad` abre el panel guiado de formalización.
 - `Finalizar venta` abre el panel de cierre.
 
 El agente permanece dentro de la propiedad que está gestionando y no necesita
@@ -291,8 +311,8 @@ pagos, contratos, permisos, vencimientos y requisitos de cierre.
 
 ## Criterios de experiencia
 
-- Apartar: completar normalmente en 30 a 60 segundos.
-- Reservar: formulario guiado en tres secciones, con posibilidad de guardar
+- Reservar: completar normalmente en 30 a 60 segundos.
+- Apartar: formulario guiado en tres secciones, con posibilidad de guardar
   avances.
 - Vender: revisar pendientes y confirmar el cierre.
 
@@ -315,11 +335,11 @@ etapas de la operación inmobiliaria.
 Disponible
     |
     v
-Apartado
+Reservado
 Bloqueo temporal
     |
     v
-Reservado
+Apartado
 Contrato, pago y expediente de formalización
     |
     v
@@ -346,8 +366,8 @@ Los estados comerciales de `propiedad_unidades` son:
 | Estado | Color | Significado |
 | --- | --- | --- |
 | `disponible` | Verde | Puede comercializarse y no tiene un bloqueo operativo activo. |
-| `apartado` | Amarillo | Tiene un bloqueo temporal sin pago ni contrato de compraventa. |
-| `reservado` | Naranja | Existe un compromiso formal con pago y contrato. |
+| `apartado` | Amarillo | Tiene un bloqueo temporal sin pago ni contrato de compraventa. Se muestra como **Reservado**. |
+| `reservado` | Naranja | Existe un compromiso formal con pago y contrato. Se muestra como **Apartado**. |
 | `vendido` | Rojo | El cierre comercial y documental final fue validado. |
 
 El estado de disponibilidad es la representación actual de la operación, pero
@@ -356,9 +376,9 @@ transiciones.
 
 ## Responsabilidad de cada etapa
 
-### Apartado
+### Reservado
 
-El apartado permite bloquear temporalmente una unidad para que el interesado
+El **Reservado** permite bloquear temporalmente una unidad para que el interesado
 complete su decisión o reúna los requisitos de formalización.
 
 Debe ser rápido y solicitar únicamente la información mínima:
@@ -368,7 +388,7 @@ Debe ser rápido y solicitar únicamente la información mínima:
 - Agente responsable.
 - Fecha y hora de inicio, generada por el sistema.
 - Fecha y hora de vencimiento, generada según la política de la inmobiliaria.
-- Motivo del apartado.
+- Motivo del reservado.
 - Forma de adquisición prevista, que puede quedar como `por definir`.
 - Precio ofrecido y observaciones, cuando existan.
 
@@ -389,10 +409,9 @@ Reglas:
 Un borrador de reserva no prolonga por sí mismo el apartado. Si se necesita
 más tiempo, debe registrarse una extensión autorizada.
 
-### Reservado
+### Apartado
 
-La reserva es el compromiso formal de la operación. La acción **Convertir a
-reserva** reutiliza la información del apartado, la oportunidad o la oferta,
+El **Apartado** es el compromiso formal de la operación. La acción **Continuar operación** reutiliza la información del reservado, la oportunidad o la oferta,
 pero exige completar y validar los requisitos de formalización.
 
 Requisitos mínimos para cambiar la propiedad a `reservado`:
@@ -452,7 +471,7 @@ dentro del expediente y no crea nuevos estados comerciales de disponibilidad.
 La oportunidad comercial y las ofertas permanecen independientes del flujo
 operativo. Pueden precargar información, pero no son pasos obligatorios.
 
-| Información | Apartado | Reservado | Vendido |
+| Información | Reservado | Apartado | Vendido |
 | --- | --- | --- | --- |
 | Compradores | Básicos | Definitivos | Validados en cierre |
 | Agente | Obligatorio | Heredado y validado | Heredado |
@@ -593,8 +612,8 @@ partir de fechas, documentos, financiamiento, pagos y condiciones contractuales.
 
 La definición vigente para Tal-IA Inmobiliarias es:
 
-1. **Apartado:** rapidez, datos mínimos, bloqueo temporal y vencimiento.
-2. **Reservado:** formalización contractual, pago confirmado y expediente
+1. **Reservado:** rapidez, datos mínimos, bloqueo temporal y vencimiento.
+2. **Apartado:** formalización contractual, pago confirmado y expediente
    principal.
 3. **Vendido:** validación y cierre comercial/documental final.
 

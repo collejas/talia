@@ -28,7 +28,7 @@ export default async function InmobiliariaContractsSettingsPage() {
         <div>
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Propiedades inmobiliarias</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Contratos inmobiliarios</h1>
-          <p className="mt-2 max-w-3xl text-muted-foreground">Administra las plantillas que aparecerán dentro del panel Reservar. Tal-IA conserva una copia del contrato generado por operación.</p>
+          <p className="mt-2 max-w-3xl text-muted-foreground">Administra las plantillas que aparecerán dentro del panel Apartar. Tal-IA conserva una copia del contrato generado por operación.</p>
         </div>
         {response.ok ? <InmobiliariaContractTemplates initialTemplates={response.data ?? []} /> : <p className="rounded-lg border border-destructive/40 p-4 text-sm text-destructive">No se pudieron cargar las plantillas.</p>}
       </div>

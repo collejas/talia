@@ -1,5 +1,23 @@
 # Changelog — Estados visuales de propiedades
 
+## 2026-10-14 — Actualización de nombres visibles
+
+Se intercambian únicamente las etiquetas visibles de `apartado` y `reservado`.
+Los valores internos, transiciones, vencimientos, contratos, pagos y validaciones
+se mantienen sin cambios.
+
+| Valor interno | Etiqueta visible | Función que conserva |
+| --- | --- | --- |
+| `apartado` | Reservado | Bloqueo temporal inicial |
+| `reservado` | Apartado | Formalización con contrato, pago y expediente |
+
+El flujo visible queda:
+
+1. Disponible
+2. Reservado
+3. Apartado
+4. Vendido
+
 ## 2026-10-10 — Orden y colores de estados
 
 ### Objetivo
@@ -10,8 +28,8 @@ Mapbox, los botones de acciones y el formulario de propiedades.
 ### Orden visual
 
 1. Disponible
-2. Apartado
-3. Reservado
+2. Reservado
+3. Apartado
 4. Vendido
 
 ### Colores
@@ -19,8 +37,8 @@ Mapbox, los botones de acciones y el formulario de propiedades.
 | Estado | Color | Uso |
 | --- | --- | --- |
 | `disponible` | Verde | Unidad disponible en el mapa |
-| `apartado` | Amarillo | Botón Apartar y unidad apartada |
-| `reservado` | Naranja | Botón Reservar y unidad reservada |
+| `apartado` | Amarillo | Botón Reservar y unidad reservada |
+| `reservado` | Naranja | Botón Apartar y unidad apartada |
 | `vendido` | Rojo | Botón Vender/Preparar cierre y unidad vendida |
 
 Colores técnicos usados:
@@ -34,7 +52,7 @@ Colores técnicos usados:
 
 - Polígonos de unidades en Mapbox.
 - Color de estado recibido por el GeoJSON del mapa.
-- Botones de Apartar, Reservar y Vender/Preparar cierre.
+- Botones de Reservar, Apartar y Vender/Preparar cierre.
 - Orden de opciones en el formulario de propiedades.
 
 ### Fuera de alcance
