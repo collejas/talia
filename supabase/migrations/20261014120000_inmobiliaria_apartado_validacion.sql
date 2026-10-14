@@ -21,6 +21,10 @@ ALTER TABLE public.operaciones_inmobiliarias
 COMMENT ON COLUMN public.operaciones_inmobiliarias.estado_validacion IS
     'Validación del expediente del apartado; no sustituye el estado comercial de la propiedad.';
 
+CREATE INDEX IF NOT EXISTS operaciones_inmobiliarias_validacion_pendiente_idx
+    ON public.operaciones_inmobiliarias (organizacion_id, enviado_a_validacion_en ASC, actualizado_en ASC)
+    WHERE estado = 'apartada' AND estado_validacion = 'pendiente_revision';
+
 CREATE TABLE IF NOT EXISTS public.inmobiliaria_operacion_documentos (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     organizacion_id uuid NOT NULL REFERENCES public.organizaciones(id) ON DELETE CASCADE,

@@ -53668,6 +53668,24 @@ async def obtener_operacion_reserva_actual_propiedad_unidad(
     return {"ok": True, "operacion": operation}
 
 
+@router.get("/inmobiliaria/apartados/pendientes-validacion")
+async def listar_apartados_pendientes_validacion(
+    *,
+    limit: int = Query(default=100, ge=1, le=100),
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("inmobiliaria.apartados.validate")),
+) -> dict[str, Any]:
+    try:
+        items, total = await repo.list_inmobiliaria_apartados_pendientes_validacion(
+            organizacion_id=organizacion_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="inmobiliaria_pending_validation_failed") from exc
+    return {"ok": True, "items": items, "total": total}
+
+
 @router.get("/propiedad-unidades/{unidad_id}/reserva/documentos")
 async def listar_documentos_apartado_propiedad_unidad(
     *,

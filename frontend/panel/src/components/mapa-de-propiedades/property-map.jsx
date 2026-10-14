@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  IconClipboardCheck,
   IconBuilding,
   IconChevronDown,
   IconChevronRight,
@@ -617,6 +618,16 @@ export function PropertyMap() {
   const [contratoFirmadoFile, setContratoFirmadoFile] = useState(null);
   const [contratoFechaFirma, setContratoFechaFirma] = useState("");
   const [canValidateApartado, setCanValidateApartado] = useState(false);
+  const [validationQueueOpen, setValidationQueueOpen] = useState(false);
+  const [validationQueueLoading, setValidationQueueLoading] = useState(false);
+  const [validationQueueError, setValidationQueueError] = useState(null);
+  const [validationQueueItems, setValidationQueueItems] = useState([]);
+  const [validationQueueTotal, setValidationQueueTotal] = useState(0);
+  const [validationFilterActive, setValidationFilterActive] = useState(false);
+  const [validationDetailOpen, setValidationDetailOpen] = useState(false);
+  const [validationDetailLoading, setValidationDetailLoading] = useState(false);
+  const [validationDetailError, setValidationDetailError] = useState(null);
+  const [validationDetail, setValidationDetail] = useState(null);
   const [apartadoDocuments, setApartadoDocuments] = useState([]);
   const [apartadoOperationId, setApartadoOperationId] = useState(null);
   const [apartadoValidationStatus, setApartadoValidationStatus] = useState(null);
@@ -692,6 +703,27 @@ export function PropertyMap() {
       });
     return () => { mounted = false; };
   }, []);
+
+  const loadValidationQueue = useCallback(async () => {
+    if (!canValidateApartado) return;
+    setValidationQueueLoading(true);
+    setValidationQueueError(null);
+    try {
+      const response = await fetch("/api/crm/inmobiliaria/apartados/pendientes-validacion?limit=100", { cache: "no-store" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || payload?.detail || "No se pudieron cargar las validaciones.");
+      setValidationQueueItems(Array.isArray(payload?.items) ? payload.items : []);
+      setValidationQueueTotal(Number.isFinite(Number(payload?.total)) ? Number(payload.total) : 0);
+    } catch (error) {
+      setValidationQueueError(error instanceof Error ? error.message : "No se pudieron cargar las validaciones.");
+    } finally {
+      setValidationQueueLoading(false);
+    }
+  }, [canValidateApartado]);
+
+  useEffect(() => {
+    if (canValidateApartado) void loadValidationQueue();
+  }, [canValidateApartado, loadValidationQueue]);
 
   const waitForMapboxInstance = useCallback(() => {
     return new Promise((resolve) => {
@@ -1426,7 +1458,10 @@ export function PropertyMap() {
 
   const filteredFeatures = useMemo(() => {
     return features.filter((feature) =>
-      matchesPropertyFeatureFilters(feature, {
+      (!validationFilterActive || (
+        inferFeatureKind(feature) === "unidad" &&
+        validationQueueItems.some((item) => String(item.unidad_id) === String(getFeatureId(feature) ?? feature?.id ?? feature?.properties?.id))
+      )) && matchesPropertyFeatureFilters(feature, {
         nivelFilter,
         tipoFilter,
         mapLevel,
@@ -1435,7 +1470,7 @@ export function PropertyMap() {
         buildFeatureMunicipioGeoKey: buildMunicipioGeoKey,
       }),
     );
-  }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey]);
+  }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey, validationFilterActive, validationQueueItems]);
 
   const panelFeatures = useMemo(() => {
     const hasExplicitFilter = Boolean(nivelFilter || tipoFilter);
@@ -2925,6 +2960,67 @@ export function PropertyMap() {
     },
     [applyMapboxNavigationLimits, logMapboxEvent],
   );
+
+  const openValidationDetail = useCallback(async (item) => {
+    if (!item?.unidad_id) return;
+    setValidationQueueOpen(false);
+    setValidationDetailError(null);
+    setValidationDetail(item);
+    setValidationDetailOpen(true);
+    setValidationDetailLoading(true);
+    setValidationFilterActive(true);
+    const feature = (featuresRef.current ?? []).find((candidate) =>
+      String(getFeatureId(candidate) ?? candidate?.id ?? candidate?.properties?.id) === String(item.unidad_id),
+    );
+    if (feature) openMapboxFeature(feature);
+    try {
+      const response = await fetch(`/api/crm/propiedad-unidades/${encodeURIComponent(item.unidad_id)}/reserva/documentos`, { cache: "no-store" });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || payload?.detail || "No se pudo cargar el expediente.");
+      setValidationDetail((current) => ({
+        ...(current || item),
+        operacion: payload?.operacion || current?.operacion || item,
+        documentos: Array.isArray(payload?.documentos) ? payload.documentos : [],
+      }));
+    } catch (error) {
+      setValidationDetailError(error instanceof Error ? error.message : "No se pudo cargar el expediente.");
+    } finally {
+      setValidationDetailLoading(false);
+    }
+  }, [openMapboxFeature]);
+
+  const reviewValidationDocument = useCallback(async (documentId, reviewStatus) => {
+    const form = new FormData();
+    form.set("estado_revision", reviewStatus);
+    const response = await fetch(`/api/crm/inmobiliaria/operaciones/documentos/${encodeURIComponent(documentId)}/revision`, { method: "PATCH", body: form });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error || payload?.detail || "No se pudo actualizar el documento.");
+    setValidationDetail((current) => current ? {
+      ...current,
+      documentos: (current.documentos || []).map((document) => document.id === documentId ? { ...document, ...payload.documento } : document),
+    } : current);
+  }, []);
+
+  const markValidationFirm = useCallback(async () => {
+    const operationId = validationDetail?.operacion?.id || validationDetail?.id;
+    if (!operationId) return;
+    setValidationDetailLoading(true);
+    setValidationDetailError(null);
+    try {
+      const response = await fetch(`/api/crm/inmobiliaria/operaciones/${encodeURIComponent(operationId)}/validar-firme`, { method: "POST", body: new FormData() });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error || payload?.detail || "No se pudo marcar el apartado como firme.");
+      setValidationQueueItems((current) => current.filter((item) => String(item.id) !== String(operationId)));
+      setValidationQueueTotal((current) => Math.max(0, current - 1));
+      setValidationDetailOpen(false);
+      setValidationDetail(null);
+      refreshGeojson();
+    } catch (error) {
+      setValidationDetailError(error instanceof Error ? error.message : "No se pudo marcar el apartado como firme.");
+    } finally {
+      setValidationDetailLoading(false);
+    }
+  }, [refreshGeojson, validationDetail]);
 
   const findFeatureForDevelopment = useCallback(
     (devId) => {
@@ -4695,6 +4791,83 @@ export function PropertyMap() {
               </div>
             </div>
           )}
+          {!mapboxActive && canValidateApartado && (
+            <div className="pointer-events-auto absolute right-4 top-4 z-50">
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-slate-950/90 px-3 py-2 text-xs font-semibold text-amber-100 shadow-lg transition hover:bg-slate-900"
+                onClick={() => {
+                  setValidationQueueOpen(true);
+                  setValidationFilterActive(true);
+                  void loadValidationQueue();
+                }}
+              >
+                <IconClipboardCheck size={16} />
+                Validaciones inmobiliarias
+                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[0.7rem] font-bold text-amber-950">{validationQueueTotal}</span>
+              </button>
+            </div>
+          )}
+          {!mapboxActive && canValidateApartado && (
+            <>
+              <Dialog open={validationQueueOpen} onOpenChange={setValidationQueueOpen}>
+                <DialogContent className="left-auto right-4 top-16 max-h-[calc(100vh-8rem)] w-full max-w-lg translate-x-0 translate-y-0 overflow-y-auto bg-background text-foreground">
+                  <DialogHeader>
+                    <DialogTitle>Validaciones inmobiliarias</DialogTitle>
+                    <DialogDescription>Expedientes de Apartado pendientes de revisión.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    {validationQueueLoading && <p className="text-sm text-muted-foreground">Cargando expedientes...</p>}
+                    {validationQueueError && <p className="text-sm text-rose-600">{validationQueueError}</p>}
+                    {!validationQueueLoading && !validationQueueItems.length && !validationQueueError && <div className="rounded border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No hay apartados pendientes de validación.</div>}
+                    {validationQueueItems.map((item) => {
+                      const buyer = item.cliente || {};
+                      const unit = item.unidad || {};
+                      return (
+                        <button key={item.id} type="button" className="w-full rounded border border-border bg-card p-3 text-left transition hover:border-primary hover:bg-muted" onClick={() => void openValidationDetail(item)}>
+                          <p className="font-semibold text-foreground">{unit.unidad || unit.nombre || unit.clave || item.unidad_id}</p>
+                          <p className="text-xs text-muted-foreground">Comprador: {buyer.nombre_completo || buyer.nombre || "Sin nombre"}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{formatMoney(Number(item.precio_acordado ?? item.precio_ofrecido ?? unit.precio ?? 0))} · {item.forma_adquisicion || "Por definir"}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Dialog open={validationDetailOpen} onOpenChange={setValidationDetailOpen}>
+                <DialogContent className="left-auto right-4 top-16 max-h-[calc(100vh-8rem)] w-full max-w-2xl translate-x-0 translate-y-0 overflow-y-auto bg-background text-foreground">
+                  <DialogHeader>
+                    <DialogTitle>Revisión del apartado</DialogTitle>
+                    <DialogDescription>Revisa la información y valida los documentos antes de marcarlo como firme.</DialogDescription>
+                  </DialogHeader>
+                  {validationDetail && (
+                    <div className="space-y-4">
+                      <div className="grid gap-3 rounded border border-border bg-muted/40 p-3 text-sm sm:grid-cols-2">
+                        <div><p className="text-xs text-muted-foreground">Propiedad</p><p className="font-medium">{validationDetail.unidad?.unidad || validationDetail.unidad?.nombre || validationDetail.unidad?.clave || validationDetail.unidad_id}</p></div>
+                        <div><p className="text-xs text-muted-foreground">Comprador</p><p className="font-medium">{validationDetail.cliente?.nombre_completo || validationDetail.cliente?.nombre || "Sin nombre"}</p></div>
+                        <div><p className="text-xs text-muted-foreground">RFC / CURP</p><p>{validationDetail.cliente?.rfc || "—"} / {validationDetail.cliente?.curp || "—"}</p></div>
+                        <div><p className="text-xs text-muted-foreground">Correo / Teléfono</p><p>{validationDetail.cliente?.correo_principal || "—"} · {validationDetail.cliente?.telefono_principal_e164 || validationDetail.cliente?.telefono_movil_1_e164 || "—"}</p></div>
+                        <div><p className="text-xs text-muted-foreground">Precio acordado</p><p>{formatMoney(Number(validationDetail.precio_acordado ?? validationDetail.precio_ofrecido ?? 0))}</p></div>
+                        <div><p className="text-xs text-muted-foreground">Forma de adquisición</p><p>{validationDetail.forma_adquisicion || "Por definir"}</p></div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold">Documentos del comprador</p>
+                        {validationDetailLoading && <p className="text-sm text-muted-foreground">Cargando expediente...</p>}
+                        {(validationDetail.documentos || []).map((document) => (
+                          <div key={document.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2 text-sm">
+                            <div><p className="font-medium">{APARTADO_DOCUMENT_TYPES.find(([type]) => type === document.tipo_documento)?.[1] || document.tipo_documento}</p><p className="text-xs text-muted-foreground">{document.estado_revision === "aprobado" ? "Aprobado" : document.estado_revision === "requiere_correccion" ? "Requiere corrección" : "Pendiente"}</p></div>
+                            <div className="flex flex-wrap gap-2">{document.archivo_id && <a className="rounded border border-input px-2 py-1 text-xs text-primary underline" href={`/api/crm/inmobiliaria/operaciones/documentos/archivo/${document.archivo_id}`} target="_blank" rel="noreferrer">Ver</a>}<Button type="button" size="sm" variant="outline" onClick={() => void reviewValidationDocument(document.id, "aprobado")}>Aprobar</Button><Button type="button" size="sm" variant="outline" onClick={() => void reviewValidationDocument(document.id, "requiere_correccion")}>Solicitar corrección</Button></div>
+                          </div>
+                        ))}
+                      </div>
+                      {validationDetailError && <p className="text-sm text-rose-600">{validationDetailError}</p>}
+                      <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setValidationDetailOpen(false)}>Cerrar</Button><Button type="button" onClick={() => void markValidationFirm()} disabled={validationDetailLoading || !(validationDetail.documentos || []).length}>Marcar apartado como firme</Button></div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
           {mapboxActive ? (
             <>
               <div
@@ -4738,6 +4911,107 @@ export function PropertyMap() {
                     </button>
                   </div>
                 </div>
+                {canValidateApartado && (
+                  <div className="border-b border-slate-800 bg-slate-950/75 px-3 py-2">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-left text-xs font-semibold text-amber-100 transition hover:bg-amber-400/20"
+                      onClick={() => {
+                        setValidationQueueOpen(true);
+                        setValidationFilterActive(true);
+                        void loadValidationQueue();
+                      }}
+                    >
+                      <span className="flex items-center gap-2"><IconClipboardCheck size={16} />Validaciones inmobiliarias</span>
+                      <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[0.7rem] font-bold text-amber-950">{validationQueueTotal}</span>
+                    </button>
+                  </div>
+                )}
+                <Dialog open={validationQueueOpen} onOpenChange={setValidationQueueOpen}>
+                  <DialogContent className="left-auto right-2 top-16 max-h-[calc(100vh-8rem)] w-full max-w-lg translate-x-0 translate-y-0 overflow-y-auto bg-background text-foreground">
+                    <DialogHeader>
+                      <DialogTitle>Validaciones inmobiliarias</DialogTitle>
+                      <DialogDescription>Expedientes de Apartado enviados por vendedores y pendientes de revisión.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      {validationQueueLoading && <p className="text-sm text-muted-foreground">Cargando expedientes...</p>}
+                      {validationQueueError && <p className="text-sm text-rose-600">{validationQueueError}</p>}
+                      {!validationQueueLoading && !validationQueueItems.length && !validationQueueError && (
+                        <div className="rounded border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No hay apartados pendientes de validación.</div>
+                      )}
+                      {validationQueueItems.map((item) => {
+                        const buyer = item.cliente || {};
+                        const unit = item.unidad || {};
+                        const buyerName = buyer.nombre_completo || buyer.nombre || "Comprador sin nombre";
+                        const unitName = unit.unidad || unit.nombre || unit.clave || unit.codigo || item.unidad_id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="w-full rounded border border-border bg-card p-3 text-left transition hover:border-primary hover:bg-muted"
+                            onClick={() => void openValidationDetail(item)}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-foreground">{unitName}</p>
+                                <p className="text-xs text-muted-foreground">Comprador: {buyerName}</p>
+                              </div>
+                              <span className="rounded-full bg-amber-100 px-2 py-1 text-[0.65rem] font-semibold text-amber-900">Pendiente</span>
+                            </div>
+                            <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                              <span>Precio: {formatMoney(Number(item.precio_acordado ?? item.precio_ofrecido ?? unit.precio ?? 0))}</span>
+                              <span>Forma: {item.forma_adquisicion || "Por definir"}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={validationDetailOpen} onOpenChange={setValidationDetailOpen}>
+                  <DialogContent className="left-auto right-2 top-16 max-h-[calc(100vh-8rem)] w-full max-w-2xl translate-x-0 translate-y-0 overflow-y-auto bg-background text-foreground">
+                    <DialogHeader>
+                      <DialogTitle>Revisión del apartado</DialogTitle>
+                      <DialogDescription>Revisa la propiedad, el comprador y cada documento antes de marcar el expediente como firme.</DialogDescription>
+                    </DialogHeader>
+                    {validationDetail && (
+                      <div className="space-y-4">
+                        <div className="grid gap-3 rounded border border-border bg-muted/40 p-3 text-sm sm:grid-cols-2">
+                          <div><p className="text-xs text-muted-foreground">Propiedad</p><p className="font-medium">{validationDetail.unidad?.unidad || validationDetail.unidad?.nombre || validationDetail.unidad?.clave || validationDetail.unidad_id}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Comprador</p><p className="font-medium">{validationDetail.cliente?.nombre_completo || validationDetail.cliente?.nombre || "Sin nombre"}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Correo</p><p>{validationDetail.cliente?.correo_principal || "—"}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Teléfono</p><p>{validationDetail.cliente?.telefono_principal_e164 || validationDetail.cliente?.telefono_movil_1_e164 || "—"}</p></div>
+                          <div><p className="text-xs text-muted-foreground">RFC</p><p>{validationDetail.cliente?.rfc || "—"}</p></div>
+                          <div><p className="text-xs text-muted-foreground">CURP</p><p>{validationDetail.cliente?.curp || "—"}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Estado civil</p><p>{validationDetail.cliente?.estado_civil || "—"}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Ubicación del comprador</p><p>{[validationDetail.cliente?.municipio, validationDetail.cliente?.entidad, validationDetail.cliente?.pais].filter(Boolean).join(", ") || "—"}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Precio acordado</p><p>{formatMoney(Number(validationDetail.precio_acordado ?? validationDetail.precio_ofrecido ?? 0))}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Forma de adquisición</p><p>{validationDetail.forma_adquisicion || "Por definir"}</p></div>
+                          <div><p className="text-xs text-muted-foreground">Fecha límite de reserva</p><p>{validationDetail.fecha_limite_reserva ? new Date(validationDetail.fecha_limite_reserva).toLocaleDateString("es-MX") : "—"}</p></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div><p className="text-sm font-semibold">Documentos del comprador</p><p className="text-xs text-muted-foreground">Todos los documentos deben estar aprobados para marcar el apartado como firme.</p></div>
+                          {validationDetailLoading && <p className="text-sm text-muted-foreground">Cargando expediente...</p>}
+                          {(validationDetail.documentos || []).map((document) => (
+                            <div key={document.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2 text-sm">
+                              <div><p className="font-medium">{APARTADO_DOCUMENT_TYPES.find(([type]) => type === document.tipo_documento)?.[1] || document.tipo_documento}</p><p className="text-xs text-muted-foreground">{document.estado_revision === "aprobado" ? "Aprobado" : document.estado_revision === "requiere_correccion" ? "Requiere corrección" : "Pendiente"}</p></div>
+                              <div className="flex flex-wrap gap-2">
+                                {document.archivo_id && <a className="rounded border border-input px-2 py-1 text-xs text-primary underline" href={`/api/crm/inmobiliaria/operaciones/documentos/archivo/${document.archivo_id}`} target="_blank" rel="noreferrer">Ver</a>}
+                                <Button type="button" size="sm" variant="outline" onClick={() => void reviewValidationDocument(document.id, "aprobado")}>Aprobar</Button>
+                                <Button type="button" size="sm" variant="outline" onClick={() => void reviewValidationDocument(document.id, "requiere_correccion")}>Solicitar corrección</Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {validationDetailError && <p className="text-sm text-rose-600">{validationDetailError}</p>}
+                        <div className="flex justify-end gap-2">
+                          <Button type="button" variant="secondary" onClick={() => setValidationDetailOpen(false)}>Cerrar</Button>
+                          <Button type="button" onClick={() => void markValidationFirm()} disabled={validationDetailLoading || !(validationDetail.documentos || []).length}>Marcar apartado como firme</Button>
+                        </div>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
                 <div className="flex-1 overflow-y-auto px-4 py-5 text-sm text-slate-200">
                   {mapboxPanelFeature ? (
                     <>

@@ -68,3 +68,15 @@ La base de datos no permite marcarlo como firme si falta un documento obligatori
 
 El menú `Operación` corresponde a inventario, envíos y transformaciones de negocios no inmobiliarios. Se oculta cuando el tenant tiene habilitado el módulo de propiedades. La validación inmobiliaria ocurre desde la ficha de la propiedad y utiliza un permiso específico.
 
+## Bandeja de validaciones inmobiliarias
+
+Los usuarios con el permiso `inmobiliaria.apartados.validate` tienen un acceso visible en la vista de propiedades:
+
+- `Validaciones inmobiliarias` muestra un contador de expedientes en `pendiente_revision`.
+- Al abrirlo, se listan las unidades pendientes de revisión.
+- El mapa se filtra para mostrar únicamente esas unidades.
+- Al seleccionar una unidad se abre el detalle del expediente con la propiedad, el comprador, el precio, la forma de adquisición y los documentos.
+- El usuario puede abrir, aprobar o solicitar corrección de cada documento y marcar el apartado como firme.
+
+La bandeja es un acceso operativo para encontrar pendientes; la propiedad y su expediente siguen siendo la fuente de verdad.
+

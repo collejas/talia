@@ -1666,6 +1666,62 @@ class CRMRepository:
             raise CRMRepositoryError("inmobiliaria_active_operation_invalid_response")
         return data[0] if data and isinstance(data[0], dict) else None
 
+    async def list_inmobiliaria_apartados_pendientes_validacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        limit: int = 100,
+    ) -> tuple[list[dict[str, Any]], int]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "estado": "eq.apartada",
+            "estado_validacion": "eq.pendiente_revision",
+            "order": "enviado_a_validacion_en.asc,actualizado_en.asc",
+            "limit": str(max(1, min(limit, 100))),
+            "select": (
+                "id,unidad_id,oportunidad_id,cliente_principal_id,agente_usuario_id,"
+                "estado,estado_validacion,forma_adquisicion,precio_ofrecido,precio_acordado,"
+                "moneda,apartado_iniciado_en,apartado_vencimiento_en,enviado_a_validacion_en,"
+                "enviado_a_validacion_por,fecha_limite_reserva,reserva_importe,"
+                "condiciones_reserva,tipo_comprador,actualizado_en,"
+                "cliente:personas!operaciones_inmobiliarias_cliente_principal_id_fkey("
+                "id,nombre,nombre_completo,apellido_paterno,apellido_materno,"
+                "correo_principal,telefono_principal_e164,telefono_movil_1_e164,"
+                "nacionalidad,ocupacion,estado_civil,curp,rfc,tipo_identificacion,"
+                "numero_identificacion,entidad,municipio,pais"
+                ")"
+            ),
+        }
+        response = await self._request(
+            "GET",
+            "/rest/v1/operaciones_inmobiliarias",
+            params=params,
+            prefer="count=exact",
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("inmobiliaria_pending_validation_invalid_response")
+
+        total = len(data)
+        content_range = response.headers.get("content-range", "")
+        if "/" in content_range:
+            try:
+                total = int(content_range.rsplit("/", 1)[1])
+            except ValueError:
+                total = len(data)
+
+        items: list[dict[str, Any]] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            unidad_id = _safe_uuid(row.get("unidad_id"))
+            if not unidad_id:
+                continue
+            unidad = await self.get_propiedad_unidad(unidad_id=unidad_id)
+            items.append({**row, "unidad": unidad or {}})
+        return items, total
+
     async def enviar_apartado_validacion(
         self,
         *,
