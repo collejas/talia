@@ -159,7 +159,12 @@ from app.services.crm_collaboration_notifications import (
     notify_activity_created,
     notify_note_created,
 )
-from app.services.user_notifications import user_notification_row_to_event
+from app.services.user_notifications import (
+    UserNotificationAction,
+    UserNotificationCreate,
+    create_and_publish_user_notification,
+    user_notification_row_to_event,
+)
 from app.services.timezone_resolver import local_date_range_to_utc, resolve_timezone_zoneinfo
 from app.services.storage import StorageError
 from app.logging.catalog_debug import write_catalog_debug_entry
@@ -53816,6 +53821,12 @@ async def enviar_apartado_propiedad_unidad_a_validacion(
         if "documents_required" in message:
             raise HTTPException(status_code=409, detail=message) from exc
         raise HTTPException(status_code=502, detail="property_apartado_validation_submit_failed") from exc
+    await _notificar_validadores_apartado(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        unidad_id=unidad_id,
+        operation=operation,
+    )
     return {"ok": True, "operacion": operation}
 
 
@@ -53893,6 +53904,64 @@ async def validar_apartado_inmobiliario_firme(
     return {"ok": True, "operacion": operation}
 
 
+async def _notificar_validadores_apartado(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    unidad_id: UUID,
+    operation: Mapping[str, Any],
+) -> None:
+    """Notifica a los usuarios autorizados sin bloquear el guardado de la reserva."""
+
+    operation_id = _safe_uuid(operation.get("id"))
+    if not operation_id:
+        logger.warning("inmobiliaria.validation_notification_missing_operation", extra={"unidad_id": str(unidad_id)})
+        return
+    try:
+        recipient_ids = await repo.list_user_ids_with_permission(
+            organizacion_id=organizacion_id,
+            codigo="inmobiliaria.apartados.validate",
+        )
+        for recipient_id in recipient_ids:
+            dedupe_key = f"inmobiliaria.apartado.validacion:{operation_id}"
+            if await repo.get_ui_notification_by_dedupe_key(
+                usuario_id=recipient_id,
+                organizacion_id=organizacion_id,
+                dedupe_key=dedupe_key,
+            ):
+                continue
+            await create_and_publish_user_notification(
+                repo=repo,
+                notification=UserNotificationCreate(
+                    organizacion_id=organizacion_id,
+                    usuario_id=recipient_id,
+                    type="inmobiliaria.apartado.validation_required",
+                    level="warning",
+                    title="Reserva pendiente de validación",
+                    message="Hay una operación inmobiliaria pendiente de revisar y validar.",
+                    category="inmobiliaria",
+                    entity_kind="operacion_inmobiliaria",
+                    entity_id=str(operation_id),
+                    persona_id=_safe_uuid(operation.get("cliente_principal_id")),
+                    oportunidad_id=_safe_uuid(operation.get("oportunidad_id")),
+                    action=UserNotificationAction(label="Revisar expediente", href="/propiedades"),
+                    meta={
+                        "operacion_id": str(operation_id),
+                        "unidad_id": str(unidad_id),
+                        "estado": operation.get("estado"),
+                        "estado_validacion": operation.get("estado_validacion"),
+                    },
+                    dedupe_key=dedupe_key,
+                    group_key=f"inmobiliaria.apartado.validacion:{organizacion_id}",
+                ),
+            )
+    except Exception as exc:  # La notificación no debe revertir una reserva guardada.
+        logger.warning(
+            "inmobiliaria.validation_notification_failed",
+            extra={"operation_id": str(operation_id), "error": str(exc)},
+        )
+
+
 @router.post("/propiedad-unidades/{unidad_id}/reserva/avance-directo")
 async def guardar_avance_reserva_directa_propiedad_unidad(
     *,
@@ -53927,6 +53996,12 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_direct_reservation_failed") from exc
+    await _notificar_validadores_apartado(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        unidad_id=unidad_id,
+        operation=operation,
+    )
     return {"ok": True, "operacion": operation}
 
 

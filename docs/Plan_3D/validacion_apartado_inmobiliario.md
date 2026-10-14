@@ -75,6 +75,28 @@ Los usuarios con el permiso `inmobiliaria.apartados.validate` tienen un acceso v
 - `Validaciones inmobiliarias` muestra un contador de expedientes en `pendiente_revision`.
 - Al abrirlo, se listan las unidades pendientes de revisión.
 - El mapa se filtra para mostrar únicamente esas unidades.
+
+## Reserva en borrador y representación visual
+
+Una reserva iniciada desde una unidad disponible se conserva como `borrador` hasta
+que el vendedor complete el expediente. No cambia automáticamente la operación a
+`reservada` ni sustituye la validación del apartado.
+
+Para que el mapa no la muestre como disponible, el GeoJSON combina el estado base
+de la unidad con la operación inmobiliaria activa y expone estos datos visuales:
+
+- `Reservado (borrador)`: color ámbar `#F59E0B`.
+- `Apartado en validación`: color amarillo intermedio `#F8D568`.
+- `Apartado firme`: color amarillo `#F1C40F`.
+- `Reservado`: color naranja `#F97316`.
+
+El estado base de la unidad se conserva para que las acciones disponibles sigan
+siendo correctas; el mapa utiliza `display_status`, `display_status_label` y
+`status_color` para mostrar el estado operativo real.
+
+Al guardar una reserva directa o enviar un apartado a validación, Tal-IA crea una
+notificación para cada usuario con el permiso `inmobiliaria.apartados.validate`.
+La notificación es deduplicada por operación y enlaza con la vista de propiedades.
 - Al seleccionar una unidad se abre el detalle del expediente con la propiedad, el comprador, el precio, la forma de adquisición y los documentos.
 - El usuario puede abrir, aprobar o solicitar corrección de cada documento y marcar el apartado como firme.
 

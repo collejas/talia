@@ -48,6 +48,9 @@ const STATUS_COLORS = {
   disponible: "#2ECC71",
   apartado: "#F1C40F",
   reservado: "#F97316",
+  reservado_borrador: "#F59E0B",
+  apartado_revision: "#F8D568",
+  apartado_firme: "#F1C40F",
   vendido: "#E74C3C",
 };
 
@@ -57,6 +60,9 @@ const STATUS_LABELS = {
   disponible: "Disponible",
   apartado: "Reservado",
   reservado: "Apartado",
+  reservado_borrador: "Reservado (borrador)",
+  apartado_revision: "Apartado en validación",
+  apartado_firme: "Apartado firme",
   vendido: "Vendido",
 };
 
@@ -192,7 +198,11 @@ function ensureStatusColors(feature) {
   }
   const props = feature.properties || {};
   const statusKey =
-    typeof props.status === "string" ? props.status.trim().toLowerCase() : "";
+    typeof props.display_status === "string"
+      ? props.display_status.trim().toLowerCase()
+      : typeof props.status === "string"
+        ? props.status.trim().toLowerCase()
+        : "";
   if (!props.color) {
     props.color = (statusKey && STATUS_COLORS[statusKey]) ?? "#95A5A6";
   }
@@ -416,7 +426,7 @@ function buildHierarchy(features) {
       continue;
     }
 
-    const status = (props.status ?? "").toLowerCase();
+    const status = (props.display_status ?? props.status ?? "").toLowerCase();
     const statusColor = props.status_color ?? STATUS_COLORS[status] ?? STATUS_COLORS.disponible;
     const manzanaId = props.manzana_id ?? null;
     const unit = {
@@ -1622,7 +1632,11 @@ export function PropertyMap() {
       return "#95A5A6";
     }
     const statusKey =
-      typeof props.status === "string" ? props.status.trim().toLowerCase() : "";
+      typeof props.display_status === "string"
+        ? props.display_status.trim().toLowerCase()
+        : typeof props.status === "string"
+          ? props.status.trim().toLowerCase()
+          : "";
     const statusColor =
       (typeof props.status_color === "string" && props.status_color) ||
       (statusKey && STATUS_COLORS[statusKey]) ||
@@ -1732,6 +1746,9 @@ export function PropertyMap() {
         return "vendidas";
       case "reservado":
       case "apartado":
+      case "reservado_borrador":
+      case "apartado_revision":
+      case "apartado_firme":
         return "apartadas";
       case "disponible":
       default:
@@ -1743,7 +1760,7 @@ export function PropertyMap() {
     const map = new Map();
     for (const feature of features) {
       const props = feature?.properties ?? {};
-      const statusBucket = getStatusCategory(props.status);
+      const statusBucket = getStatusCategory(props.display_status ?? props.status);
       const countryKey = getCountryKeyFromProps(props);
       const stateKey = normalizeStateCode(
         (props.estado_cve ?? props.cve_ent ?? props.cve_entidad ?? "").toString().trim(),
@@ -2030,7 +2047,13 @@ export function PropertyMap() {
     return saleLogs.filter((sale) => allowedUnitIds.has(String(sale?.unidad_id ?? "")));
   }, [mapboxKind, mapboxPanelFeature, mapboxSalesSummary, saleLogs, unidadId]);
   const mapboxStatusLabel =
-    typeof mapboxProps?.status === "string" ? getStatusLabel(mapboxProps.status).toUpperCase() : null;
+    typeof mapboxProps?.display_status_label === "string"
+      ? mapboxProps.display_status_label.toUpperCase()
+      : typeof mapboxProps?.display_status === "string"
+        ? getStatusLabel(mapboxProps.display_status).toUpperCase()
+        : typeof mapboxProps?.status === "string"
+          ? getStatusLabel(mapboxProps.status).toUpperCase()
+          : null;
   const mapboxPriceLabel =
     mapboxProps?.precio != null
       ? new Intl.NumberFormat("es-MX", {
