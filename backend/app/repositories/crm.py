@@ -1638,7 +1638,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "unidad_id": f"eq.{unidad_id}",
-            "estado": "in.(apartado,borrador,reservado)",
+            "estado": "in.(apartada,borrador,reservado)",
             "order": "actualizado_en.desc",
             "limit": "1",
             "select": (

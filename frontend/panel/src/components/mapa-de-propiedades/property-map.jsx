@@ -54,12 +54,10 @@ const STATUS_COLORS = {
   vendido: "#E74C3C",
 };
 
-// Los valores internos conservan su significado y compatibilidad histórica.
-// La etiqueta visible cambia para reflejar el flujo actual: Reservado → Apartado.
 const STATUS_LABELS = {
   disponible: "Disponible",
-  apartado: "Reservado",
-  reservado: "Apartado",
+  apartado: "Apartado",
+  reservado: "Reservado",
   reservado_borrador: "Reservado (borrador)",
   apartado_revision: "Apartado en validación",
   apartado_firme: "Apartado firme",
@@ -2231,8 +2229,6 @@ export function PropertyMap() {
       setApartadoClientQuery("");
       setApartadoClients([]);
       setApartadoClient(null);
-    } else {
-      setApartadoClient(null);
     }
     setReservaPrecio(mapboxProps?.precio != null ? String(mapboxProps.precio) : "");
     setReservaFechaLimite(deadline.toISOString().slice(0, 10));
@@ -2518,7 +2514,6 @@ export function PropertyMap() {
       setReservaError("Selecciona el contacto o comprador principal antes de guardar la reserva.");
       return;
     }
-    const directReservation = (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible";
     setReservaLoading(true);
     setReservaError(null);
     try {
@@ -2538,12 +2533,12 @@ export function PropertyMap() {
         throw new Error(buyerProfilePayload?.detail || buyerProfilePayload?.error || "No se pudieron guardar los datos del comprador.");
       }
       const response = await fetch(
-        `/api/crm/propiedad-unidades/${unidadId}/reserva/${directReservation ? "avance-directo" : "avance"}`,
+        `/api/crm/propiedad-unidades/${unidadId}/reserva/${(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" ? "avance" : "avance-directo"}`,
         {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...(directReservation ? { cliente_principal_id: apartadoClient.id } : {}),
+          ...((mapboxProps?.status ?? "").toString().toLowerCase() !== "apartado" ? { cliente_principal_id: apartadoClient.id } : {}),
           precio_acordado: reservaPrecio ? Number(reservaPrecio) : null,
           fecha_limite_reserva: reservaFechaLimite ? `${reservaFechaLimite}T23:59:59Z` : null,
           forma_adquisicion: reservaForma,
@@ -2558,7 +2553,7 @@ export function PropertyMap() {
         throw new Error(payload?.error || payload?.detail || "property_reserva_avance_failed");
       }
       const operationId = payload?.operacion?.id;
-      const requiresApartadoValidation = !canValidateApartado && !directReservation;
+      const requiresApartadoValidation = !canValidateApartado;
       if (requiresApartadoValidation) {
         const requiredDocumentTypes = APARTADO_DOCUMENT_TYPES
           .filter(([type]) => type !== "acta_matrimonio")
@@ -5233,22 +5228,20 @@ export function PropertyMap() {
                                 type="button"
                                 className="flex-1 min-w-[120px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition disabled:opacity-50"
                                 style={{
-                                  backgroundColor: STATUS_COLORS.apartado,
+                                  backgroundColor: STATUS_COLORS.reservado,
                                 }}
-                                onClick={mapboxProps?.operation_status === "borrador" ? handleOpenReservaPanel : handleOpenApartadoPanel}
+                                onClick={handleOpenApartadoPanel}
                                 disabled={statusLoading || apartadoLoading}
                               >
                                 {apartadoLoading
                                   ? "Guardando..."
-                                  : mapboxProps?.operation_status === "borrador"
-                                    ? "Continuar reservado"
-                                    : "Reservado"}
+                                  : "Reservado"}
                               </button>
                               <button
                                 type="button"
                                 className="flex-1 min-w-[120px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition disabled:opacity-50"
                                 style={{
-                                  backgroundColor: STATUS_COLORS.reservado,
+                                  backgroundColor: STATUS_COLORS.apartado,
                                 }}
                                 onClick={handleOpenReservaPanel}
                                 disabled={statusLoading || reservaLoading}
@@ -5540,20 +5533,35 @@ export function PropertyMap() {
                           </Dialog>
                         </>
                       )}
-                      {mapboxKind === "unidad" && unidadId && ["apartado", "disponible"].includes((mapboxProps?.status ?? "").toString().toLowerCase()) && (
+                      {mapboxKind === "unidad" && unidadId && ["apartado", "reservado", "disponible"].includes((mapboxProps?.status ?? "").toString().toLowerCase()) && (
                         <>
-                          {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && (
+                          {["apartado", "reservado"].includes((mapboxProps?.status ?? "").toString().toLowerCase()) && (
                             <div className="mt-6 space-y-2 border-t border-slate-800 pt-4">
                               <div className="flex flex-wrap gap-2">
                                 <button
                                   type="button"
                                   className="flex-1 min-w-[140px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white transition disabled:opacity-50"
-                                  style={{ backgroundColor: STATUS_COLORS.reservado }}
+                                  style={{ backgroundColor: STATUS_COLORS.apartado }}
                                   onClick={handleOpenReservaPanel}
                                   disabled={reservaLoading}
                                 >
-                                  {reservaLoading ? "Guardando..." : "Apartado"}
+                                  {reservaLoading
+                                    ? "Guardando..."
+                                    : (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
+                                      ? "Continuar apartado"
+                                      : "Apartado"}
                                 </button>
+                                {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && (
+                                  <button
+                                    type="button"
+                                    className="flex-1 min-w-[140px] rounded px-3 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white transition disabled:opacity-50"
+                                    style={{ backgroundColor: STATUS_COLORS.vendido }}
+                                    onClick={handleOpenSaleModal}
+                                    disabled={saleLoading}
+                                  >
+                                    {saleLoading ? "Preparando..." : "Preparar cierre"}
+                                  </button>
+                                )}
                               </div>
                               {statusMessage && <p className="text-[0.65rem] text-emerald-300">{statusMessage}</p>}
                               {statusError && <p className="text-[0.65rem] text-rose-400">{statusError}</p>}
@@ -5606,7 +5614,7 @@ export function PropertyMap() {
                                     <p className="text-xs text-amber-700 dark:text-amber-300">Selecciona un comprador para cargar sus datos contractuales.</p>
                                   )}
                                 </div>
-                                {(mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
+                                {((mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" || !apartadoClient) && (
                                   <div className="space-y-2">
                                     <label className="text-[0.65rem] uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-cliente-search">
                                       Contacto o comprador
