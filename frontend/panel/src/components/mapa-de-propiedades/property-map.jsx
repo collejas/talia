@@ -2554,34 +2554,31 @@ export function PropertyMap() {
       }
       const operationId = payload?.operacion?.id;
       const requiresApartadoValidation = !canValidateApartado;
-      if (requiresApartadoValidation) {
-        const requiredDocumentTypes = APARTADO_DOCUMENT_TYPES
-          .filter(([type]) => type !== "acta_matrimonio")
-          .map(([type]) => type);
-        const missingDocuments = requiredDocumentTypes.filter((type) => {
-          if (apartadoDocumentFiles[type]) return false;
-          const existing = apartadoDocuments.find((document) => document.tipo_documento === type);
-          return !existing || existing.estado_revision === "requiere_correccion";
+      const requiredDocumentTypes = APARTADO_DOCUMENT_TYPES
+        .filter(([type]) => type !== "acta_matrimonio")
+        .map(([type]) => type);
+      const missingDocuments = requiredDocumentTypes.filter((type) => {
+        if (apartadoDocumentFiles[type]) return false;
+        const existing = apartadoDocuments.find((document) => document.tipo_documento === type);
+        return !existing || existing.estado_revision === "requiere_correccion";
+      });
+      const documentsToUpload = APARTADO_DOCUMENT_TYPES
+        .map(([type]) => type)
+        .filter((type) => apartadoDocumentFiles[type]);
+      for (const type of documentsToUpload) {
+        const documentForm = new FormData();
+        documentForm.set("tipo_documento", type);
+        documentForm.set("file", apartadoDocumentFiles[type]);
+        const documentResponse = await fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/documentos`, {
+          method: "POST",
+          body: documentForm,
         });
-        if (missingDocuments.length) {
-          throw new Error("Adjunta todos los documentos obligatorios antes de enviar el apartado a validación.");
+        const documentPayload = await documentResponse.json().catch(() => null);
+        if (!documentResponse.ok) {
+          throw new Error(documentPayload?.error || documentPayload?.detail || `No se pudo subir ${type}.`);
         }
-        const documentsToUpload = APARTADO_DOCUMENT_TYPES
-          .map(([type]) => type)
-          .filter((type) => apartadoDocumentFiles[type]);
-        for (const type of documentsToUpload) {
-          const documentForm = new FormData();
-          documentForm.set("tipo_documento", type);
-          documentForm.set("file", apartadoDocumentFiles[type]);
-          const documentResponse = await fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/documentos`, {
-            method: "POST",
-            body: documentForm,
-          });
-          const documentPayload = await documentResponse.json().catch(() => null);
-          if (!documentResponse.ok) {
-            throw new Error(documentPayload?.error || documentPayload?.detail || `No se pudo subir ${type}.`);
-          }
-        }
+      }
+      if (missingDocuments.length === 0) {
         const validationResponse = await fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/enviar-validacion`, { method: "POST" });
         const validationPayload = await validationResponse.json().catch(() => null);
         if (!validationResponse.ok) {
@@ -2590,7 +2587,11 @@ export function PropertyMap() {
         setStatusMessage("Apartado enviado a revisión. El usuario autorizado continuará con el contrato.");
         setReservaPanelOpen(false);
         refreshGeojson();
+        void loadValidationQueue();
         return;
+      }
+      if (requiresApartadoValidation) {
+        throw new Error("Adjunta todos los documentos obligatorios antes de enviar el apartado a validación.");
       }
       if (operationId && reservaImporte) {
         const paymentForm = new FormData();
@@ -2644,7 +2645,7 @@ export function PropertyMap() {
     } finally {
       setReservaLoading(false);
     }
-  }, [apartadoClient?.id, apartadoDocumentFiles, canValidateApartado, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, refreshGeojson, renderContratoPreview, reservaCompradorDatos, reservaCondiciones, reservaCuentaDatos, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, reservaTipoComprador, unidadId]);
+  }, [apartadoClient?.id, apartadoDocumentFiles, apartadoDocuments, canValidateApartado, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, loadValidationQueue, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, refreshGeojson, renderContratoPreview, reservaCompradorDatos, reservaCondiciones, reservaCuentaDatos, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, reservaTipoComprador, unidadId]);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
