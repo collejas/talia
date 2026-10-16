@@ -6820,6 +6820,22 @@ class PropiedadUnidadReservaDirectaRequest(PropiedadUnidadReservaAvanceRequest):
     oportunidad_id: UUID | None = None
 
 
+class PropiedadUnidadCambiarCompradorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    comprador_nuevo_id: UUID
+    oportunidad_nueva_id: UUID | None = None
+    motivo: str = Field(..., min_length=5, max_length=1000)
+
+    @field_validator("motivo")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if len(normalized) < 5:
+            raise ValueError("property_buyer_change_reason_required")
+        return normalized
+
+
 class InmobiliariaContratoPlantilla(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -53673,6 +53689,76 @@ async def obtener_operacion_reserva_actual_propiedad_unidad(
     if operation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_reserva_actual_not_found")
     return {"ok": True, "operacion": operation}
+
+
+@router.post("/propiedad-unidades/{unidad_id}/reserva/cambiar-comprador")
+async def cambiar_comprador_reserva_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    payload: PropiedadUnidadCambiarCompradorRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inmobiliaria.apartados.change_buyer")),
+) -> dict[str, Any]:
+    if not usuario_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
+        organizacion_id=organizacion_id,
+        unidad_id=unidad_id,
+    )
+    if not operation or not operation.get("id"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_reserva_actual_not_found")
+    try:
+        cambio = await repo.cambiar_comprador_operacion(
+            organizacion_id=organizacion_id,
+            operacion_id=_safe_uuid(operation["id"]),
+            comprador_nuevo_id=payload.comprador_nuevo_id,
+            oportunidad_nueva_id=payload.oportunidad_nueva_id or _safe_uuid(operation.get("oportunidad_id")),
+            motivo=payload.motivo,
+            usuario_id=usuario_id,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if any(marker in message for marker in (
+            "operation_not_found",
+            "buyer_not_found",
+            "opportunity_not_found",
+            "buyer_change_not_allowed",
+            "buyer_change_noop",
+            "buyer_change_reason_required",
+            "property_operation_not_found",
+        )):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_buyer_change_failed") from exc
+    return {"ok": True, "operacion": operation, "cambio": cambio}
+
+
+@router.get("/propiedad-unidades/{unidad_id}/reserva/cambios-comprador")
+async def listar_cambios_comprador_reserva_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_any_permission([
+        "inmobiliaria.apartados.change_buyer",
+        "inmobiliaria.apartados.validate",
+    ])),
+) -> dict[str, Any]:
+    operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
+        organizacion_id=organizacion_id,
+        unidad_id=unidad_id,
+    )
+    if not operation or not operation.get("id"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_reserva_actual_not_found")
+    try:
+        items = await repo.list_cambios_comprador_operacion(
+            organizacion_id=organizacion_id,
+            operacion_id=_safe_uuid(operation["id"]),
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_buyer_change_history_failed") from exc
+    return {"ok": True, "items": items, "total": len(items)}
 
 
 @router.get("/inmobiliaria/apartados/pendientes-validacion")

@@ -641,6 +641,15 @@ export function PropertyMap() {
   const [apartadoValidationStatus, setApartadoValidationStatus] = useState(null);
   const [apartadoDocumentFiles, setApartadoDocumentFiles] = useState({});
   const [apartadoDocumentsLoading, setApartadoDocumentsLoading] = useState(false);
+  const [buyerChangeOpen, setBuyerChangeOpen] = useState(false);
+  const [buyerChangeClientQuery, setBuyerChangeClientQuery] = useState("");
+  const [buyerChangeClients, setBuyerChangeClients] = useState([]);
+  const [buyerChangeClient, setBuyerChangeClient] = useState(null);
+  const [buyerChangeOpportunityId, setBuyerChangeOpportunityId] = useState("");
+  const [buyerChangeReason, setBuyerChangeReason] = useState("");
+  const [buyerChangeLoading, setBuyerChangeLoading] = useState(false);
+  const [buyerChangeError, setBuyerChangeError] = useState(null);
+  const [buyerChangeHistory, setBuyerChangeHistory] = useState([]);
   const [parteVendedoraNombre, setParteVendedoraNombre] = useState("");
   const [parteVendedoraFirmante, setParteVendedoraFirmante] = useState("");
   const [parteVendedoraCargo, setParteVendedoraCargo] = useState("");
@@ -2309,6 +2318,61 @@ export function PropertyMap() {
     }
   }, [apartadoOperationId, refreshGeojson]);
 
+  const loadBuyerChangeHistory = useCallback(async () => {
+    if (!unidadId || !canValidateApartado) return;
+    const response = await fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/cambios-comprador`, { cache: "no-store" });
+    const payload = await response.json().catch(() => null);
+    if (response.ok) setBuyerChangeHistory(Array.isArray(payload?.items) ? payload.items : []);
+  }, [canValidateApartado, unidadId]);
+
+  const handleOpenBuyerChange = useCallback(() => {
+    setBuyerChangeClientQuery("");
+    setBuyerChangeClients([]);
+    setBuyerChangeClient(null);
+    setBuyerChangeOpportunityId("");
+    setBuyerChangeReason("");
+    setBuyerChangeError(null);
+    void loadBuyerChangeHistory();
+    setBuyerChangeOpen(true);
+  }, [loadBuyerChangeHistory]);
+
+  const handleChangeBuyer = useCallback(async () => {
+    if (!unidadId || !buyerChangeClient?.id) {
+      setBuyerChangeError("Selecciona el nuevo comprador.");
+      return;
+    }
+    if (buyerChangeReason.trim().length < 5) {
+      setBuyerChangeError("Indica el motivo del cambio.");
+      return;
+    }
+    setBuyerChangeLoading(true);
+    setBuyerChangeError(null);
+    try {
+      const response = await fetch(`/api/crm/propiedad-unidades/${unidadId}/reserva/cambiar-comprador`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          comprador_nuevo_id: buyerChangeClient.id,
+          oportunidad_nueva_id: buyerChangeOpportunityId || null,
+          motivo: buyerChangeReason.trim(),
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.detail || payload?.error || "No se pudo corregir el comprador.");
+      setStatusMessage("Comprador corregido. Los documentos y contratos anteriores requieren una nueva carga y revisión.");
+      setBuyerChangeOpen(false);
+      setApartadoClient(buyerChangeClient);
+      setApartadoDocuments([]);
+      setApartadoValidationStatus(payload?.cambio?.estado_validacion || "pendiente_captura");
+      await loadBuyerChangeHistory();
+      refreshGeojson();
+    } catch (error) {
+      setBuyerChangeError(error instanceof Error ? error.message : "No se pudo corregir el comprador.");
+    } finally {
+      setBuyerChangeLoading(false);
+    }
+  }, [buyerChangeClient, buyerChangeOpportunityId, buyerChangeReason, loadBuyerChangeHistory, refreshGeojson, unidadId]);
+
   useEffect(() => {
     if (!isReservaPanelOpen || !unidadId) return undefined;
     const controller = new AbortController();
@@ -2733,9 +2797,10 @@ export function PropertyMap() {
   }, [isSaleModalOpen, isStatusModalOpen]);
 
   useEffect(() => {
-    const query = apartadoClientQuery.trim();
+    const query = (buyerChangeOpen ? buyerChangeClientQuery : apartadoClientQuery).trim();
     const directReservation = isReservaPanelOpen && (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible";
-    if ((!isApartadoPanelOpen && !directReservation) || query.length < 2) {
+    const buyerCorrection = buyerChangeOpen;
+    if ((!isApartadoPanelOpen && !directReservation && !buyerCorrection) || query.length < 2) {
       setApartadoClients([]);
       setApartadoClientsLoading(false);
       return undefined;
@@ -2753,17 +2818,22 @@ export function PropertyMap() {
       })
       .then((payload) => {
         if (!controller.signal.aborted) {
-          setApartadoClients(Array.isArray(payload?.items) ? payload.items : []);
+          const clients = Array.isArray(payload?.items) ? payload.items : [];
+          if (buyerCorrection) setBuyerChangeClients(clients);
+          else setApartadoClients(clients);
         }
       })
       .catch(() => {
-        if (!controller.signal.aborted) setApartadoClients([]);
+        if (!controller.signal.aborted) {
+          if (buyerCorrection) setBuyerChangeClients([]);
+          else setApartadoClients([]);
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setApartadoClientsLoading(false);
       });
     return () => controller.abort();
-  }, [apartadoClientQuery, isApartadoPanelOpen, isReservaPanelOpen, mapboxProps?.status]);
+  }, [apartadoClientQuery, buyerChangeClientQuery, buyerChangeOpen, isApartadoPanelOpen, isReservaPanelOpen, mapboxProps?.status]);
 
   useEffect(() => {
     if (isSaleModalOpen && availableOpportunities.length && !saleModalOpportunityId) {
@@ -5545,6 +5615,68 @@ export function PropertyMap() {
                               </div>
                             </DialogContent>
                           </Dialog>
+                          <Dialog open={buyerChangeOpen} onOpenChange={setBuyerChangeOpen}>
+                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Corregir comprador</DialogTitle>
+                                <DialogDescription>
+                                  Esta acción requiere permisos elevados. Al confirmar, los documentos y contratos del comprador anterior quedarán invalidados y deberán cargarse nuevamente.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="space-y-2">
+                                  <label className="text-xs font-medium text-foreground" htmlFor="buyer-change-search">Nuevo comprador</label>
+                                  {buyerChangeClient ? (
+                                    <div className="flex items-center justify-between rounded border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">
+                                      <span className="truncate">{buyerChangeClient.nombre_completo || buyerChangeClient.nombre}</span>
+                                      <button type="button" className="text-xs underline" onClick={() => setBuyerChangeClient(null)}>Cambiar</button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <Input id="buyer-change-search" value={buyerChangeClientQuery} onChange={(event) => setBuyerChangeClientQuery(event.target.value)} placeholder="Buscar por nombre, teléfono o correo" />
+                                      {buyerChangeClients.length > 0 && (
+                                        <div className="max-h-40 overflow-y-auto rounded border border-border bg-card">
+                                          {buyerChangeClients.map((client) => (
+                                            <button type="button" key={client.id} className="block w-full px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => setBuyerChangeClient(client)}>
+                                              {client.nombre_completo || client.nombre}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-foreground" htmlFor="buyer-change-opportunity">Oportunidad relacionada <span className="font-normal text-muted-foreground">(Opcional)</span></label>
+                                  <select id="buyer-change-opportunity" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={buyerChangeOpportunityId} onChange={(event) => setBuyerChangeOpportunityId(event.target.value)}>
+                                    <option value="">Conservar la oportunidad actual</option>
+                                    {availableOpportunities.map((opportunity) => <option key={opportunity.id} value={opportunity.id}>{buildOpportunityOptionLabel(opportunity)}</option>)}
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-xs font-medium text-foreground" htmlFor="buyer-change-reason">Motivo del cambio <span className="font-normal text-muted-foreground">(Obligatorio)</span></label>
+                                  <textarea id="buyer-change-reason" className="min-h-24 w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={buyerChangeReason} onChange={(event) => setBuyerChangeReason(event.target.value)} placeholder="Ej. El vendedor seleccionó un contacto incorrecto." />
+                                </div>
+                                {buyerChangeHistory.length > 0 && (
+                                  <div className="space-y-2 rounded border border-border bg-muted/40 p-3">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em]">Historial de cambios</p>
+                                    {buyerChangeHistory.map((change) => (
+                                      <div key={change.id} className="border-b border-border pb-2 text-xs last:border-0 last:pb-0">
+                                        <p>{change.comprador_anterior?.nombre_completo || change.comprador_anterior?.nombre || "Sin comprador"} → {change.comprador_nuevo?.nombre_completo || change.comprador_nuevo?.nombre || "Sin comprador"}</p>
+                                        <p className="text-muted-foreground">{change.motivo} · {change.cambiado_en ? new Date(change.cambiado_en).toLocaleString("es-MX") : ""}</p>
+                                        <p className="text-muted-foreground">Documentos invalidados: {change.documentos_invalidados || 0} · Contratos cancelados: {change.contratos_cancelados || 0}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {buyerChangeError && <p className="text-xs text-rose-500">{buyerChangeError}</p>}
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <Button type="button" variant="secondary" onClick={() => setBuyerChangeOpen(false)}>Cancelar</Button>
+                                <Button type="button" onClick={handleChangeBuyer} disabled={buyerChangeLoading || !buyerChangeClient}>{buyerChangeLoading ? "Guardando..." : "Confirmar corrección"}</Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                         </>
                       )}
                       {mapboxKind === "unidad" && unidadId && ["apartado", "reservado", "disponible"].includes((mapboxProps?.status ?? "").toString().toLowerCase()) && (
@@ -5628,6 +5760,14 @@ export function PropertyMap() {
                                     <p className="text-xs text-amber-700 dark:text-amber-300">Selecciona un comprador para cargar sus datos contractuales.</p>
                                   )}
                                 </div>
+                                {canValidateApartado && apartadoClient && (mapboxProps?.status ?? "").toString().toLowerCase() !== "vendido" && (
+                                  <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3">
+                                    <p className="text-xs text-foreground">¿El comprador ligado a esta operación es incorrecto?</p>
+                                    <Button type="button" variant="outline" size="sm" className="mt-2" onClick={handleOpenBuyerChange}>
+                                      Corregir comprador
+                                    </Button>
+                                  </div>
+                                )}
                                 {((mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" || !apartadoClient) && (
                                   <div className="space-y-2">
                                     <label className="text-[0.65rem] uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-cliente-search">

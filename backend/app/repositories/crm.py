@@ -1629,6 +1629,78 @@ class CRMRepository:
             return result
         raise CRMRepositoryError(f"property_direct_reservation_invalid_response:{result!r}")
 
+    async def cambiar_comprador_operacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        operacion_id: UUID,
+        comprador_nuevo_id: UUID,
+        oportunidad_nueva_id: UUID | None,
+        motivo: str,
+        usuario_id: UUID,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_cambiar_comprador_operacion",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_operacion_id": str(operacion_id),
+                "p_comprador_nuevo_id": str(comprador_nuevo_id),
+                "p_oportunidad_nueva_id": str(oportunidad_nueva_id) if oportunidad_nueva_id else None,
+                "p_motivo": motivo,
+                "p_usuario_id": str(usuario_id),
+            },
+        )
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError("property_buyer_change_invalid_response")
+
+    async def list_cambios_comprador_operacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        operacion_id: UUID,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "operacion_id": f"eq.{operacion_id}",
+            "order": "cambiado_en.desc",
+            "limit": str(max(1, min(limit, 100))),
+            "select": (
+                "id,operacion_id,comprador_anterior_id,comprador_nuevo_id,"
+                "oportunidad_anterior_id,oportunidad_nueva_id,motivo,"
+                "documentos_invalidados,contratos_cancelados,cambiado_por_usuario_id,cambiado_en"
+            ),
+        }
+        response = await self._request(
+            "GET", "/rest/v1/inmobiliaria_operacion_cambios_comprador", params=params
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("property_buyer_change_history_invalid_response")
+        rows = [row for row in data if isinstance(row, dict)]
+        person_ids = [
+            person_id
+            for row in rows
+            for person_id in (_safe_uuid(row.get("comprador_anterior_id")), _safe_uuid(row.get("comprador_nuevo_id")))
+            if person_id
+        ]
+        user_ids = [_safe_uuid(row.get("cambiado_por_usuario_id")) for row in rows]
+        people = await self.get_personas_by_ids_light(organizacion_id=organizacion_id, persona_ids=person_ids)
+        users = await self.list_users_by_ids(
+            organizacion_id=organizacion_id,
+            user_ids=[user_id for user_id in user_ids if user_id],
+        )
+        people_by_id = {str(row.get("id")): row for row in people if row.get("id")}
+        users_by_id = {str(row.get("id")): row for row in users if row.get("id")}
+        for row in rows:
+            row["comprador_anterior"] = people_by_id.get(str(row.get("comprador_anterior_id")))
+            row["comprador_nuevo"] = people_by_id.get(str(row.get("comprador_nuevo_id")))
+            row["usuario"] = users_by_id.get(str(row.get("cambiado_por_usuario_id")))
+        return rows
+
     async def get_operacion_inmobiliaria_activa_por_unidad(
         self,
         *,
