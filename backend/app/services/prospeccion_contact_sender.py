@@ -1076,6 +1076,18 @@ async def _log_whatsapp_inbox_message(
     envio_organizacion_id = _clean_text(envio.get("organizacion_id"))
     prospecto_id = envio.get("prospecto_id")
     persona_id = await _resolve_persona_id_for_prospecto(repo=repo, prospecto_id=prospecto_id)
+    if not persona_id:
+        # Un envío de prospección no crea contacto CRM. La RPC de WhatsApp
+        # crea una persona cuando recibe un envío saliente sin contacto, por
+        # lo que solo debemos registrar el envío en las tablas de prospección
+        # hasta que exista una respuesta real y ocurra la promoción.
+        log_event(
+            logger,
+            "prospeccion.sender_inbox_skip_crm_registration_without_reply",
+            prospecto_id=str(prospecto_id) if prospecto_id else None,
+            envio_id=str(envio.get("id")) if envio.get("id") else None,
+        )
+        return True
     conversation_id = await _ensure_whatsapp_conversation(repo=repo, persona_id=persona_id) if persona_id else None
     detalle_meta = result.detalle if isinstance(result.detalle, dict) else {}
     body_preview = _clean_text(detalle_meta.get("body_preview"))

@@ -240,6 +240,34 @@ async def test_campaign_whatsapp_uses_meta_transport_directly(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
+async def test_prospect_whatsapp_audit_does_not_create_crm_contact_without_promotion(monkeypatch) -> None:
+    prospecto_id = UUID("11111111-1111-1111-1111-111111111111")
+
+    class FakeRepo:
+        async def worker_get_prospecto(self, *, prospecto_id):
+            return {"id": str(prospecto_id), "metadata": {}}
+
+    async def fail_register(**kwargs):
+        raise AssertionError("un prospecto sin respuesta no debe registrar mensaje CRM")
+
+    monkeypatch.setattr(sender_module.storage, "register_whatsapp_message", fail_register)
+
+    persisted = await sender_module._log_whatsapp_inbox_message(
+        repo=FakeRepo(),
+        envio={"id": "22222222-2222-2222-2222-222222222222", "prospecto_id": str(prospecto_id)},
+        detalle={"phone": "4423270045"},
+        payload={"body": "Hola"},
+        result=ContactEnvioResult(
+            estado="enviado",
+            detalle={"body_preview": "Hola", "status": "sent"},
+            mensaje_id="wamid.test",
+        ),
+    )
+
+    assert persisted is True
+
+
+@pytest.mark.asyncio
 async def test_postmark_prospeccion_queues_without_loading_legacy_provider(monkeypatch) -> None:
     calls = {}
 
