@@ -17,7 +17,9 @@ Esta carpeta quedó organizada así:
 - `envios_y_separacion.md`: comportamiento vigente del scheduler/worker, control durable y auditoría de intervalos.
 - `propuesta_separacion_estricta.md`: diseño implementado para garantizar el intervalo mínimo entre despachos.
 - `inbox_prospeccion_plan.md`: plan y avance de operación de conversaciones de prospección reutilizando `/inbox`.
+- `contrato_prospecto_contacto_empresa.md`: contrato vigente que separa prospectos de personas/contactos y empresas, define la promoción por respuesta real y separa ambos dedupes.
 - `_archivo/`: documentos históricos que ya no reflejan el estado actual.
 
 Si vas a definir cambios nuevos, parte de `prospeccion.md` y cruza con `backend_endpoints.md` + `base_datos.md`.
 Para revisar la separación temporal entre envíos, usa `envios_y_separacion.md`; el plan histórico de ejecución queda en `_archivo/plan_envios_prospeccion.md`.
+Para cualquier cambio que toque promoción, respuestas o duplicidad, el contrato principal es `contrato_prospecto_contacto_empresa.md`.

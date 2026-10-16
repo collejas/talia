@@ -18,7 +18,13 @@
 - Se crean lotes y envíos por canal (correo, WhatsApp, llamada).
 - Persistencia: `prospeccion_contacto_batch`, `prospeccion_contacto_envio`, `prospeccion_contactos_log`.
 
-5. Evaluar
+5. Responder y promover
+- Una entrega o lectura no convierte al prospecto.
+- Solo una respuesta real por correo, WhatsApp o voz habilita la promoción a CRM.
+- La promoción conserva el prospecto como origen y ejecuta dedupe únicamente en `personas` y `cuentas`.
+- Sin respuesta, el registro permanece exclusivamente como prospecto.
+
+6. Evaluar
 - Monitoreo de lotes, métricas, campañas y reintentos.
 - Vistas: `prospeccion/contactos` y `prospeccion/campanas`.
 
@@ -29,6 +35,7 @@
 - Contacto: worker multicanal con reintentos y estado.
 - Campañas: agrupación/duplicación de lotes.
 - Inbox comercial: operación de respuestas de prospección desde `/inbox` con filtros de origen/canal/lote/campaña.
+- Promoción CRM: creación o reutilización de `personas`, `cuentas` y `cuenta_personas` únicamente después de una respuesta válida.
 
 ## 3) Observaciones técnicas clave
 
@@ -64,8 +71,21 @@ Para cambios nuevos:
   - mensajes entrantes no-prospección no se bloquean por ausencia de campaña.
 - Embudo:
   - se mantiene el embudo actual (no se crea uno nuevo de prospección).
+- Separación de identidades:
+  - `prospeccion_prospectos` no es una tabla de contactos/empresas.
+  - El dedupe entre prospectos evita repetidos dentro de prospección.
+  - El dedupe CRM solo consulta `personas`, `cuentas` y `cuenta_personas`.
 
-## 7) Estado de implementación actual
+## 7) Contrato de promoción
+
+El flujo completo, la matriz de estados, las reglas por canal y los pendientes de
+implementación están documentados en:
+
+- `docs/Prospeccion/contrato_prospecto_contacto_empresa.md`
+
+Ese documento prevalece sobre referencias históricas en `Prospeccion/_archivo/`.
+
+## 8) Estado de implementación actual
 
 - WhatsApp en frío operativo con prompt especializado y routing por contexto de prospección.
 - Correo de prospección operativo por Brevo con plantillas y `{{logo_url}}`.
@@ -76,13 +96,13 @@ Para cambios nuevos:
   - sin fallback global a `talia.mx`.
 - Retirada de “Salud por canal” en `prospeccion/campanas` por no ser tenant-safe.
 
-## 8) Dónde ver el historial detallado
+## 9) Dónde ver el historial detallado
 
 - Detalle cronológico de cambios: `docs/Prospeccion/CHANGELOG.md`.
 - Pendientes reales actuales: `docs/Prospeccion/siguiente_pasos.md`.
 - Refactor de columnarización y snapshot al convertir resultados: `docs/Prospeccion/plan_columnarizacion_resultados_direccion.md` y `docs/Prospeccion/plan_resultado_a_prospecto_snapshot.md`.
 
-## 9) Programación y separación de envíos
+## 10) Programación y separación de envíos
 
 - La vista `/prospeccion/prospectos` valida una separación de `5` a `3600` segundos.
 - El backend guarda cada envío en `prospeccion_contacto_envio.programado_en` con la separación solicitada.

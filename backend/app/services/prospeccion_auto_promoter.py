@@ -158,7 +158,6 @@ async def _auto_promote_prospecto_locked(
     )
     correo = _clean_text(prospecto.get("email"))
     telefono = normalize_phone(_clean_text(prospecto.get("phone_e164") or prospecto.get("phone")))
-    segmento = _clean_text(prospecto.get("segmento"))
     notas_value = metadata.get("notas")
     notas = notas_value.strip() if isinstance(notas_value, str) else None
     source_label = _describe_source(prospecto)
@@ -275,7 +274,6 @@ async def _auto_promote_prospecto_locked(
             "nombre_completo": display_name,
             "correo": correo,
             "telefono_e164": telefono,
-            "company_name": segmento,
             "notes": notas,
             "persona_datos": persona_datos,
             "propietario_usuario_id": owner_user_id,

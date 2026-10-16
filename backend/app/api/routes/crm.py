@@ -8778,7 +8778,7 @@ def _dedupe_prospectos_for_save(items: Sequence[dict[str, Any]]) -> list[dict[st
     return deduped
 
 
-def _filter_prospectos_against_existing_contacts(
+def _filter_prospectos_against_existing_prospectos(
     items: Sequence[dict[str, Any]],
     *,
     existing_email_rows: Sequence[dict[str, Any]],
@@ -8903,7 +8903,7 @@ def _dedupe_import_prospectos_with_omissions(
     return deduped, omitted
 
 
-def _filter_prospectos_against_existing_contacts_with_omissions(
+def _filter_prospectos_against_existing_prospectos_with_omissions(
     items: Sequence[dict[str, Any]],
     *,
     existing_email_rows: Sequence[dict[str, Any]],
@@ -42944,7 +42944,7 @@ async def listar_audit_por_prospecto(
 async def convertir_prospecto_a_contacto_legacy(
     *,
     repo: CRMRepository = Depends(get_repository),
-    _: str = Depends(require_permission("ejecutar_busquedas")),
+    _: str = Depends(require_permission("contacts.write")),
     user_token: str = Depends(require_user_token),
     organizacion_id: UUID = Depends(require_organizacion_id),
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -42972,7 +42972,9 @@ async def convertir_prospecto_a_contacto_legacy(
     canal_origen = (payload.canal_origen or "otro").lower()
     source_label = _describe_prospeccion_source(prospecto)
     pipeline_canal_label = _infer_prospeccion_canal_label(prospecto)
-    company_name = payload.company_name or prospecto.get("nombre_comercial") or prospecto.get("display_name") or prospecto.get("segmento")
+    # La empresa solo puede venir de una confirmación explícita en este alta
+    # manual. El nombre/segmento del resultado de prospección no es identidad CRM.
+    company_name = _clean_text(payload.company_name)
     website = payload.website or prospecto.get("website")
     segmento = payload.segmento or prospecto.get("segmento")
     actividad = payload.actividad or prospecto.get("actividad")
@@ -43238,20 +43240,20 @@ async def guardar_prospectos(
         )
     except CRMRepositoryError as exc:
         logger.warning(
-            "prospeccion.prospectos.contact_dedupe_lookup_failed",
+            "prospeccion.prospectos.prospecto_dedupe_lookup_failed",
             extra={"error": str(exc), "contactables_encontrados": len(contactables)},
         )
         existing_email_rows = []
         existing_phone_rows = []
     if existing_email_rows or existing_phone_rows:
-        prospectos = _filter_prospectos_against_existing_contacts(
+        prospectos = _filter_prospectos_against_existing_prospectos(
             prospectos,
             existing_email_rows=existing_email_rows,
             existing_phone_rows=existing_phone_rows,
         )
     if not prospectos:
         logger.info(
-            "prospeccion.prospectos.no_payload_after_contact_dedupe",
+            "prospeccion.prospectos.no_payload_after_prospecto_dedupe",
             extra={"contactables_encontrados": len(contactables)},
         )
         return {
@@ -43372,7 +43374,7 @@ async def importar_prospectos(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    filtered_items, existing_omissions = _filter_prospectos_against_existing_contacts_with_omissions(
+    filtered_items, existing_omissions = _filter_prospectos_against_existing_prospectos_with_omissions(
         deduped_items,
         existing_email_rows=existing_email_rows,
         existing_phone_rows=existing_phone_rows,
@@ -58075,12 +58077,12 @@ async def prospeccion_buscador_guardar_prospectos(
 
     if not prospectos:
         logger.info(
-            "buscador.prospectos.no_payload_after_contact_dedupe",
+            "buscador.prospectos.no_payload_after_prospecto_dedupe",
             extra={"job_id": str(job_id), "rows_considered": len(rows)},
         )
         return {"ok": True, "prospectos": [], "total": 0}
 
-    # Evita insertar contactos que ya existen en prospectos.
+    # Dedupe interno: evita insertar prospectos repetidos en prospección.
     try:
         existing_email_rows = await repo.list_prospectos_by_emails(
             organizacion_id=organizacion_id,
@@ -58095,20 +58097,20 @@ async def prospeccion_buscador_guardar_prospectos(
         )
     except CRMRepositoryError as exc:
         logger.warning(
-            "buscador.prospectos.contact_dedupe_lookup_failed",
+            "buscador.prospectos.prospecto_dedupe_lookup_failed",
             extra={"error": str(exc), "job_id": str(job_id)},
         )
         existing_email_rows = []
         existing_phone_rows = []
     if existing_email_rows or existing_phone_rows:
-        prospectos = _filter_prospectos_against_existing_contacts(
+        prospectos = _filter_prospectos_against_existing_prospectos(
             prospectos,
             existing_email_rows=existing_email_rows,
             existing_phone_rows=existing_phone_rows,
         )
     if not prospectos:
         logger.info(
-            "buscador.prospectos.no_payload_after_existing_contact_filter",
+            "buscador.prospectos.no_payload_after_existing_prospecto_filter",
             extra={"job_id": str(job_id), "rows_considered": len(rows)},
         )
         return {"ok": True, "prospectos": [], "total": 0}

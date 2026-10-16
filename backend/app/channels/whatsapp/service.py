@@ -2013,6 +2013,22 @@ async def _sync_inbound_to_prospeccion_log(
         )
         return True
 
+    try:
+        await auto_promote_prospecto(
+            prospecto_id=prospecto_uuid,
+            canal="whatsapp",
+            estado="respondido",
+            repo=repo,
+        )
+    except Exception as exc:  # pragma: no cover - no debe bloquear el webhook entrante
+        log_event(
+            logger,
+            "whatsapp.prospeccion_reply_promotion_failed",
+            prospecto_id=str(prospecto_uuid),
+            envio_id=str(envio_id_value) if envio_id_value else None,
+            error=str(exc),
+        )
+
     if batch_id_value:
         try:
             await progress_hub.publish(

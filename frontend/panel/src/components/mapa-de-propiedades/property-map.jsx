@@ -4889,8 +4889,16 @@ export function PropertyMap() {
                           </div>
                         ))}
                       </div>
-                      {validationDetailError && <p className="text-sm text-rose-600">{validationDetailError}</p>}
-                      <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setValidationDetailOpen(false)}>Cerrar</Button><Button type="button" onClick={() => void markValidationFirm()} disabled={validationDetailLoading || !(validationDetail.documentos || []).length}>Marcar apartado como firme</Button></div>
+                        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-foreground">
+                          <p className="font-semibold">Siguiente paso del validador</p>
+                          <p className="mt-1">Abre el expediente para imprimir el contrato, entregarlo a firma y adjuntar la copia firmada. Después podrás validar el apartado como firme.</p>
+                        </div>
+                        {validationDetailError && <p className="text-sm text-rose-600">{validationDetailError}</p>}
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button type="button" variant="secondary" onClick={() => setValidationDetailOpen(false)}>Cerrar</Button>
+                          <Button type="button" onClick={() => setValidationDetailOpen(false)}>Abrir expediente y contrato</Button>
+                          <Button type="button" onClick={() => void markValidationFirm()} disabled={validationDetailLoading || !(validationDetail.documentos || []).length}>Validar apartado como firme</Button>
+                        </div>
                     </div>
                   )}
                 </DialogContent>
@@ -5032,10 +5040,15 @@ export function PropertyMap() {
                             </div>
                           ))}
                         </div>
+                        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-foreground">
+                          <p className="font-semibold">Siguiente paso del validador</p>
+                          <p className="mt-1">Abre el expediente para imprimir el contrato, entregarlo a firma y adjuntar la copia firmada. Después podrás validar el apartado como firme.</p>
+                        </div>
                         {validationDetailError && <p className="text-sm text-rose-600">{validationDetailError}</p>}
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-wrap justify-end gap-2">
                           <Button type="button" variant="secondary" onClick={() => setValidationDetailOpen(false)}>Cerrar</Button>
-                          <Button type="button" onClick={() => void markValidationFirm()} disabled={validationDetailLoading || !(validationDetail.documentos || []).length}>Marcar apartado como firme</Button>
+                          <Button type="button" onClick={() => setValidationDetailOpen(false)}>Abrir expediente y contrato</Button>
+                          <Button type="button" onClick={() => void markValidationFirm()} disabled={validationDetailLoading || !(validationDetail.documentos || []).length}>Validar apartado como firme</Button>
                         </div>
                       </div>
                     )}

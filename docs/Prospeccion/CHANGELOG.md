@@ -6,6 +6,23 @@ Formato recomendado por entrada:
 - `Base de datos`
 - `Operación/Notas`
 
+## 2026-10-16
+
+### Documentación
+
+- Se documentó el contrato de separación entre resultados de prospección, prospectos, personas y cuentas en `contrato_prospecto_contacto_empresa.md`.
+- Se estableció que la coincidencia de duplicidad de CRM solo aplica sobre personas, cuentas y sus relaciones; los prospectos conservan únicamente una deduplicación interna dentro de su propio universo.
+- Se documentó que la promoción automática a contacto/empresa requiere una respuesta real del prospecto por correo, WhatsApp o voz. El envío, entrega, lectura, timbrado o cierre técnico de una llamada no son respuestas por sí mismos.
+- Se documentaron los límites de la promoción por canal, la exclusión de respuestas automáticas y la prohibición de usar segmento o actividad como nombre de empresa.
+- Se mantuvo como pendiente únicamente la cobertura de pruebas por canal y la validación operativa de casos límite.
+
+### Backend
+
+- WhatsApp ahora promueve el prospecto después de registrar una respuesta entrante real.
+- La conversión manual requiere `contacts.write` y solo crea empresa cuando el usuario proporciona explícitamente `company_name`.
+- El autopromotor dejó de usar `segmento` como identidad empresarial.
+- Se renombraron los filtros y eventos de deduplicación interna para distinguirlos de la deduplicación CRM.
+
 ## 2026-09-05
 
 ### Capacidad de correo en programación

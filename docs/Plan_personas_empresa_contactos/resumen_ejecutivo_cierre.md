@@ -56,3 +56,18 @@ el vocabulario legacy en capas internas donde no haya riesgo de romper integraci
 - `contact` en nombres o firmas quedo como semantica heredada o compatibilidad interna,
   no como contrato publico del panel.
 - La documentacion de cierre completa vive en la misma carpeta del plan.
+
+## Regla de frontera con prospección
+
+Un prospecto no es una persona/contacto ni una empresa/cuenta. El prospecto solo se
+promueve al CRM cuando existe una respuesta real después de un contacto de
+prospección por correo, WhatsApp o voz.
+
+La deduplicación de prospectos entre búsquedas pertenece exclusivamente a
+`prospeccion_prospectos`. La deduplicación CRM pertenece exclusivamente a
+`personas`, `cuentas` y `cuenta_personas`; una consulta CRM no debe usar prospectos
+como candidatos de duplicidad.
+
+El contrato completo está en:
+
+- [`contrato_prospecto_contacto_empresa.md`](../Prospeccion/contrato_prospecto_contacto_empresa.md)
