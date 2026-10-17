@@ -111,7 +111,7 @@ async def _run() -> None:
 
 def main() -> None:
     configure_logging(
-        level=min(resolve_log_level(settings.log_level, default=logging.INFO), logging.INFO),
+        level=max(resolve_log_level(settings.log_level, default=logging.INFO), logging.INFO),
         log_file="/var/www/talia/logs/prospeccion-atribucion-worker.log",
     )
     asyncio.run(_run())

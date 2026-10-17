@@ -265,7 +265,7 @@ def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     configure_logging(
-        level=min(resolve_log_level(settings.log_level, default=logging.INFO), logging.INFO),
+        level=max(resolve_log_level(settings.log_level, default=logging.INFO), logging.INFO),
         log_file="/var/www/talia/logs/postmark-preparer.log",
     )
     asyncio.run(_run())

@@ -40,4 +40,5 @@ exec "${UVICORN_CMD[@]}" app.main:app \
   --host 0.0.0.0 \
   --port 8004 \
   --proxy-headers \
+  --no-access-log \
   --env-file "$BACKEND_DIR/.env"
