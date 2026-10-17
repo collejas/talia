@@ -2373,6 +2373,57 @@ export function PropertyMap() {
     }
   }, [buyerChangeClient, buyerChangeOpportunityId, buyerChangeReason, loadBuyerChangeHistory, refreshGeojson, unidadId]);
 
+  const buyerChangePanel = (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-foreground" htmlFor="buyer-change-search-inline">Nuevo comprador</label>
+        {buyerChangeClient ? (
+          <div className="flex items-center justify-between rounded border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">
+            <span className="truncate">{buyerChangeClient.nombre_completo || buyerChangeClient.nombre}</span>
+            <button type="button" className="text-xs underline" onClick={() => setBuyerChangeClient(null)}>Cambiar</button>
+          </div>
+        ) : (
+          <>
+            <Input id="buyer-change-search-inline" value={buyerChangeClientQuery} onChange={(event) => setBuyerChangeClientQuery(event.target.value)} placeholder="Buscar por nombre, teléfono o correo" />
+            {buyerChangeClients.length > 0 && (
+              <div className="max-h-40 overflow-y-auto rounded border border-border bg-card">
+                {buyerChangeClients.map((client) => (
+                  <button type="button" key={client.id} className="block w-full px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => setBuyerChangeClient(client)}>
+                    {client.nombre_completo || client.nombre}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-foreground" htmlFor="buyer-change-opportunity-inline">Oportunidad relacionada <span className="font-normal text-muted-foreground">(Opcional)</span></label>
+        <select id="buyer-change-opportunity-inline" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={buyerChangeOpportunityId} onChange={(event) => setBuyerChangeOpportunityId(event.target.value)}>
+          <option value="">Conservar la oportunidad actual</option>
+          {availableOpportunities.map((opportunity) => <option key={opportunity.id} value={opportunity.id}>{buildOpportunityOptionLabel(opportunity)}</option>)}
+        </select>
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-foreground" htmlFor="buyer-change-reason-inline">Motivo del cambio <span className="font-normal text-muted-foreground">(Obligatorio)</span></label>
+        <textarea id="buyer-change-reason-inline" className="min-h-24 w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={buyerChangeReason} onChange={(event) => setBuyerChangeReason(event.target.value)} placeholder="Ej. El vendedor seleccionó un contacto incorrecto." />
+      </div>
+      {buyerChangeHistory.length > 0 && (
+        <div className="space-y-2 rounded border border-border bg-muted/40 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em]">Historial de cambios</p>
+          {buyerChangeHistory.map((change) => (
+            <div key={change.id} className="border-b border-border pb-2 text-xs last:border-0 last:pb-0">
+              <p>{change.comprador_anterior?.nombre_completo || change.comprador_anterior?.nombre || "Sin comprador"} → {change.comprador_nuevo?.nombre_completo || change.comprador_nuevo?.nombre || "Sin comprador"}</p>
+              <p className="text-muted-foreground">{change.motivo} · {change.cambiado_en ? new Date(change.cambiado_en).toLocaleString("es-MX") : ""}</p>
+              <p className="text-muted-foreground">Documentos invalidados: {change.documentos_invalidados || 0} · Contratos cancelados: {change.contratos_cancelados || 0}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {buyerChangeError && <p className="text-xs text-rose-500">{buyerChangeError}</p>}
+    </div>
+  );
+
   useEffect(() => {
     if (!isReservaPanelOpen || !unidadId) return undefined;
     const controller = new AbortController();
@@ -5615,8 +5666,8 @@ export function PropertyMap() {
                               </div>
                             </DialogContent>
                           </Dialog>
-                          <Dialog open={buyerChangeOpen} onOpenChange={setBuyerChangeOpen}>
-                            <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
+                          <Dialog open={false} onOpenChange={() => undefined}>
+                            <DialogContent className="z-[10030] left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
                               <DialogHeader>
                                 <DialogTitle>Corregir comprador</DialogTitle>
                                 <DialogDescription>
@@ -5722,11 +5773,13 @@ export function PropertyMap() {
                           >
                             <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
                               <DialogHeader>
-                                <DialogTitle>Completar apartado</DialogTitle>
+                                <DialogTitle>{buyerChangeOpen ? "Corregir comprador" : "Completar apartado"}</DialogTitle>
                                 <DialogDescription>
-                                  {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
-                                    ? `Completa el expediente del apartado. Estado: ${apartadoValidationStatus === "firme" ? "Firme" : apartadoValidationStatus === "pendiente_revision" ? "Pendiente de validación" : "Pendiente de captura"}.`
-                                    : "Completa los datos iniciales para preparar el apartado de esta propiedad."}
+                                  {buyerChangeOpen
+                                    ? "Selecciona el comprador correcto y registra el motivo. Los documentos y contratos anteriores deberán revisarse nuevamente."
+                                    : (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
+                                      ? `Completa el expediente del apartado. Estado: ${apartadoValidationStatus === "firme" ? "Firme" : apartadoValidationStatus === "pendiente_revision" ? "Pendiente de validación" : "Pendiente de captura"}.`
+                                      : "Completa los datos iniciales para preparar el apartado de esta propiedad."}
                                 </DialogDescription>
                                 {!canValidateApartado && (
                                   <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
@@ -5734,7 +5787,7 @@ export function PropertyMap() {
                                   </p>
                                 )}
                               </DialogHeader>
-                              <div className="space-y-4">
+                              {buyerChangeOpen ? buyerChangePanel : <div className="space-y-4">
                                 <div className="space-y-1">
                                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Comprador y condiciones</p>
                                   <p className="text-sm text-foreground">
@@ -6062,12 +6115,18 @@ export function PropertyMap() {
                                 </>
                                 )}
                                 {reservaError && <p className="text-xs text-rose-400">{reservaError}</p>}
-                              </div>
+                              </div>}
                               <div className="flex justify-end gap-2">
-                                <Button type="button" variant="secondary" onClick={() => setReservaPanelOpen(false)}>Cancelar</Button>
-                                <Button type="button" onClick={handleSaveReservaAvance} disabled={reservaLoading}>
-                                  {reservaLoading ? "Guardando..." : canValidateApartado ? "Guardar avance" : "Enviar a validación"}
-                                </Button>
+                                <Button type="button" variant="secondary" onClick={() => buyerChangeOpen ? setBuyerChangeOpen(false) : setReservaPanelOpen(false)}>Cancelar</Button>
+                                {buyerChangeOpen ? (
+                                  <Button type="button" onClick={handleChangeBuyer} disabled={buyerChangeLoading || !buyerChangeClient}>
+                                    {buyerChangeLoading ? "Guardando..." : "Confirmar corrección"}
+                                  </Button>
+                                ) : (
+                                  <Button type="button" onClick={handleSaveReservaAvance} disabled={reservaLoading}>
+                                    {reservaLoading ? "Guardando..." : canValidateApartado ? "Guardar avance" : "Enviar a validación"}
+                                  </Button>
+                                )}
                               </div>
                             </DialogContent>
                           </Dialog>

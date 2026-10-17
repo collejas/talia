@@ -13737,6 +13737,18 @@ class CRMPipelineStage(BaseModel):
     actualizado_en: str
 
 
+class CRMPipelineStageNameUpdate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=120)
+
+    @field_validator("nombre")
+    @classmethod
+    def normalize_nombre(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("El nombre de la etapa no puede estar vacío.")
+        return normalized
+
+
 class CRMUserSummary(BaseModel):
     id: UUID
     nombre_completo: str | None = None
@@ -20868,6 +20880,44 @@ async def list_pipeline_stages(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [CRMPipelineStage.model_validate(row) for row in rows]
+
+
+@router.patch("/pipeline/stages/{stage_id}", response_model=CRMPipelineStage)
+async def update_pipeline_stage_name(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("settings.manage")),
+    stage_id: UUID,
+    payload: CRMPipelineStageNameUpdate,
+) -> CRMPipelineStage:
+    try:
+        row = await repo.update_pipeline_stage_name(
+            organizacion_id=organizacion_id,
+            stage_id=stage_id,
+            nombre=payload.nombre,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="No se pudo actualizar el nombre de la etapa.") from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="pipeline_stage_not_found")
+
+    try:
+        await repo.create_audit_log(
+            organizacion_id=organizacion_id,
+            usuario_id=usuario_id,
+            registro_id=stage_id,
+            accion="pipeline_stage_name_updated",
+            tabla="etapas_pipeline",
+            cambios={"nombre": payload.nombre},
+        )
+    except CRMRepositoryError:
+        logger.warning(
+            "crm.pipeline_stage_name_audit_failed",
+            extra={"organizacion_id": str(organizacion_id), "stage_id": str(stage_id)},
+        )
+    return CRMPipelineStage.model_validate(row)
 
 
 @router.get("/usuarios", response_model=list[CRMUserSummary])

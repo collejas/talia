@@ -35,16 +35,12 @@ class CRMRepositoryError(RuntimeError):
 def _normalize_pipeline_stage_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(row)
     code = str(normalized.get("codigo") or "").strip().lower()
-    if code == "demo":
-        normalized["nombre"] = "Cita agendada"
-    elif code == "ganado" or code.endswith("_ganado"):
+    if code == "ganado" or code.endswith("_ganado"):
         normalized["codigo"] = "cerrado_ganado"
-        normalized["nombre"] = "Cerrado · Ganado"
         if not normalized.get("categoria"):
             normalized["categoria"] = "ganada"
     elif code == "perdido" or code.endswith("_perdido"):
         normalized["codigo"] = "cerrado_perdido"
-        normalized["nombre"] = "Cerrado · Perdido"
         if not normalized.get("categoria"):
             normalized["categoria"] = "perdida"
     return normalized
@@ -2936,6 +2932,39 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"Respuesta inesperada al listar etapas: {data!r}")
         return [_normalize_pipeline_stage_row(row) for row in data if isinstance(row, dict)]
+
+    async def update_pipeline_stage_name(
+        self,
+        *,
+        organizacion_id: UUID,
+        stage_id: UUID,
+        nombre: str,
+    ) -> dict[str, Any] | None:
+        """Actualiza únicamente el nombre visible de una etapa del tenant."""
+
+        resp = await self._request_service_role(
+            "PATCH",
+            "/rest/v1/etapas_pipeline",
+            params={
+                "id": f"eq.{stage_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "visible_en_embudo": "eq.true",
+            },
+            json={
+                "nombre": nombre,
+                "actualizado_en": datetime.now(timezone.utc).isoformat(),
+            },
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"Respuesta inesperada al actualizar etapa: {data!r}")
+        if not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"Respuesta inválida al actualizar etapa: {row!r}")
+        return _normalize_pipeline_stage_row(row)
 
     async def get_pipeline_stage_by_code(
         self,
