@@ -119,6 +119,177 @@ propiedades sin revisar el caso de uso:
 Cuando una vista compartida mezcle datos de ambos dominios, debe mostrar solo
 las secciones, filtros y acciones correspondientes a los módulos habilitados.
 
+## Clientes y ventas para la modalidad propiedades
+
+### Decisión de producto
+
+No se creará una entidad separada de “clientes inmobiliarios”. `Clientes`
+continuará siendo el maestro de identidad, relación comercial e historial. La
+modalidad de la relación se mostrará mediante un dominio comercial explícito:
+
+- `propiedades`.
+- `productos_servicios`.
+- `mixto`, cuando el mismo cliente tenga ambos tipos de operación.
+
+Un cliente inmobiliario debe poder verse en `Clientes` y en `Ventas` con la
+misma trazabilidad que un cliente de productos, pero sin tratar una propiedad
+como existencia de almacén.
+
+### Regla para considerar a una persona cliente
+
+La secuencia inmobiliaria será:
+
+```text
+Prospecto
+  -> oportunidad inmobiliaria
+  -> cotización de propiedad
+  -> apartado o reserva
+  -> venta formal
+  -> pago confirmado
+  -> cliente activo
+```
+
+Aceptar una cotización o ganar una oportunidad no debe crear por sí solo un
+cliente activo. Un pago parcial confirmado puede activar al cliente y dejar la
+venta con saldo pendiente. El estado de la unidad (`disponible`, `reservado`,
+`apartado`, `vendido` o `bloqueado`) debe permanecer separado del estado
+financiero de la venta.
+
+### Vista `Clientes`
+
+La tabla general debe incorporar, cuando el módulo de propiedades esté activo,
+las siguientes columnas opcionales:
+
+- Dominio del cliente: propiedades, productos/servicios o mixto.
+- Número de propiedades adquiridas.
+- Última unidad adquirida.
+- Total vendido en propiedades.
+- Estado de la operación inmobiliaria más reciente.
+
+El detalle de cliente debe incluir una pestaña `Propiedades` con:
+
+- Desarrollo.
+- Unidad, lote, casa o departamento.
+- `propiedad_id` y `unidad_id`.
+- Precio final y moneda.
+- Fecha de operación.
+- Estado comercial de la unidad.
+- Venta, cotización y oportunidad relacionadas.
+- Pagos confirmados y saldo pendiente.
+- Documentos o contrato, cuando existan.
+
+Los clientes de productos deben conservar sus vistas actuales. Los clientes
+mixtos deben conservar un único perfil y mostrar ambos historiales separados
+por dominio.
+
+### Vista `Ventas`
+
+La vista debe conservar un reporte unificado, con un filtro de dominio:
+
+- Todas.
+- Productos y servicios.
+- Propiedades.
+
+Una fila inmobiliaria debe mostrar al menos:
+
+| Campo | Información |
+|---|---|
+| Cliente | Persona o cuenta compradora |
+| Dominio | Propiedad |
+| Desarrollo | Desarrollo inmobiliario |
+| Unidad | Código o nombre de la unidad |
+| Estado | Pendiente, pago parcial, pagada o cancelada |
+| Precio | Precio final de la operación |
+| Cobrado | Pagos confirmados |
+| Saldo | Importe pendiente |
+| Vendedor | Usuario responsable |
+
+En filas inmobiliarias no deben aparecer acciones de almacén, surtido,
+entrega, existencias o movimientos de inventario. Esas acciones solo aplican a
+productos y servicios con `maneja_inventario = true`.
+
+El resumen de ventas podrá mostrar métricas separadas para propiedades:
+
+- Unidades vendidas.
+- Valor vendido en propiedades.
+- Cobrado y saldo inmobiliario.
+- Operaciones apartadas o reservadas, sin contarlas todavía como ventas
+  formalizadas.
+
+### Relaciones de datos
+
+La trazabilidad debe apoyarse en relaciones explícitas, no únicamente en
+`metadata` o `jsonb`:
+
+```text
+cliente_id
+  -> venta_id
+      -> venta_items
+          -> pedido_venta_item_id
+              -> propiedad_id / unidad_id
+```
+
+También deben conservarse las relaciones con `cotizacion_id` y
+`oportunidad_id`. `pedido_venta_items` ya contempla `propiedad_id` y
+`unidad_id`; la formalización debe asegurar que esos valores se propaguen a la
+venta y que el reporte pueda recuperarlos mediante la relación explícita.
+
+Las propiedades no deben entrar al flujo de existencias, surtidos,
+recepciones ni movimientos cuantitativos de almacén.
+
+### Diagnóstico actual
+
+Al revisar frontend, backend y Supabase se confirmó lo siguiente:
+
+- `/clientes` consume `/crm/clientes` y resume la tabla general `ventas`.
+- `/ventas` consume `/crm/ventas/reporte`, respaldado por el RPC
+  `crm_reporte_ventas`.
+- El reporte actual devuelve cliente, oportunidad, vendedor, importe, pagos y
+  saldo, pero no devuelve desarrollo, unidad ni dominio comercial.
+- `POST /crm/ventas/propiedades` actualmente prepara la cotización y el flujo
+  de la operación inmobiliaria; la venta formal debe quedar registrada en el
+  flujo posterior de pedidos, venta y pagos.
+- En la revisión actual de Supabase existen ventas generales y movimientos de
+  unidades marcados como `vendido`, pero no hay partidas inmobiliarias
+  formalizadas dentro de `venta_items` relacionadas con una unidad.
+
+Por tanto, el primer trabajo técnico no es crear otra pantalla aislada, sino
+completar la propagación de la relación propiedad/unidad durante la
+formalización y después enriquecer los contratos de `Clientes` y `Ventas`.
+
+### Fases técnicas específicas
+
+1. **Formalización inmobiliaria**
+   - Propagar `propiedad_id` y `unidad_id` desde la cotización o el pedido
+     hasta la venta formal.
+   - Mantener la diferencia entre apartado, reserva, venta contractual y pago.
+   - No crear una venta formal al aceptar solamente una cotización.
+
+2. **Backend y base de datos**
+   - Ampliar `crm_reporte_ventas` con `dominio`, `propiedad_id`, `unidad_id`,
+     desarrollo, unidad y estado inmobiliario.
+   - Añadir filtros de dominio al endpoint `/crm/ventas/reporte`.
+   - Ampliar el resumen de clientes con conteos y totales por dominio.
+   - Ampliar `/crm/clientes/{cliente_id}/historial` con el detalle de unidades
+     y operaciones inmobiliarias.
+   - Mantener todos los filtros por `organizacion_id` y permisos actuales.
+
+3. **Frontend**
+   - Agregar el filtro de dominio en `Ventas`.
+   - Mostrar columnas inmobiliarias solo cuando el tenant tenga propiedades
+     habilitadas.
+   - Mostrar la pestaña `Propiedades` en el detalle del cliente bajo la misma
+     condición.
+   - Ocultar acciones logísticas para filas inmobiliarias.
+   - Mantener el reporte de productos sin columnas inmobiliarias innecesarias.
+
+4. **Validación**
+   - Probar tenant solo propiedades, solo productos y tenant mixto.
+   - Probar una operación apartada, una reservada, una venta formal, un pago
+     parcial y una venta liquidada.
+   - Confirmar que la unidad, el cliente, la venta, el pago y el saldo se
+     visualizan correctamente en ambas vistas.
+
 ## Estado actual detectado
 
 ### Frontend
