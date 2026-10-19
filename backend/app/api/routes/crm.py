@@ -4321,8 +4321,16 @@ class ClienteRecord(BaseModel):
     fuente: str | None = None
     monto_estimado: float | None = None
     numero_ventas: int = 0
+    numero_ventas_propiedades: int = 0
+    numero_ventas_productos: int = 0
+    dominio_comercial: Literal["propiedades", "productos_servicios", "mixto"] | None = None
+    numero_propiedades: int = 0
+    ultima_unidad_nombre: str | None = None
+    ultimo_desarrollo_nombre: str | None = None
     numero_oportunidades_ganadas: int = 0
     total_vendido: float = 0
+    total_vendido_propiedades: float = 0
+    total_vendido_productos: float = 0
     total_cobrado: float = 0
     saldo_pendiente: float = 0
     ultima_compra_en: datetime | None = None
@@ -4351,6 +4359,7 @@ class ClienteHistorialResponse(BaseModel):
     cotizaciones: list[dict[str, Any]] = Field(default_factory=list)
     ventas: list[dict[str, Any]] = Field(default_factory=list)
     venta_items: list[dict[str, Any]] = Field(default_factory=list)
+    propiedades: list[dict[str, Any]] = Field(default_factory=list)
     pagos: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -4362,6 +4371,10 @@ class CRMVentasReporteResumen(BaseModel):
     numero_pagos_parciales: int = 0
     numero_pendientes_pago: int = 0
     numero_pagadas: int = 0
+    numero_ventas_propiedades: int = 0
+    total_vendido_propiedades: Decimal = Decimal("0")
+    numero_ventas_productos: int = 0
+    total_vendido_productos: Decimal = Decimal("0")
 
 
 class CRMVentasReportePunto(BaseModel):
@@ -4385,6 +4398,12 @@ class CRMVentasReporteItem(BaseModel):
     saldo_pendiente: Decimal
     estatus: Literal["pendiente_pago", "pago_parcial", "pagada", "cancelada", "reembolsada"]
     moneda: str
+    dominio: Literal["propiedades", "productos_servicios", "mixto"] = "productos_servicios"
+    propiedad_id: UUID | None = None
+    unidad_id: UUID | None = None
+    desarrollo_nombre: str | None = None
+    unidad_nombre: str | None = None
+    propiedad_status: str | None = None
 
 
 class CRMVentasReporteVendedor(BaseModel):
@@ -20822,10 +20841,12 @@ async def list_clientes(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ClienteListResponse:
     try:
+        module_flags = await _get_tenant_module_flags(repo=repo, organizacion_id=organizacion_id)
         rows = await repo.list_clientes(
             organizacion_id=organizacion_id,
             limit=limit,
             offset=offset,
+            include_propiedades=module_flags["propiedades"],
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -20837,13 +20858,14 @@ async def list_clientes(
 async def get_sales_report(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_any_tenant_module_enabled()),
     user_token: str = Depends(require_user_token),  # noqa: ARG001
     usuario_id: UUID | None = Depends(optional_usuario_id),
     _: str = Depends(require_permission("sales.view")),
     desde: date,
     hasta: date,
     estatus: Literal["pendiente_pago", "pago_parcial", "pagada", "cancelada", "reembolsada"] | None = None,
+    dominio: Literal["propiedades", "productos_servicios", "mixto"] | None = None,
     vendedor_usuario_id: UUID | None = None,
     moneda: str | None = Query(default=None, min_length=3, max_length=3),
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -20857,6 +20879,11 @@ async def get_sales_report(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="date_range_too_large")
 
     try:
+        module_flags = await _get_tenant_module_flags(repo=repo, organizacion_id=organizacion_id)
+        if not module_flags["propiedades"]:
+            dominio = "productos_servicios"
+        elif not module_flags["productos"]:
+            dominio = "propiedades"
         can_view_all = await repo.current_user_has_perm(codigo="sales.view_all")
         can_view_team = await repo.current_user_has_perm(codigo="sales.view_team")
         seller_rows = await repo.list_sales_reps_for_report(organizacion_id=organizacion_id, limit=500)
@@ -20914,6 +20941,7 @@ async def get_sales_report(
             vendedor_usuario_id=vendedor_usuario_id,
             vendedor_usuario_ids=allowed_seller_ids,
             moneda=moneda.upper() if moneda else None,
+            dominio=dominio,
             limit=limit,
             offset=offset,
         )
@@ -20945,10 +20973,12 @@ async def historial_cliente(
     cliente_id: UUID,
 ) -> ClienteHistorialResponse:
     try:
+        module_flags = await _get_tenant_module_flags(repo=repo, organizacion_id=organizacion_id)
         history = await repo.get_cliente_historial(
             organizacion_id=organizacion_id,
             cliente_id=cliente_id,
             usuario_token=user_token,
+            include_propiedades=module_flags["propiedades"],
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="no_se_pudo_consultar_historial_cliente") from exc

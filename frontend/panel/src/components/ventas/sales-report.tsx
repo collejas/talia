@@ -19,6 +19,10 @@ export type SalesReportSummary = {
   numero_pagos_parciales: number;
   numero_pendientes_pago: number;
   numero_pagadas: number;
+  numero_ventas_propiedades: number;
+  total_vendido_propiedades: Amount;
+  numero_ventas_productos: number;
+  total_vendido_productos: Amount;
 };
 
 export type SalesReportPoint = { mes: string; total_vendido: Amount; total_cobrado: Amount };
@@ -37,6 +41,12 @@ export type SalesReportItem = {
   saldo_pendiente: Amount;
   estatus: string;
   moneda: string;
+  dominio: "propiedades" | "productos_servicios" | "mixto";
+  propiedad_id: string | null;
+  unidad_id: string | null;
+  desarrollo_nombre: string | null;
+  unidad_nombre: string | null;
+  propiedad_status: string | null;
 };
 
 type Seller = { id: string; nombre_completo: string | null; correo: string | null };
@@ -59,6 +69,10 @@ const EMPTY_REPORT: SalesReportData = {
     numero_pagos_parciales: 0,
     numero_pendientes_pago: 0,
     numero_pagadas: 0,
+    numero_ventas_propiedades: 0,
+    total_vendido_propiedades: 0,
+    numero_ventas_productos: 0,
+    total_vendido_productos: 0,
   },
   serie: [],
   items: [],
@@ -68,7 +82,8 @@ const EMPTY_REPORT: SalesReportData = {
 };
 
 type DatePreset = "mes" | "90d" | "ano" | "personalizado";
-type Filters = SalesReportPrintFilters;
+type DomainFilter = "todos" | "propiedades" | "productos_servicios" | "mixto";
+type Filters = SalesReportPrintFilters & { dominio: DomainFilter };
 
 function dateInputValue(date: Date): string {
   const year = date.getFullYear();
@@ -77,7 +92,7 @@ function dateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function defaultFilters(): Filters {
+function defaultFilters(dominio: DomainFilter = "todos"): Filters {
   const now = new Date();
   return {
     desde: dateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)),
@@ -85,6 +100,7 @@ function defaultFilters(): Filters {
     estatus: "todos",
     vendedor: "todos",
     moneda: "MXN",
+    dominio,
   };
 }
 
@@ -126,8 +142,9 @@ function periodLabel(value: string): string {
   return new Intl.DateTimeFormat("es-MX", { month: "short", year: "2-digit" }).format(new Date(year, (month || 1) - 1, 1));
 }
 
-export function SalesReport({ printBrand }: { printBrand: SalesReportPrintBrand | null }) {
-  const [filters, setFilters] = useState<Filters>(defaultFilters);
+export function SalesReport({ printBrand, propiedadesEnabled, productosEnabled }: { printBrand: SalesReportPrintBrand | null; propiedadesEnabled: boolean; productosEnabled: boolean }) {
+  const defaultDomain: DomainFilter = propiedadesEnabled && !productosEnabled ? "propiedades" : "todos";
+  const [filters, setFilters] = useState<Filters>(() => defaultFilters(defaultDomain));
   const [preset, setPreset] = useState<DatePreset>("mes");
   const [offset, setOffset] = useState(0);
   const [report, setReport] = useState<SalesReportData>(EMPTY_REPORT);
@@ -174,6 +191,7 @@ export function SalesReport({ printBrand }: { printBrand: SalesReportPrintBrand 
       moneda: filters.moneda,
     });
     if (filters.estatus !== "todos") params.set("estatus", filters.estatus);
+    if (filters.dominio !== "todos") params.set("dominio", filters.dominio);
     if (filters.vendedor !== "todos") params.set("vendedor_usuario_id", filters.vendedor);
 
     const controller = new AbortController();
@@ -235,6 +253,7 @@ export function SalesReport({ printBrand }: { printBrand: SalesReportPrintBrand 
         moneda: selectedFilters.moneda,
       });
       if (selectedFilters.estatus !== "todos") params.set("estatus", selectedFilters.estatus);
+      if (selectedFilters.dominio !== "todos") params.set("dominio", selectedFilters.dominio);
       if (selectedFilters.vendedor !== "todos") params.set("vendedor_usuario_id", selectedFilters.vendedor);
       return `/api/crm/ventas/reporte?${params.toString()}`;
     };
@@ -270,6 +289,15 @@ export function SalesReport({ printBrand }: { printBrand: SalesReportPrintBrand 
   return (
     <div className="space-y-5">
       <section aria-label="Filtros del reporte" className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4">
+        {propiedadesEnabled && productosEnabled ? <div className="grid min-w-44 gap-1.5">
+          <label htmlFor="sales-domain" className="text-sm font-medium">Tipo de venta</label>
+          <select id="sales-domain" value={filters.dominio} onChange={(event) => updateFilter("dominio", event.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="todos">Todas</option>
+            <option value="productos_servicios">Productos y servicios</option>
+            <option value="propiedades">Propiedades</option>
+            <option value="mixto">Mixtas</option>
+          </select>
+        </div> : null}
         <div className="grid min-w-36 gap-1.5">
           <label htmlFor="sales-period" className="text-sm font-medium">Periodo de ventas</label>
           <select id="sales-period" value={preset} onChange={(event) => selectPreset(event.target.value as DatePreset)} className="h-9 rounded-md border bg-background px-3 text-sm">
@@ -358,13 +386,14 @@ export function SalesReport({ printBrand }: { printBrand: SalesReportPrintBrand 
           <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Fecha</TableHead><TableHead>Cliente</TableHead><TableHead>Oportunidad</TableHead><TableHead>Vendedor</TableHead>
+                <TableHead>Fecha</TableHead><TableHead>Cliente</TableHead>{propiedadesEnabled ? <TableHead>Tipo / propiedad</TableHead> : null}<TableHead>Oportunidad</TableHead><TableHead>Vendedor</TableHead>
                 <TableHead>Estado</TableHead><TableHead className="text-right">Venta</TableHead><TableHead className="text-right">Cobrado</TableHead><TableHead className="text-right">Saldo</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {report.items.map((item) => <TableRow key={item.id}>
                   <TableCell className="whitespace-nowrap">{formatDate(item.fecha_venta)}</TableCell>
                   <TableCell className="min-w-40"><Link className="font-medium text-primary hover:underline" href={`/clientes/${encodeURIComponent(item.cliente_id)}`}>{item.cliente_nombre}</Link></TableCell>
+                  {propiedadesEnabled ? <TableCell className="min-w-48">{item.dominio === "propiedades" || item.dominio === "mixto" ? <><span className="font-medium">{item.dominio === "mixto" ? "Mixta" : "Propiedad"}</span><br /><span className="text-xs text-muted-foreground">{[item.desarrollo_nombre, item.unidad_nombre].filter(Boolean).join(" · ") || "Unidad sin detalle"}</span></> : "Productos/servicios"}</TableCell> : null}
                   <TableCell className="min-w-48">{item.codigo_oportunidad ? `${item.codigo_oportunidad} · ` : ""}{item.oportunidad_titulo || "—"}</TableCell>
                   <TableCell>{item.vendedor_nombre || "Sin vendedor"}</TableCell>
                   <TableCell>{statusLabel(item.estatus)}</TableCell>
@@ -372,7 +401,7 @@ export function SalesReport({ printBrand }: { printBrand: SalesReportPrintBrand 
                   <TableCell className="text-right tabular-nums">{formatMoney(item.total_cobrado, item.moneda)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(item.saldo_pendiente, item.moneda)}</TableCell>
                 </TableRow>)}
-                {!loading && report.items.length === 0 ? <TableRow><TableCell colSpan={8} className="h-24 text-center text-muted-foreground">No hay ventas que coincidan con los filtros.</TableCell></TableRow> : null}
+                {!loading && report.items.length === 0 ? <TableRow><TableCell colSpan={propiedadesEnabled ? 9 : 8} className="h-24 text-center text-muted-foreground">No hay ventas que coincidan con los filtros.</TableCell></TableRow> : null}
               </TableBody>
             </Table>
           </div>

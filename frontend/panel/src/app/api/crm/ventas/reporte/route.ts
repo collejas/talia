@@ -11,6 +11,7 @@ export async function GET(request: Request) {
       estatus: url.searchParams.get("estatus"),
       vendedor_usuario_id: url.searchParams.get("vendedor_usuario_id"),
       moneda: url.searchParams.get("moneda"),
+      dominio: url.searchParams.get("dominio"),
       limit: url.searchParams.get("limit") ?? "50",
       offset: url.searchParams.get("offset") ?? "0",
     },

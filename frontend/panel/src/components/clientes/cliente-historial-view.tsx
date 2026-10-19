@@ -10,6 +10,7 @@ type ClienteHistory = {
   cotizaciones: Array<Record<string, unknown>>;
   ventas: Array<Record<string, unknown>>;
   venta_items: Array<Record<string, unknown>>;
+  propiedades: Array<Record<string, unknown>>;
   pagos: Array<Record<string, unknown>>;
 };
 
@@ -28,7 +29,7 @@ function Empty({ label }: { label: string }) {
   return <p className="py-8 text-center text-sm text-muted-foreground">No hay {label} registrados.</p>;
 }
 
-export function ClienteHistorialView({ history }: { history: ClienteHistory }) {
+export function ClienteHistorialView({ history, showPropertyHistory = true }: { history: ClienteHistory; showPropertyHistory?: boolean }) {
   const { cliente } = history;
   const title = cliente.razon_social || cliente.contacto?.nombre_completo || "Cliente";
   const sold = history.ventas.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
@@ -52,6 +53,7 @@ export function ClienteHistorialView({ history }: { history: ClienteHistory }) {
         <SummaryCard label="Ventas" value={history.ventas.length.toString()} />
         <SummaryCard label="Total vendido" value={formatMoney(sold, currency)} />
         <SummaryCard label="Total cobrado" value={formatMoney(paid, currency)} />
+        {showPropertyHistory && history.propiedades.length ? <SummaryCard label="Propiedades" value={history.propiedades.length.toString()} /> : null}
       </div>
 
       <Tabs defaultValue="resumen" className="space-y-4">
@@ -60,6 +62,7 @@ export function ClienteHistorialView({ history }: { history: ClienteHistory }) {
           <TabsTrigger value="oportunidades">Oportunidades</TabsTrigger>
           <TabsTrigger value="cotizaciones">Cotizaciones</TabsTrigger>
           <TabsTrigger value="ventas">Ventas</TabsTrigger>
+          {showPropertyHistory ? <TabsTrigger value="propiedades">Propiedades</TabsTrigger> : null}
           <TabsTrigger value="pagos">Pagos</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
         </TabsList>
@@ -76,6 +79,7 @@ export function ClienteHistorialView({ history }: { history: ClienteHistory }) {
         <TabsContent value="oportunidades"><HistoryTable rows={history.oportunidades} columns={[["titulo", "Oportunidad"], ["estado", "Estado"], ["monto_estimado", "Monto"]]} currency={currency} /></TabsContent>
         <TabsContent value="cotizaciones"><HistoryTable rows={history.cotizaciones} columns={[["id", "Cotización"], ["estatus", "Estado"], ["total", "Total"]]} currency={currency} /></TabsContent>
         <TabsContent value="ventas"><HistoryTable rows={history.ventas} columns={[["id", "Venta"], ["estatus", "Estado"], ["total", "Total"], ["fecha_venta", "Fecha"]]} currency={currency} /></TabsContent>
+        {showPropertyHistory ? <TabsContent value="propiedades"><HistoryTable rows={history.propiedades} columns={[["desarrollo_nombre", "Desarrollo"], ["unidad_nombre", "Unidad"], ["propiedad_status", "Estado unidad"], ["estatus_venta", "Estado venta"], ["total_venta", "Total"], ["fecha_venta", "Fecha"]]} currency={currency} /></TabsContent> : null}
         <TabsContent value="pagos"><HistoryTable rows={history.pagos} columns={[["fecha_pago", "Fecha"], ["monto", "Monto"], ["metodo_pago", "Método"], ["estatus", "Estado"]]} currency={currency} /></TabsContent>
         <TabsContent value="documentos"><HistoryTable rows={cliente.documentos as unknown as Array<Record<string, unknown>>} columns={[["tipo", "Tipo"], ["estado", "Estado"], ["creado_en", "Fecha"]]} currency={currency} /></TabsContent>
       </Tabs>

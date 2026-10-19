@@ -490,11 +490,24 @@ Fecha: 2026-10-19
 - El menú lateral oculta compras y operación cuando productos está desactivado.
 - `catalog_items` se filtra por dominio usando `propiedad_id` y `unidad_id`
   cuando el tenant tiene una sola modalidad activa.
+- `Clientes` conserva un único perfil y ahora puede incluir dominio comercial,
+  conteos inmobiliarios y última unidad adquirida.
+- El historial de cliente incorpora la pestaña `Propiedades` con desarrollo,
+  unidad, estado de unidad, venta, importe y fecha.
+- `Ventas` incorpora el filtro de dominio y muestra contexto de propiedad sin
+  presentar acciones de inventario para una operación inmobiliaria.
+- El RPC `crm_reporte_ventas` tiene una variante con dominio, desarrollo,
+  unidad y estado inmobiliario; fue aplicada en Supabase mediante la migración
+  `20261019_120000_property_sales_reporting.sql`.
+- El backend fuerza el dominio visible según los módulos activos del tenant y
+  devuelve `403` cuando no existe ningún módulo comercial.
 
 Pendiente para una siguiente iteración:
 
 - Validación visual autenticada por tenant en el panel desplegado.
-- Revisión de ventas, cotizaciones y reportes compartidos.
+- Validación de una venta inmobiliaria formalizada con pedido, pago parcial y
+  liquidación para comprobar la propagación real de `propiedad_id` y
+  `unidad_id`.
 - Pruebas automatizadas específicas para las cuatro combinaciones de módulos.
 - Resolver el comportamiento de tenants nuevos cuyos flags no existan todavía.
 

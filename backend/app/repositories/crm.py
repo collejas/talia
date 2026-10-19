@@ -20729,6 +20729,7 @@ class CRMRepository:
         organizacion_id: UUID,
         limit: int = 50,
         offset: int = 0,
+        include_propiedades: bool = True,
     ) -> list[dict[str, Any]]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
@@ -20755,6 +20756,7 @@ class CRMRepository:
             await self._attach_cliente_sales_summary(
                 organizacion_id=organizacion_id,
                 rows=rows,
+                include_propiedades=include_propiedades,
             )
         return rows
 
@@ -20769,6 +20771,7 @@ class CRMRepository:
         vendedor_usuario_id: UUID | None,
         vendedor_usuario_ids: list[UUID] | None,
         moneda: str | None,
+        dominio: str | None,
         limit: int,
         offset: int,
     ) -> dict[str, Any]:
@@ -20788,6 +20791,7 @@ class CRMRepository:
                     else None
                 ),
                 "p_moneda": moneda,
+                "p_dominio": dominio,
                 "p_limit": limit,
                 "p_offset": offset,
             },
@@ -20803,6 +20807,7 @@ class CRMRepository:
         *,
         organizacion_id: UUID,
         rows: list[dict[str, Any]],
+        include_propiedades: bool = True,
     ) -> None:
         client_ids = [str(row["id"]) for row in rows if row.get("id")]
         if not client_ids:
@@ -20814,7 +20819,7 @@ class CRMRepository:
                 params={
                     "organizacion_id": f"eq.{organizacion_id}",
                     "cliente_id": _postgrest_in_clause(client_ids),
-                    "select": "cliente_id,total,estatus,fecha_venta",
+                    "select": "id,cliente_id,total,estatus,fecha_venta",
                 },
                 organizacion_id=organizacion_id,
             ),
@@ -20846,8 +20851,20 @@ class CRMRepository:
         if not isinstance(sales, list) or not isinstance(payments, list) or not isinstance(opportunities, list):
             raise CRMRepositoryError("Respuesta inesperada al resumir ventas de clientes")
 
+        sales = [row for row in sales if isinstance(row, dict)]
+        sale_context = await self._get_sale_property_context(
+            organizacion_id=organizacion_id,
+            sales=sales,
+        ) if include_propiedades else {}
+
         sold_by_client: dict[str, Decimal] = defaultdict(Decimal)
         count_by_client: dict[str, int] = defaultdict(int)
+        property_count_by_client: dict[str, int] = defaultdict(int)
+        product_count_by_client: dict[str, int] = defaultdict(int)
+        property_total_by_client: dict[str, Decimal] = defaultdict(Decimal)
+        product_total_by_client: dict[str, Decimal] = defaultdict(Decimal)
+        domains_by_client: dict[str, set[str]] = defaultdict(set)
+        latest_property_by_client: dict[str, tuple[str, dict[str, Any]]] = {}
         paid_by_client: dict[str, Decimal] = defaultdict(Decimal)
         won_opportunities_by_client: dict[str, int] = defaultdict(int)
         last_purchase_by_client: dict[str, str] = {}
@@ -20862,6 +20879,23 @@ class CRMRepository:
                 continue
             sold_by_client[client_id] += Decimal(str(sale.get("total") or 0))
             count_by_client[client_id] += 1
+            context = sale_context.get(str(sale.get("id")), {})
+            domain = str(context.get("dominio") or "productos_servicios")
+            domains_by_client[client_id].add(domain)
+            if domain in {"propiedades", "mixto"}:
+                property_count_by_client[client_id] += 1
+                if domain == "propiedades":
+                    property_total_by_client[client_id] += Decimal(str(sale.get("total") or 0))
+                property_detail = context.get("property")
+                purchase_date = sale.get("fecha_venta")
+                if isinstance(property_detail, dict) and isinstance(purchase_date, str):
+                    previous = latest_property_by_client.get(client_id)
+                    if previous is None or purchase_date > previous[0]:
+                        latest_property_by_client[client_id] = (purchase_date, property_detail)
+            if domain in {"productos_servicios", "mixto"}:
+                product_count_by_client[client_id] += 1
+                if domain == "productos_servicios":
+                    product_total_by_client[client_id] += Decimal(str(sale.get("total") or 0))
             purchase_date = sale.get("fecha_venta")
             if isinstance(purchase_date, str) and purchase_date > last_purchase_by_client.get(client_id, ""):
                 last_purchase_by_client[client_id] = purchase_date
@@ -20892,6 +20926,19 @@ class CRMRepository:
             sold = sold_by_client.get(client_id, Decimal("0"))
             paid = paid_by_client.get(client_id, Decimal("0"))
             row["numero_ventas"] = count_by_client.get(client_id, 0)
+            row["numero_ventas_propiedades"] = property_count_by_client.get(client_id, 0)
+            row["numero_ventas_productos"] = product_count_by_client.get(client_id, 0)
+            row["total_vendido_propiedades"] = float(property_total_by_client.get(client_id, Decimal("0")))
+            row["total_vendido_productos"] = float(product_total_by_client.get(client_id, Decimal("0")))
+            domain_set = domains_by_client.get(client_id, set())
+            row["dominio_comercial"] = (
+                "mixto" if len(domain_set) > 1
+                else next(iter(domain_set), None)
+            )
+            row["numero_propiedades"] = property_count_by_client.get(client_id, 0)
+            latest_property = latest_property_by_client.get(client_id)
+            row["ultima_unidad_nombre"] = latest_property[1].get("unidad_nombre") if latest_property else None
+            row["ultimo_desarrollo_nombre"] = latest_property[1].get("desarrollo_nombre") if latest_property else None
             row["numero_oportunidades_ganadas"] = won_opportunities_by_client.get(client_id, 0)
             row["total_vendido"] = float(sold)
             row["total_cobrado"] = float(paid)
@@ -20905,12 +20952,150 @@ class CRMRepository:
                 else "Sin actividad"
             )
 
+    async def _list_all_service_role_rows(
+        self,
+        *,
+        organizacion_id: UUID,
+        path: str,
+        params: dict[str, str],
+        page_size: int = 1000,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            page_params = {**params, "limit": str(page_size), "offset": str(offset)}
+            response = await self._request_service_role(
+                "GET", path, params=page_params, organizacion_id=organizacion_id
+            )
+            data = response.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError(f"Respuesta inesperada al consultar {path}")
+            rows.extend(row for row in data if isinstance(row, dict))
+            if len(data) < page_size:
+                return rows
+            offset += page_size
+
+    async def _get_sale_property_context(
+        self,
+        *,
+        organizacion_id: UUID,
+        sales: list[dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        sale_ids = [str(row["id"]) for row in sales if row.get("id")]
+        if not sale_ids:
+            return {}
+        items = await self._list_all_service_role_rows(
+            organizacion_id=organizacion_id,
+            path="/rest/v1/venta_items",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "venta_id": _postgrest_in_clause(sale_ids),
+                "select": "id,venta_id,catalog_item_id,pedido_venta_item_id,orden",
+                "order": "orden.asc",
+            },
+        )
+        pedido_item_ids = [str(row["pedido_venta_item_id"]) for row in items if row.get("pedido_venta_item_id")]
+        catalog_item_ids = [str(row["catalog_item_id"]) for row in items if row.get("catalog_item_id")]
+        pedido_items, catalog_items = await asyncio.gather(
+            self._list_all_service_role_rows(
+                organizacion_id=organizacion_id,
+                path="/rest/v1/pedido_venta_items",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "id": _postgrest_in_clause(pedido_item_ids) if pedido_item_ids else "eq.00000000-0000-0000-0000-000000000000",
+                    "select": "id,propiedad_id,unidad_id",
+                },
+            ) if pedido_item_ids else asyncio.sleep(0, result=[]),
+            self._list_all_service_role_rows(
+                organizacion_id=organizacion_id,
+                path="/rest/v1/catalog_items",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "id": _postgrest_in_clause(catalog_item_ids) if catalog_item_ids else "eq.00000000-0000-0000-0000-000000000000",
+                    "select": "id,propiedad_id,unidad_id",
+                },
+            ) if catalog_item_ids else asyncio.sleep(0, result=[]),
+        )
+        pedido_by_id = {str(row["id"]): row for row in pedido_items}
+        catalog_by_id = {str(row["id"]): row for row in catalog_items}
+        unit_ids = {
+            str((pedido_by_id.get(str(item.get("pedido_venta_item_id"))) or {}).get("unidad_id")
+                or (catalog_by_id.get(str(item.get("catalog_item_id"))) or {}).get("unidad_id"))
+            for item in items
+            if (pedido_by_id.get(str(item.get("pedido_venta_item_id"))) or {}).get("unidad_id")
+            or (catalog_by_id.get(str(item.get("catalog_item_id"))) or {}).get("unidad_id")
+        }
+        units = await self._list_all_service_role_rows(
+            organizacion_id=organizacion_id,
+            path="/rest/v1/propiedad_unidades",
+            params={
+                "id": _postgrest_in_clause(sorted(unit_ids)) if unit_ids else "eq.00000000-0000-0000-0000-000000000000",
+                "select": "id,nombre,unidad,status,desarrollo_id",
+            },
+        ) if unit_ids else []
+        unit_by_id = {str(row["id"]): row for row in units}
+        development_ids = {
+            str(unit.get("desarrollo_id")) for unit in units if unit.get("desarrollo_id")
+        }
+        property_ids = {
+            str((pedido_by_id.get(str(item.get("pedido_venta_item_id"))) or {}).get("propiedad_id")
+                or (catalog_by_id.get(str(item.get("catalog_item_id"))) or {}).get("propiedad_id"))
+            for item in items
+            if (pedido_by_id.get(str(item.get("pedido_venta_item_id"))) or {}).get("propiedad_id")
+            or (catalog_by_id.get(str(item.get("catalog_item_id"))) or {}).get("propiedad_id")
+        }
+        development_ids.update(property_ids)
+        developments = await self._list_all_service_role_rows(
+            organizacion_id=organizacion_id,
+            path="/rest/v1/propiedad_desarrollos",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": _postgrest_in_clause(sorted(development_ids)) if development_ids else "eq.00000000-0000-0000-0000-000000000000",
+                "select": "id,nombre",
+            },
+        ) if development_ids else []
+        development_by_id = {str(row["id"]): row for row in developments}
+
+        result: dict[str, dict[str, Any]] = {}
+        for item in items:
+            sale_id = str(item.get("venta_id") or "")
+            if not sale_id:
+                continue
+            pedido = pedido_by_id.get(str(item.get("pedido_venta_item_id"))) or {}
+            catalog = catalog_by_id.get(str(item.get("catalog_item_id"))) or {}
+            property_id = pedido.get("propiedad_id") or catalog.get("propiedad_id")
+            unit_id = pedido.get("unidad_id") or catalog.get("unidad_id")
+            is_property = bool(property_id or unit_id)
+            context = result.setdefault(sale_id, {"property_lines": 0, "product_lines": 0})
+            if not is_property:
+                context["product_lines"] += 1
+                continue
+            context["property_lines"] += 1
+            if "property" not in context:
+                unit = unit_by_id.get(str(unit_id)) or {}
+                development_id = unit.get("desarrollo_id") or property_id
+                context["property"] = {
+                    "propiedad_id": property_id,
+                    "unidad_id": unit_id,
+                    "desarrollo_nombre": (development_by_id.get(str(development_id)) or {}).get("nombre"),
+                    "unidad_nombre": unit.get("nombre") or unit.get("unidad"),
+                    "propiedad_status": unit.get("status"),
+                }
+        for context in result.values():
+            context["dominio"] = (
+                "mixto" if context["property_lines"] and context["product_lines"]
+                else "propiedades" if context["property_lines"]
+                else "productos_servicios"
+            )
+        return result
+
     async def get_cliente_historial(
         self,
         *,
         organizacion_id: UUID,
         cliente_id: UUID,
         usuario_token: str | None = None,
+        include_propiedades: bool = True,
     ) -> dict[str, Any] | None:
         """Obtiene el historial comercial completo de un cliente del tenant."""
         cliente = await self.get_cliente_por_id(
@@ -20981,7 +21166,7 @@ class CRMRepository:
                     params={
                         "organizacion_id": f"eq.{organizacion_id}",
                         "venta_id": _postgrest_in_clause(venta_ids),
-                        "select": "id,venta_id,catalog_item_id,descripcion,cantidad,precio_unitario,descuento_monto,impuestos,subtotal,moneda,orden,creado_en",
+                        "select": "id,venta_id,catalog_item_id,pedido_venta_item_id,descripcion,cantidad,precio_unitario,descuento_monto,impuestos,subtotal,moneda,orden,creado_en",
                         "order": "orden.asc",
                     },
                     organizacion_id=organizacion_id,
@@ -21006,12 +21191,49 @@ class CRMRepository:
             venta_items = [row for row in item_data if isinstance(row, dict)]
             pagos = [row for row in payment_data if isinstance(row, dict)]
 
+        sale_context = await self._get_sale_property_context(
+            organizacion_id=organizacion_id,
+            sales=ventas,
+        ) if include_propiedades else {}
+        propiedades: list[dict[str, Any]] = []
+        seen_property_keys: set[tuple[str, str]] = set()
+        for venta in ventas:
+            context = sale_context.get(str(venta.get("id")), {})
+            property_detail = context.get("property")
+            if not isinstance(property_detail, dict):
+                continue
+            key = (str(property_detail.get("propiedad_id") or ""), str(property_detail.get("unidad_id") or ""))
+            if key in seen_property_keys:
+                continue
+            seen_property_keys.add(key)
+            propiedades.append({
+                **property_detail,
+                "venta_id": venta.get("id"),
+                "estatus_venta": venta.get("estatus"),
+                "total_venta": venta.get("total"),
+                "moneda": venta.get("moneda"),
+                "fecha_venta": venta.get("fecha_venta"),
+            })
+        for item in venta_items:
+            context = sale_context.get(str(item.get("venta_id")), {})
+            property_detail = context.get("property")
+            item["dominio"] = context.get("dominio", "productos_servicios")
+            if isinstance(property_detail, dict):
+                item.update({
+                    "propiedad_id": property_detail.get("propiedad_id"),
+                    "unidad_id": property_detail.get("unidad_id"),
+                    "desarrollo_nombre": property_detail.get("desarrollo_nombre"),
+                    "unidad_nombre": property_detail.get("unidad_nombre"),
+                    "propiedad_status": property_detail.get("propiedad_status"),
+                })
+
         return {
             "cliente": cliente,
             "oportunidades": oportunidades,
             "cotizaciones": cotizaciones,
             "ventas": ventas,
             "venta_items": venta_items,
+            "propiedades": propiedades,
             "pagos": pagos,
         }
 

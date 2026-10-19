@@ -35,6 +35,34 @@ function dateValue(row: DataTableRow, key: string): string {
 
 const clientColumns: ColumnDef<DataTableRow>[] = [
   {
+    id: "dominio_comercial",
+    accessorFn: (row) => textValue(row, "dominio_comercial"),
+    header: ({ column }) => <SortButton column={column} label="Dominio" />,
+    cell: ({ row }) => {
+      const value = textValue(row.original, "dominio_comercial");
+      return value === "propiedades" ? "Propiedades" : value === "mixto" ? "Mixto" : value === "productos_servicios" ? "Productos/servicios" : "—";
+    },
+    meta: { label: "Dominio" },
+  },
+  {
+    id: "numero_propiedades",
+    accessorFn: (row) => Number(rawValue(row, "numero_propiedades")) || 0,
+    header: ({ column }) => <SortButton column={column} label="Propiedades" />,
+    cell: ({ row }) => <span className="tabular-nums">{textValue(row.original, "numero_propiedades")}</span>,
+    meta: { label: "Propiedades" },
+  },
+  {
+    id: "ultima_propiedad",
+    accessorFn: (row) => `${textValue(row, "ultimo_desarrollo_nombre")} ${textValue(row, "ultima_unidad_nombre")}`,
+    header: ({ column }) => <SortButton column={column} label="Última propiedad" />,
+    cell: ({ row }) => {
+      const development = textValue(row.original, "ultimo_desarrollo_nombre");
+      const unit = textValue(row.original, "ultima_unidad_nombre");
+      return development === "—" && unit === "—" ? "—" : [development, unit].filter((value) => value !== "—").join(" · ");
+    },
+    meta: { label: "Última propiedad" },
+  },
+  {
     id: "telefono",
     accessorFn: (row) => textValue(row, "telefono"),
     header: ({ column }) => <SortButton column={column} label="Teléfono" />,
@@ -106,13 +134,19 @@ const clientColumns: ColumnDef<DataTableRow>[] = [
   },
 ];
 
-export function ClientesTable({ rows }: { rows: DataTableRow[] }) {
+export function ClientesTable({ rows, showPropertyColumns = true }: { rows: DataTableRow[]; showPropertyColumns?: boolean }) {
+  const visibleColumns = showPropertyColumns
+    ? clientColumns
+    : clientColumns.filter((column) => !["dominio_comercial", "numero_propiedades", "ultima_propiedad"].includes(String(column.id)));
   return (
     <DataTable
       data={rows}
-      extraColumns={clientColumns}
+      extraColumns={visibleColumns}
       storageKey="clientes"
       initialVisibility={{
+        dominio_comercial: true,
+        numero_propiedades: true,
+        ultima_propiedad: true,
         telefono: false,
         correo: false,
         ultima_compra: false,

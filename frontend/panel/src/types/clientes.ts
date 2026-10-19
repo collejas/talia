@@ -62,6 +62,14 @@ export type ClienteRecord = {
   fuente: string | null;
   monto_estimado: number | null;
   numero_ventas: number;
+  numero_ventas_propiedades: number;
+  numero_ventas_productos: number;
+  dominio_comercial: "propiedades" | "productos_servicios" | "mixto" | null;
+  numero_propiedades: number;
+  total_vendido_propiedades: number;
+  total_vendido_productos: number;
+  ultima_unidad_nombre: string | null;
+  ultimo_desarrollo_nombre: string | null;
   numero_oportunidades_ganadas: number;
   total_vendido: number;
   total_cobrado: number;
