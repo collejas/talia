@@ -2,10 +2,12 @@ import { AppViewLayout } from "@/components/layouts/app-view-layout";
 import { InventoryFulfillmentQueue } from "@/components/inventario/inventory-fulfillment-queue";
 import { hasPermission } from "@/lib/auth/permissions";
 import { callCrmApi } from "@/lib/api/crm";
+import { requireTenantModuleEnabled } from "@/lib/settings/module-flags";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryFulfillmentPage() {
+  await requireTenantModuleEnabled("productos");
   const canManageFulfillment = await hasPermission("inventory.fulfillment.manage");
   const brandResponse = await callCrmApi<{
     organization_name: string;

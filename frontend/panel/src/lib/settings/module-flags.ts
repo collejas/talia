@@ -64,3 +64,10 @@ export async function requireTenantModuleEnabled(moduleName: "productos" | "prop
     redirect("/unauthorized")
   }
 }
+
+export async function requireAnyTenantModuleEnabled(): Promise<void> {
+  const flags = await fetchTenantModuleFlags()
+  if (!flags.productosEnabled && !flags.propiedadesEnabled) {
+    redirect("/unauthorized")
+  }
+}

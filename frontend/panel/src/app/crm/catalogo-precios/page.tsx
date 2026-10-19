@@ -1,6 +1,7 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
 import { fetchCatalogItemPriceListsBatch, fetchCatalogItems, fetchCatalogPriceLists } from "@/app/settings/catalogo/actions";
 import { callCrmApi } from "@/lib/api/crm";
+import { fetchTenantModuleFlags, requireAnyTenantModuleEnabled } from "@/lib/settings/module-flags";
 import { CatalogPricesWorkspace, type CatalogPriceProduct, type CatalogPriceProperty } from "@/components/crm/catalog-prices-workspace";
 
 export const dynamic = "force-dynamic";
@@ -76,10 +77,12 @@ async function fetchPropertyHierarchy(): Promise<CatalogPriceProperty[]> {
 }
 
 export default async function CrmCatalogoPreciosPage() {
+  await requireAnyTenantModuleEnabled();
+  const moduleFlags = await fetchTenantModuleFlags();
   const [items, priceLists, properties, brandResponse] = await Promise.all([
     fetchCatalogItems({ includeInactive: false, limit: 5000 }),
     fetchCatalogPriceLists(),
-    fetchPropertyHierarchy(),
+    moduleFlags.propiedadesEnabled ? fetchPropertyHierarchy() : Promise.resolve([]),
     callCrmApi<CatalogPrintBrand>("/crm/catalogo-precios/branding"),
   ]);
   const printBrand = brandResponse.ok ? brandResponse.data : null;

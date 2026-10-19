@@ -384,7 +384,13 @@ export function AppSidebar({
       // Operación corresponde a inventarios, envíos y transformaciones. El flujo
       // inmobiliario se valida desde la ficha de la propiedad y no debe aparecer
       // como operación logística en tenants con propiedades habilitadas.
-      if (item.url === "/operacion" && moduleFlags.propiedadesEnabled) {
+      if (item.url === "/operacion" && !moduleFlags.productosEnabled) {
+        return false
+      }
+      if (item.url === "/compras" && !moduleFlags.productosEnabled) {
+        return false
+      }
+      if (item.url === "/crm/catalogo-precios" && !moduleFlags.productosEnabled && !moduleFlags.propiedadesEnabled) {
         return false
       }
       if (item.url === "/propiedades" && !moduleFlags.propiedadesEnabled) {
@@ -426,7 +432,7 @@ export function AppSidebar({
       }, [])
 
     return filterItems(items)
-  }, [isMasterTenant, moduleFlags.propiedadesEnabled, settingsChildren, permissionsLoading, permissionContext])
+  }, [isMasterTenant, moduleFlags.productosEnabled, moduleFlags.propiedadesEnabled, settingsChildren, permissionsLoading, permissionContext])
   const dashboardRoutePrefetchedRef = useRef(false)
   const mapaRoutePrefetchedRef = useRef(false)
 

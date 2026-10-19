@@ -7634,20 +7634,51 @@ async def require_organizacion_id(
 TenantModuleName = Literal["productos", "propiedades"]
 
 
+async def _get_tenant_module_flags(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+) -> dict[str, bool]:
+    try:
+        config = await repo.get_organizacion_config(organizacion_id=organizacion_id) or {}
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="tenant_module_config_unavailable") from exc
+    features = config.get("features") if isinstance(config, dict) else None
+    if not isinstance(features, dict):
+        features = {}
+    return {
+        "productos": bool(
+            isinstance(features.get("productos"), dict)
+            and features["productos"].get("enabled") is True
+        ),
+        "propiedades": bool(
+            isinstance(features.get("propiedades"), dict)
+            and features["propiedades"].get("enabled") is True
+        ),
+    }
+
+
 def require_tenant_module_enabled(module_name: TenantModuleName):
     async def _dependency(
         repo: CRMRepository = Depends(get_repository),
         organizacion_id: UUID = Depends(require_organizacion_id),
     ) -> UUID:
-        try:
-            config = await repo.get_organizacion_config(organizacion_id=organizacion_id) or {}
-        except CRMRepositoryError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        features = config.get("features") if isinstance(config, dict) else None
-        module_config = features.get(module_name) if isinstance(features, dict) else None
-        enabled = bool(module_config.get("enabled")) if isinstance(module_config, dict) else False
-        if not enabled:
+        flags = await _get_tenant_module_flags(repo=repo, organizacion_id=organizacion_id)
+        if not flags[module_name]:
             raise HTTPException(status_code=403, detail=f"feature_{module_name}_disabled")
+        return organizacion_id
+
+    return _dependency
+
+
+def require_any_tenant_module_enabled():
+    async def _dependency(
+        repo: CRMRepository = Depends(get_repository),
+        organizacion_id: UUID = Depends(require_organizacion_id),
+    ) -> UUID:
+        flags = await _get_tenant_module_flags(repo=repo, organizacion_id=organizacion_id)
+        if not any(flags.values()):
+            raise HTTPException(status_code=403, detail="feature_commercial_modules_disabled")
         return organizacion_id
 
     return _dependency
@@ -12835,11 +12866,34 @@ async def _current_user_has_any_permission(
     return False
 
 
+def _module_for_path(path: str) -> TenantModuleName | None:
+    if path.startswith("/crm/compras") or path.startswith("/crm/operacion"):
+        return "productos"
+    if path.startswith("/crm/catalogo-precios/inventario"):
+        return "productos"
+    return None
+
+
+async def _enforce_path_module(
+    *,
+    repo: CRMRepository,
+    path: str,
+    organizacion_id: UUID | None,
+) -> None:
+    module_name = _module_for_path(path)
+    if module_name is None or organizacion_id is None:
+        return
+    flags = await _get_tenant_module_flags(repo=repo, organizacion_id=organizacion_id)
+    if not flags[module_name]:
+        raise HTTPException(status_code=403, detail=f"feature_{module_name}_disabled")
+
+
 def require_permission(permission_code: str):
     normalized_code = permission_code.strip().lower()
     permission_codes = (normalized_code, *_PERMISSION_EQUIVALENTS.get(normalized_code, ()))
 
     async def _dependency(
+        request: Request,
         user_token: str | None = Depends(optional_user_token),
         usuario_id: UUID | None = Depends(optional_usuario_id),
         x_organizacion_id: Annotated[str | None, Header(alias="X-Organizacion-Id")] = None,
@@ -12861,6 +12915,11 @@ def require_permission(permission_code: str):
                     detail="Encabezado X-Organizacion-Id inválido",
                 ) from exc
             repo = CRMRepository()
+            await _enforce_path_module(
+                repo=repo,
+                path=request.url.path,
+                organizacion_id=organizacion_id,
+            )
             try:
                 is_admin = await repo.user_has_role(usuario_id=usuario_id, role_code="admin")
                 is_owner = await repo.user_has_role(usuario_id=usuario_id, role_code="owner")
@@ -12888,6 +12947,20 @@ def require_permission(permission_code: str):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
             return user_token
         repo = CRMRepository(user_token=user_token)
+        path_organizacion_id = None
+        if x_organizacion_id:
+            try:
+                path_organizacion_id = UUID(x_organizacion_id)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Encabezado X-Organizacion-Id inválido",
+                ) from exc
+        await _enforce_path_module(
+            repo=repo,
+            path=request.url.path,
+            organizacion_id=path_organizacion_id,
+        )
         user_id = _jwt_verify_and_sub(user_token)
         try:
             permission_context = await repo.get_permission_context()
@@ -12923,10 +12996,28 @@ def require_permission(permission_code: str):
 
 
 def require_any_permission(permission_codes: list[str]):
-    async def _dependency(user_token: str = Depends(require_user_token)) -> str:
+    async def _dependency(
+        request: Request,
+        user_token: str = Depends(require_user_token),
+        x_organizacion_id: Annotated[str | None, Header(alias="X-Organizacion-Id")] = None,
+    ) -> str:
         if settings.environment.strip().lower() == "test" or _is_pytest_runtime():
             return user_token
         repo = CRMRepository(user_token=user_token)
+        path_organizacion_id = None
+        if x_organizacion_id:
+            try:
+                path_organizacion_id = UUID(x_organizacion_id)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Encabezado X-Organizacion-Id inválido",
+                ) from exc
+        await _enforce_path_module(
+            repo=repo,
+            path=request.url.path,
+            organizacion_id=path_organizacion_id,
+        )
         user_id = _jwt_verify_and_sub(user_token)
         try:
             permission_context = await repo.get_permission_context()
@@ -22269,7 +22360,7 @@ async def pipeline_revert_opportunity_stage(
 async def list_price_lists(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_any_tenant_module_enabled()),
     _: str = Depends(require_any_permission(["settings.view", "propuesta.view"])),
     include_inactive: bool = Query(default=False),
     usable_only: bool = Query(default=False),
@@ -22294,7 +22385,7 @@ async def list_price_lists(
 async def create_price_list(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_any_tenant_module_enabled()),
     _: str = Depends(require_permission("settings.manage")),
     payload: CRMPriceListCreate,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -22316,7 +22407,7 @@ async def create_price_list(
 async def update_price_list(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_any_tenant_module_enabled()),
     _: str = Depends(require_permission("settings.manage")),
     lista_precio_id: UUID,
     payload: CRMPriceListUpdate,
@@ -22347,7 +22438,7 @@ async def update_price_list(
 async def deactivate_price_list(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_any_tenant_module_enabled()),
     _: str = Depends(require_permission("settings.manage")),
     lista_precio_id: UUID,
     usuario_id: UUID | None = Depends(optional_usuario_id),
@@ -22953,7 +23044,7 @@ async def _load_catalog_price_values_for_export(
 async def download_catalog_items_template(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_any_permission(["settings.view", "settings.manage"])),
 ) -> Response:
     try:
@@ -22974,7 +23065,7 @@ async def download_catalog_items_template(
 async def export_catalog_items_csv(
     *,
     repo: CRMRepository = Depends(get_repository),
-    organizacion_id: UUID = Depends(require_organizacion_id),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("productos")),
     _: str = Depends(require_any_permission(["settings.view", "settings.manage"])),
 ) -> Response:
     rows: list[dict[str, Any]] = []
@@ -23022,6 +23113,7 @@ async def export_catalog_items_csv(
 async def list_catalog_items(
     *,
     repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_any_tenant_module_enabled()),
     _: str = Depends(require_any_permission(["settings.view", "propuesta.view"])),
     include_inactive: bool = Query(default=False),
     solo_vendibles: bool = Query(default=False),
@@ -23029,12 +23121,20 @@ async def list_catalog_items(
     search: str | None = Query(default=None, max_length=200),
     limit: Annotated[int, Query(ge=1, le=5000)] = 2000,
 ) -> list[CRMCatalogItem]:
+    module_flags = await _get_tenant_module_flags(repo=repo, organizacion_id=organizacion_id)
+    inmobiliario = None
+    if module_flags["propiedades"] and not module_flags["productos"]:
+        inmobiliario = True
+    elif module_flags["productos"] and not module_flags["propiedades"]:
+        inmobiliario = False
     try:
         rows = await repo.list_catalog_items(
+            organizacion_id=organizacion_id,
             include_inactive=include_inactive,
             solo_vendibles=solo_vendibles,
             tipo=tipo,
             search=search,
+            inmobiliario=inmobiliario,
             limit=limit,
         )
     except CRMRepositoryError as exc:

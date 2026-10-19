@@ -15033,6 +15033,7 @@ class CRMRepository:
         familia_id: UUID | None = None,
         modelo_id: UUID | None = None,
         search: str | None = None,
+        inmobiliario: bool | None = None,
         limit: int = 200,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -15068,10 +15069,20 @@ class CRMRepository:
             pattern = search.strip()
             if pattern:
                 sanitized = pattern.replace("%", "").replace("*", "")
-                params["or"] = (
+                search_filter = (
                     f"(nombre.ilike.*{sanitized}*,slug.ilike.*{sanitized}*,"
                     f"descripcion.ilike.*{sanitized}*,descripcion_corta.ilike.*{sanitized}*,descripcion_larga.ilike.*{sanitized}*)"
                 )
+                if inmobiliario is True:
+                    params["and"] = f"(or(propiedad_id.not.is.null,unidad_id.not.is.null),or{search_filter})"
+                elif inmobiliario is False:
+                    params["and"] = f"(propiedad_id.is.null,unidad_id.is.null,or{search_filter})"
+                else:
+                    params["or"] = search_filter
+        elif inmobiliario is True:
+            params["or"] = "(propiedad_id.not.is.null,unidad_id.not.is.null)"
+        elif inmobiliario is False:
+            params["and"] = "(propiedad_id.is.null,unidad_id.is.null)"
         resp = await self._request("GET", "/rest/v1/catalog_items", params=params)
         data = resp.json()
         if not isinstance(data, list):

@@ -303,3 +303,27 @@ compras o inventario debe declarar explícitamente:
 No se considera suficiente agregar una opción al menú. La protección debe
 existir también en la ruta server-side y en el backend.
 
+## Implementación inicial aplicada
+
+Fecha: 2026-10-19
+
+- Se consolidó la lectura backend de `features.productos` y
+  `features.propiedades`.
+- Se agregó acceso backend para exigir al menos un módulo comercial activo.
+- Compras, operación e inventario operativo quedan bloqueados para tenants sin
+  productos, incluso mediante acceso directo a la API.
+- Las rutas frontend de compras, surtidos, inventario y transformaciones exigen
+  el módulo de productos.
+- El catálogo de precios exige al menos una modalidad activa y solo carga la
+  jerarquía inmobiliaria cuando propiedades está habilitado.
+- El menú lateral oculta compras y operación cuando productos está desactivado.
+- `catalog_items` se filtra por dominio usando `propiedad_id` y `unidad_id`
+  cuando el tenant tiene una sola modalidad activa.
+
+Pendiente para una siguiente iteración:
+
+- Validación visual autenticada por tenant en el panel desplegado.
+- Revisión de ventas, cotizaciones y reportes compartidos.
+- Pruebas automatizadas específicas para las cuatro combinaciones de módulos.
+- Resolver el comportamiento de tenants nuevos cuyos flags no existan todavía.
+

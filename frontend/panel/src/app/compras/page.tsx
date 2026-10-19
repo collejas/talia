@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { AppViewLayout } from "@/components/layouts/app-view-layout"
 import { callCrmApi } from "@/lib/api/crm"
+import { requireTenantModuleEnabled } from "@/lib/settings/module-flags"
 
 import { ComprasWorkspace } from "../settings/compras/compras-workspace.client"
 
@@ -95,6 +96,7 @@ type ComprasPageProps = {
 }
 
 export default async function ComprasPage({ searchParams }: ComprasPageProps) {
+  await requireTenantModuleEnabled("productos")
   const resolvedSearchParams = searchParams ? await searchParams : {}
   const vistaParam = resolvedSearchParams.vista
   const requestedView = typeof vistaParam === "string" ? vistaParam : Array.isArray(vistaParam) ? vistaParam[0] : "resumen"

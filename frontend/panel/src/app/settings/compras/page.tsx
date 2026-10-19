@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation"
+import { requireTenantModuleEnabled } from "@/lib/settings/module-flags"
 
-export default function SettingsComprasRedirectPage() {
+export default async function SettingsComprasRedirectPage() {
+  await requireTenantModuleEnabled("productos")
   redirect("/compras")
 }

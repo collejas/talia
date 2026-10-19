@@ -1,10 +1,12 @@
 import { AppViewLayout } from "@/components/layouts/app-view-layout";
 import { OperationalInventoryWorkspace } from "@/components/inventario/operational-inventory-workspace";
 import { callCrmApi } from "@/lib/api/crm";
+import { requireTenantModuleEnabled } from "@/lib/settings/module-flags";
 
 export const dynamic = "force-dynamic";
 
 export default async function OperationalInventoryPage() {
+  await requireTenantModuleEnabled("productos");
   const brandResponse = await callCrmApi<{
     organization_name: string;
     logo_url: string;
