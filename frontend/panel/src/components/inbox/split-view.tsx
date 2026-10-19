@@ -1088,6 +1088,7 @@ export function InboxSplitView({
   const inboxStreamRefreshTimeoutRef = React.useRef<number | null>(null);
   const { user: currentUser } = useCurrentUser();
   const { context: permissionContext } = usePermissions();
+  const currentUserId = typeof currentUser?.id === "string" ? currentUser.id.trim() : "";
   const canDeleteInboxData = React.useMemo(() => {
     const roles = Array.isArray(permissionContext.roles) ? permissionContext.roles : [];
     return Boolean(
@@ -1291,6 +1292,10 @@ export function InboxSplitView({
     const inAll = threadItems.find((thread) => thread.id === selectedId);
     return inAll ?? null;
   }, [selectedId, filteredThreads, threadItems]);
+
+  const canControlSelectedAssistant = Boolean(
+    selectedThread && currentUserId && selectedThread.asignadoId === currentUserId,
+  );
 
   const openOpportunityWorkspace = React.useCallback(async () => {
     const threadId = selectedThread?.id ?? null;
@@ -2684,26 +2689,28 @@ export function InboxSplitView({
                     {promotingOpportunity ? "Creando..." : "Crear oportunidad"}
                   </Button>
                 ) : null}
-                <Button
-                  variant={selectedThread.manualMode ? "default" : "outline"}
-                  size="sm"
-                  className="gap-2"
-                  onClick={handleToggleManualMode}
-                  disabled={manualToggling}
-                  aria-pressed={selectedThread.manualMode}
-                >
-                  {selectedThread.manualMode ? (
-                    <>
-                      <IconRobot className="size-4" />
-                      {manualToggling ? "Reactivando…" : "Volver al asistente"}
-                    </>
-                  ) : (
-                    <>
-                      <IconRobotOff className="size-4" />
-                      {manualToggling ? "Pausando…" : "Pausar asistente"}
-                    </>
-                  )}
-                </Button>
+                {canControlSelectedAssistant ? (
+                  <Button
+                    variant={selectedThread.manualMode ? "default" : "outline"}
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleToggleManualMode}
+                    disabled={manualToggling}
+                    aria-pressed={selectedThread.manualMode}
+                  >
+                    {selectedThread.manualMode ? (
+                      <>
+                        <IconRobot className="size-4" />
+                        {manualToggling ? "Reactivando…" : "Volver al asistente"}
+                      </>
+                    ) : (
+                      <>
+                        <IconRobotOff className="size-4" />
+                        {manualToggling ? "Pausando…" : "Pausar asistente"}
+                      </>
+                    )}
+                  </Button>
+                ) : null}
               </div>
             </header>
 

@@ -31936,13 +31936,38 @@ async def delete_inbox_whatsapp_persona(
 @router.post("/inbox/conversations/{conversacion_id}/manual")
 async def set_inbox_manual_mode(
     *,
-    _: str = Depends(require_permission("conv.assign")),
-    user_token: str = Depends(require_user_token),  # noqa: ARG001
+    _: str = Depends(require_permission("messages.write")),
+    user_token: str = Depends(require_user_token),
+    repo: CRMRepository = Depends(get_repository),
     conversacion_id: UUID,
     payload: ManualOverridePayload,
 ) -> dict[str, Any]:
     try:
-        await storage.set_manual_override(str(conversacion_id), payload.manual)
+        permission_context = await repo.get_permission_context()
+        current_user_id = _safe_uuid(permission_context.get("usuario_id"))
+        if current_user_id is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="manual_control_user_required")
+
+        conversation = await repo.get_conversation_with_controls(
+            conversation_id=str(conversacion_id)
+        )
+        assigned_user_id = _safe_uuid(conversation.get("asignado_a_usuario_id"))
+        if assigned_user_id != current_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="manual_control_assignment_required",
+            )
+        channel = _clean_text(conversation.get("canal")).lower()
+        if channel not in {"whatsapp", "webchat", "correo"}:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="manual_control_channel_invalid")
+
+        await storage.set_manual_override(str(conversacion_id), payload.manual, user_token=user_token)
+    except HTTPException:
+        raise
+    except CRMRepositoryError as exc:
+        if "conversation_not_found" in str(exc).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="conversation_not_found") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="manual_control_unavailable") from exc
     except StorageError as exc:
         detail = str(exc) or "No se pudo actualizar el modo manual"
         lowered = detail.lower()

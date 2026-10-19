@@ -2653,9 +2653,9 @@ async def fetch_manual_overrides(conversation_ids: list[str]) -> dict[str, bool]
         raise StorageError(str(exc)) from exc
 
 
-async def set_manual_override(conversation_id: str, manual: bool) -> None:
+async def set_manual_override(conversation_id: str, manual: bool, *, user_token: str) -> None:
     """Activa o desactiva el modo manual para una conversación."""
-    repo = CRMRepository()
+    repo = CRMRepository(user_token=user_token)
     try:
         await repo.set_manual_override(conversation_id=conversation_id, manual=manual)
     except CRMRepositoryError as exc:
