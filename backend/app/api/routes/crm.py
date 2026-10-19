@@ -124,6 +124,7 @@ from app.services.brevo_templates import (
 )
 from app.services.brevo_quota import fetch_brevo_daily_quota
 from app.services.postmark.repository import PostmarkRepository, PostmarkRepositoryError
+from app.services.meta_whatsapp_templates import MetaWhatsAppTemplateClient, MetaWhatsAppTemplateError
 from app.services.banxico import BanxicoError, BanxicoTipoCambio, fetch_banxico_tipo_cambio, fetch_banxico_tipo_cambio_at_date
 from app.services.catalog_embeddings import CatalogEmbeddingService
 from app.services.catalog_fraccionamientos import (
@@ -40189,6 +40190,17 @@ async def crear_whats_prosp_template(
         campana_id=payload.campana_id,
     )
     raw = payload.model_dump(mode="json", exclude_none=True)
+    body_text = _clean_text(raw.get("cuerpo_texto"))
+    if not body_text:
+        raise HTTPException(status_code=422, detail="whatsapp_template_body_required")
+    existing = await repo.get_whats_prosp_template_by_identity(
+        usuario_token=user_token,
+        organizacion_id=organizacion_id,
+        template_name=payload.template_name,
+        language_code=payload.language_code,
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="whats_prosp_template_duplicate")
     images = raw.pop("imagenes", [])
     images = await _maybe_auto_bind_whats_prosp_template_images(
         repo=repo,
@@ -40200,6 +40212,11 @@ async def crear_whats_prosp_template(
         raw,
         organizacion_id=organizacion_id,
     )
+    # El estado de aprobación nunca lo controla el cliente. La plantilla queda
+    # pendiente hasta que Meta confirme su resultado por webhook.
+    body["template_status"] = "pending"
+    body["meta_status"] = "pending"
+    body["meta_template_id"] = None
     try:
         template = await repo.create_whats_prosp_template(
             usuario_token=user_token,
@@ -40222,6 +40239,73 @@ async def crear_whats_prosp_template(
         if "whats_prosp_template_duplicate" in str(exc):
             raise HTTPException(status_code=409, detail="whats_prosp_template_duplicate") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    try:
+        platform_repo = PlatformRepository()
+        connection = await platform_repo.get_whatsapp_meta_connection(
+            organizacion_id=organizacion_id,
+        )
+    except PlatformRepositoryError as exc:
+        await repo.worker_update_whats_prosp_template_status(
+            organizacion_id=organizacion_id,
+            template_id=UUID(str(template["id"])),
+            template_status="draft",
+            meta_status=None,
+            last_error_code="meta_connection_unavailable",
+        )
+        raise HTTPException(status_code=502, detail="whatsapp_meta_connection_unavailable") from exc
+
+    if not connection or str(connection.get("estado") or "") != "conectado":
+        await repo.worker_update_whats_prosp_template_status(
+            organizacion_id=organizacion_id,
+            template_id=UUID(str(template["id"])),
+            template_status="draft",
+            meta_status=None,
+            last_error_code="meta_connection_not_connected",
+        )
+        raise HTTPException(status_code=409, detail="whatsapp_meta_connection_not_connected")
+
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    try:
+        meta_response = await MetaWhatsAppTemplateClient(
+            access_token=runtime.meta_page_access_token or "",
+            graph_api_version=runtime.meta_graph_api_version or settings.meta_graph_api_version,
+        ).create_template(
+            waba_id=str(connection.get("waba_id") or ""),
+            name=payload.template_name,
+            language_code=payload.language_code,
+            category=payload.meta_category,
+            body_text=body_text,
+        )
+    except MetaWhatsAppTemplateError as exc:
+        rejected = exc.code.endswith("rejected") or exc.code in {
+            "meta_template_name_invalid",
+            "meta_template_category_invalid",
+            "meta_template_payload_invalid",
+            "meta_template_access_denied",
+            "meta_template_authorization_error",
+        }
+        await repo.worker_update_whats_prosp_template_status(
+            organizacion_id=organizacion_id,
+            template_id=UUID(str(template["id"])),
+            template_status="rejected" if rejected else "draft",
+            meta_status="rejected" if rejected else None,
+            rejected_reason=exc.message if rejected else None,
+            last_error_code=exc.code,
+        )
+        raise HTTPException(status_code=502, detail=exc.code) from exc
+
+    meta_template_id = str(meta_response.get("id") or "").strip() or None
+    persisted = await repo.worker_update_whats_prosp_template_status(
+        organizacion_id=organizacion_id,
+        template_id=UUID(str(template["id"])),
+        template_status="pending",
+        meta_status="pending",
+        meta_template_id=meta_template_id,
+        meta_created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    if persisted:
+        template = persisted
     _attach_contact_template_images([template], image_rows)
     return {"ok": True, "template": template}
 
@@ -40244,6 +40328,15 @@ async def actualizar_whats_prosp_template(
     if not current:
         raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
     raw_data = payload.model_dump(mode="json", exclude_unset=True)
+    # El estado remoto solo puede venir de Meta mediante webhook/sync.
+    raw_data.pop("template_status", None)
+    if _clean_text(current.get("meta_template_id")) and any(
+        field in raw_data for field in ("template_name", "language_code", "meta_category", "cuerpo_texto")
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="whatsapp_template_remote_fields_are_immutable",
+        )
     effective_campana_id = payload.campana_id or current.get("campana_id")
     if effective_campana_id:
         await _validate_whats_prosp_template_campaign(
@@ -40299,6 +40392,68 @@ async def actualizar_whats_prosp_template(
     return {"ok": True, "template": template}
 
 
+@router.post("/prospeccion/whatsapp/templates/{template_id}/sync")
+async def sincronizar_whats_prosp_template(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    template_id: UUID,
+) -> dict[str, Any]:
+    current = await repo.get_whats_prosp_template(
+        usuario_token=user_token,
+        organizacion_id=organizacion_id,
+        template_id=template_id,
+    )
+    if not current:
+        raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
+    meta_template_id = _clean_text(current.get("meta_template_id"))
+    if not meta_template_id:
+        raise HTTPException(status_code=409, detail="whatsapp_template_meta_id_missing")
+    try:
+        platform_repo = PlatformRepository()
+        connection = await platform_repo.get_whatsapp_meta_connection(
+            organizacion_id=organizacion_id,
+        )
+        runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+        if not connection or str(connection.get("estado") or "") != "conectado":
+            raise MetaWhatsAppTemplateError("meta_connection_not_connected")
+        remote = await MetaWhatsAppTemplateClient(
+            access_token=runtime.meta_page_access_token or "",
+            graph_api_version=runtime.meta_graph_api_version or settings.meta_graph_api_version,
+        ).get_template(template_id=meta_template_id)
+    except PlatformRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_meta_connection_unavailable") from exc
+    except MetaWhatsAppTemplateError as exc:
+        raise HTTPException(status_code=502, detail=exc.code) from exc
+
+    status_value = _clean_text(remote.get("status")).lower()
+    status_map = {
+        "pending": "pending",
+        "approved": "approved",
+        "rejected": "rejected",
+        "paused": "paused",
+        "disabled": "disabled",
+        "archived": "archived",
+        "deleted": "archived",
+    }
+    normalized_status = status_map.get(status_value)
+    if not normalized_status:
+        raise HTTPException(status_code=502, detail="meta_template_status_invalid")
+    updated = await repo.worker_update_whats_prosp_template_status(
+        organizacion_id=organizacion_id,
+        template_id=template_id,
+        template_status=normalized_status,
+        meta_status=normalized_status,
+        meta_template_id=meta_template_id,
+        rejected_reason=_clean_text(remote.get("rejected_reason")) if normalized_status == "rejected" else None,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
+    return {"ok": True, "template": updated, "source": "meta_sync"}
+
+
 @router.delete("/prospeccion/whatsapp/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def eliminar_whats_prosp_template(
     *,
@@ -40309,6 +40464,15 @@ async def eliminar_whats_prosp_template(
     template_id: UUID,
 ) -> Response:
     try:
+        current = await repo.get_whats_prosp_template(
+            usuario_token=user_token,
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+        )
+        if not current:
+            raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
+        if _clean_text(current.get("meta_template_id")):
+            raise HTTPException(status_code=409, detail="whatsapp_template_remote_delete_not_supported")
         await repo.delete_whats_prosp_template(
             usuario_token=user_token,
             organizacion_id=organizacion_id,

@@ -262,7 +262,7 @@ export function CampanasMetricsClient() {
     metaTemplateName: "",
     metaTemplateLanguage: "",
     metaCategory: "marketing" as "marketing" | "utility" | "authentication",
-    templateStatus: "draft" as "draft" | "approved" | "rejected" | "archived",
+    templateStatus: "draft" as "draft" | "pending" | "approved" | "rejected" | "paused" | "disabled" | "archived",
     nombreIa: "",
     nombreEmpresa: "",
     ctaBaseUrl: "https://talia.mx/",
@@ -2008,25 +2008,11 @@ ${secondCellHtml}
                           </div>
                         <div className="space-y-1">
                           <Label>Estado operativo</Label>
-                          <Select
-                            value={templateForm.templateStatus}
-                            onValueChange={(value) =>
-                              setTemplateForm((prev) => ({
-                                ...prev,
-                                templateStatus: value as "draft" | "approved" | "rejected" | "archived",
-                              }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecciona un estado" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="draft">Borrador</SelectItem>
-                              <SelectItem value="approved">Aprobada</SelectItem>
-                              <SelectItem value="rejected">Rechazada</SelectItem>
-                              <SelectItem value="archived">Archivada</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                            {templateForm.canal === "whatsapp"
+                              ? "Meta actualiza este estado mediante webhook o sincronización manual."
+                              : "El estado se administra desde la aplicación."}
+                          </div>
                         </div>
                       </div>
                     </section>

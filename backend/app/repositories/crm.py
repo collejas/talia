@@ -25622,6 +25622,137 @@ class CRMRepository:
             raise CRMRepositoryError(f"whats_prosp_template_invalid:{row!r}")
         return row
 
+    async def get_whats_prosp_template_by_identity(
+        self,
+        *,
+        usuario_token: str,
+        organizacion_id: UUID,
+        template_name: str,
+        language_code: str,
+    ) -> dict[str, Any] | None:
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_templates",
+            token=usuario_token,
+            params={
+                "select": "*",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": "eq.whatsapp",
+                "provider": "eq.meta",
+                "usage_scope": "eq.whats_prosp",
+                "template_name": f"ilike.{template_name}",
+                "language_code": f"ilike.{language_code}",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def get_whats_prosp_template_by_meta_id(
+        self,
+        *,
+        organizacion_id: UUID,
+        meta_template_id: str,
+    ) -> dict[str, Any] | None:
+        meta_id = str(meta_template_id or "").strip()
+        if not meta_id:
+            return None
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_templates",
+            params={
+                "select": "*",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": "eq.whatsapp",
+                "provider": "eq.meta",
+                "usage_scope": "eq.whats_prosp",
+                "meta_template_id": f"eq.{meta_id}",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def worker_find_whats_prosp_template(
+        self,
+        *,
+        organizacion_id: UUID,
+        meta_template_id: str | None = None,
+        template_name: str | None = None,
+        language_code: str | None = None,
+    ) -> dict[str, Any] | None:
+        params: dict[str, str] = {
+            "select": "*",
+            "organizacion_id": f"eq.{organizacion_id}",
+            "canal": "eq.whatsapp",
+            "provider": "eq.meta",
+            "usage_scope": "eq.whats_prosp",
+            "limit": "1",
+        }
+        if meta_template_id:
+            params["meta_template_id"] = f"eq.{str(meta_template_id).strip()}"
+        elif template_name and language_code:
+            params["template_name"] = f"eq.{str(template_name).strip()}"
+            params["language_code"] = f"eq.{str(language_code).strip()}"
+        else:
+            return None
+        resp = await self._request("GET", "/rest/v1/prospeccion_contacto_templates", params=params)
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
+    async def worker_update_whats_prosp_template_status(
+        self,
+        *,
+        organizacion_id: UUID,
+        template_id: UUID,
+        template_status: str,
+        meta_status: str | None,
+        meta_template_id: str | None = None,
+        meta_created_at: str | None = None,
+        rejected_reason: str | None = None,
+        last_error_code: str | None = None,
+    ) -> dict[str, Any] | None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        payload: dict[str, Any] = {
+            "template_status": template_status,
+            "meta_status": meta_status,
+            "meta_rejected_reason": rejected_reason,
+            "meta_synced_at": now_iso,
+            "meta_last_error_code": last_error_code,
+            "actualizado_en": now_iso,
+        }
+        if meta_template_id:
+            payload["meta_template_id"] = str(meta_template_id).strip()
+        if meta_created_at:
+            payload["meta_created_at"] = meta_created_at
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/prospeccion_contacto_templates",
+            params={
+                "id": f"eq.{template_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": "eq.whatsapp",
+                "provider": "eq.meta",
+                "usage_scope": "eq.whats_prosp",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        return row if isinstance(row, dict) else None
+
     async def create_whats_prosp_template(
         self,
         *,

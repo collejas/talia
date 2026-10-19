@@ -14,6 +14,7 @@ from twilio.request_validator import RequestValidator
 from app.channels.whatsapp.routing import (
     resolve_whatsapp_organizacion,
     resolve_whatsapp_organizacion_by_phone_number_id,
+    resolve_whatsapp_organizacion_by_waba_id,
 )
 from app.core.config import settings
 from app.services import tenant_runtime
@@ -106,6 +107,13 @@ async def _resolve_meta_payload_organizacion_id(
         # como fallback: normalmente esa URL es compartida y puede apuntar al
         # tenant maestro. Un número desconocido debe rechazarse.
         return None
+    waba_id = _extract_meta_waba_id(payload)
+    if waba_id:
+        resolved = await resolve_whatsapp_organizacion_by_waba_id(waba_id=waba_id)
+        parsed = _parse_org_uuid(resolved)
+        if parsed:
+            return parsed
+        return None
     display_phone_number = _extract_meta_display_phone_number(payload)
     if display_phone_number:
         resolved = await resolve_whatsapp_organizacion(to_number=display_phone_number)
@@ -162,6 +170,19 @@ def _extract_meta_phone_number_id(payload: dict[str, Any]) -> str | None:
             candidate = metadata.get("phone_number_id")
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
+    return None
+
+
+def _extract_meta_waba_id(payload: dict[str, Any]) -> str | None:
+    entries = payload.get("entry")
+    if not isinstance(entries, list):
+        return None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        candidate = entry.get("id")
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
     return None
 
 

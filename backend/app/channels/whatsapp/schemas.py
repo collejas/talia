@@ -374,3 +374,73 @@ class MetaWhatsAppStatusCallback(BaseModel):
                         )
                     )
         return callbacks
+
+
+class MetaWhatsAppTemplateStatusUpdate(BaseModel):
+    """Cambio de ciclo de vida de una plantilla Meta."""
+
+    waba_id: str
+    meta_template_id: str | None = None
+    template_name: str | None = None
+    language_code: str | None = None
+    status: str
+    reason: str | None = None
+    raw_payload: dict[str, Any] = Field(default_factory=dict)
+
+    @classmethod
+    def from_webhook_payload(cls, payload: Mapping[str, Any] | Any) -> list["MetaWhatsAppTemplateStatusUpdate"]:
+        root = dict(payload) if isinstance(payload, Mapping) else {}
+        updates: list[MetaWhatsAppTemplateStatusUpdate] = []
+        entries = root.get("entry") or []
+        if not isinstance(entries, list):
+            return updates
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            waba_id = _coerce_to_str(entry.get("id"))
+            if not waba_id:
+                continue
+            changes = entry.get("changes") or []
+            if not isinstance(changes, list):
+                continue
+            for change in changes:
+                if not isinstance(change, dict) or change.get("field") != "message_template_status_update":
+                    continue
+                value = change.get("value")
+                if not isinstance(value, dict):
+                    continue
+                raw_status = _coerce_to_str(value.get("event") or value.get("status")).lower()
+                if not raw_status:
+                    continue
+                status_aliases = {
+                    "approved": "approved",
+                    "rejected": "rejected",
+                    "pending": "pending",
+                    "paused": "paused",
+                    "disabled": "disabled",
+                    "archived": "archived",
+                    "deleted": "archived",
+                }
+                normalized_status = status_aliases.get(raw_status, raw_status)
+                if normalized_status not in {
+                    "pending", "approved", "rejected", "paused", "disabled", "archived"
+                }:
+                    continue
+                updates.append(
+                    cls(
+                        waba_id=waba_id,
+                        meta_template_id=_coerce_to_str(
+                            value.get("message_template_id") or value.get("template_id")
+                        ) or None,
+                        template_name=_coerce_to_str(
+                            value.get("message_template_name") or value.get("name")
+                        ) or None,
+                        language_code=_coerce_to_str(
+                            value.get("message_template_language") or value.get("language")
+                        ) or None,
+                        status=normalized_status,
+                        reason=_coerce_to_str(value.get("reason")) or None,
+                        raw_payload={"entry": entry, "change": change, "value": value},
+                    )
+                )
+        return updates

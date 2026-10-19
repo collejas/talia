@@ -1511,6 +1511,26 @@ class PlatformRepository:
         value = row.get("id")
         return str(value) if value else None
 
+    async def resolve_org_for_meta_waba_id(self, *, waba_id: str) -> str | None:
+        waba_key = str(waba_id or "").strip()
+        if not waba_key:
+            return None
+        data = await self._rest(
+            "GET",
+            "/rest/v1/whatsapp_meta_connections",
+            params={
+                "select": "organizacion_id",
+                "waba_id": f"eq.{waba_key}",
+                "estado": "eq.conectado",
+                "limit": "1",
+            },
+        )
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            value = data[0].get("organizacion_id")
+            if value:
+                return str(value)
+        return None
+
     async def create_permissions(
         self, *, organizacion_id: UUID, permisos: Sequence[dict[str, str]]
     ) -> list[dict[str, Any]]:

@@ -1,4 +1,8 @@
-from app.channels.whatsapp.schemas import MetaWhatsAppIncomingMessage, MetaWhatsAppStatusCallback
+from app.channels.whatsapp.schemas import (
+    MetaWhatsAppIncomingMessage,
+    MetaWhatsAppStatusCallback,
+    MetaWhatsAppTemplateStatusUpdate,
+)
 
 
 def test_meta_whatsapp_incoming_message_from_webhook_payload_parses_text():
@@ -189,3 +193,32 @@ def test_meta_whatsapp_status_callback_reads_value_errors():
     assert callback.error_code == "131049"
     assert callback.error_message == "(#131049) Message not delivered"
     assert callback.error_details == "This message was not delivered to maintain healthy ecosystem engagement."
+
+
+def test_meta_whatsapp_template_status_update_parses_waba_event():
+    payload = {
+        "entry": [{
+            "id": "WABA_ID",
+            "changes": [{
+                "field": "message_template_status_update",
+                "value": {
+                    "event": "REJECTED",
+                    "message_template_id": "META_TEMPLATE_ID",
+                    "message_template_name": "seguimiento_demo",
+                    "message_template_language": "es_MX",
+                    "reason": "INVALID_FORMAT",
+                },
+            }],
+        }]
+    }
+
+    updates = MetaWhatsAppTemplateStatusUpdate.from_webhook_payload(payload)
+
+    assert len(updates) == 1
+    update = updates[0]
+    assert update.waba_id == "WABA_ID"
+    assert update.meta_template_id == "META_TEMPLATE_ID"
+    assert update.template_name == "seguimiento_demo"
+    assert update.language_code == "es_MX"
+    assert update.status == "rejected"
+    assert update.reason == "INVALID_FORMAT"

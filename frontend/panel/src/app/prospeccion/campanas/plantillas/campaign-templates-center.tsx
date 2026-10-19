@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { IconArrowLeft, IconEdit, IconLoader, IconPlus, IconRocket, IconSearch, IconTrash, IconVersions } from "@tabler/icons-react"
+import { IconArrowLeft, IconEdit, IconLoader, IconPlus, IconRefresh, IconRocket, IconSearch, IconTrash, IconVersions } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,6 +16,7 @@ import {
   deleteContactoTemplateVersion,
   deleteWhatsProspTemplate,
   publishContactoTemplateVersion,
+  syncWhatsProspTemplate,
   type ContactoTemplate,
   type ContactoTemplateVersion,
   type CrmCampaign,
@@ -33,7 +34,11 @@ function statusLabel(version: ContactoTemplateVersion | undefined) {
 
 function templateStatusLabel(template: ContactoTemplate, version: ContactoTemplateVersion | undefined) {
   if (template.canal === "whatsapp") {
+    if (template.template_status === "pending") return "Pendiente de Meta"
     if (template.template_status === "approved") return "Aprobada"
+    if (template.template_status === "rejected") return "Rechazada"
+    if (template.template_status === "paused") return "Pausada"
+    if (template.template_status === "disabled") return "Deshabilitada"
     if (template.template_status === "archived") return "Archivada"
     return "Borrador"
   }
@@ -60,6 +65,7 @@ export function CampaignTemplatesCenter({ campaignId }: Props) {
   const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null)
   const [publishingVersionId, setPublishingVersionId] = useState<string | null>(null)
   const [deletingVersionId, setDeletingVersionId] = useState<string | null>(null)
+  const [syncingTemplateId, setSyncingTemplateId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -150,6 +156,20 @@ export function CampaignTemplatesCenter({ campaignId }: Props) {
     }
   }
 
+  const syncTemplate = async (template: ContactoTemplate) => {
+    if (template.canal !== "whatsapp") return
+    setSyncingTemplateId(template.id)
+    setError(null)
+    try {
+      await syncWhatsProspTemplate(template.id)
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo sincronizar la plantilla con Meta.")
+    } finally {
+      setSyncingTemplateId(null)
+    }
+  }
+
   const filteredTemplates = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase()
     return templates.filter((template) => {
@@ -202,7 +222,11 @@ export function CampaignTemplatesCenter({ campaignId }: Props) {
                   <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="Estado" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos los estados</SelectItem>
+                    <SelectItem value="pending">Pendientes de Meta</SelectItem>
                     <SelectItem value="approved">Aprobadas</SelectItem>
+                    <SelectItem value="rejected">Rechazadas</SelectItem>
+                    <SelectItem value="paused">Pausadas</SelectItem>
+                    <SelectItem value="disabled">Deshabilitadas</SelectItem>
                     <SelectItem value="publicada">Publicadas</SelectItem>
                     <SelectItem value="borrador">Borradores</SelectItem>
                     <SelectItem value="archived">Archivadas</SelectItem>
@@ -253,6 +277,7 @@ export function CampaignTemplatesCenter({ campaignId }: Props) {
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{template.language_code || "—"}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{template.canal === "whatsapp" ? "—" : templateVersions.length || "—"}</td>
                 <td className="px-4 py-3"><div className="flex justify-end gap-1">
+                  {template.canal === "whatsapp" ? <Button type="button" variant="ghost" size="sm" onClick={() => void syncTemplate(template)} disabled={syncingTemplateId === template.id} aria-label="Sincronizar estado con Meta">{syncingTemplateId === template.id ? <IconLoader className="size-4 animate-spin" /> : <IconRefresh className="size-4" />}</Button> : null}
                   <Button type="button" variant="outline" size="sm" onClick={() => router.push(`/prospeccion/campanas/plantillas/${template.id}/editar?campana_id=${encodeURIComponent(campaignId ?? "")}`)}><IconEdit className="mr-1.5 size-3.5" /> Editar</Button>
                   {latest?.estado === "borrador" ? <Button type="button" variant="ghost" size="sm" onClick={() => router.push(`/prospeccion/campanas/plantillas/${template.id}/editar?campana_id=${encodeURIComponent(campaignId ?? "")}&version_id=${encodeURIComponent(latest.id)}`)} aria-label="Revisar y publicar"><IconRocket className="size-4" /></Button> : null}
                   {template.canal === "correo" ? <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedTemplateId((current) => current === template.id ? null : template.id)} aria-label="Ver versiones"><IconVersions className="size-4" /></Button> : null}

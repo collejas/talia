@@ -88,3 +88,16 @@ async def resolve_whatsapp_organizacion_by_phone_number_id(
     except PlatformRepositoryError:
         return None
     return _safe_str_value(resolved)
+
+
+async def resolve_whatsapp_organizacion_by_waba_id(*, waba_id: str | None) -> str | None:
+    """Resuelve el tenant desde el WABA que origina un evento Meta."""
+    waba_key = _safe_str_value(waba_id)
+    if not waba_key:
+        return None
+    try:
+        repo = PlatformRepository()
+        resolved = await repo.resolve_org_for_meta_waba_id(waba_id=waba_key)
+    except PlatformRepositoryError:
+        return None
+    return _safe_str_value(resolved)

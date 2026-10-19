@@ -1,6 +1,6 @@
 # Creación de plantillas WhatsApp Meta desde campañas de prospección
 
-**Estado:** Propuesta técnica para implementación
+**Estado:** Implementación inicial realizada; pendiente de despliegue y prueba controlada con Meta
 
 **Módulo:** `/prospeccion/campanas`
 
@@ -32,21 +32,21 @@ La aplicación ya cuenta con:
 - Relación de plantillas con campañas, batches y envíos.
 - Tabla `public.whatsapp_meta_connections` con `waba_id` y `phone_number_id`.
 
-Actualmente el endpoint:
+Antes de esta implementación, el endpoint:
 
 ```text
 POST /crm/prospeccion/whatsapp/templates
 ```
 
-guarda la plantilla en Supabase, pero todavía no ejecuta la creación remota en
-Meta mediante:
+guardaba la plantilla en Supabase, pero no ejecutaba la creación remota en Meta.
+Ahora ejecuta la creación remota en el WABA conectado del tenant mediante:
 
 ```text
 POST https://graph.facebook.com/{GRAPH_API_VERSION}/{WABA_ID}/message_templates
 ```
 
-Por lo tanto, `template_status = approved` no debe interpretarse como
-aprobación real de Meta hasta que exista sincronización con el proveedor.
+El estado `approved` ahora solo puede proceder del webhook de Meta o de una
+sincronización manual; el frontend ya no puede marcarlo directamente.
 
 ## 3. Flujo funcional propuesto
 
@@ -317,22 +317,26 @@ identificarse si corresponde al índice local o al nombre/idioma de Meta.
 
 ## 13. Fases de implementación
 
-### Fase 1: Integración básica
+### Fase 1: Integración básica — realizada
 
-- Crear cliente Meta de plantillas.
-- Crear plantilla de texto simple.
-- Guardar ID y estado Meta.
-- Mostrar `pending` en la UI.
-- Corregir readiness a Meta.
+- Cliente Meta aislado en `backend/app/services/meta_whatsapp_templates.py`.
+- Creación de plantilla de texto con componente `BODY`.
+- Persistencia de `meta_template_id`, `meta_status` y errores normalizados.
+- UI con estado pendiente y acción de sincronización manual.
+- `readiness` todavía requiere migrarse de Twilio a Meta; queda pendiente.
 
-### Fase 2: Sincronización
+### Fase 2: Sincronización — realizada en modalidad webhook/manual
 
-- Endpoint de sincronización.
-- Consulta de estados desde Meta.
-- Motivo de rechazo.
-- Actualización manual desde la UI.
+- Webhook `message_template_status_update` procesado por la cola durable existente.
+- Consulta manual desde `POST .../{template_id}/sync`.
+- Persistencia del motivo de rechazo y del último código de error.
+- La resolución del tenant usa el `WABA ID` conectado, no datos del frontend.
 
-### Fase 3: Componentes avanzados
+La implementación actual no ejecuta creación real en Meta durante las pruebas
+automáticas. La validación de proveedor queda para una prueba controlada con
+un tenant de staging.
+
+### Fase 3: Componentes avanzados — pendiente
 
 - Header de imagen.
 - Footer.
@@ -340,13 +344,17 @@ identificarse si corresponde al índice local o al nombre/idioma de Meta.
 - Variables estructuradas.
 - Validación previa compatible con Meta.
 
-### Fase 4: Operación y auditoría
+### Fase 4: Operación y auditoría — pendiente parcial
 
 - Historial de cambios.
 - Registro de solicitudes y respuestas sanitizadas.
 - Reintentos controlados.
 - Métricas de aprobación y rechazo.
 - Archivado protegido por historial de envíos.
+
+Mientras no exista el endpoint explícito de archivado remoto, una plantilla que
+ya tiene `meta_template_id` no se puede editar en sus campos remotos ni borrar
+localmente. Esto evita que GEOACTIV quede desincronizado con Meta.
 
 ## 14. Criterios de aceptación
 
@@ -370,7 +378,7 @@ La funcionalidad se considerará terminada cuando:
 - `docs/Plan_envios_whats_marketing/04_BACKEND_CONTRACTS.md`
 - `docs/Prospeccion/frontend_vistas.md`
 - `docs/Prospeccion/backend_endpoints.md`
-- `supabase/migrations/20280711_090000_whats_prosp_meta_templates.sql`
+- `supabase/migrations/20261019_120000_whatsapp_meta_template_sync.sql`
 - `backend/app/api/routes/crm.py`
 - `backend/app/repositories/crm.py`
 - `frontend/panel/src/app/prospeccion/campanas/plantillas`
@@ -488,7 +496,9 @@ ser elegible para envíos.
 ### 16.6 Idempotencia del webhook
 
 El mismo evento puede llegar más de una vez. El procesamiento debe ser
-idempotente mediante:
+idempotente. La implementación reutiliza la cola durable y el worker existentes;
+antes de ampliar el esquema de deduplicación de eventos se debe verificar el
+identificador disponible en cada payload de Meta. El diseño objetivo contempla:
 
 - Identificador único del evento Meta cuando esté disponible.
 - Hash estable del payload sanitizado cuando no exista un ID suficiente.

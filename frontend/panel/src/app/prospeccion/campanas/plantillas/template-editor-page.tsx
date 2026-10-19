@@ -41,6 +41,7 @@ type Channel = "correo" | "whatsapp"
 type EmailFormat = "html" | "texto"
 type EmailCreationMode = "visual" | "html" | "ai"
 type EmailMessageKind = "transactional" | "broadcast"
+type TemplateStatus = "draft" | "pending" | "approved" | "rejected" | "paused" | "disabled" | "archived"
 type HtmlLinkDestination = "landing" | "agenda" | "whatsapp" | "internal"
 type LogoAsset = { id: string; nombre: string; file_url: string }
 type EmailVariable = { clave: string; etiqueta: string; descripcion?: string }
@@ -89,7 +90,7 @@ type FormState = {
   metaTemplateName: string
   metaTemplateLanguage: string
   metaCategory: "marketing" | "utility" | "authentication"
-  templateStatus: "draft" | "approved" | "archived"
+  templateStatus: TemplateStatus
   websiteBaseUrl: string
   websiteLinkLabel: string
   demoLinkLabel: string
@@ -156,7 +157,12 @@ function formFromTemplate(template: ContactoTemplate, campaignId: string): FormS
     metaTemplateLanguage: template.language_code ?? "es_MX",
     metaCategory: template.meta_category ?? "marketing",
     templateStatus:
-      template.template_status === "approved" || template.template_status === "archived"
+      template.template_status === "pending" ||
+      template.template_status === "approved" ||
+      template.template_status === "rejected" ||
+      template.template_status === "paused" ||
+      template.template_status === "disabled" ||
+      template.template_status === "archived"
         ? template.template_status
         : "draft",
     websiteBaseUrl: "https://talia.mx/",
@@ -1371,25 +1377,24 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
                     </Select>
                   </div>
                   <div className="max-w-sm space-y-2">
-                    <Label>Estado en la aplicación</Label>
-                    <Select
-                      value={form.templateStatus}
-                      onValueChange={(value) =>
-                        setForm((previous) => ({
-                          ...previous,
-                          templateStatus: value as FormState["templateStatus"],
-                        }))
-                      }
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="draft">Borrador</SelectItem>
-                        <SelectItem value="approved">Aprobada</SelectItem>
-                        <SelectItem value="archived">Archivada</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Estado en Meta</Label>
+                    <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                      {form.templateStatus === "pending"
+                        ? "Pendiente de revisión de Meta"
+                        : form.templateStatus === "approved"
+                          ? "Aprobada por Meta"
+                          : form.templateStatus === "rejected"
+                            ? "Rechazada por Meta"
+                            : form.templateStatus === "paused"
+                              ? "Pausada por Meta"
+                              : form.templateStatus === "disabled"
+                                ? "Deshabilitada por Meta"
+                                : form.templateStatus === "archived"
+                                  ? "Archivada"
+                                  : "Borrador local"}
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      Marca Aprobada únicamente cuando Meta ya la aprobó con el mismo nombre, idioma, categoría y encabezado.
+                      Este estado no se edita manualmente: Meta lo comunica mediante webhook o sincronización manual.
                     </p>
                   </div>
                   <div className="space-y-2">

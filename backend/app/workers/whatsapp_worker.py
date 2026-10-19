@@ -38,6 +38,7 @@ async def _process_webhook_job(repo: CRMRepository, row: dict[str, Any]) -> None
 
     incoming = schemas.MetaWhatsAppIncomingMessage.from_webhook_payload(payload)
     statuses = schemas.MetaWhatsAppStatusCallback.from_webhook_payload(payload)
+    template_updates = schemas.MetaWhatsAppTemplateStatusUpdate.from_webhook_payload(payload)
     for message in incoming:
         await service.handle_incoming_message(
             message,
@@ -50,10 +51,42 @@ async def _process_webhook_job(repo: CRMRepository, row: dict[str, Any]) -> None
             provider="meta",
             organizacion_id=organization_id,
         )
+    for update in template_updates:
+        template = await repo.worker_find_whats_prosp_template(
+            organizacion_id=UUID(organization_id),
+            meta_template_id=update.meta_template_id,
+            template_name=update.template_name,
+            language_code=update.language_code,
+        )
+        if not template:
+            logger.warning(
+                "whatsapp.template_status_unmatched",
+                extra={
+                    "organization_id": organization_id,
+                    "meta_template_id": update.meta_template_id,
+                    "template_name": update.template_name,
+                    "language_code": update.language_code,
+                    "status": update.status,
+                },
+            )
+            continue
+        await repo.worker_update_whats_prosp_template_status(
+            organizacion_id=UUID(organization_id),
+            template_id=UUID(str(template["id"])),
+            template_status=update.status,
+            meta_status=update.status,
+            meta_template_id=update.meta_template_id,
+            rejected_reason=update.reason if update.status == "rejected" else None,
+        )
     await repo.worker_mark_whatsapp_webhook_done(job_id=job_id)
     logger.info(
         "whatsapp.webhook_job_done",
-        extra={"job_id": str(job_id), "messages": len(incoming), "statuses": len(statuses)},
+        extra={
+            "job_id": str(job_id),
+            "messages": len(incoming),
+            "statuses": len(statuses),
+            "template_updates": len(template_updates),
+        },
     )
 
 

@@ -19,6 +19,15 @@ export async function PATCH(request: Request, context: RouteContext) {
   })
 }
 
+export async function POST(request: Request, context: RouteContext) {
+  const { templateId } = await context.params
+  return proxyProspeccionRequest(request, {
+    method: "POST",
+    backendPath: `/crm/prospeccion/whatsapp/templates/${templateId}/sync`,
+    forwardSearch: false,
+  })
+}
+
 export async function DELETE(request: Request, context: RouteContext) {
   const { templateId } = await context.params
   return proxyProspeccionRequest(request, {

@@ -625,7 +625,11 @@ export type ContactoTemplate = {
   template_name?: string | null
   language_code?: string | null
   meta_category?: "marketing" | "utility" | "authentication" | null
-  template_status?: "draft" | "approved" | "rejected" | "archived" | null
+  template_status?: "draft" | "pending" | "approved" | "rejected" | "paused" | "disabled" | "archived" | null
+  meta_status?: "draft" | "pending" | "approved" | "rejected" | "paused" | "disabled" | "archived" | null
+  meta_template_id?: string | null
+  meta_rejected_reason?: string | null
+  meta_synced_at?: string | null
   metadata?: Record<string, unknown> | null
   imagenes?: ContactoTemplateImagen[]
 }
@@ -672,7 +676,7 @@ export type WhatsProspTemplateInput = {
   template_name: string
   language_code: string
   meta_category: "marketing" | "utility" | "authentication"
-  template_status?: "draft" | "approved" | "rejected" | "archived"
+  template_status?: "draft" | "pending" | "approved" | "rejected" | "paused" | "disabled" | "archived"
   activo?: boolean
   metadata?: Record<string, unknown> | null
   imagenes?: Array<{ variable_clave: ContactoTemplateImagenVariable; logo_id: string }>
@@ -2089,6 +2093,13 @@ export async function updateWhatsProspTemplate(
     method: "PATCH",
     body: JSON.stringify(payload),
   })
+}
+
+export async function syncWhatsProspTemplate(templateId: string) {
+  return requestJson<{ ok: boolean; template: ContactoTemplate; source: string }>(
+    `/api/prospeccion/whatsapp/templates/${templateId}/sync`,
+    { method: "POST" },
+  )
 }
 
 export async function deleteWhatsProspTemplate(templateId: string) {
