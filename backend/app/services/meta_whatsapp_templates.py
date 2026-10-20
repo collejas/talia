@@ -193,6 +193,39 @@ class MetaWhatsAppTemplateClient:
         normalized_category = str(category or "").strip().upper()
         if normalized_category not in {"MARKETING", "UTILITY", "AUTHENTICATION"}:
             raise MetaWhatsAppTemplateError("meta_template_category_invalid")
+        components = self.build_components(
+            body_text=body,
+            header_format=header_format,
+            header_text=header_text,
+            header_handle=header_handle,
+            footer_text=footer_text,
+            buttons=buttons,
+        )
+        return await self._request(
+            "POST",
+            f"{waba}/message_templates",
+            json_payload={
+                "name": normalized_name,
+                "language": language,
+                "category": normalized_category,
+                "components": components,
+            },
+            operation="create",
+        )
+
+    @staticmethod
+    def build_components(
+        *,
+        body_text: str,
+        header_format: Literal["none", "text", "image", "video", "document"] = "none",
+        header_text: str | None = None,
+        header_handle: str | None = None,
+        footer_text: str | None = None,
+        buttons: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        body = str(body_text or "").strip()
+        if not body:
+            raise MetaWhatsAppTemplateError("meta_template_payload_invalid")
         format_value = str(header_format or "none").strip().lower()
         if format_value not in {"none", "text", "image", "video", "document"}:
             raise MetaWhatsAppTemplateError("meta_template_header_invalid")
@@ -229,16 +262,39 @@ class MetaWhatsAppTemplateClient:
                 raise MetaWhatsAppTemplateError("meta_template_button_invalid")
         if normalized_buttons:
             components.append({"type": "BUTTONS", "buttons": normalized_buttons})
+        return components
+
+    async def update_template(
+        self,
+        *,
+        template_id: str,
+        category: str,
+        components: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        template = str(template_id or "").strip()
+        normalized_category = str(category or "").strip().upper()
+        if not template or normalized_category not in {"MARKETING", "UTILITY", "AUTHENTICATION"}:
+            raise MetaWhatsAppTemplateError("meta_template_payload_invalid")
+        if not components:
+            raise MetaWhatsAppTemplateError("meta_template_payload_invalid")
         return await self._request(
             "POST",
+            template,
+            json_payload={"category": normalized_category, "components": components},
+            operation="update",
+        )
+
+    async def delete_template(self, *, waba_id: str, template_id: str, name: str) -> dict[str, Any]:
+        waba = str(waba_id or "").strip()
+        meta_id = str(template_id or "").strip()
+        normalized_name = self._validate_name(name)
+        if not waba or not meta_id:
+            raise MetaWhatsAppTemplateError("meta_template_payload_invalid")
+        return await self._request(
+            "DELETE",
             f"{waba}/message_templates",
-            json_payload={
-                "name": normalized_name,
-                "language": language,
-                "category": normalized_category,
-                "components": components,
-            },
-            operation="create",
+            params={"hsm_id": meta_id, "name": normalized_name},
+            operation="delete",
         )
 
     async def upload_template_media(self, *, content: bytes, mime_type: str) -> str:

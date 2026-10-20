@@ -118,3 +118,58 @@ async def test_meta_whatsapp_template_client_uploads_media(monkeypatch):
         ("POST", "APP_ID/uploads", {"file_length": "10", "file_type": "image/png"}, "media_session"),
         ("POST", "SESSION_ID", {"Content-Type": "image/png", "file_offset": "0"}, "media_upload"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_meta_whatsapp_template_client_updates_template(monkeypatch):
+    captured = {}
+
+    async def fake_request(self, method, resource, *, json_payload=None, params=None, operation):
+        captured.update(method=method, resource=resource, json_payload=json_payload, operation=operation)
+        return {"success": True}
+
+    monkeypatch.setattr(MetaWhatsAppTemplateClient, "_request", fake_request)
+    client = MetaWhatsAppTemplateClient(access_token="token")
+
+    response = await client.update_template(
+        template_id="META_TEMPLATE_ID",
+        category="marketing",
+        components=[{"type": "BODY", "text": "Nuevo contenido"}],
+    )
+
+    assert response["success"] is True
+    assert captured == {
+        "method": "POST",
+        "resource": "META_TEMPLATE_ID",
+        "operation": "update",
+        "json_payload": {
+            "category": "MARKETING",
+            "components": [{"type": "BODY", "text": "Nuevo contenido"}],
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_meta_whatsapp_template_client_deletes_template(monkeypatch):
+    captured = {}
+
+    async def fake_request(self, method, resource, *, json_payload=None, params=None, operation):
+        captured.update(method=method, resource=resource, params=params, operation=operation)
+        return {"success": True}
+
+    monkeypatch.setattr(MetaWhatsAppTemplateClient, "_request", fake_request)
+    client = MetaWhatsAppTemplateClient(access_token="token")
+
+    response = await client.delete_template(
+        waba_id="WABA_ID",
+        template_id="META_TEMPLATE_ID",
+        name="Seguimiento_Demo",
+    )
+
+    assert response["success"] is True
+    assert captured == {
+        "method": "DELETE",
+        "resource": "WABA_ID/message_templates",
+        "params": {"hsm_id": "META_TEMPLATE_ID", "name": "seguimiento_demo"},
+        "operation": "delete",
+    }

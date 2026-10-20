@@ -645,3 +645,25 @@ por webhook y no se puede marcar manualmente desde el panel.
 - El cargador acepta actualmente JPEG, PNG, MP4 y PDF, con límite de 16 MB por
   archivo en esta primera fase.
 
+## 18. Edición y eliminación desde la aplicación
+
+Las plantillas que ya tienen `meta_template_id` ahora se administran en dos
+fases:
+
+1. El backend valida tenant, permisos y conexión Meta.
+2. Ejecuta primero la operación remota en Meta.
+3. Solo si Meta confirma, actualiza o elimina la representación local.
+
+La edición usa `POST /{template_id}` de la API de administración de plantillas
+Meta y reemplaza el conjunto completo de componentes. Si se modifica el
+encabezado multimedia, se vuelve a cargar el archivo para obtener un nuevo
+handle de ejemplo. Meta puede volver a revisar la plantilla después de editarla;
+por eso la aplicación la deja en `pending` hasta recibir el webhook.
+
+La eliminación usa `DELETE /{waba_id}/message_templates` con el ID y nombre
+técnico de la plantilla. La confirmación visual del panel no sustituye la
+validación backend ni la pertenencia al tenant.
+
+Los nombres técnicos y el idioma no se editan porque identifican la variante
+remota. Para cambiar esos datos se debe crear una nueva plantilla.
+

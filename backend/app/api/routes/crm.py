@@ -12101,6 +12101,56 @@ async def _maybe_auto_bind_whats_prosp_template_images(
     return [{"variable_clave": "logo_url", "logo_id": resolved_logo_id}, *images]
 
 
+async def _prepare_whatsapp_template_media_handle(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    runtime: Any,
+    header_format: str,
+    logo_id: str,
+    current_logo_id: str | None = None,
+    current_handle: str | None = None,
+) -> str:
+    """Valida el archivo del tenant y obtiene el handle de ejemplo de Meta."""
+
+    if header_format not in {"image", "video", "document"}:
+        return ""
+    if logo_id and logo_id == _clean_text(current_logo_id) and _clean_text(current_handle):
+        return _clean_text(current_handle)
+    try:
+        logos = await repo.list_logos(organizacion_id=organizacion_id)
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_template_media_lookup_failed") from exc
+    logo = next((row for row in logos if _clean_text(row.get("id")) == logo_id), None)
+    media_url = _clean_text(logo.get("file_url")) if isinstance(logo, dict) else ""
+    if not media_url or not media_url.lower().startswith("https://"):
+        raise HTTPException(status_code=422, detail="whatsapp_template_media_not_available")
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as media_client:
+            media_response = await media_client.get(media_url)
+        if media_response.status_code >= 400:
+            raise HTTPException(status_code=422, detail="whatsapp_template_media_not_available")
+        media_type = media_response.headers.get("content-type", "").split(";", 1)[0].lower()
+        expected_types = {
+            "image": {"image/jpeg", "image/png"},
+            "video": {"video/mp4"},
+            "document": {"application/pdf"},
+        }
+        if media_type not in expected_types[header_format]:
+            raise HTTPException(status_code=422, detail="whatsapp_template_media_type_mismatch")
+        return await MetaWhatsAppTemplateClient(
+            access_token=runtime.meta_page_access_token or "",
+            graph_api_version=runtime.meta_graph_api_version or settings.meta_graph_api_version,
+            app_id=settings.meta_app_id,
+        ).upload_template_media(content=media_response.content, mime_type=media_type)
+    except HTTPException:
+        raise
+    except MetaWhatsAppTemplateError as exc:
+        raise HTTPException(status_code=502, detail=exc.code) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="whatsapp_template_media_download_failed") from exc
+
+
 async def _replace_contact_template_images(
     *,
     repo: CRMRepository,
@@ -40508,17 +40558,7 @@ async def actualizar_whats_prosp_template(
     raw_data = payload.model_dump(mode="json", exclude_unset=True)
     # El estado remoto solo puede venir de Meta mediante webhook/sync.
     raw_data.pop("template_status", None)
-    if _clean_text(current.get("meta_template_id")) and any(
-        field in raw_data for field in (
-            "template_name", "language_code", "meta_category", "cuerpo_texto",
-            "meta_header_format", "meta_header_text", "meta_header_logo_id",
-            "meta_footer_text", "botones",
-        )
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="whatsapp_template_remote_fields_are_immutable",
-        )
+    remote_meta_id = _clean_text(current.get("meta_template_id"))
     effective_campana_id = payload.campana_id or current.get("campana_id")
     if effective_campana_id:
         await _validate_whats_prosp_template_campaign(
@@ -40528,6 +40568,111 @@ async def actualizar_whats_prosp_template(
         )
     images = raw_data.pop("imagenes", None)
     buttons = raw_data.pop("botones", None)
+    media_handle: str | None = None
+    if remote_meta_id:
+        effective_header_format = _clean_text(
+            raw_data.get("meta_header_format")
+            if "meta_header_format" in raw_data
+            else current.get("meta_header_format")
+        ).lower() or "none"
+        effective_header_text = _clean_text(
+            raw_data.get("meta_header_text")
+            if "meta_header_text" in raw_data
+            else current.get("meta_header_text")
+        )
+        effective_logo_id = _clean_text(
+            raw_data.get("meta_header_logo_id")
+            if "meta_header_logo_id" in raw_data
+            else current.get("meta_header_logo_id")
+        )
+        effective_footer = _clean_text(
+            raw_data.get("meta_footer_text")
+            if "meta_footer_text" in raw_data
+            else current.get("meta_footer_text")
+        )
+        if effective_header_format == "text" and not effective_header_text:
+            raise HTTPException(status_code=422, detail="whatsapp_template_header_text_required")
+        if effective_header_format in {"image", "video", "document"} and not effective_logo_id:
+            raise HTTPException(status_code=422, detail="whatsapp_template_header_media_required")
+        if effective_header_format == "none" and (effective_header_text or effective_logo_id):
+            raise HTTPException(status_code=422, detail="whatsapp_template_header_configuration_invalid")
+        if buttons is None:
+            existing_buttons = await repo.list_contact_template_buttons(
+                usuario_token=user_token,
+                template_ids=[str(template_id)],
+            )
+            button_payloads = [
+                {
+                    "tipo": row.get("tipo"),
+                    "texto": row.get("texto"),
+                    "url": row.get("url"),
+                    "telefono": row.get("telefono"),
+                    "payload": row.get("payload"),
+                }
+                for row in existing_buttons
+            ]
+        else:
+            button_payloads = [
+                WhatsProspTemplateButtonPayload.model_validate(button).model_dump(
+                    mode="json", exclude_none=True
+                )
+                for button in buttons
+            ]
+        try:
+            platform_repo = PlatformRepository()
+            connection = await platform_repo.get_whatsapp_meta_connection(
+                organizacion_id=organizacion_id,
+            )
+            runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+        except PlatformRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="whatsapp_meta_connection_unavailable") from exc
+        if not connection or str(connection.get("estado") or "") != "conectado":
+            raise HTTPException(status_code=409, detail="whatsapp_meta_connection_not_connected")
+        if effective_header_format in {"image", "video", "document"}:
+            media_handle = await _prepare_whatsapp_template_media_handle(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                runtime=runtime,
+                header_format=effective_header_format,
+                logo_id=effective_logo_id,
+                current_logo_id=_clean_text(current.get("meta_header_logo_id")),
+                current_handle=_clean_text(current.get("meta_header_sample_handle")),
+            )
+        try:
+            components = MetaWhatsAppTemplateClient.build_components(
+                body_text=_clean_text(
+                    raw_data.get("cuerpo_texto")
+                    if "cuerpo_texto" in raw_data
+                    else current.get("cuerpo_texto")
+                ),
+                header_format=effective_header_format,
+                header_text=effective_header_text,
+                header_handle=media_handle,
+                footer_text=effective_footer,
+                buttons=button_payloads,
+            )
+            await MetaWhatsAppTemplateClient(
+                access_token=runtime.meta_page_access_token or "",
+                graph_api_version=runtime.meta_graph_api_version or settings.meta_graph_api_version,
+                app_id=settings.meta_app_id,
+            ).update_template(
+                template_id=remote_meta_id,
+                category=_clean_text(
+                    raw_data.get("meta_category")
+                    if "meta_category" in raw_data
+                    else current.get("meta_category")
+                ),
+                components=components,
+            )
+        except MetaWhatsAppTemplateError as exc:
+            raise HTTPException(status_code=502, detail=exc.code) from exc
+        # Nombre e idioma identifican la plantilla remota y no se cambian aquí.
+        raw_data.pop("template_name", None)
+        raw_data.pop("language_code", None)
+        raw_data["template_status"] = "pending"
+        raw_data["meta_status"] = "pending"
+        if media_handle:
+            raw_data["meta_header_sample_handle"] = media_handle
     if images is not None:
         images = await _maybe_auto_bind_whats_prosp_template_images(
             repo=repo,
@@ -40544,6 +40689,12 @@ async def actualizar_whats_prosp_template(
     body.pop("canal", None)
     body.pop("provider", None)
     body.pop("usage_scope", None)
+    if remote_meta_id:
+        body["template_status"] = "pending"
+        body["meta_status"] = "pending"
+        body["meta_synced_at"] = datetime.now(timezone.utc).isoformat()
+        body["meta_rejected_reason"] = None
+        body["meta_last_error_code"] = None
     try:
         template = await repo.update_whats_prosp_template(
             usuario_token=user_token,
@@ -40677,8 +40828,29 @@ async def eliminar_whats_prosp_template(
         )
         if not current:
             raise HTTPException(status_code=404, detail="whats_prosp_template_not_found")
-        if _clean_text(current.get("meta_template_id")):
-            raise HTTPException(status_code=409, detail="whatsapp_template_remote_delete_not_supported")
+        meta_template_id = _clean_text(current.get("meta_template_id"))
+        if meta_template_id:
+            try:
+                platform_repo = PlatformRepository()
+                connection = await platform_repo.get_whatsapp_meta_connection(
+                    organizacion_id=organizacion_id,
+                )
+                runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+                if not connection or str(connection.get("estado") or "") != "conectado":
+                    raise MetaWhatsAppTemplateError("meta_connection_not_connected")
+                await MetaWhatsAppTemplateClient(
+                    access_token=runtime.meta_page_access_token or "",
+                    graph_api_version=runtime.meta_graph_api_version or settings.meta_graph_api_version,
+                    app_id=settings.meta_app_id,
+                ).delete_template(
+                    waba_id=str(connection.get("waba_id") or ""),
+                    template_id=meta_template_id,
+                    name=str(current.get("template_name") or ""),
+                )
+            except PlatformRepositoryError as exc:
+                raise HTTPException(status_code=502, detail="whatsapp_meta_connection_unavailable") from exc
+            except MetaWhatsAppTemplateError as exc:
+                raise HTTPException(status_code=502, detail=exc.code) from exc
         await repo.delete_whats_prosp_template(
             usuario_token=user_token,
             organizacion_id=organizacion_id,
