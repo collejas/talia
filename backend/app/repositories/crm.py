@@ -24782,21 +24782,16 @@ class CRMRepository:
         *,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        request = (
-            self._request_with_user(
-                "POST",
-                "/rest/v1/ui_notificaciones",
-                token=self._user_token,
-                json=[payload],
-                prefer="return=representation,resolution=merge-duplicates",
-            )
-            if self._user_token
-            else self._request(
-                "POST",
-                "/rest/v1/ui_notificaciones",
-                json=[payload],
-                prefer="return=representation,resolution=merge-duplicates",
-            )
+        # Las notificaciones se generan desde backend para un destinatario que
+        # puede ser distinto del usuario autenticado de la petición. El token
+        # del usuario sólo debe usarse para leerlas o actualizarlas bajo su
+        # propia policy RLS; la creación usa service_role y conserva el
+        # aislamiento mediante organizacion_id en el payload y en las policies.
+        request = self._request_service_role(
+            "POST",
+            "/rest/v1/ui_notificaciones",
+            json=[payload],
+            prefer="return=representation,resolution=merge-duplicates",
         )
         resp = await request
         data = resp.json() or []
