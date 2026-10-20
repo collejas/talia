@@ -1,5 +1,9 @@
 # Plan · Ventas de propiedades por catálogo
 
+La automatización operativa completa, incluyendo la diferencia entre reservado,
+apartado, pedido y venta formal, está documentada en
+[Automatización de la operación y venta inmobiliaria](./automatizacion_operacion_venta_inmobiliaria.md).
+
 ## Objetivo
 
 - Vincular cada `propiedad_unidad` importada o creada con un `catalog_item`, de modo que la venta siga funcionando sobre el catálogo (cotizaciones/lead_cards) mientras guarda la referencia geoespacial (desarrollo/unidad).

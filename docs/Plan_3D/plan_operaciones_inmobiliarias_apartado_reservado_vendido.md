@@ -3,6 +3,10 @@
 Fecha: 2026-10-14 (UTC)
 Estado: Definición funcional base
 
+La automatización completa entre la ficha de Propiedades, cotizaciones,
+pedidos y Ventas se documenta en
+[Automatización de la operación y venta inmobiliaria](./automatizacion_operacion_venta_inmobiliaria.md).
+
 ## Nomenclatura visible vigente
 
 Los nombres visibles se actualizaron sin modificar los valores internos ni las
@@ -320,6 +324,7 @@ No se agregan nuevas etapas comerciales ni estados visibles por estas mejoras.
 
 ## Documentos relacionados
 
+- [Automatización de la operación y venta inmobiliaria](./automatizacion_operacion_venta_inmobiliaria.md)
 - [Plan de estados comerciales y precio por m2 en propiedades](./plan_estados_comerciales_y_precio_m2_propiedades.md)
 - [Flujo integrado: propiedades, catalog items y ventas](../ventas_productos_propiedades_unidades/flujo_integrado.md)
 - [Plan de normalización de inventario, ventas y personas](./plan_normalizacion_inventario_ventas_personas.md)
