@@ -45,6 +45,26 @@ async def test_request_prefers_user_token(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.asyncio
+async def test_delete_whats_prosp_template_accepts_postgrest_204(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "supabase_service_role", "service")
+    monkeypatch.setattr(settings, "supabase_anon", "anon")
+
+    repo = CRMRepository(user_token="user-token")
+    repo._request_with_user = AsyncMock(
+        return_value=type("EmptyResponse", (), {"status_code": 204, "content": b""})()
+    )
+
+    await repo.delete_whats_prosp_template(
+        usuario_token="user-token",
+        organizacion_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        template_id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
+    )
+
+    repo._request_with_user.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_rpc_prefers_user_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "supabase_url", "https://example.supabase.co")
     monkeypatch.setattr(settings, "supabase_service_role", "service")

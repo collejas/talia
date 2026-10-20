@@ -26110,6 +26110,10 @@ class CRMRepository:
                 "usage_scope": "eq.whats_prosp",
             },
         )
+        # PostgREST responde 204 sin cuerpo cuando el DELETE fue exitoso.
+        # No intentar parsear JSON evita convertir una eliminación correcta en 500.
+        if resp.status_code in {204, 205} or not resp.content:
+            return
         data = resp.json() or []
         if isinstance(data, dict) and data.get("message") == "No rows deleted":
             raise CRMRepositoryError("whats_prosp_template_not_found")
