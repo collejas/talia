@@ -5185,6 +5185,34 @@ class ContactoTemplateImagenPayload(BaseModel):
     logo_id: UUID
 
 
+class WhatsProspTemplateButtonPayload(BaseModel):
+    """Botón estructurado soportado por las plantillas de Meta."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tipo: Literal["quick_reply", "url", "phone"]
+    texto: str = Field(..., min_length=1, max_length=25)
+    url: str | None = Field(default=None, max_length=2000)
+    telefono: str | None = Field(default=None, max_length=20)
+    payload: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def validate_target(self) -> "WhatsProspTemplateButtonPayload":
+        if self.tipo == "url":
+            if not self.url or not re.fullmatch(r"https://[^\s]+", self.url.strip(), flags=re.IGNORECASE):
+                raise ValueError("whatsapp_template_button_url_invalid")
+            if self.telefono:
+                raise ValueError("whatsapp_template_button_target_invalid")
+        elif self.tipo == "phone":
+            if not self.telefono or not re.fullmatch(r"\+[1-9]\d{7,14}", self.telefono.strip()):
+                raise ValueError("whatsapp_template_button_phone_invalid")
+            if self.url:
+                raise ValueError("whatsapp_template_button_target_invalid")
+        elif self.url or self.telefono:
+            raise ValueError("whatsapp_template_button_target_invalid")
+        return self
+
+
 class ContactoTemplatePayload(BaseModel):
     """Crea una plantilla multicanal para prospección."""
 
@@ -5321,6 +5349,11 @@ class WhatsProspTemplateCreatePayload(BaseModel):
     template_name: str = Field(..., min_length=2, max_length=160)
     language_code: str = Field(..., min_length=2, max_length=32)
     meta_category: Literal["marketing", "utility", "authentication"]
+    meta_header_format: Literal["none", "text", "image", "video", "document"] = "none"
+    meta_header_text: str | None = Field(default=None, max_length=60)
+    meta_header_logo_id: UUID | None = None
+    meta_footer_text: str | None = Field(default=None, max_length=60)
+    botones: list[WhatsProspTemplateButtonPayload] = Field(default_factory=list, max_length=2)
     template_status: Literal["draft", "approved", "rejected", "archived"] = Field(default="draft")
     activo: bool = Field(default=True)
     metadata: dict[str, Any] | None = Field(default=None)
@@ -5340,6 +5373,11 @@ class WhatsProspTemplateUpdatePayload(BaseModel):
     template_name: str | None = Field(default=None, min_length=2, max_length=160)
     language_code: str | None = Field(default=None, min_length=2, max_length=32)
     meta_category: Literal["marketing", "utility", "authentication"] | None = Field(default=None)
+    meta_header_format: Literal["none", "text", "image", "video", "document"] | None = None
+    meta_header_text: str | None = Field(default=None, max_length=60)
+    meta_header_logo_id: UUID | None = None
+    meta_footer_text: str | None = Field(default=None, max_length=60)
+    botones: list[WhatsProspTemplateButtonPayload] | None = Field(default=None, max_length=2)
     template_status: Literal["draft", "approved", "rejected", "archived"] | None = Field(default=None)
     activo: bool | None = Field(default=None)
     metadata: dict[str, Any] | None = Field(default=None)
@@ -11981,6 +12019,30 @@ def _attach_contact_template_images(
         )
     for item in items:
         item["imagenes"] = by_template.get(_clean_text(item.get("id")) or "", [])
+
+
+def _attach_contact_template_buttons(
+    items: list[dict[str, Any]],
+    button_rows: list[dict[str, Any]],
+) -> None:
+    by_template: dict[str, list[dict[str, Any]]] = {}
+    for row in button_rows:
+        template_id = _clean_text(row.get("template_id"))
+        if not template_id:
+            continue
+        by_template.setdefault(template_id, []).append(
+            {
+                "id": row.get("id"),
+                "posicion": row.get("posicion"),
+                "tipo": row.get("tipo"),
+                "texto": row.get("texto"),
+                "url": row.get("url"),
+                "telefono": row.get("telefono"),
+                "payload": row.get("payload"),
+            }
+        )
+    for item in items:
+        item["botones"] = by_template.get(_clean_text(item.get("id")) or "", [])
 
 
 def _normalize_template_media_url(value: Any) -> str:
@@ -40166,6 +40228,11 @@ async def listar_whats_prosp_templates(
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         _attach_contact_template_images(items, image_rows)
+        button_rows = await repo.list_contact_template_buttons(
+            usuario_token=user_token,
+            template_ids=[str(item["id"]) for item in items if isinstance(item, dict) and _clean_text(item.get("id"))],
+        )
+        _attach_contact_template_buttons(items, button_rows)
     return {
         "ok": True,
         "items": items,
@@ -40202,6 +40269,11 @@ async def obtener_whats_prosp_template(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     _attach_contact_template_images([template], image_rows)
+    button_rows = await repo.list_contact_template_buttons(
+        usuario_token=user_token,
+        template_ids=[str(template["id"])],
+    )
+    _attach_contact_template_buttons([template], button_rows)
     return {"ok": True, "template": template}
 
 
@@ -40223,6 +40295,15 @@ async def crear_whats_prosp_template(
     body_text = _clean_text(raw.get("cuerpo_texto"))
     if not body_text:
         raise HTTPException(status_code=422, detail="whatsapp_template_body_required")
+    header_format = _clean_text(raw.get("meta_header_format")).lower() or "none"
+    header_text = _clean_text(raw.get("meta_header_text"))
+    header_logo_id = _clean_text(raw.get("meta_header_logo_id"))
+    if header_format == "text" and not header_text:
+        raise HTTPException(status_code=422, detail="whatsapp_template_header_text_required")
+    if header_format in {"image", "video", "document"} and not header_logo_id:
+        raise HTTPException(status_code=422, detail="whatsapp_template_header_media_required")
+    if header_format == "none" and (header_text or header_logo_id):
+        raise HTTPException(status_code=422, detail="whatsapp_template_header_configuration_invalid")
     existing = await repo.get_whats_prosp_template_by_identity(
         usuario_token=user_token,
         organizacion_id=organizacion_id,
@@ -40232,6 +40313,7 @@ async def crear_whats_prosp_template(
     if existing:
         raise HTTPException(status_code=409, detail="whats_prosp_template_duplicate")
     images = raw.pop("imagenes", [])
+    buttons = raw.pop("botones", [])
     images = await _maybe_auto_bind_whats_prosp_template_images(
         repo=repo,
         organizacion_id=organizacion_id,
@@ -40252,6 +40334,24 @@ async def crear_whats_prosp_template(
             usuario_token=user_token,
             payload=body,
         )
+        if buttons:
+            button_rows = [
+                {
+                    "organizacion_id": str(organizacion_id),
+                    "template_id": str(template["id"]),
+                    "posicion": index,
+                    **button.model_dump(mode="json", exclude_none=True),
+                }
+                for index, button in enumerate(
+                    [WhatsProspTemplateButtonPayload.model_validate(button) for button in buttons],
+                    start=1,
+                )
+            ]
+            await repo.replace_contact_template_buttons(
+                usuario_token=user_token,
+                template_id=UUID(str(template["id"])),
+                botones=button_rows,
+            )
         if images:
             parsed_images = [ContactoTemplateImagenPayload.model_validate(image) for image in images]
             await _replace_contact_template_images(
@@ -40265,9 +40365,11 @@ async def crear_whats_prosp_template(
             usuario_token=user_token,
             template_ids=[str(template["id"])],
         )
-    except CRMRepositoryError as exc:
+    except (CRMRepositoryError, ValidationError) as exc:
         if "whats_prosp_template_duplicate" in str(exc):
             raise HTTPException(status_code=409, detail="whats_prosp_template_duplicate") from exc
+        if isinstance(exc, ValidationError):
+            raise HTTPException(status_code=422, detail="whatsapp_template_buttons_invalid") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     try:
@@ -40296,16 +40398,56 @@ async def crear_whats_prosp_template(
         raise HTTPException(status_code=409, detail="whatsapp_meta_connection_not_connected")
 
     runtime = await tenant_runtime.get_whatsapp_runtime_settings(organizacion_id=organizacion_id)
+    header_handle: str | None = None
+    if header_format in {"image", "video", "document"}:
+        try:
+            logos = await repo.list_logos(organizacion_id=organizacion_id)
+        except CRMRepositoryError as exc:
+            raise HTTPException(status_code=502, detail="whatsapp_template_media_lookup_failed") from exc
+        logo = next((row for row in logos if _clean_text(row.get("id")) == header_logo_id), None)
+        media_url = _clean_text(logo.get("file_url")) if isinstance(logo, dict) else ""
+        if not media_url or not media_url.lower().startswith("https://"):
+            raise HTTPException(status_code=422, detail="whatsapp_template_media_not_available")
+        try:
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=False) as media_client:
+                media_response = await media_client.get(media_url)
+            if media_response.status_code >= 400:
+                raise HTTPException(status_code=422, detail="whatsapp_template_media_not_available")
+            media_type = media_response.headers.get("content-type", "").split(";", 1)[0].lower()
+            expected_types = {
+                "image": {"image/jpeg", "image/png"},
+                "video": {"video/mp4"},
+                "document": {"application/pdf"},
+            }
+            if media_type not in expected_types[header_format]:
+                raise HTTPException(status_code=422, detail="whatsapp_template_media_type_mismatch")
+            header_handle = await MetaWhatsAppTemplateClient(
+                access_token=runtime.meta_page_access_token or "",
+                graph_api_version=runtime.meta_graph_api_version or settings.meta_graph_api_version,
+                app_id=settings.meta_app_id,
+            ).upload_template_media(content=media_response.content, mime_type=media_type)
+        except HTTPException:
+            raise
+        except MetaWhatsAppTemplateError as exc:
+            raise HTTPException(status_code=502, detail=exc.code) from exc
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=502, detail="whatsapp_template_media_download_failed") from exc
     try:
         meta_response = await MetaWhatsAppTemplateClient(
             access_token=runtime.meta_page_access_token or "",
             graph_api_version=runtime.meta_graph_api_version or settings.meta_graph_api_version,
+            app_id=settings.meta_app_id,
         ).create_template(
             waba_id=str(connection.get("waba_id") or ""),
             name=payload.template_name,
             language_code=payload.language_code,
             category=payload.meta_category,
             body_text=body_text,
+            header_format=header_format,
+            header_text=header_text,
+            header_handle=header_handle,
+            footer_text=_clean_text(raw.get("meta_footer_text")),
+            buttons=buttons,
         )
     except MetaWhatsAppTemplateError as exc:
         rejected = exc.code.endswith("rejected") or exc.code in {
@@ -40333,10 +40475,16 @@ async def crear_whats_prosp_template(
         meta_status="pending",
         meta_template_id=meta_template_id,
         meta_created_at=datetime.now(timezone.utc).isoformat(),
+        meta_header_sample_handle=header_handle,
     )
     if persisted:
         template = persisted
     _attach_contact_template_images([template], image_rows)
+    button_rows = await repo.list_contact_template_buttons(
+        usuario_token=user_token,
+        template_ids=[str(template["id"])],
+    )
+    _attach_contact_template_buttons([template], button_rows)
     return {"ok": True, "template": template}
 
 
@@ -40361,7 +40509,11 @@ async def actualizar_whats_prosp_template(
     # El estado remoto solo puede venir de Meta mediante webhook/sync.
     raw_data.pop("template_status", None)
     if _clean_text(current.get("meta_template_id")) and any(
-        field in raw_data for field in ("template_name", "language_code", "meta_category", "cuerpo_texto")
+        field in raw_data for field in (
+            "template_name", "language_code", "meta_category", "cuerpo_texto",
+            "meta_header_format", "meta_header_text", "meta_header_logo_id",
+            "meta_footer_text", "botones",
+        )
     ):
         raise HTTPException(
             status_code=409,
@@ -40375,6 +40527,7 @@ async def actualizar_whats_prosp_template(
             campana_id=UUID(str(effective_campana_id)),
         )
     images = raw_data.pop("imagenes", None)
+    buttons = raw_data.pop("botones", None)
     if images is not None:
         images = await _maybe_auto_bind_whats_prosp_template_images(
             repo=repo,
@@ -40407,6 +40560,24 @@ async def actualizar_whats_prosp_template(
                 template_id=template_id,
                 images=parsed_images,
             )
+        if buttons is not None:
+            button_rows = [
+                {
+                    "organizacion_id": str(organizacion_id),
+                    "template_id": str(template_id),
+                    "posicion": index,
+                    **button.model_dump(mode="json", exclude_none=True),
+                }
+                for index, button in enumerate(
+                    [WhatsProspTemplateButtonPayload.model_validate(button) for button in buttons],
+                    start=1,
+                )
+            ]
+            await repo.replace_contact_template_buttons(
+                usuario_token=user_token,
+                template_id=template_id,
+                botones=button_rows,
+            )
         image_rows = await repo.list_contact_template_images(
             usuario_token=user_token,
             template_ids=[str(template_id)],
@@ -40419,6 +40590,11 @@ async def actualizar_whats_prosp_template(
             raise HTTPException(status_code=409, detail="whats_prosp_template_duplicate") from exc
         raise HTTPException(status_code=502, detail=detail) from exc
     _attach_contact_template_images([template], image_rows)
+    button_rows = await repo.list_contact_template_buttons(
+        usuario_token=user_token,
+        template_ids=[str(template["id"])],
+    )
+    _attach_contact_template_buttons([template], button_rows)
     return {"ok": True, "template": template}
 
 

@@ -591,3 +591,57 @@ La automatización se considerará terminada cuando:
 
 - [Meta WhatsApp Business Platform: webhook payload reference](https://www.postman.com/meta/whatsapp-business-platform/folder/tduohwq/webhook-payload-reference)
 
+## 17. Constructor visual alineado con Meta
+
+La vista `prospeccion/campanas/plantillas/nueva` ahora conserva los componentes
+estructurales de una plantilla Meta, en lugar de enviar únicamente el cuerpo:
+
+- Encabezado: ninguno, texto, imagen, video MP4 o documento PDF.
+- Cuerpo: texto con las variables de prospección existentes.
+- Pie de nota: hasta 60 caracteres.
+- Botones: hasta dos, de respuesta rápida, URL o teléfono.
+
+Los campos se guardan en columnas explícitas de
+`prospeccion_contacto_templates`. Los botones se guardan en
+`prospeccion_contacto_template_botones`, con posición, tipo y destino
+estructurados; no se usa `metadata` como fuente principal.
+
+### 17.1 Encabezados multimedia
+
+Para imagen, video o documento el usuario selecciona un archivo del catálogo
+de logos/media de su tenant. El backend verifica que el archivo pertenezca al
+tenant, lo carga mediante la sesión resumible de Meta y usa el `header_handle`
+devuelto en el componente `HEADER.example.header_handle` de la creación.
+
+Si el tipo real del archivo no corresponde al selector, la operación se detiene
+antes de crear la plantilla. El handle de ejemplo se conserva para auditoría y
+para preparar el envío posterior.
+
+### 17.2 Payload conceptual enviado a Meta
+
+```json
+{
+  "components": [
+    {"type": "HEADER", "format": "IMAGE", "example": {"header_handle": ["..."]}},
+    {"type": "BODY", "text": "Hola {{1}}"},
+    {"type": "FOOTER", "text": "Responde para continuar"},
+    {"type": "BUTTONS", "buttons": [{"type": "QUICK_REPLY", "text": "Me interesa"}]}
+  ]
+}
+```
+
+Después de que Meta apruebe la plantilla, el envío debe proporcionar el valor
+dinámico del header multimedia y de las variables del cuerpo. Crear una
+plantilla y enviarla son operaciones distintas; la aprobación sigue llegando
+por webhook y no se puede marcar manualmente desde el panel.
+
+### 17.3 Restricciones operativas
+
+- Una plantilla con ID remoto conserva sus componentes como inmutables; para
+  cambiar encabezado, pie o botones se debe crear una nueva plantilla en Meta.
+- Los botones URL solo aceptan `https://`; teléfonos deben usar formato E.164.
+- La tabla de botones tiene RLS por organización y eliminación en cascada con
+  la plantilla local.
+- El cargador acepta actualmente JPEG, PNG, MP4 y PDF, con límite de 16 MB por
+  archivo en esta primera fase.
+

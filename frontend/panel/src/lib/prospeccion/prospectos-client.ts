@@ -628,10 +628,26 @@ export type ContactoTemplate = {
   template_status?: "draft" | "pending" | "approved" | "rejected" | "paused" | "disabled" | "archived" | null
   meta_status?: "draft" | "pending" | "approved" | "rejected" | "paused" | "disabled" | "archived" | null
   meta_template_id?: string | null
+  meta_header_format?: "none" | "text" | "image" | "video" | "document" | null
+  meta_header_text?: string | null
+  meta_header_logo_id?: string | null
+  meta_header_sample_handle?: string | null
+  meta_footer_text?: string | null
   meta_rejected_reason?: string | null
   meta_synced_at?: string | null
   metadata?: Record<string, unknown> | null
   imagenes?: ContactoTemplateImagen[]
+  botones?: WhatsProspTemplateButton[]
+}
+
+export type WhatsProspTemplateButton = {
+  id?: string | null
+  posicion?: number
+  tipo: "quick_reply" | "url" | "phone"
+  texto: string
+  url?: string | null
+  telefono?: string | null
+  payload?: string | null
 }
 
 export type ContactoTemplateImagenVariable =
@@ -676,6 +692,11 @@ export type WhatsProspTemplateInput = {
   template_name: string
   language_code: string
   meta_category: "marketing" | "utility" | "authentication"
+  meta_header_format?: "none" | "text" | "image" | "video" | "document"
+  meta_header_text?: string | null
+  meta_header_logo_id?: string | null
+  meta_footer_text?: string | null
+  botones?: WhatsProspTemplateButton[]
   template_status?: "draft" | "pending" | "approved" | "rejected" | "paused" | "disabled" | "archived"
   activo?: boolean
   metadata?: Record<string, unknown> | null

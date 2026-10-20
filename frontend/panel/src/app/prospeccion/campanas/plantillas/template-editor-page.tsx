@@ -33,6 +33,7 @@ import {
   type CrmCampaign,
   type ProspectoItem,
   type WhatsAppAtribucionRule,
+  type WhatsProspTemplateButton,
 } from "@/lib/prospeccion/prospectos-client"
 import { PROSPECCION_SOURCE_LABELS } from "@/lib/prospeccion/source-labels"
 
@@ -90,6 +91,11 @@ type FormState = {
   metaTemplateName: string
   metaTemplateLanguage: string
   metaCategory: "marketing" | "utility" | "authentication"
+  metaHeaderFormat: "none" | "text" | "image" | "video" | "document"
+  metaHeaderText: string
+  metaHeaderLogoId: string
+  metaFooterText: string
+  metaButtons: WhatsProspTemplateButton[]
   templateStatus: TemplateStatus
   websiteBaseUrl: string
   websiteLinkLabel: string
@@ -114,6 +120,11 @@ const emptyForm = (campaign?: CrmCampaign): FormState => ({
   metaTemplateName: "",
   metaTemplateLanguage: "es_MX",
   metaCategory: "marketing",
+  metaHeaderFormat: "none",
+  metaHeaderText: "",
+  metaHeaderLogoId: "",
+  metaFooterText: "",
+  metaButtons: [],
   templateStatus: "draft",
   websiteBaseUrl: "https://talia.mx/",
   websiteLinkLabel: "Visitar sitio web",
@@ -156,6 +167,11 @@ function formFromTemplate(template: ContactoTemplate, campaignId: string): FormS
     metaTemplateName: template.template_name ?? "",
     metaTemplateLanguage: template.language_code ?? "es_MX",
     metaCategory: template.meta_category ?? "marketing",
+    metaHeaderFormat: template.meta_header_format ?? "none",
+    metaHeaderText: template.meta_header_text ?? "",
+    metaHeaderLogoId: template.meta_header_logo_id ?? template.imagenes?.find((image) => image.variable_clave === "logo_url")?.logo_id ?? "",
+    metaFooterText: template.meta_footer_text ?? "",
+    metaButtons: template.botones ?? [],
     templateStatus:
       template.template_status === "pending" ||
       template.template_status === "approved" ||
@@ -815,6 +831,11 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
     if (!name) return setError("Escribe un nombre para la plantilla.")
     if (form.canal === "correo" && !form.emailCreationMode) return setError("Selecciona cómo quieres crear la plantilla.")
     if (!content) return setError("Escribe el contenido de la plantilla.")
+    if (form.canal === "whatsapp") {
+      if (form.metaHeaderFormat === "text" && !form.metaHeaderText.trim()) return setError("Escribe el texto del encabezado.")
+      if (["image", "video", "document"].includes(form.metaHeaderFormat) && !(form.metaHeaderLogoId || imageIds.logo_url)) return setError("Selecciona el archivo del encabezado.")
+      if (form.metaButtons.length > 2) return setError("Meta permite hasta dos botones por plantilla.")
+    }
 
     setSaving(true)
     setError(null)
@@ -861,6 +882,17 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
           template_name: form.metaTemplateName.trim(),
           language_code: form.metaTemplateLanguage.trim(),
           meta_category: form.metaCategory,
+          meta_header_format: form.metaHeaderFormat,
+          meta_header_text: form.metaHeaderFormat === "text" ? form.metaHeaderText.trim() : null,
+          meta_header_logo_id: ["image", "video", "document"].includes(form.metaHeaderFormat) ? (form.metaHeaderLogoId || imageIds.logo_url || null) : null,
+          meta_footer_text: form.metaFooterText.trim() || null,
+          botones: form.metaButtons.map((button) => ({
+            tipo: button.tipo,
+            texto: button.texto,
+            url: button.url ?? null,
+            telefono: button.telefono ?? null,
+            payload: button.payload ?? null,
+          })),
           template_status: form.templateStatus,
           activo: true,
           metadata: payload.metadata,
@@ -1401,44 +1433,69 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
                     <Label htmlFor="whatsapp-body">Texto de la plantilla</Label>
                     <Textarea id="whatsapp-body" className="min-h-[360px] resize-y" ref={(node) => { contentInputRefs.current.text = node }} onFocus={(event) => rememberContentCursor("text", event.currentTarget)} onClick={(event) => rememberContentCursor("text", event.currentTarget)} onKeyUp={(event) => rememberContentCursor("text", event.currentTarget)} onSelect={(event) => rememberContentCursor("text", event.currentTarget)} value={form.cuerpoTexto} onChange={(event) => { rememberContentCursor("text", event.currentTarget); setForm((previous) => ({ ...previous, cuerpoTexto: event.target.value })) }} placeholder="Hola {{nombre}}, ..." />
                   </div>
-                  <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                  <div className="space-y-4 rounded-lg border bg-muted/20 p-3">
                     <div>
-                      <Label>Imagen del encabezado en Meta</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Esta imagen se enviará como header de la plantilla. Meta debe tener la plantilla aprobada con header de tipo imagen.
-                      </p>
+                      <Label>Encabezado en Meta</Label>
+                      <p className="text-xs text-muted-foreground">Meta permite texto, imagen, video o documento como encabezado.</p>
                     </div>
-                    <Select
-                      value={imageIds.logo_url || "__none__"}
-                      onValueChange={(value) =>
-                        setImageIds((previous) => ({
-                          ...previous,
-                          logo_url: value === "__none__" ? undefined : value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={logosLoading ? "Cargando imágenes..." : "Selecciona una imagen"} />
-                      </SelectTrigger>
+                    <Select value={form.metaHeaderFormat} onValueChange={(value) => setForm((previous) => ({ ...previous, metaHeaderFormat: value as FormState["metaHeaderFormat"] }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">Sin imagen</SelectItem>
-                        {logos.map((logo) => (
-                          <SelectItem key={logo.id} value={logo.id}>{logo.nombre}</SelectItem>
-                        ))}
+                        <SelectItem value="none">Sin encabezado</SelectItem>
+                        <SelectItem value="text">Texto</SelectItem>
+                        <SelectItem value="image">Imagen</SelectItem>
+                        <SelectItem value="video">Video MP4</SelectItem>
+                        <SelectItem value="document">Documento PDF</SelectItem>
                       </SelectContent>
                     </Select>
-                    {whatsappHeaderImage ? (
-                      <div className="overflow-hidden rounded-md border bg-background">
-                        <Image
-                          src={whatsappHeaderImage.file_url}
-                          alt={whatsappHeaderImage.nombre}
-                          width={720}
-                          height={360}
-                          unoptimized
-                          className="max-h-52 w-full object-cover"
-                        />
-                      </div>
+                    {form.metaHeaderFormat === "text" ? (
+                      <Input value={form.metaHeaderText} maxLength={60} onChange={(event) => setForm((previous) => ({ ...previous, metaHeaderText: event.target.value }))} placeholder="Título de la promoción" />
                     ) : null}
+                    {["image", "video", "document"].includes(form.metaHeaderFormat) ? (
+                      <>
+                        <Select
+                          value={form.metaHeaderLogoId || imageIds.logo_url || "__none__"}
+                          onValueChange={(value) => {
+                            const logoId = value === "__none__" ? "" : value
+                            setForm((previous) => ({ ...previous, metaHeaderLogoId: logoId }))
+                            setImageIds((previous) => ({ ...previous, logo_url: logoId || undefined }))
+                          }}
+                        >
+                          <SelectTrigger><SelectValue placeholder={logosLoading ? "Cargando archivos..." : "Selecciona un archivo"} /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Sin archivo</SelectItem>
+                            {logos.map((logo) => <SelectItem key={logo.id} value={logo.id}>{logo.nombre}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        {form.metaHeaderFormat === "image" && whatsappHeaderImage ? (
+                          <div className="overflow-hidden rounded-md border bg-background"><Image src={whatsappHeaderImage.file_url} alt={whatsappHeaderImage.nombre} width={720} height={360} unoptimized className="max-h-52 w-full object-cover" /></div>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                    <Label htmlFor="meta-footer">Pie de nota <span className="font-normal text-muted-foreground">(opcional, máximo 60 caracteres)</span></Label>
+                    <Input id="meta-footer" maxLength={60} value={form.metaFooterText} onChange={(event) => setForm((previous) => ({ ...previous, metaFooterText: event.target.value }))} placeholder="Responde este mensaje para continuar" />
+                  </div>
+                  <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+                    <div className="flex items-center justify-between">
+                      <div><Label>Botones</Label><p className="text-xs text-muted-foreground">Hasta dos botones de respuesta rápida, URL o teléfono.</p></div>
+                      <Button type="button" size="sm" variant="outline" disabled={form.metaButtons.length >= 2} onClick={() => setForm((previous) => ({ ...previous, metaButtons: [...previous.metaButtons, { tipo: "quick_reply", texto: "" }] }))}>Agregar botón</Button>
+                    </div>
+                    {form.metaButtons.map((button, index) => (
+                      <div key={`${index}-${button.tipo}`} className="grid gap-2 rounded-md border bg-background p-3 sm:grid-cols-[150px_minmax(0,1fr)_auto]">
+                        <Select value={button.tipo} onValueChange={(value) => setForm((previous) => ({ ...previous, metaButtons: previous.metaButtons.map((item, itemIndex) => itemIndex === index ? { ...item, tipo: value as WhatsProspTemplateButton["tipo"], url: null, telefono: null } : item) }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent><SelectItem value="quick_reply">Respuesta rápida</SelectItem><SelectItem value="url">URL</SelectItem><SelectItem value="phone">Teléfono</SelectItem></SelectContent>
+                        </Select>
+                        <div className="space-y-2">
+                          <Input maxLength={25} value={button.texto} onChange={(event) => setForm((previous) => ({ ...previous, metaButtons: previous.metaButtons.map((item, itemIndex) => itemIndex === index ? { ...item, texto: event.target.value } : item) }))} placeholder="Texto del botón" />
+                          {button.tipo === "url" ? <Input value={button.url ?? ""} onChange={(event) => setForm((previous) => ({ ...previous, metaButtons: previous.metaButtons.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item) }))} placeholder="https://ejemplo.com" /> : null}
+                          {button.tipo === "phone" ? <Input value={button.telefono ?? ""} onChange={(event) => setForm((previous) => ({ ...previous, metaButtons: previous.metaButtons.map((item, itemIndex) => itemIndex === index ? { ...item, telefono: event.target.value } : item) }))} placeholder="+5215512345678" /> : null}
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => setForm((previous) => ({ ...previous, metaButtons: previous.metaButtons.filter((_, itemIndex) => itemIndex !== index) }))}><IconTrash className="h-4 w-4" /></Button>
+                      </div>
+                    ))}
                   </div>
                 </>
               }

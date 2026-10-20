@@ -25729,6 +25729,58 @@ class CRMRepository:
             raise CRMRepositoryError(f"contact_template_images_replace_invalid:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_contact_template_buttons(
+        self,
+        *,
+        usuario_token: str,
+        template_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        normalized_ids = [str(value).strip() for value in template_ids if str(value).strip()]
+        if not normalized_ids:
+            return []
+        resp = await self._request_with_user(
+            "GET",
+            "/rest/v1/prospeccion_contacto_template_botones",
+            token=usuario_token,
+            params={
+                "select": "id,organizacion_id,template_id,posicion,tipo,texto,url,telefono,payload",
+                "template_id": f"in.({','.join(normalized_ids)})",
+                "order": "posicion.asc",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_template_buttons_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def replace_contact_template_buttons(
+        self,
+        *,
+        usuario_token: str,
+        template_id: UUID,
+        botones: Sequence[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        await self._request_with_user(
+            "DELETE",
+            "/rest/v1/prospeccion_contacto_template_botones",
+            token=usuario_token,
+            params={"template_id": f"eq.{template_id}"},
+        )
+        if not botones:
+            return []
+        rows = [dict(button, template_id=str(template_id)) for button in botones]
+        resp = await self._request_with_user(
+            "POST",
+            "/rest/v1/prospeccion_contacto_template_botones",
+            token=usuario_token,
+            json=rows,
+            prefer="return=representation",
+        )
+        data = resp.json() or []
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"contact_template_buttons_replace_invalid:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
     async def list_contact_template_image_context(
         self,
         *,
@@ -25942,6 +25994,7 @@ class CRMRepository:
         meta_created_at: str | None = None,
         rejected_reason: str | None = None,
         last_error_code: str | None = None,
+        meta_header_sample_handle: str | None = None,
     ) -> dict[str, Any] | None:
         now_iso = datetime.now(timezone.utc).isoformat()
         payload: dict[str, Any] = {
@@ -25956,6 +26009,8 @@ class CRMRepository:
             payload["meta_template_id"] = str(meta_template_id).strip()
         if meta_created_at:
             payload["meta_created_at"] = meta_created_at
+        if meta_header_sample_handle:
+            payload["meta_header_sample_handle"] = str(meta_header_sample_handle).strip()
         resp = await self._request(
             "PATCH",
             "/rest/v1/prospeccion_contacto_templates",
