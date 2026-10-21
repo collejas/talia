@@ -23,7 +23,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Awaitable, Callable, Iterable, Literal, Mapping, Sequence, TypeVar
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from mimetypes import guess_type
 from urllib.parse import parse_qs, urlparse
 from urllib.error import HTTPError, URLError
@@ -2747,6 +2747,57 @@ async def _ensure_property_quote_for_status(
     return quote
 
 
+async def _ensure_property_operation_opportunity(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    unidad: Mapping[str, Any],
+    cliente_principal_id: UUID,
+    oportunidad_id: UUID | None,
+    precio: Decimal | None,
+    usuario_id: UUID | None,
+) -> tuple[UUID, dict[str, Any]]:
+    """Obtiene o crea la oportunidad que acompaña una operación inmobiliaria."""
+    if oportunidad_id:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+        if not opportunity:
+            raise HTTPException(status_code=404, detail="opportunity_not_found")
+        return oportunidad_id, opportunity
+
+    stage_id = await repo.get_default_stage_id(organizacion_id=organizacion_id)
+    unit_label = _clean_text(unidad.get("unidad") or unidad.get("nombre")) or str(unidad.get("id"))
+    request_id = uuid5(
+        NAMESPACE_URL,
+        f"talia:property-operation:{organizacion_id}:{unidad.get('id')}:{cliente_principal_id}",
+    )
+    try:
+        opportunity = await repo.create_opportunity(
+            organizacion_id=organizacion_id,
+            payload={
+                "contacto_principal_id": str(cliente_principal_id),
+                "etapa_id": str(stage_id),
+                "request_id": str(request_id),
+                "titulo": f"Operación inmobiliaria · {unit_label}",
+                "descripcion": "Oportunidad creada automáticamente desde Propiedades.",
+                "monto_estimado": _decimal_to_number(precio),
+                "moneda": "MXN",
+                "metadata": {
+                    "source": "property_operation",
+                    "unidad_id": str(unidad.get("id")),
+                },
+            },
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="property_opportunity_creation_failed") from exc
+    created_id = _safe_uuid(opportunity.get("id"))
+    if not created_id:
+        raise HTTPException(status_code=502, detail="property_opportunity_creation_invalid")
+    return created_id, opportunity
+
+
 async def _advance_opportunity_to_won(
     repo: CRMRepository,
     organizacion_id: UUID,
@@ -3617,6 +3668,7 @@ async def _mark_quote_as_accepted_from_mapbox(
                 "property_quote_order_creation_failed",
                 extra={"organizacion_id": str(organizacion_id), "cotizacion_id": str(quote_id), "error": str(exc)},
             )
+            raise
 
 
 async def _ensure_product_for_catalog_item(
@@ -54327,13 +54379,27 @@ async def apartar_propiedad_unidad(
     usuario_id: UUID | None = Depends(optional_usuario_id),
     _: str = Depends(require_permission("sales.orders.submit")),
 ) -> dict[str, Any]:
+    unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
+    if not unidad:
+        raise HTTPException(status_code=404, detail="property_unit_not_found")
+    if not _safe_uuid(unidad.get("catalog_item_id")):
+        raise HTTPException(status_code=409, detail="property_catalog_item_required")
+    resolved_oportunidad_id, opportunity = await _ensure_property_operation_opportunity(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        unidad=unidad,
+        cliente_principal_id=payload.cliente_principal_id,
+        oportunidad_id=payload.oportunidad_id,
+        precio=payload.precio_ofrecido or _decimal_or_none(unidad.get("precio")),
+        usuario_id=usuario_id,
+    )
     try:
         operation = await repo.apartar_propiedad(
             organizacion_id=organizacion_id,
             unidad_id=unidad_id,
             cliente_principal_id=payload.cliente_principal_id,
             agente_usuario_id=usuario_id,
-            oportunidad_id=payload.oportunidad_id,
+            oportunidad_id=resolved_oportunidad_id,
             apartado_horas=payload.apartado_horas,
             forma_adquisicion=payload.forma_adquisicion,
             apartado_motivo=payload.apartado_motivo,
@@ -54352,7 +54418,21 @@ async def apartar_propiedad_unidad(
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_apartado_failed") from exc
-    return {"ok": True, "operacion": operation}
+    quote = await _ensure_property_quote_for_status(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        unidad={**unidad, "id": str(unidad_id)},
+        status_value=PropiedadStatus.reservado.value,
+        oportunidad_id=resolved_oportunidad_id,
+        persona_id=payload.cliente_principal_id,
+        cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
+        catalog_item_id=_safe_uuid(unidad.get("catalog_item_id")),
+        propiedad_id=_safe_uuid(unidad.get("propiedad_id")),
+        precio_final=payload.precio_ofrecido,
+        moneda=payload.moneda,
+        usuario_id=usuario_id,
+    )
+    return {"ok": True, "operacion": operation, "cotizacion": quote}
 
 
 @router.post("/propiedad-unidades/{unidad_id}/reserva/avance")
@@ -54777,13 +54857,27 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
     usuario_id: UUID | None = Depends(optional_usuario_id),
     _: str = Depends(require_permission("sales.orders.submit")),
 ) -> dict[str, Any]:
+    unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
+    if not unidad:
+        raise HTTPException(status_code=404, detail="property_unit_not_found")
+    if not _safe_uuid(unidad.get("catalog_item_id")):
+        raise HTTPException(status_code=409, detail="property_catalog_item_required")
+    resolved_oportunidad_id, opportunity = await _ensure_property_operation_opportunity(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        unidad=unidad,
+        cliente_principal_id=payload.cliente_principal_id,
+        oportunidad_id=payload.oportunidad_id,
+        precio=payload.precio_acordado or _decimal_or_none(unidad.get("precio")),
+        usuario_id=usuario_id,
+    )
     try:
         operation = await repo.guardar_avance_reserva_directa(
             organizacion_id=organizacion_id,
             unidad_id=unidad_id,
             cliente_principal_id=payload.cliente_principal_id,
             agente_usuario_id=usuario_id,
-            oportunidad_id=payload.oportunidad_id,
+            oportunidad_id=resolved_oportunidad_id,
             precio_acordado=payload.precio_acordado,
             fecha_limite_reserva=payload.fecha_limite_reserva,
             forma_adquisicion=payload.forma_adquisicion,
@@ -54807,7 +54901,21 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
         unidad_id=unidad_id,
         operation=operation,
     )
-    return {"ok": True, "operacion": operation}
+    quote = await _ensure_property_quote_for_status(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        unidad={**unidad, "id": str(unidad_id)},
+        status_value=PropiedadStatus.reservado.value,
+        oportunidad_id=resolved_oportunidad_id,
+        persona_id=payload.cliente_principal_id,
+        cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
+        catalog_item_id=_safe_uuid(unidad.get("catalog_item_id")),
+        propiedad_id=_safe_uuid(unidad.get("propiedad_id")),
+        precio_final=payload.precio_acordado,
+        moneda="MXN",
+        usuario_id=usuario_id,
+    )
+    return {"ok": True, "operacion": operation, "cotizacion": quote}
 
 
 @router.get("/inmobiliaria/contratos/plantillas", response_model=list[InmobiliariaContratoPlantilla])

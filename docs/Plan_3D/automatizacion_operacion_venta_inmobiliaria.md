@@ -1,7 +1,7 @@
 # Automatización de la operación y venta inmobiliaria
 
 Fecha: 2026-10-19 (UTC)  
-Estado: Diseño funcional pendiente de implementación
+Estado: Implementación inicial aplicada; pendiente de validación en flujo real
 
 ## Objetivo
 
@@ -154,7 +154,7 @@ metadata puede conservar atributos variables, pero no debe ser la única fuente
 para `propiedad_id`, `unidad_id`, `catalog_item_id`, precio, estado o relaciones
 comerciales.
 
-## Situación actual detectada
+## Situación actual detectada antes de la implementación
 
 La implementación actual está parcialmente automatizada:
 
@@ -168,6 +168,24 @@ La implementación actual está parcialmente automatizada:
   inmobiliaria.
 - Los reportes de Clientes y Ventas ya están preparados para mostrar ventas
   inmobiliarias cuando existen partidas de venta vinculadas a una unidad.
+
+## Implementación aplicada el 2026-10-21
+
+- `Reservado` y `Apartado` crean o reutilizan una oportunidad inmobiliaria de
+  forma determinista cuando el usuario no proporciona una.
+- Ambas acciones generan o reutilizan una cotización interna en borrador con la
+  unidad, el catálogo, el precio y la oportunidad asociados.
+- `Preparar cierre` conserva la cotización aceptada y crea/reutiliza el pedido
+  de venta automáticamente; si el pedido no puede crearse, la API ya no
+  informa un cierre preparado como si hubiera terminado correctamente.
+- La confirmación del pedido actualiza la unidad a `vendido` y agrega un
+  movimiento `venta_inmobiliaria_confirmada` con comprador, cuenta, precio y
+  moneda.
+- La migración aplicada es
+  `supabase/migrations/20261021_120000_finalize_property_sale_status.sql`.
+
+La confirmación del pedido continúa siendo la acción que crea la venta formal.
+Preparar el cierre no marca la unidad como vendida.
 
 ## Plan de implementación
 

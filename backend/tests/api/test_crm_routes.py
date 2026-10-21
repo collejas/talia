@@ -2577,7 +2577,7 @@ async def test_registrar_venta_propiedad_requiere_oportunidad(
 
 
 @pytest.mark.asyncio
-async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
+async def test_registrar_venta_propiedad_prepara_cotizacion_sin_cerrar_unidad(
     client: AsyncClient, fake_repo: DummyCRMRepository, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     catalog_item_id = uuid.uuid4()
@@ -2656,19 +2656,9 @@ async def test_registrar_venta_propiedad_actualiza_relaciones_y_movimiento(
     assert any(call_name == "add_quote_item" for call_name, _ in fake_repo.calls)
     add_item_call = next(call for name, call in fake_repo.calls if name == "add_quote_item")
     assert add_item_call["payload"]["orden"] == 1
-    assert fake_repo.updated_propiedad_unidades
-    assert fake_repo.updated_propiedad_unidades[0]["payload"]["status"] == "vendido"
-    assert fake_repo.updated_propiedad_unidades[0]["payload"]["oportunidad_id"] == str(oportunidad_id)
-    assert fake_repo.updated_propiedad_unidades[0]["payload"]["catalog_item_id"] == str(catalog_item_id)
-    assert fake_repo.created_propiedad_unidad_movimientos
-    movimiento_payload = fake_repo.created_propiedad_unidad_movimientos[0]["payload"]
-    assert movimiento_payload["oportunidad_id"] == str(oportunidad_id)
-    assert movimiento_payload["persona_id"] == str(persona_id)
-    assert movimiento_payload["cuenta_id"] == str(cuenta_id)
-    assert movimiento_payload["estado_nuevo"] == "vendido"
-    assert fake_repo.updated_catalog_items
-    assert fake_repo.updated_catalog_items[0]["payload"]["oportunidad_id"] == str(oportunidad_id)
-    assert fake_repo.updated_catalog_items[0]["payload"]["persona_id"] == str(persona_id)
+    assert not fake_repo.updated_propiedad_unidades
+    assert not fake_repo.created_propiedad_unidad_movimientos
+    assert not fake_repo.updated_catalog_items
 
 
 @pytest.mark.asyncio

@@ -2179,13 +2179,6 @@ export function PropertyMap() {
     setSaleModalOpen(true);
   }, [mapboxProps?.precio]);
 
-  const handleOpenStatusModal = useCallback((status) => {
-    setStatusModalTarget(status);
-    setStatusModalOpportunityId(null);
-    setStatusModalError(null);
-    setStatusModalOpen(true);
-  }, []);
-
   const handleOpenApartadoPanel = useCallback(() => {
     setApartadoClientQuery("");
     setApartadoClients([]);
@@ -2805,7 +2798,7 @@ export function PropertyMap() {
     } finally {
       setStatusLoading(false);
     }
-  }, [refreshGeojson, statusModalOpportunityId, statusModalTarget, unidadId]);
+  }, [catalogItemId, mapboxProps?.precio, propiedadId, refreshGeojson, statusModalOpportunityId, statusModalTarget, unidadId]);
 
   useEffect(() => {
     if (!isSaleModalOpen && !isStatusModalOpen) {
@@ -2945,7 +2938,7 @@ export function PropertyMap() {
       }
       const data = await response.json().catch(() => null);
       setSaleSuccess(
-        data?.id ? `Cotización preparada (${data.id}). Confirma el pedido para apartar la unidad.` : "Cotización preparada. Confirma el pedido para apartar la unidad.",
+        data?.id ? `Cierre preparado (${data.id}). El pedido quedó listo para confirmación.` : "Cierre preparado. El pedido quedó listo para confirmación.",
       );
       refreshGeojson();
       setSaleModalOpen(false);
