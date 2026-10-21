@@ -314,6 +314,7 @@ export default function ProspeccionMetricasPageClient() {
     [voiceItems],
   )
   const summaryCampaign = data?.campanas_correo?.summary ?? data?.campanas.summary
+  const whatsappSummary = data?.campanas_whatsapp?.summary
   const commercialSummary = data?.resultado_comercial_whatsapp?.summary
   const commercialOpportunityRate = commercialSummary?.conversaciones
     ? (commercialSummary.oportunidades / commercialSummary.conversaciones) * 100
@@ -377,7 +378,7 @@ export default function ProspeccionMetricasPageClient() {
     campanas_whatsapp: {
       title: "Campañas WhatsApp",
       description: "Enviados, entregados, respuestas y resultados comerciales atribuidos a campañas WhatsApp.",
-      badge: number.format(commercialSummary?.envios ?? 0),
+      badge: number.format(whatsappSummary?.mensajes_salientes ?? 0),
     },
     campanas_voz: {
       title: "Resultados de Voz",
@@ -411,23 +412,23 @@ export default function ProspeccionMetricasPageClient() {
         { title: "Fallidas", value: number.format(voiceSummary.fallidos), hint: "No completadas" },
       ]
     } else if (canal === "todos") {
-      const totalEnvios = (summaryCampaign?.envios_totales ?? 0) + (commercialSummary?.envios ?? 0)
-      const totalRespondidos = (summaryCampaign?.envios_respondidos ?? 0) + (commercialSummary?.respondieron ?? 0)
+      const totalEnvios = (summaryCampaign?.envios_totales ?? 0) + (whatsappSummary?.mensajes_salientes ?? 0)
+      const totalRespondidos = (summaryCampaign?.envios_respondidos ?? 0) + (whatsappSummary?.conversaciones_respondidas ?? 0)
       cards.push(
         {
           title: "Envíos totales",
           value: number.format(totalEnvios),
-          hint: `Correo ${number.format(summaryCampaign?.envios_totales ?? 0)} · WhatsApp ${number.format(commercialSummary?.envios ?? 0)}`,
+          hint: `Correo ${number.format(summaryCampaign?.envios_totales ?? 0)} · WhatsApp ${number.format(whatsappSummary?.mensajes_salientes ?? 0)}`,
         },
         {
           title: "Entregados",
-          value: number.format((summaryCampaign?.envios_entregados ?? 0) + (commercialSummary?.entregados ?? 0)),
-          hint: `Correo ${number.format(summaryCampaign?.envios_entregados ?? 0)} · WhatsApp ${number.format(commercialSummary?.entregados ?? 0)}`,
+          value: number.format((summaryCampaign?.envios_entregados ?? 0) + (whatsappSummary?.mensajes_entregados ?? 0)),
+          hint: `Correo ${number.format(summaryCampaign?.envios_entregados ?? 0)} · WhatsApp ${number.format(whatsappSummary?.mensajes_entregados ?? 0)}`,
         },
         {
           title: "Respuestas de campaña",
           value: number.format(totalRespondidos),
-          hint: `Correo ${number.format(summaryCampaign?.envios_respondidos ?? 0)} · WhatsApp ${number.format(commercialSummary?.respondieron ?? 0)}`,
+          hint: `Correo ${number.format(summaryCampaign?.envios_respondidos ?? 0)} · WhatsApp ${number.format(whatsappSummary?.conversaciones_respondidas ?? 0)}`,
         },
         {
           title: "Conversaciones atribuidas",
@@ -503,7 +504,7 @@ export default function ProspeccionMetricasPageClient() {
       })
     }
     return cards
-  }, [summaryCampaign, commercialSummary, summaryPhrases, campaignItems, canal, voiceSummary])
+  }, [summaryCampaign, whatsappSummary, commercialSummary, summaryPhrases, campaignItems, canal, voiceSummary])
 
   const channelSummary = useMemo(() => {
     const items = campaignItems
@@ -570,10 +571,11 @@ export default function ProspeccionMetricasPageClient() {
       }
     })
 
-    if (commercialSummary) {
-      const whatsappTotal = commercialSummary.envios ?? 0
-      const whatsappRespondidos = commercialSummary.respondieron ?? 0
-      const whatsappEntregados = commercialSummary.entregados ?? 0
+    if (whatsappSummary) {
+      const whatsappTotal = whatsappSummary.mensajes_salientes ?? 0
+      const whatsappRespondidos = whatsappSummary.conversaciones_respondidas ?? 0
+      const whatsappEntregados = whatsappSummary.mensajes_entregados ?? 0
+      const whatsappFallidos = whatsappSummary.mensajes_fallidos ?? 0
       const existingIndex = rows.findIndex((row) => row.canal === "whatsapp")
       const whatsappRow: ChannelSummaryRow = {
         canal: "whatsapp",
@@ -583,7 +585,7 @@ export default function ProspeccionMetricasPageClient() {
         envios_enviados: whatsappTotal,
         envios_entregados: whatsappEntregados,
         envios_respondidos: whatsappRespondidos,
-        envios_fallidos: 0,
+        envios_fallidos: whatsappFallidos,
         envios_omitidos: 0,
         envios_sin_respuesta: Math.max(0, whatsappEntregados - whatsappRespondidos),
         envios_otros_estados: 0,
@@ -603,7 +605,7 @@ export default function ProspeccionMetricasPageClient() {
     return rows
       .filter((row) => row.envios_totales_stack > 0 || row.canal !== "whatsapp")
       .sort((a, b) => (channelOrder[a.canal] ?? 99) - (channelOrder[b.canal] ?? 99))
-  }, [campaignItems, commercialSummary])
+  }, [campaignItems, whatsappSummary])
 
   const sortedCampaignItems = useMemo(() => {
     const items = [...campaignItems]
@@ -759,25 +761,26 @@ export default function ProspeccionMetricasPageClient() {
       return
     }
     if (activeTab === "campanas_whatsapp") {
-      const rows = commercialItems.map((item) => [
+      const rows = (data.campanas_whatsapp?.items ?? []).map((item) => [
         item.campana_id,
         item.campana_nombre,
         item.canal,
-        item.envios,
-        item.entregados,
-        item.respondieron,
-        item.oportunidades,
-        item.clientes,
-        item.costo_total,
-        item.costo_por_oportunidad,
-        item.costo_adquisicion,
-        item.pendientes_cobro,
+        item.mensajes_salientes,
+        item.mensajes_con_evento_entrega,
+        item.mensajes_entregados,
+        item.mensajes_leidos,
+        item.mensajes_fallidos,
+        item.mensajes_sin_evento_entrega,
+        item.mensajes_entrantes,
+        item.conversaciones_respondidas,
+        item.oportunidades_total,
+        item.oportunidades_ganadas,
       ])
       const csv = buildCsv(
-        ["campana_id", "campana_nombre", "canal", "envios", "entregados", "respondieron", "oportunidades", "clientes", "costo_total", "costo_por_oportunidad", "costo_adquisicion", "pendientes_cobro"],
+        ["campana_id", "campana_nombre", "canal", "mensajes_salientes", "mensajes_con_evento_entrega", "mensajes_entregados", "mensajes_leidos", "mensajes_fallidos", "mensajes_sin_evento_entrega", "mensajes_entrantes", "conversaciones_respondidas", "oportunidades_total", "oportunidades_ganadas"],
         rows,
       )
-      downloadCsv(`prospeccion_metricas_resultado_whatsapp_${timestamp}.csv`, csv)
+      downloadCsv(`prospeccion_metricas_whatsapp_${timestamp}.csv`, csv)
       return
     }
     const phraseRows = phraseCampaignGroups.flatMap((group) => [
@@ -809,7 +812,7 @@ export default function ProspeccionMetricasPageClient() {
       phraseRows,
     )
     downloadCsv(`prospeccion_metricas_frases_${timestamp}.csv`, csv)
-  }, [activeTab, data, campaignItems, voiceItems, commercialItems, phraseCampaignGroups])
+  }, [activeTab, data, campaignItems, voiceItems, phraseCampaignGroups])
 
   const exportXlsx = useCallback(async () => {
     try {
@@ -1550,6 +1553,104 @@ export default function ProspeccionMetricasPageClient() {
             <CardHeader className="pb-3">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
+                  <CardTitle className="text-base">Resultado de envíos</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Actividad operativa de los envíos WhatsApp, independiente de conversaciones CRM.
+                  </p>
+                </div>
+                <Badge variant="outline" className="w-fit border-border bg-muted text-muted-foreground">
+                  {number.format(whatsappSummary?.batches_total ?? 0)} lotes
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+              {[
+                { title: "Enviados", value: number.format(whatsappSummary?.mensajes_salientes ?? 0), hint: "Mensajes generados" },
+                {
+                  title: "Entregados",
+                  value: number.format(whatsappSummary?.mensajes_entregados ?? 0),
+                  hint: `${(whatsappSummary?.tasa_entrega_pct ?? 0).toFixed(2)}% de los enviados`,
+                },
+                {
+                  title: "Leídos",
+                  value: number.format(whatsappSummary?.mensajes_leidos ?? 0),
+                  hint: `${(whatsappSummary?.tasa_lectura_pct ?? 0).toFixed(2)}% de los enviados`,
+                },
+                {
+                  title: "Fallidos",
+                  value: number.format(whatsappSummary?.mensajes_fallidos ?? 0),
+                  hint: `${(whatsappSummary?.tasa_fallo_pct ?? 0).toFixed(2)}% de los enviados`,
+                },
+                {
+                  title: "Sin evento",
+                  value: number.format(whatsappSummary?.mensajes_sin_evento_entrega ?? 0),
+                  hint: `${(100 - (whatsappSummary?.tasa_trazabilidad_pct ?? 0)).toFixed(2)}% sin trazabilidad`,
+                },
+                {
+                  title: "Respuestas",
+                  value: number.format(whatsappSummary?.conversaciones_respondidas ?? 0),
+                  hint: `${number.format(whatsappSummary?.mensajes_entrantes ?? 0)} mensajes entrantes`,
+                },
+                {
+                  title: "Oportunidades",
+                  value: number.format(whatsappSummary?.oportunidades_total ?? 0),
+                  hint: `${commercialOpportunityRate.toFixed(2)}% de las conversaciones`,
+                },
+              ].map((card) => (
+                <div key={card.title} className="rounded-xl border border-border bg-background/80 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{card.title}</p>
+                  <p className="mt-2 text-xl font-semibold text-foreground">{card.value}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border shadow-none">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Envíos por campaña</CardTitle>
+              <p className="text-xs text-muted-foreground">Estado operativo de cada lote y sus eventos recibidos desde Meta.</p>
+            </CardHeader>
+            <CardContent>
+              {(data?.campanas_whatsapp?.items ?? []).length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[820px] text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="px-2 py-2">Campaña</th>
+                        <th className="px-2 py-2">Lotes</th>
+                        <th className="px-2 py-2">Enviados</th>
+                        <th className="px-2 py-2">Entregados</th>
+                        <th className="px-2 py-2">Leídos</th>
+                        <th className="px-2 py-2">Fallidos</th>
+                        <th className="px-2 py-2">Sin evento</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data?.campanas_whatsapp?.items ?? []).map((item) => (
+                        <tr key={item.campana_id ?? item.campana_nombre ?? "campana-whatsapp"} className="border-b last:border-0">
+                          <td className="px-2 py-2 font-medium">{item.campana_nombre ?? "Sin campaña"}</td>
+                          <td className="px-2 py-2">{number.format(item.batches_total)}</td>
+                          <td className="px-2 py-2">{number.format(item.mensajes_salientes)}</td>
+                          <td className="px-2 py-2">{number.format(item.mensajes_entregados)}</td>
+                          <td className="px-2 py-2">{number.format(item.mensajes_leidos)}</td>
+                          <td className="px-2 py-2">{number.format(item.mensajes_fallidos)}</td>
+                          <td className="px-2 py-2">{number.format(item.mensajes_sin_evento_entrega)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">No hay envíos WhatsApp para este periodo.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border shadow-none">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
                   <CardTitle className="text-base">Resultado comercial</CardTitle>
                   <p className="text-xs text-muted-foreground">
                     Oportunidades, clientes y costo atribuidos a campañas WhatsApp.
@@ -1562,19 +1663,9 @@ export default function ProspeccionMetricasPageClient() {
                 ) : null}
               </div>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+            <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               {[
-                { title: "Enviados", value: number.format(commercialSummary?.envios ?? 0), hint: "Mensajes de campaña" },
-                {
-                  title: "Entregados",
-                  value: number.format(commercialSummary?.entregados ?? 0),
-                  hint: `${(commercialSummary?.tasa_entrega_pct ?? 0).toFixed(2)}% de los enviados`,
-                },
-                {
-                  title: "Oportunidades",
-                  value: number.format(commercialSummary?.oportunidades ?? 0),
-                  hint: `${commercialOpportunityRate.toFixed(2)}% de las conversaciones`,
-                },
+                { title: "Oportunidades", value: number.format(commercialSummary?.oportunidades ?? 0), hint: `${commercialOpportunityRate.toFixed(2)}% de las conversaciones` },
                 { title: "Clientes ganados", value: number.format(commercialSummary?.clientes ?? 0), hint: "Oportunidades ganadas" },
                 {
                   title: "Costo total",
