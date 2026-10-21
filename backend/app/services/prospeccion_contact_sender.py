@@ -95,6 +95,7 @@ class _PostmarkPreparationCache:
 
     public_base_urls: dict[UUID, str | None]
     template_images: dict[tuple[UUID, UUID], dict[str, Any]]
+    template_header_formats: dict[tuple[UUID, UUID], str | None]
     domains: dict[UUID, dict[str, Any] | None]
     migrations: dict[UUID, dict[str, Any] | None]
     plans: dict[UUID, dict[str, Any] | None]
@@ -106,6 +107,7 @@ class _PostmarkPreparationCache:
     def __init__(self) -> None:
         self.public_base_urls = {}
         self.template_images = {}
+        self.template_header_formats = {}
         self.domains = {}
         self.migrations = {}
         self.plans = {}
@@ -233,6 +235,21 @@ class _PostmarkPreparationCache:
                 )
                 self.template_images[key] = dict(context or {})
         return dict(self.template_images[key])
+
+    async def template_header_format(
+        self, organizacion_id: UUID, template_id: UUID
+    ) -> str | None:
+        key = (organizacion_id, template_id)
+        async with self.lock:
+            if key in self.template_header_formats:
+                return self.template_header_formats[key]
+        value = await CRMRepository().get_contact_template_meta_header_format(
+            organizacion_id=organizacion_id,
+            template_id=template_id,
+        )
+        async with self.lock:
+            self.template_header_formats[key] = value
+        return value
 
     async def load_render_context(
         self, organizacion_id: UUID, template_ids: set[UUID]
@@ -1873,6 +1890,7 @@ async def _run_envio_whatsapp(
     payload: dict[str, Any],
     *,
     organizacion_id: UUID | None = None,
+    preparation_cache: _PostmarkPreparationCache | None = None,
 ) -> ContactEnvioResult:
     telefono = _detail_phone(detalle)
     if not telefono or not _prospecto_whatsapp_allowed(detalle):
@@ -1907,13 +1925,47 @@ async def _run_envio_whatsapp(
     variables_def = metadata.get("twilio_variables") or metadata.get("twilio_content_variables")
     context = _build_placeholder_context(detalle, metadata, payload)
     image_context: dict[str, str] = {}
+    template_header_format = _clean_text(
+        metadata.get("meta_header_format")
+        or payload.get("meta_header_format")
+    ).lower()
+    template_id_raw = _clean_text(payload.get("template_id"))
+    if not template_header_format and organizacion_id and template_id_raw:
+        try:
+            template_header_format = (
+                await preparation_cache.template_header_format(
+                    organizacion_id,
+                    UUID(template_id_raw),
+                )
+                if preparation_cache
+                else (
+                    await CRMRepository().get_contact_template_meta_header_format(
+                        organizacion_id=organizacion_id,
+                        template_id=UUID(template_id_raw),
+                    )
+                ) or ""
+            ).lower()
+        except (CRMRepositoryError, TypeError, ValueError) as exc:
+            log_event(
+                logger,
+                "prospeccion.sender_template_header_format_unavailable",
+                organizacion_id=str(organizacion_id),
+                template_id=template_id_raw,
+                error=str(exc),
+            )
     if organizacion_id:
-        template_id_raw = _clean_text(payload.get("template_id"))
-        if template_id_raw:
+        if template_id_raw and template_header_format == "image":
             try:
-                image_context = await CRMRepository().list_contact_template_image_context(
-                    organizacion_id=organizacion_id,
-                    template_id=UUID(template_id_raw),
+                image_context = (
+                    await preparation_cache.template_image_context(
+                        organizacion_id,
+                        UUID(template_id_raw),
+                    )
+                    if preparation_cache
+                    else await CRMRepository().list_contact_template_image_context(
+                        organizacion_id=organizacion_id,
+                        template_id=UUID(template_id_raw),
+                    )
                 )
             except (CRMRepositoryError, TypeError, ValueError) as exc:
                 log_event(
@@ -1934,14 +1986,18 @@ async def _run_envio_whatsapp(
                     metadata = merged_metadata
                     context = _build_placeholder_context(detalle, metadata, payload)
     header_image_url = _clean_text(
-        image_context.get("logo_url")
-        or image_context.get("hero_image_url")
-        or image_context.get("image_url")
-        or (metadata.get("media_url_base") if isinstance(metadata, dict) else None)
-        or (metadata.get("media_url_tracked") if isinstance(metadata, dict) else None)
-        or (metadata.get("logo_url") if isinstance(metadata, dict) else None)
+        (
+            image_context.get("logo_url")
+            or image_context.get("hero_image_url")
+            or image_context.get("image_url")
+            or (metadata.get("media_url_base") if isinstance(metadata, dict) else None)
+            or (metadata.get("media_url_tracked") if isinstance(metadata, dict) else None)
+            or (metadata.get("logo_url") if isinstance(metadata, dict) else None)
+        )
+        if template_header_format == "image"
+        else None
     )
-    if not header_image_url and image_context:
+    if template_header_format == "image" and not header_image_url and image_context:
         for value in image_context.values():
             header_image_url = _clean_text(value)
             if header_image_url:
@@ -2858,6 +2914,7 @@ class ProspeccionContactSender:
                         detalle,
                         payload,
                         organizacion_id=org_uuid,
+                        preparation_cache=self._postmark_preparation_cache,
                     )
                 else:
                     result = await _run_envio_llamada(detalle, payload)
@@ -2885,6 +2942,7 @@ class ProspeccionContactSender:
                 detalle,
                 payload,
                 organizacion_id=org_uuid,
+                preparation_cache=self._postmark_preparation_cache,
             )
         elif canal == "llamada":
             reservation = await repo.worker_reserve_envio_dispatch(envio_id=envio_id)

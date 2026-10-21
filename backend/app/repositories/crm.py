@@ -26121,6 +26121,36 @@ class CRMRepository:
                 context[key] = url
         return context
 
+    async def get_contact_template_meta_header_format(
+        self,
+        *,
+        organizacion_id: UUID,
+        template_id: UUID,
+    ) -> str | None:
+        """Obtiene el tipo de encabezado persistido de una plantilla Meta."""
+
+        resp = await self._request(
+            "GET",
+            "/rest/v1/prospeccion_contacto_templates",
+            params={
+                "select": "meta_header_format",
+                "id": f"eq.{template_id}",
+                "organizacion_id": f"eq.{organizacion_id}",
+                "canal": "eq.whatsapp",
+                "provider": "eq.meta",
+                "usage_scope": "eq.whats_prosp",
+                "limit": "1",
+            },
+        )
+        data = resp.json() or []
+        if not isinstance(data, list) or not data:
+            return None
+        row = data[0]
+        if not isinstance(row, dict):
+            raise CRMRepositoryError(f"contact_template_header_format_invalid:{row!r}")
+        value = str(row.get("meta_header_format") or "").strip().lower()
+        return value or None
+
     async def list_whats_prosp_templates(
         self,
         *,

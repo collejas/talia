@@ -11982,6 +11982,9 @@ def _resolve_contact_channels(
                         entry["meta_category"] = meta_category
                         entry_metadata.setdefault("meta_category", meta_category)
                         entry_metadata.setdefault("whatsapp_meta_category_snapshot", meta_category)
+                    header_format = _clean_text(template_row.get("meta_header_format")).lower() or "none"
+                    entry["meta_header_format"] = header_format
+                    entry_metadata.setdefault("meta_header_format", header_format)
                     if template_status:
                         entry["template_status"] = template_status
                         entry_metadata.setdefault("template_status", template_status)
