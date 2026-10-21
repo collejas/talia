@@ -65,6 +65,7 @@ export type EmbudoCard = {
   etapaNombre: string;
   etapaCodigo: string | null;
   monto: number | null;
+  dominioComercial: "productos_servicios" | "propiedades" | "mixto" | null;
   moneda: string | null;
   probabilidad: number | null;
   proyectoNombre: string | null;
@@ -157,6 +158,7 @@ export type PipelineBoardCard = {
   etapa_codigo: string | null;
   etapa_nombre: string;
   monto: number | null;
+  dominio_comercial?: "productos_servicios" | "propiedades" | "mixto" | null;
   monto_estimado?: number | null;
   moneda: string | null;
   probabilidad: number | null;

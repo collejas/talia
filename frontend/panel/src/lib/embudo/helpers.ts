@@ -198,6 +198,12 @@ export function adaptCard(card: PipelineBoardCard): EmbudoCard {
     etapaNombre: card.etapa_nombre,
     etapaCodigo,
     monto: resolvedMonto,
+    dominioComercial:
+      card.dominio_comercial === "productos_servicios" ||
+      card.dominio_comercial === "propiedades" ||
+      card.dominio_comercial === "mixto"
+        ? card.dominio_comercial
+        : null,
     moneda: normalizeCurrencyCode(card.moneda),
     probabilidad: card.probabilidad,
     proyectoNombre: card.proyecto_nombre ?? resolvedTitulo ?? null,

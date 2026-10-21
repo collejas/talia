@@ -11,7 +11,7 @@ apartado, pedido y venta formal, está documentada en
 ## Objetivo
 
 - Vincular cada `propiedad_unidad` importada o creada con un `catalog_item`, de modo que la venta siga funcionando sobre el catálogo (cotizaciones/lead_cards) mientras guarda la referencia geoespacial (desarrollo/unidad).
-- Registrar la venta unificada de una propiedad como una cotización que incluya el `catalog_item` (para la parte comercial) y los campos `propiedad_id`, `unidad_id`, `linea_id/familia_id/modelo_id` (para trazabilidad).
+- Registrar la venta unificada de una propiedad como una cotización que incluya el `catalog_item` (para la parte comercial) y las relaciones explícitas `propiedad_id`, `unidad_id` y `operacion_inmobiliaria_id` (para trazabilidad). `linea_id/familia_id/modelo_id` siguen perteneciendo al catálogo/unidad.
 
 ## Flujo propuesto
 
@@ -22,7 +22,7 @@ apartado, pedido y venta formal, está documentada en
    - `_ensure_catalog_item_for_unidad` se dispara tanto desde el importador como desde la ruta `POST /crm/propiedades` (que crea unidades manuales), lo que garantiza que incluso las unidades agregadas desde el panel tengan un `catalog_item_id` y que en `/var/www/talia/logs/mapbox-debug.log` quede registro de la sincronización entre propiedad/unidad/catálogo.
 
 2. **Ventas y cotizaciones**  
-   - Habilitar un endpoint (p.ej. `POST /crm/ventas/propiedades`) que reciba `catalog_item_id`, `propiedad_id`, `unidad_id`, `precio_final`, `moneda`, `metadata.adicional` y cree la cotización/oportunidad correspondiente. El payload copia la unidad concreta al lead y guarda los IDs para que el pipeline (y funciones como `crm_contact_restart_stats`) puedan mostrar la propiedad en el tablero de ventas.  
+   - La fase inicial ya expone `GET /crm/oportunidades/{oportunidad_id}/property-context` y el constructor de `Propuesta inmobiliaria` envía `catalog_item_id`, `propiedad_id`, `unidad_id` y `operacion_inmobiliaria_id` en columnas explícitas. El endpoint especializado de ventas inmobiliarias queda como siguiente fase.
    - La misma ruta debería actualizar `propiedad_unidades.status` a `vendido` y el catálogo a `activo`/`vendido` según el caso, manteniendo la consistencia.
 
 3. **Consumo en frontend**  

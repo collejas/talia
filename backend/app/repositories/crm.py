@@ -1269,6 +1269,7 @@ class CRMRepository:
             "propietario_usuario_id",
             "asignado_a_usuario_id",
             "metadata",
+            "dominio_comercial",
             "creado_en",
             "actualizado_en",
             "cerrado_en",
@@ -5775,6 +5776,10 @@ class CRMRepository:
         valida_hasta: str | None,
         metadata: dict[str, Any],
         items: list[dict[str, Any]],
+        dominio_comercial: str | None = None,
+        operacion_inmobiliaria_id: UUID | None = None,
+        propiedad_id: UUID | None = None,
+        unidad_id: UUID | None = None,
         usuario_id: UUID | None = None,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -5789,6 +5794,14 @@ class CRMRepository:
             "valida_hasta": valida_hasta,
             "metadata": metadata,
         }
+        if dominio_comercial:
+            body["dominio_comercial"] = dominio_comercial
+        if operacion_inmobiliaria_id:
+            body["operacion_inmobiliaria_id"] = str(operacion_inmobiliaria_id)
+        if propiedad_id:
+            body["propiedad_id"] = str(propiedad_id)
+        if unidad_id:
+            body["unidad_id"] = str(unidad_id)
         if usuario_id:
             body["creada_por_usuario_id"] = str(usuario_id)
         resp = await self._request(
@@ -5987,6 +6000,73 @@ class CRMRepository:
                 )
                 return row
         return None
+
+    async def get_property_opportunity_context(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+    ) -> dict[str, Any]:
+        """Obtiene la unidad y operación inmobiliaria asociadas a la oportunidad."""
+        operation_response = await self._request(
+            "GET",
+            "/rest/v1/operaciones_inmobiliarias",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "oportunidad_id": f"eq.{oportunidad_id}",
+                "select": "id,unidad_id,estado,precio_ofrecido,precio_acordado,precio_final,moneda,apartado_vencimiento_en,actualizado_en",
+                "order": "actualizado_en.desc,id.desc",
+                "limit": "1",
+            },
+        )
+        operations = operation_response.json() or []
+        operation = operations[0] if isinstance(operations, list) and operations else None
+
+        unit_response = await self._request(
+            "GET",
+            "/rest/v1/propiedad_unidades",
+            params={
+                "oportunidad_id": f"eq.{oportunidad_id}",
+                "select": "id,desarrollo_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en",
+                "order": "actualizado_en.desc,id.desc",
+                "limit": "1",
+            },
+        )
+        units = unit_response.json() or []
+        unit = units[0] if isinstance(units, list) and units else None
+        if unit is None and isinstance(operation, dict) and operation.get("unidad_id"):
+            unit_response = await self._request(
+                "GET",
+                "/rest/v1/propiedad_unidades",
+                params={
+                    "id": f"eq.{operation['unidad_id']}",
+                    "select": "id,desarrollo_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en",
+                    "limit": "1",
+                },
+            )
+            units = unit_response.json() or []
+            unit = units[0] if isinstance(units, list) and units else None
+
+        development = None
+        if isinstance(unit, dict) and unit.get("desarrollo_id"):
+            development_response = await self._request(
+                "GET",
+                "/rest/v1/propiedad_desarrollos",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "id": f"eq.{unit['desarrollo_id']}",
+                    "select": "id,nombre,descripcion,tipo,status",
+                    "limit": "1",
+                },
+            )
+            developments = development_response.json() or []
+            development = developments[0] if isinstance(developments, list) and developments else None
+
+        return {
+            "operation": operation if isinstance(operation, dict) else None,
+            "unit": unit if isinstance(unit, dict) else None,
+            "development": development if isinstance(development, dict) else None,
+        }
 
     async def get_opportunity_with_contact_service_role(
         self,

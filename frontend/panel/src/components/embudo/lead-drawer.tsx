@@ -377,6 +377,37 @@ type QuoteItemForm = {
   listaPrecioNombre: string | null;
 };
 
+type PropertyProposalContext = {
+  dominio_comercial: "productos_servicios" | "propiedades" | "mixto" | null;
+  operation: {
+    id: string;
+    unidad_id: string;
+    estado: string;
+    precio_ofrecido: number | null;
+    precio_acordado: number | null;
+    precio_final: number | null;
+    moneda: string | null;
+  } | null;
+  unit: {
+    id: string;
+    desarrollo_id: string | null;
+    catalog_item_id: string | null;
+    unidad: string | null;
+    nombre: string | null;
+    descripcion: string | null;
+    status: string | null;
+    precio: number | null;
+    area_m2: number | null;
+  } | null;
+  development: {
+    id: string;
+    nombre: string;
+    descripcion: string | null;
+    tipo: string | null;
+    status: string | null;
+  } | null;
+};
+
 type QuotePriceOption = {
   id: string;
   nombre: string;
@@ -1107,6 +1138,9 @@ export function LeadDrawer({
   );
   const [quoteFolio, setQuoteFolio] = useState("");
   const [quoteItems, setQuoteItems] = useState<QuoteItemForm[]>(() => []);
+  const [propertyProposalContext, setPropertyProposalContext] = useState<PropertyProposalContext | null>(null);
+  const [propertyProposalLoading, setPropertyProposalLoading] = useState(false);
+  const [propertyProposalError, setPropertyProposalError] = useState<string | null>(null);
   const computedQuoteTotals = useMemo(() => computeQuoteTotals(quoteItems), [quoteItems]);
   const [catalogState, setCatalogState] = useState<CatalogItemsState>({ status: "idle", items: [] });
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -1312,6 +1346,53 @@ export function LeadDrawer({
       setOpportunityAccountLookupPending(false);
     }
   };
+
+  useEffect(() => {
+    if (!quoteDialogOpen || !card || card.dominioComercial !== "propiedades") {
+      if (!quoteDialogOpen) setPropertyProposalContext(null);
+      return;
+    }
+    let cancelled = false;
+    const loadPropertyContext = async () => {
+      setPropertyProposalLoading(true);
+      setPropertyProposalError(null);
+      try {
+        const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/property-context`, {
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Error ${response.status}`);
+        if (cancelled) return;
+        const context = payload as PropertyProposalContext;
+        setPropertyProposalContext(context);
+        const unit = context.unit;
+        const operation = context.operation;
+        if (unit) {
+          const price = operation?.precio_final ?? operation?.precio_acordado ?? operation?.precio_ofrecido ?? unit.precio;
+          setQuoteItems((current) => current.length && !isBlankQuoteItem(current[0]) ? current : [
+            createQuoteItemForm({
+              catalogItemId: unit.catalog_item_id,
+              nombre: unit.nombre || unit.unidad || "Unidad inmobiliaria",
+              descripcion: unit.descripcion || context.development?.nombre || "Propuesta inmobiliaria",
+              unidad: "unidad",
+              cantidad: "1",
+              precioUnitario: price != null ? formatNumberInputValue(price) : "",
+              precioListaUnitario: price != null ? formatNumberInputValue(price) : "",
+              moneda: operation?.moneda || card.moneda || "MXN",
+            }),
+          ]);
+        }
+      } catch (error) {
+        if (!cancelled) setPropertyProposalError(error instanceof Error ? error.message : "No se pudo cargar la unidad inmobiliaria.");
+      } finally {
+        if (!cancelled) setPropertyProposalLoading(false);
+      }
+    };
+    void loadPropertyContext();
+    return () => {
+      cancelled = true;
+    };
+  }, [card, quoteDialogOpen]);
 
   useEffect(() => {
     if (isCreateMode && open) {
@@ -2810,6 +2891,7 @@ export function LeadDrawer({
   };
 
   const quoteSummaryCurrency = (quoteMoneda || card?.moneda || "MXN").trim().toUpperCase();
+  const isPropertyOpportunity = card?.dominioComercial === "propiedades";
   const quoteSummarySubtotal = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
   const quoteSummaryTaxes = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
@@ -2882,14 +2964,22 @@ export function LeadDrawer({
     const subtotalValue = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
     const taxValue = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
     const totalValue = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
-    const itemsPayload = buildQuoteItemsPayload(quoteItems);
+    const itemsPayload: Array<Record<string, unknown>> = buildQuoteItemsPayload(quoteItems).map((item) => ({
+      ...item,
+      ...(isPropertyOpportunity && propertyProposalContext?.unit
+        ? {
+            propiedad_id: propertyProposalContext.unit.desarrollo_id,
+            unidad_id: propertyProposalContext.unit.id,
+          }
+        : {}),
+    }));
     const conceptsPayload = itemsPayload
       .map((item) => {
-        const title = typeof item.titulo === "string" ? item.titulo : null;
-        const description = typeof item.descripcion === "string" ? item.descripcion : null;
-        const total = typeof item.total === "number" ? item.total : null;
-        const unit = typeof item.unidad === "string" ? item.unidad : null;
-        const quantity = typeof item.cantidad === "number" ? item.cantidad : null;
+        const title = typeof item["titulo"] === "string" ? item["titulo"] : null;
+        const description = typeof item["descripcion"] === "string" ? item["descripcion"] : null;
+        const total = typeof item["total"] === "number" ? item["total"] : null;
+        const unit = typeof item["unidad"] === "string" ? item["unidad"] : null;
+        const quantity = typeof item["cantidad"] === "number" ? item["cantidad"] : null;
         if (!title && !description && total == null) {
           return null;
         }
@@ -2924,6 +3014,10 @@ export function LeadDrawer({
       moneda: (quoteMoneda || "MXN").trim().toUpperCase(),
       valido_hasta: quoteValidoHasta?.trim() || null,
       folio: (folioOverride ?? quoteFolio).trim() || null,
+      dominio_comercial: isPropertyOpportunity ? "propiedades" : "productos_servicios",
+      operacion_inmobiliaria_id: isPropertyOpportunity ? propertyProposalContext?.operation?.id ?? null : null,
+      propiedad_id: isPropertyOpportunity ? propertyProposalContext?.unit?.desarrollo_id ?? null : null,
+      unidad_id: isPropertyOpportunity ? propertyProposalContext?.unit?.id ?? null : null,
     };
   }, [
     computedQuoteTotals?.subtotal,
@@ -2938,6 +3032,8 @@ export function LeadDrawer({
     quoteTotal,
     quoteValidoHasta,
     quoteFolio,
+    isPropertyOpportunity,
+    propertyProposalContext,
   ]);
 
   const buildQuotePayload = (folioOverride?: string | null) => {
@@ -4200,7 +4296,7 @@ export function LeadDrawer({
                         disabled={isBusy}
                       >
                         <IconChecklist className="size-4" />
-                        Cotizar
+                        {card.dominioComercial === "propiedades" ? "Crear propuesta inmobiliaria" : "Cotizar"}
                       </Button>
                     </div>
                   </div>
@@ -4983,7 +5079,9 @@ export function LeadDrawer({
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <DialogTitle className="text-base font-semibold">Nueva cotización</DialogTitle>
+                    <DialogTitle className="text-base font-semibold">
+                      {isPropertyOpportunity ? "Nueva propuesta inmobiliaria" : "Nueva cotización"}
+                    </DialogTitle>
                     <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] uppercase tracking-wide">
                       {quoteCurrentFolio}
                     </Badge>
@@ -4992,7 +5090,7 @@ export function LeadDrawer({
                     </Badge>
                   </div>
                   <DialogDescription className="max-w-2xl text-xs">
-                    Cotización para {card.titulo ?? "la oportunidad seleccionada"}.
+                    {isPropertyOpportunity ? "Propuesta inmobiliaria para" : "Cotización para"} {card.titulo ?? "la oportunidad seleccionada"}.
                   </DialogDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -5003,7 +5101,7 @@ export function LeadDrawer({
                     Guardar borrador
                   </Button>
                   <Button type="button" size="sm" onClick={handleSendQuote} disabled={quotePending}>
-                    {quotePending ? "Enviando..." : "Enviar cotización"}
+                    {quotePending ? "Enviando..." : isPropertyOpportunity ? "Enviar propuesta inmobiliaria" : "Enviar cotización"}
                   </Button>
                 </div>
               </div>
@@ -5012,7 +5110,7 @@ export function LeadDrawer({
             <div className="grid min-h-0 flex-1 gap-0 overflow-hidden grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_300px]">
               <ScrollArea className="h-full min-h-0">
                 <div className="space-y-3 px-3 py-3 pb-28 sm:px-4">
-                  <div className="space-y-2 pb-3">
+                    <div className="space-y-2 pb-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <h4 className="text-sm font-semibold text-foreground">Datos principales</h4>
@@ -5133,6 +5231,7 @@ export function LeadDrawer({
                     </div>
                   </div>
 
+                  {!isPropertyOpportunity ? (
                   <div className="space-y-2 pb-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
@@ -5220,6 +5319,27 @@ export function LeadDrawer({
                       Escribe para buscar y selecciona una sugerencia. El listado completo se abre desde el botón.
                     </p>
                   </div>
+                  ) : (
+                    <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50/60 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold text-foreground">Propuesta inmobiliaria</h4>
+                          <p className="text-[11px] text-muted-foreground">La unidad está vinculada a la oportunidad y no se selecciona como producto.</p>
+                        </div>
+                        <Badge variant="outline">Propiedades</Badge>
+                      </div>
+                      {propertyProposalLoading ? <p className="text-xs text-muted-foreground">Cargando unidad...</p> : null}
+                      {propertyProposalError ? <p className="text-xs text-destructive">{propertyProposalError}</p> : null}
+                      {propertyProposalContext?.development || propertyProposalContext?.unit ? (
+                        <div className="grid gap-1 text-xs sm:grid-cols-2">
+                          <span><strong>Desarrollo:</strong> {propertyProposalContext.development?.nombre || "Sin desarrollo"}</span>
+                          <span><strong>Unidad:</strong> {propertyProposalContext.unit?.nombre || propertyProposalContext.unit?.unidad || "Sin unidad"}</span>
+                          <span><strong>Estado:</strong> {propertyProposalContext.unit?.status || propertyProposalContext.operation?.estado || "Sin estado"}</span>
+                          <span><strong>Área:</strong> {propertyProposalContext.unit?.area_m2 != null ? `${propertyProposalContext.unit.area_m2} m²` : "Sin área"}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
 
                   <div className="space-y-2 pb-3">
                     <div className="flex items-center justify-between gap-2">

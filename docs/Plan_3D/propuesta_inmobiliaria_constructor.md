@@ -1,7 +1,7 @@
 # Propuesta inmobiliaria desde una oportunidad
 
 Fecha: 2026-10-21 (UTC)  
-Estado: Idea documentada; pendiente de aprobación e implementación
+Estado: Fase inicial implementada; pendiente de validación autenticada en flujo real
 
 ## Objetivo
 
@@ -43,6 +43,25 @@ catálogo. No existe todavía un contrato específico que cargue automáticament
 - `propiedad_id`.
 - `unidad_id`.
 - `operacion_inmobiliaria_id`.
+
+## Implementación aplicada en la fase inicial
+
+- `oportunidades.dominio_comercial` distingue `productos_servicios`,
+  `propiedades` y `mixto`.
+- `cotizaciones` y `cotizacion_items` conservan sus nombres técnicos y ahora
+  tienen relaciones explícitas para operación, propiedad y unidad.
+- Se ejecutó backfill histórico desde las relaciones existentes y metadata de
+  transición; la metadata no es la fuente estructural futura.
+- El endpoint de contexto es
+  `GET /crm/oportunidades/{oportunidad_id}/property-context`.
+- El constructor del Embudo muestra **Propuesta inmobiliaria**, oculta el
+  selector general de productos y envía el dominio/relaciones explícitas.
+- El backend rechaza una cotización genérica cuando la oportunidad pertenece al
+  dominio inmobiliario.
+
+Esta fase mantiene el endpoint técnico de cotizaciones para no romper el ciclo
+actual. La extracción posterior a contratos separados de creación, PDF y envío
+queda como siguiente fase del plan.
 - Desarrollo y nivel/manzana.
 - Estado comercial de la unidad.
 - Precio de lista y precio acordado.

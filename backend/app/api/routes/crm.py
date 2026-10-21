@@ -2668,6 +2668,9 @@ async def _ensure_property_quote_for_status(
         "total": resolved_price,
         "moneda": moneda,
         "oportunidad_id": str(oportunidad_id),
+        "dominio_comercial": "propiedades",
+        "propiedad_id": str(resolved_propiedad_id) if resolved_propiedad_id else None,
+        "unidad_id": str(unidad.get("id")),
         "metadata": {key: value for key, value in sale_refs.items() if value is not None},
     }
     if cuenta_id:
@@ -2734,6 +2737,8 @@ async def _ensure_property_quote_for_status(
                 "precio_unitario_final": resolved_price,
                 "subtotal": resolved_price,
                 "moneda_aplicada": moneda,
+                "propiedad_id": str(resolved_propiedad_id) if resolved_propiedad_id else None,
+                "unidad_id": str(unidad.get("id")),
                 "metadata": {key: value for key, value in sale_refs.items() if value is not None},
             },
         )
@@ -2906,6 +2911,15 @@ async def _ensure_property_operation_opportunity(
         )
         if not opportunity:
             raise HTTPException(status_code=404, detail="opportunity_not_found")
+        if opportunity.get("dominio_comercial") not in {"propiedades", "mixto"}:
+            try:
+                opportunity = await repo.update_opportunity(
+                    organizacion_id=organizacion_id,
+                    oportunidad_id=oportunidad_id,
+                    payload={"dominio_comercial": "propiedades"},
+                )
+            except CRMRepositoryError as exc:
+                raise HTTPException(status_code=502, detail="property_opportunity_domain_update_failed") from exc
         return oportunidad_id, opportunity
 
     stage_id = await repo.get_default_stage_id(organizacion_id=organizacion_id)
@@ -2925,6 +2939,7 @@ async def _ensure_property_operation_opportunity(
                 "descripcion": "Oportunidad creada automáticamente desde Propiedades.",
                 "monto_estimado": _decimal_to_number(precio),
                 "moneda": "MXN",
+                "dominio_comercial": "propiedades",
                 "metadata": {
                     "source": "property_operation",
                     "unidad_id": str(unidad.get("id")),
@@ -10776,6 +10791,10 @@ def _quote_items_to_repository_payload(
             image_url = item_metadata.get("fotoUrl") or item_metadata.get("foto_url")
             if isinstance(image_url, str) and image_url.strip():
                 metadata["fotoUrl"] = image_url.strip()
+        if item.get("propiedad_id"):
+            metadata["propiedad_id"] = str(item["propiedad_id"])
+        if item.get("unidad_id"):
+            metadata["unidad_id"] = str(item["unidad_id"])
         if catalog_item_id:
             metadata["catalog_item_id"] = catalog_item_id
         repository_items.append(
@@ -10795,6 +10814,8 @@ def _quote_items_to_repository_payload(
                 "descuento_monto_aplicado": _as_number(item.get("descuento_monto_aplicado")),
                 "limite_descuento_porcentaje": _as_number(item.get("limite_descuento_porcentaje")),
                 "precio_unitario_final": _as_number(item.get("precio_unitario_final")),
+                "propiedad_id": item.get("propiedad_id"),
+                "unidad_id": item.get("unidad_id"),
             }
         )
     return repository_items
@@ -14277,6 +14298,7 @@ class CRMOpportunity(BaseModel):
     motivo_perdida: str | None = None
     propietario_usuario_id: UUID | None = None
     asignado_a_usuario_id: UUID | None = None
+    dominio_comercial: Literal["productos_servicios", "propiedades", "mixto"] | None = None
     metadata: dict | None = None
     creado_en: str
     actualizado_en: str
@@ -14342,6 +14364,7 @@ class CRMOpportunityCreate(BaseModel):
     estado: str = Field(default="abierta")
     propietario_usuario_id: UUID | None = None
     asignado_a_usuario_id: UUID | None = None
+    dominio_comercial: Literal["productos_servicios", "propiedades", "mixto"] | None = None
     metadata: dict | None = Field(default_factory=dict)
 
     @field_validator("moneda")
@@ -14364,6 +14387,7 @@ class CRMOpportunityUpdate(BaseModel):
     motivo_perdida: str | None = None
     propietario_usuario_id: UUID | None = None
     asignado_a_usuario_id: UUID | None = None
+    dominio_comercial: Literal["productos_servicios", "propiedades", "mixto"] | None = None
     metadata: dict | None = Field(default=None)
 
 
@@ -18359,6 +18383,8 @@ class LeadQuoteItemPayload(BaseModel):
     cantidad: float | None = Field(default=None, gt=0)
     precio_unitario: float | None = Field(default=None, ge=0)
     descuento: float | None = Field(default=None, ge=0)
+    propiedad_id: UUID | None = None
+    unidad_id: UUID | None = None
     descuento_porcentaje: float | None = Field(default=None, ge=0, le=100)
     subtotal: float | None = Field(default=None, ge=0)
     impuestos: float | None = Field(default=None, ge=0)
@@ -18411,6 +18437,10 @@ class LeadQuoteCreatePayload(BaseModel):
     pdf_path: str | None = Field(default=None, max_length=512)
     metadatos: dict[str, Any] | None = Field(default=None)
     items: list[LeadQuoteItemPayload] | None = Field(default=None)
+    dominio_comercial: Literal["productos_servicios", "propiedades", "mixto"] | None = None
+    operacion_inmobiliaria_id: UUID | None = None
+    propiedad_id: UUID | None = None
+    unidad_id: UUID | None = None
 
 
 class LeadQuoteMarkPayload(BaseModel):
@@ -35961,6 +35991,36 @@ async def registrar_pago_confirmado(
         raise HTTPException(status_code=502, detail="respuesta_pago_invalida") from exc
 
 
+@router.get("/oportunidades/{oportunidad_id}/property-context")
+async def get_property_opportunity_context(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
+    oportunidad_id: UUID,
+) -> dict[str, Any]:
+    opportunity = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if opportunity is None:
+        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+    context = await repo.get_property_opportunity_context(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    return {
+        "ok": True,
+        "dominio_comercial": opportunity.get("dominio_comercial"),
+        "oportunidad": {
+            "id": str(oportunidad_id),
+            "titulo": opportunity.get("titulo"),
+            "moneda": opportunity.get("moneda") or "MXN",
+        },
+        **context,
+    }
+
+
 @router.post(
     "/oportunidades/{oportunidad_id}/quotes/folio",
     response_model=LeadQuoteFolioResponse,
@@ -36016,6 +36076,29 @@ async def create_lead_quote(
     )
     if opportunity is None:
         raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+    commercial_domain = opportunity.get("dominio_comercial")
+    if commercial_domain == "propiedades" and payload.dominio_comercial != "propiedades":
+        raise HTTPException(
+            status_code=409,
+            detail="property_opportunity_requires_property_proposal",
+        )
+    property_context = None
+    if commercial_domain == "propiedades":
+        property_context = await repo.get_property_opportunity_context(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+        context_unit = property_context.get("unit")
+        if not isinstance(context_unit, dict) or not context_unit.get("id"):
+            raise HTTPException(status_code=409, detail="property_unit_context_required")
+        if payload.unidad_id and str(payload.unidad_id) != str(context_unit["id"]):
+            raise HTTPException(status_code=409, detail="property_unit_context_mismatch")
+        context_operation = property_context.get("operation")
+        context_development_id = _safe_uuid(context_unit.get("desarrollo_id"))
+        context_operation_id = _safe_uuid(context_operation.get("id")) if isinstance(context_operation, dict) else None
+    else:
+        context_development_id = None
+        context_operation_id = None
     contact = _single_related(opportunity.get("contacto")) or {}
     cuenta = _single_related(opportunity.get("cuenta")) or {}
     oportunidad_metadata = _ensure_dict(opportunity.get("metadata"), default={})
@@ -36149,6 +36232,15 @@ async def create_lead_quote(
             valida_hasta=valido_hasta.isoformat() if valido_hasta else None,
             metadata=metadata,
             items=repo_items,
+            dominio_comercial=payload.dominio_comercial or commercial_domain,
+            operacion_inmobiliaria_id=payload.operacion_inmobiliaria_id or context_operation_id,
+            propiedad_id=payload.propiedad_id or context_development_id,
+            unidad_id=(
+                payload.unidad_id
+                or _safe_uuid(property_context.get("unit", {}).get("id"))
+                if property_context
+                else payload.unidad_id
+            ),
             usuario_id=usuario_id,
         )
     except CRMRepositoryError as exc:
