@@ -36398,7 +36398,7 @@ async def create_lead_quote(
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
         vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
-        is_property_proposal=opportunity_row.get("dominio_comercial") == "propiedades",
+        is_property_proposal=opportunity.get("dominio_comercial") == "propiedades",
     )
 
     try:

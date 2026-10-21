@@ -1318,13 +1318,13 @@ export function LeadDrawer({
   };
 
   useEffect(() => {
-    if (!quoteDialogOpen || !card || card.dominioComercial !== "propiedades") {
-      if (!quoteDialogOpen) setPropertyProposalContext(null);
+    if (!card) {
+      setPropertyProposalContext(null);
       return;
     }
     let cancelled = false;
     const loadPropertyContext = async () => {
-      setPropertyProposalLoading(true);
+      if (quoteDialogOpen) setPropertyProposalLoading(true);
       setPropertyProposalError(null);
       try {
         const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/property-context`, {
@@ -1337,7 +1337,7 @@ export function LeadDrawer({
         setPropertyProposalContext(context);
         const unit = context.unit;
         const operation = context.operation;
-        if (unit) {
+        if (quoteDialogOpen && unit) {
           const price = operation?.precio_final ?? operation?.precio_acordado ?? operation?.precio_ofrecido ?? unit.precio;
           setQuoteItems((current) => current.length && !isBlankQuoteItem(current[0]) ? current : [
             createQuoteItemForm({
@@ -1353,9 +1353,11 @@ export function LeadDrawer({
           ]);
         }
       } catch (error) {
-        if (!cancelled) setPropertyProposalError(error instanceof Error ? error.message : "No se pudo cargar la unidad inmobiliaria.");
+        if (!cancelled && card.dominioComercial === "propiedades") {
+          setPropertyProposalError(error instanceof Error ? error.message : "No se pudo cargar la unidad inmobiliaria.");
+        }
       } finally {
-        if (!cancelled) setPropertyProposalLoading(false);
+        if (!cancelled && quoteDialogOpen) setPropertyProposalLoading(false);
       }
     };
     void loadPropertyContext();
@@ -2861,7 +2863,18 @@ export function LeadDrawer({
   };
 
   const quoteSummaryCurrency = (quoteMoneda || card?.moneda || "MXN").trim().toUpperCase();
-  const isPropertyOpportunity = card?.dominioComercial === "propiedades";
+  const propertyContextMatchesCard = propertyProposalContext?.oportunidad?.id === card?.oportunidadId;
+  const isPropertyOpportunity = Boolean(
+    card?.dominioComercial === "propiedades"
+      || (
+        propertyContextMatchesCard
+        && (
+          propertyProposalContext?.dominio_comercial === "propiedades"
+          || propertyProposalContext?.operation
+          || propertyProposalContext?.unit
+        )
+      ),
+  );
   const quoteSummarySubtotal = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
   const quoteSummaryTaxes = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
@@ -4275,7 +4288,7 @@ export function LeadDrawer({
                         disabled={isBusy}
                       >
                         <IconChecklist className="size-4" />
-                        {card.dominioComercial === "propiedades" ? "Crear propuesta inmobiliaria" : "Cotizar"}
+                        {isPropertyOpportunity ? "Crear propuesta inmobiliaria" : "Cotizar"}
                       </Button>
                     </div>
                   </div>
