@@ -11472,7 +11472,30 @@ class CRMRepository:
         `dominio_comercial`, pero sí conservan la relación explícita con una
         operación o unidad inmobiliaria. Esa relación es la fuente de verdad
         para decidir qué constructor debe abrir el embudo.
+
+        Cuando el tenant opera exclusivamente en modo inmobiliario, las
+        oportunidades históricas creadas antes de la separación pueden traer
+        `productos_servicios` aunque nunca hayan sido productos. En ese caso
+        el modo activo del tenant es la fuente de verdad de presentación; no
+        se modifica el valor histórico persistido.
         """
+        tenant_config = await self.get_organizacion_config(organizacion_id=organizacion_id)
+        tenant_features = tenant_config.get("features") if isinstance(tenant_config, dict) else None
+        property_only_tenant = bool(
+            isinstance(tenant_features, dict)
+            and isinstance(tenant_features.get("propiedades"), dict)
+            and tenant_features["propiedades"].get("enabled") is True
+            and not (
+                isinstance(tenant_features.get("productos"), dict)
+                and tenant_features["productos"].get("enabled") is True
+            )
+        )
+        if property_only_tenant:
+            for row in rows:
+                if row.get("dominio_comercial") != "mixto":
+                    row["dominio_comercial"] = "propiedades"
+            return rows
+
         opportunity_ids = [
             str(row.get("id"))
             for row in rows
