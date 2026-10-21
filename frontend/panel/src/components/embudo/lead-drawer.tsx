@@ -3072,14 +3072,17 @@ export function LeadDrawer({
     if (!card) {
       throw new Error("No hay oportunidad activa.");
     }
-    const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes/pdf`, {
+    const response = await fetch(
+      `/api/embudo/leads/${card.oportunidadId}/${isPropertyOpportunity ? "property-proposals/pdf" : "quotes/pdf"}`,
+      {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/pdf",
       },
       body: JSON.stringify(body),
-    });
+      },
+    );
     if (!response.ok) {
       const bodyError = await response.json().catch(() => ({}));
       const message =
@@ -3091,7 +3094,7 @@ export function LeadDrawer({
     const fileNameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)"?/i);
     const filename = fileNameMatch?.[1] ? decodeURIComponent(fileNameMatch[1].replace(/"/g, "")) : "cotizacion.pdf";
     return { blob, filename };
-  }, [card]);
+  }, [card, isPropertyOpportunity]);
 
   const openGeneratedQuotePdfPreview = useCallback(async (body: Record<string, unknown>) => {
     setQuotePreviewError(null);
@@ -3154,11 +3157,14 @@ export function LeadDrawer({
           return;
         }
 
-        const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes`, {
+        const response = await fetch(
+          `/api/embudo/leads/${card.oportunidadId}/${isPropertyOpportunity ? "property-proposals" : "quotes"}`,
+          {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        });
+          },
+        );
         const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) {
           if (showDiscountLimitNotice(responseBody?.error)) {
@@ -3240,10 +3246,13 @@ export function LeadDrawer({
         for (const attachment of quoteAttachments) {
           formData.append("attachments", attachment.file, attachment.name);
         }
-        const response = await fetch(`/api/embudo/leads/${card.oportunidadId}/quotes/send`, {
+        const response = await fetch(
+          `/api/embudo/leads/${card.oportunidadId}/${isPropertyOpportunity ? "property-proposals/send" : "quotes/send"}`,
+          {
           method: "POST",
           body: formData,
-        });
+          },
+        );
         const responseBody = await response.json().catch(() => ({}));
         if (!response.ok) {
           if (showDiscountLimitNotice(responseBody?.error)) {

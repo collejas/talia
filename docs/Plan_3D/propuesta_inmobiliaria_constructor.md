@@ -1,7 +1,7 @@
 # Propuesta inmobiliaria desde una oportunidad
 
 Fecha: 2026-10-21 (UTC)  
-Estado: Fase inicial implementada; pendiente de validación autenticada en flujo real
+Estado: Fase inicial y contratos especializados implementados; pendiente de validación autenticada en flujo real
 
 ## Objetivo
 
@@ -58,6 +58,10 @@ catálogo. No existe todavía un contrato específico que cargue automáticament
   selector general de productos y envía el dominio/relaciones explícitas.
 - El backend rechaza una cotización genérica cuando la oportunidad pertenece al
   dominio inmobiliario.
+- Se agregaron contratos especializados para creación, PDF y envío:
+  `property-proposals`, `property-proposals/pdf` y `property-proposals/send`.
+- El panel usa esos contratos únicamente para oportunidades de propiedades;
+  productos y servicios conservan las rutas `quotes`.
 
 Esta fase mantiene el endpoint técnico de cotizaciones para no romper el ciclo
 actual. La extracción posterior a contratos separados de creación, PDF y envío
@@ -182,12 +186,12 @@ Una propuesta aceptada debe conservar su precio como documento histórico. Si el
 precio cambia después de aceptarla, se debe crear una nueva versión o una nueva
 propuesta, no sobrescribir silenciosamente la anterior.
 
-## Modelo de datos propuesto
+## Modelo de datos aplicado
 
 La información estructural de la operación no debe depender exclusivamente de
 `metadata` o `jsonb`.
 
-Se propone agregar columnas explícitas donde todavía no existan:
+La migración aplicada agrega columnas explícitas y relaciones reales:
 
 ### `oportunidades`
 
@@ -202,10 +206,9 @@ Se propone agregar columnas explícitas donde todavía no existan:
 
 ### `cotizacion_items`
 
-La partida debe continuar vinculada a `catalog_item_id` y conservar el precio
-comercial aplicado. Si se requiere consultar la unidad directamente por
-partida, se evaluará agregar `propiedad_id` y `unidad_id`; si la relación de la
-cabecera es suficiente, no se duplicarán innecesariamente esas columnas.
+La partida continúa vinculada a `catalog_item_id`, conserva el precio comercial
+aplicado y tiene `propiedad_id` y `unidad_id` explícitos para trazabilidad
+directa.
 
 Las columnas deben incluir tenant, foreign keys, índices y constraints
 compatibles con las relaciones existentes.
@@ -364,14 +367,16 @@ inmobiliaria cuando el contrato no corresponda.
 
 ### Fase 3: constructor frontend
 
-- Extraer el constructor actual de productos.
-- Crear `PropertyProposalBuilder`.
+- Separar visualmente el constructor inmobiliario del selector de productos.
+- Mantener la implementación dentro del drawer actual hasta completar la
+  extracción a `PropertyProposalBuilder`.
 - Cambiar títulos, campos, acciones y estados.
 - Bloquear selector general de productos en propiedades.
 
 ### Fase 4: backend de propuesta
 
-- Crear contratos inmobiliarios de creación, PDF y envío.
+- Crear contratos inmobiliarios de creación, PDF y envío. **Implementado en la
+  fase actual.**
 - Reutilizar servicios de folios, PDF, correo, WhatsApp e historial.
 - Mantener la cotización y sus partidas relacionadas explícitamente.
 

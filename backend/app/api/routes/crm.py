@@ -35991,6 +35991,85 @@ async def registrar_pago_confirmado(
         raise HTTPException(status_code=502, detail="respuesta_pago_invalida") from exc
 
 
+async def _prepare_property_proposal_payload(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+    payload: LeadQuoteCreatePayload,
+) -> LeadQuoteCreatePayload:
+    opportunity = await repo.get_opportunity_with_contact(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    if opportunity is None:
+        raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
+    if opportunity.get("dominio_comercial") != "propiedades":
+        raise HTTPException(status_code=409, detail="property_proposal_requires_property_opportunity")
+    context = await repo.get_property_opportunity_context(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    unit = context.get("unit")
+    if not isinstance(unit, dict) or not unit.get("id"):
+        raise HTTPException(status_code=409, detail="property_unit_context_required")
+    operation = context.get("operation")
+    operation_id = _safe_uuid(operation.get("id")) if isinstance(operation, dict) else None
+    development_id = _safe_uuid(unit.get("desarrollo_id"))
+    price = (
+        _as_number(operation.get("precio_final"))
+        if isinstance(operation, dict)
+        else None
+    ) or (
+        _as_number(operation.get("precio_acordado"))
+        if isinstance(operation, dict)
+        else None
+    ) or (
+        _as_number(operation.get("precio_ofrecido"))
+        if isinstance(operation, dict)
+        else None
+    ) or _as_number(unit.get("precio"))
+    currency = (
+        (operation.get("moneda") if isinstance(operation, dict) else None)
+        or payload.moneda
+        or "MXN"
+    ).upper()
+    items = list(payload.items or [])
+    if not items:
+        items = [
+            LeadQuoteItemPayload(
+                catalog_item_id=_safe_uuid(unit.get("catalog_item_id")),
+                titulo=_clean_text(unit.get("nombre") or unit.get("unidad")) or "Unidad inmobiliaria",
+                descripcion=_clean_text(unit.get("descripcion")) or "Propuesta inmobiliaria",
+                unidad="unidad",
+                cantidad=1,
+                precio_unitario=price,
+                propiedad_id=development_id,
+                unidad_id=_safe_uuid(unit.get("id")),
+            )
+        ]
+    else:
+        items = [
+            item.model_copy(
+                update={
+                    "propiedad_id": development_id,
+                    "unidad_id": _safe_uuid(unit.get("id")),
+                }
+            )
+            for item in items
+        ]
+    return payload.model_copy(
+        update={
+            "dominio_comercial": "propiedades",
+            "operacion_inmobiliaria_id": operation_id,
+            "propiedad_id": development_id,
+            "unidad_id": _safe_uuid(unit.get("id")),
+            "moneda": currency,
+            "items": items,
+        }
+    )
+
+
 @router.get("/oportunidades/{oportunidad_id}/property-context")
 async def get_property_opportunity_context(
     *,
@@ -36019,6 +36098,66 @@ async def get_property_opportunity_context(
         },
         **context,
     }
+
+
+@router.post(
+    "/oportunidades/{oportunidad_id}/property-proposals",
+    response_model=LeadQuoteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_property_proposal(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
+    oportunidad_id: UUID,
+    payload: LeadQuoteCreatePayload,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> LeadQuoteResponse:
+    prepared_payload = await _prepare_property_proposal_payload(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        payload=payload,
+    )
+    return await create_lead_quote(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        _="propuesta.view",
+        oportunidad_id=oportunidad_id,
+        payload=prepared_payload,
+        usuario_id=usuario_id,
+    )
+
+
+@router.post("/oportunidades/{oportunidad_id}/property-proposals/pdf")
+async def preview_property_proposal_pdf(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
+    oportunidad_id: UUID,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> Response:
+    try:
+        base_payload = LeadQuoteCreatePayload.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail="invalid_property_proposal_payload") from exc
+    prepared_payload = await _prepare_property_proposal_payload(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+        payload=base_payload,
+    )
+    return await preview_lead_quote_pdf(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        _="propuesta.view",
+        oportunidad_id=oportunidad_id,
+        payload=prepared_payload.model_dump(mode="json", exclude_none=True),
+        usuario_id=usuario_id,
+    )
 
 
 @router.post(
@@ -36287,6 +36426,10 @@ async def preview_lead_quote_pdf(
         base_payload = LeadQuoteCreatePayload.model_validate(payload)
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=exc.errors()) from exc
+    if opportunity_row.get("dominio_comercial") == "propiedades" and base_payload.dominio_comercial != "propiedades":
+        raise HTTPException(status_code=409, detail="property_opportunity_requires_property_proposal")
+    if base_payload.dominio_comercial == "propiedades" and opportunity_row.get("dominio_comercial") != "propiedades":
+        raise HTTPException(status_code=409, detail="property_proposal_requires_property_opportunity")
 
     currency = base_payload.moneda or opportunity_row.get("moneda") or "MXN"
     normalized_items = await _resolve_authorized_quote_price_lists(
@@ -36434,6 +36577,7 @@ async def send_lead_quote(
     oportunidad_id: UUID,
     request: Request,
     usuario_id: UUID | None = Depends(optional_usuario_id),
+    property_only: bool = False,
 ) -> LeadQuoteResponse:
     oportunidad_row = await repo.get_opportunity_with_contact(
         organizacion_id=organizacion_id,
@@ -36462,6 +36606,7 @@ async def send_lead_quote(
             payload = LeadQuoteSendPayload.model_validate_json(raw_payload)
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail="invalid_quote_payload") from exc
+
         uploaded_attachments = [
             file
             for file in form.getlist("attachments")
@@ -36476,6 +36621,19 @@ async def send_lead_quote(
             payload = LeadQuoteSendPayload.model_validate(raw_json)
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail="invalid_quote_payload") from exc
+
+    if payload.dominio_comercial == "propiedades" and oportunidad_row.get("dominio_comercial") != "propiedades":
+        raise HTTPException(status_code=409, detail="property_proposal_requires_property_opportunity")
+    if property_only or oportunidad_row.get("dominio_comercial") == "propiedades":
+        if not property_only and payload.dominio_comercial != "propiedades":
+            raise HTTPException(status_code=409, detail="property_opportunity_requires_property_proposal")
+        prepared_payload = await _prepare_property_proposal_payload(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            payload=payload,
+        )
+        payload = payload.model_copy(update=prepared_payload.model_dump(exclude_none=True))
 
     currency = payload.moneda or oportunidad_row.get("moneda") or "MXN"
     base_payload_data = payload.model_dump(
@@ -36641,6 +36799,10 @@ async def send_lead_quote(
             valida_hasta=quote_valid_until.isoformat() if quote_valid_until else None,
             metadata=metadata,
             items=repo_items,
+            dominio_comercial=base_payload.dominio_comercial or oportunidad_row.get("dominio_comercial"),
+            operacion_inmobiliaria_id=base_payload.operacion_inmobiliaria_id,
+            propiedad_id=base_payload.propiedad_id,
+            unidad_id=base_payload.unidad_id,
             usuario_id=usuario_id,
         )
     except CRMRepositoryError as exc:
@@ -36729,6 +36891,30 @@ async def send_lead_quote(
             quote=quote,
         )
     return LeadQuoteResponse(quote=quote)
+
+
+@router.post(
+    "/oportunidades/{oportunidad_id}/property-proposals/send",
+    response_model=LeadQuoteResponse,
+)
+async def send_property_proposal(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+    _: str = Depends(require_permission("propuesta.view")),
+    oportunidad_id: UUID,
+    request: Request,
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+) -> LeadQuoteResponse:
+    return await send_lead_quote(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        _="propuesta.view",
+        oportunidad_id=oportunidad_id,
+        request=request,
+        usuario_id=usuario_id,
+        property_only=True,
+    )
 
 
 @router.post("/cotizaciones/{cotizacion_id}/mark", response_model=LeadQuoteResponse)
