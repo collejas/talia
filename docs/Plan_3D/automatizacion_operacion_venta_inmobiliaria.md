@@ -175,6 +175,10 @@ La implementación actual está parcialmente automatizada:
   forma determinista cuando el usuario no proporciona una.
 - Ambas acciones generan o reutilizan una cotización interna en borrador con la
   unidad, el catálogo, el precio y la oportunidad asociados.
+- Cuando el precio acordado cambia durante `Apartado`, se sincronizan la
+  operación inmobiliaria, el total de la cotización y el precio/subtotal de su
+  partida. Una cotización ya aceptada no se modifica: si el importe difiere,
+  la API exige crear una nueva cotización para conservar el historial comercial.
 - `Preparar cierre` conserva la cotización aceptada y crea/reutiliza el pedido
   de venta automáticamente; si el pedido no puede crearse, la API ya no
   informa un cierre preparado como si hubiera terminado correctamente.

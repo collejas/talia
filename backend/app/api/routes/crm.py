@@ -2731,7 +2731,9 @@ async def _ensure_property_quote_for_status(
                 "descripcion": catalog_item.get("nombre") or "Unidad inmobiliaria",
                 "cantidad": 1,
                 "precio_unitario": resolved_price,
+                "precio_unitario_final": resolved_price,
                 "subtotal": resolved_price,
+                "moneda_aplicada": moneda,
                 "metadata": {key: value for key, value in sale_refs.items() if value is not None},
             },
         )
@@ -2745,6 +2747,145 @@ async def _ensure_property_quote_for_status(
         oportunidad_id=oportunidad_id,
     )
     return quote
+
+
+async def _sync_property_quote_price(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    unidad: dict[str, Any],
+    oportunidad_id: UUID,
+    persona_id: UUID | None,
+    cuenta_id: UUID | None,
+    catalog_item_id: UUID | None,
+    propiedad_id: UUID | None,
+    precio_final: Decimal | None,
+    moneda: str,
+    usuario_id: UUID | None,
+    validate_only: bool = False,
+) -> dict[str, Any] | None:
+    """Mantiene el precio del apartado igual en cotización y partida."""
+
+    resolved_price = _decimal_to_number(precio_final)
+    if resolved_price is None:
+        resolved_price = _as_number(unidad.get("precio"))
+    if resolved_price is None or resolved_price <= 0:
+        raise HTTPException(status_code=409, detail="property_price_required")
+
+    unit_id = _safe_uuid(unidad.get("id"))
+    if not unit_id:
+        raise HTTPException(status_code=502, detail="property_unit_invalid")
+    quotes = await repo.list_quote_entries(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    matching_quote: dict[str, Any] | None = None
+    accepted_quote: dict[str, Any] | None = None
+    for candidate in quotes:
+        metadata = _normalize_metadata_value(candidate.get("metadata")) or {}
+        if _safe_uuid(metadata.get("unidad_id")) != unit_id:
+            continue
+        matching_quote = candidate
+        if str(candidate.get("estatus") or "").strip().lower() == "aceptada":
+            accepted_quote = candidate
+            break
+
+    current_total = _as_number((accepted_quote or matching_quote or {}).get("total"))
+    if accepted_quote and current_total is not None and abs(current_total - resolved_price) > 0.005:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="accepted_quote_price_change_requires_new_quote",
+        )
+    if validate_only:
+        return matching_quote
+
+    if matching_quote is None:
+        return await _ensure_property_quote_for_status(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            unidad=unidad,
+            status_value=PropiedadStatus.reservado.value,
+            oportunidad_id=oportunidad_id,
+            persona_id=persona_id,
+            cuenta_id=cuenta_id,
+            catalog_item_id=catalog_item_id,
+            propiedad_id=propiedad_id,
+            precio_final=precio_final,
+            moneda=moneda,
+            usuario_id=usuario_id,
+        )
+    if accepted_quote:
+        return accepted_quote
+
+    quote_id = _safe_uuid(matching_quote.get("id"))
+    if not quote_id:
+        raise CRMRepositoryError("property_quote_missing_id")
+    metadata = _normalize_metadata_value(matching_quote.get("metadata")) or {}
+    metadata.update({"precio_final": resolved_price, "tipo_operacion": PropiedadStatus.reservado.value})
+    await repo.update_quote_entry(
+        organizacion_id=organizacion_id,
+        quote_id=quote_id,
+        payload={"total": resolved_price, "moneda": moneda, "metadata": metadata},
+    )
+
+    items = matching_quote.get("items")
+    if not isinstance(items, list):
+        items = await repo.list_quote_items(
+            organizacion_id=organizacion_id,
+            cotizacion_id=quote_id,
+        )
+    property_item = next(
+        (
+            item for item in items
+            if isinstance(item, dict)
+            and (
+                _safe_uuid(item.get("catalog_item_id")) == _safe_uuid(catalog_item_id)
+                or _safe_uuid((_normalize_metadata_value(item.get("metadata")) or {}).get("unidad_id")) == unit_id
+            )
+        ),
+        None,
+    )
+    if property_item and _safe_uuid(property_item.get("id")):
+        item_metadata = _normalize_metadata_value(property_item.get("metadata")) or {}
+        item_metadata.update({"precio_final": resolved_price, "unidad_id": str(unit_id)})
+        await repo.update_quote_item(
+            organizacion_id=organizacion_id,
+            quote_item_id=_safe_uuid(property_item["id"]),
+            payload={
+                "precio_unitario": resolved_price,
+                "precio_unitario_final": resolved_price,
+                "subtotal": resolved_price,
+                "moneda_aplicada": moneda,
+                "metadata": item_metadata,
+            },
+        )
+    else:
+        # Una cotización sin partida no es utilizable para preparar el cierre;
+        # reutilizamos el flujo central que crea la partida correctamente.
+        return await _ensure_property_quote_for_status(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            unidad=unidad,
+            status_value=PropiedadStatus.reservado.value,
+            oportunidad_id=oportunidad_id,
+            persona_id=persona_id,
+            cuenta_id=cuenta_id,
+            catalog_item_id=catalog_item_id,
+            propiedad_id=propiedad_id,
+            precio_final=precio_final,
+            moneda=moneda,
+            usuario_id=usuario_id,
+        )
+
+    await _sync_opportunity_amount_from_current_quote(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    return await repo.get_quote_entry(
+        organizacion_id=organizacion_id,
+        quote_id=quote_id,
+    )
 
 
 async def _ensure_property_operation_opportunity(
@@ -54286,11 +54427,10 @@ async def actualizar_status_propiedad_unidad(
         PropiedadStatus.reservado.value,
     }:
         try:
-            await _ensure_property_quote_for_status(
+            await _sync_property_quote_price(
                 repo=repo,
                 organizacion_id=organizacion_id,
                 unidad={**(current_unidad or {}), "id": str(unidad_id)},
-                status_value=payload.status.value,
                 oportunidad_id=resolved_oportunidad_id,
                 persona_id=resolved_persona_id,
                 cuenta_id=resolved_cuenta_id,
@@ -54418,11 +54558,10 @@ async def apartar_propiedad_unidad(
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_apartado_failed") from exc
-    quote = await _ensure_property_quote_for_status(
+    quote = await _sync_property_quote_price(
         repo=repo,
         organizacion_id=organizacion_id,
         unidad={**unidad, "id": str(unidad_id)},
-        status_value=PropiedadStatus.reservado.value,
         oportunidad_id=resolved_oportunidad_id,
         persona_id=payload.cliente_principal_id,
         cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
@@ -54444,6 +54583,37 @@ async def guardar_avance_reserva_propiedad_unidad(
     organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("sales.orders.submit")),
 ) -> dict[str, Any]:
+    unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
+    if not unidad:
+        raise HTTPException(status_code=404, detail="property_unit_not_found")
+    current_operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
+        organizacion_id=organizacion_id,
+        unidad_id=unidad_id,
+    )
+    current_opportunity_id = _safe_uuid((current_operation or {}).get("oportunidad_id"))
+    if current_opportunity_id:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=current_opportunity_id,
+        )
+        if not opportunity:
+            raise HTTPException(status_code=404, detail="opportunity_not_found")
+        # Evita modificar la operación si el precio nuevo intentaría alterar
+        # una cotización que ya fue aceptada como documento comercial.
+        await _sync_property_quote_price(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            unidad={**unidad, "id": str(unidad_id)},
+            oportunidad_id=current_opportunity_id,
+            persona_id=_safe_uuid((current_operation or {}).get("cliente_principal_id")),
+            cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
+            catalog_item_id=_safe_uuid(unidad.get("catalog_item_id")),
+            propiedad_id=_safe_uuid(unidad.get("propiedad_id")),
+            precio_final=payload.precio_acordado,
+            moneda=str((current_operation or {}).get("moneda") or "MXN"),
+            usuario_id=None,
+            validate_only=True,
+        )
     try:
         operation = await repo.guardar_avance_reserva(
             organizacion_id=organizacion_id,
@@ -54465,7 +54635,27 @@ async def guardar_avance_reserva_propiedad_unidad(
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_reserva_avance_failed") from exc
-    return {"ok": True, "operacion": operation}
+    opportunity_id = _safe_uuid(operation.get("oportunidad_id")) or current_opportunity_id
+    quote = None
+    if opportunity_id:
+        opportunity = await repo.get_pipeline_opportunity(
+            organizacion_id=organizacion_id,
+            oportunidad_id=opportunity_id,
+        )
+        quote = await _sync_property_quote_price(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            unidad={**unidad, "id": str(unidad_id)},
+            oportunidad_id=opportunity_id,
+            persona_id=_safe_uuid(operation.get("cliente_principal_id")),
+            cuenta_id=_safe_uuid((opportunity or {}).get("cuenta_id")),
+            catalog_item_id=_safe_uuid(unidad.get("catalog_item_id")),
+            propiedad_id=_safe_uuid(unidad.get("propiedad_id")),
+            precio_final=payload.precio_acordado,
+            moneda=str(operation.get("moneda") or "MXN"),
+            usuario_id=None,
+        )
+    return {"ok": True, "operacion": operation, "cotizacion": quote}
 
 
 @router.get("/propiedad-unidades/{unidad_id}/reserva/actual")
@@ -54901,11 +55091,10 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
         unidad_id=unidad_id,
         operation=operation,
     )
-    quote = await _ensure_property_quote_for_status(
+    quote = await _sync_property_quote_price(
         repo=repo,
         organizacion_id=organizacion_id,
         unidad={**unidad, "id": str(unidad_id)},
-        status_value=PropiedadStatus.reservado.value,
         oportunidad_id=resolved_oportunidad_id,
         persona_id=payload.cliente_principal_id,
         cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),

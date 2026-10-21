@@ -5876,6 +5876,56 @@ class CRMRepository:
                 f"Error creando items de cotización: {resp.status_code} {resp.text}"
             )
 
+    async def update_quote_entry(
+        self,
+        *,
+        organizacion_id: UUID,
+        quote_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Actualiza campos comerciales explícitos de una cotización del tenant."""
+
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/cotizaciones",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{quote_id}",
+                "limit": "1",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError("quote_update_failed")
+
+    async def update_quote_item(
+        self,
+        *,
+        organizacion_id: UUID,
+        quote_item_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Actualiza una partida de cotización con filtro de tenant e id."""
+
+        resp = await self._request(
+            "PATCH",
+            "/rest/v1/cotizacion_items",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{quote_item_id}",
+                "limit": "1",
+            },
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            return data[0]
+        raise CRMRepositoryError("quote_item_update_failed")
+
     async def mark_quote_entry(
         self,
         *,
