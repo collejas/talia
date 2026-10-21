@@ -191,6 +191,10 @@ La implementación actual está parcialmente automatizada:
 La confirmación del pedido continúa siendo la acción que crea la venta formal.
 Preparar el cierre no marca la unidad como vendida.
 
+La separación entre el constructor de productos y el constructor de
+`Propuesta inmobiliaria` está documentada en
+[Propuesta inmobiliaria desde una oportunidad](./propuesta_inmobiliaria_constructor.md).
+
 ## Plan de implementación
 
 ### Fase 1: normalizar el inicio desde Propiedades

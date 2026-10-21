@@ -1,5 +1,9 @@
 # Plan · Ventas de propiedades por catálogo
 
+La separación del constructor de cotizaciones de productos y del constructor
+de `Propuesta inmobiliaria` desde una oportunidad está documentada en
+[Propuesta inmobiliaria desde una oportunidad](./propuesta_inmobiliaria_constructor.md).
+
 La automatización operativa completa, incluyendo la diferencia entre reservado,
 apartado, pedido y venta formal, está documentada en
 [Automatización de la operación y venta inmobiliaria](./automatizacion_operacion_venta_inmobiliaria.md).
