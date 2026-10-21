@@ -23,6 +23,10 @@ export type PropertyProposalContext = {
     apartado_vencimiento_en: string | null;
     apartado_iniciado_en: string | null;
     apartado_horas: number | null;
+    fecha_limite_reserva: string | null;
+    reserva_importe: number | null;
+    condiciones_reserva: string | null;
+    estado_validacion: string | null;
     forma_adquisicion: string | null;
     enviado_a_validacion_en: string | null;
   } | null;
@@ -103,9 +107,12 @@ export function PropertyProposalBuilder({
           <span><strong>Área:</strong> {unit?.area_m2 != null ? `${unit.area_m2} m²` : "Sin área"}</span>
           <span><strong>Precio vigente:</strong> {formatCurrency(price, operation?.moneda || currency)}</span>
           <span><strong>Operación:</strong> {operation?.estado || "Sin operación"}</span>
+          {operation?.reserva_importe != null ? (
+            <span><strong>Importe de apartado:</strong> {formatCurrency(operation.reserva_importe, operation.moneda || currency)}</span>
+          ) : null}
           {operation?.forma_adquisicion ? <span><strong>Adquisición:</strong> {operation.forma_adquisicion}</span> : null}
-          {operation?.apartado_vencimiento_en ? (
-            <span><strong>Apartado vence:</strong> {formatDate(operation.apartado_vencimiento_en)}</span>
+          {(operation?.fecha_limite_reserva || operation?.apartado_vencimiento_en) ? (
+            <span><strong>Apartado vence:</strong> {formatDate(operation.fecha_limite_reserva || operation.apartado_vencimiento_en || "")}</span>
           ) : null}
         </div>
       ) : null}

@@ -6014,7 +6014,7 @@ class CRMRepository:
             params={
                 "organizacion_id": f"eq.{organizacion_id}",
                 "oportunidad_id": f"eq.{oportunidad_id}",
-                "select": "id,unidad_id,estado,precio_ofrecido,precio_acordado,precio_final,moneda,apartado_vencimiento_en,apartado_iniciado_en,apartado_horas,forma_adquisicion,enviado_a_validacion_en,actualizado_en",
+                "select": "id,unidad_id,estado,precio_ofrecido,precio_acordado,precio_final,moneda,apartado_vencimiento_en,apartado_iniciado_en,apartado_horas,forma_adquisicion,fecha_limite_reserva,reserva_importe,condiciones_reserva,estado_validacion,enviado_a_validacion_en,actualizado_en",
                 "order": "actualizado_en.desc,id.desc",
                 "limit": "1",
             },
@@ -7387,6 +7387,10 @@ class CRMRepository:
             raise CRMRepositoryError(
                 f"Respuesta inválida al obtener oportunidad del pipeline: {row!r}"
             )
+        await self._attach_pipeline_commercial_domains(
+            organizacion_id=organizacion_id,
+            rows=[row],
+        )
         await self._attach_contact_rows(
             organizacion_id=organizacion_id,
             rows=[row],
@@ -7422,6 +7426,10 @@ class CRMRepository:
         except Exception:
             organizacion_id = None
         if organizacion_id is not None:
+            await self._attach_pipeline_commercial_domains(
+                organizacion_id=organizacion_id,
+                rows=[row],
+            )
             await self._attach_contact_rows(
                 organizacion_id=organizacion_id,
                 rows=[row],
@@ -11367,6 +11375,11 @@ class CRMRepository:
                 f"Respuesta inesperada al listar pipeline de oportunidades: {data!r}"
             )
         results = [row for row in data if isinstance(row, dict)]
+        if results:
+            await self._attach_pipeline_commercial_domains(
+                organizacion_id=organizacion_id,
+                rows=results,
+            )
         if q and q.strip():
             results = [row for row in results if _matches_search_query(row, q)]
         if correo and correo.strip():
@@ -11446,6 +11459,57 @@ class CRMRepository:
                 results = filtered
         total = len(results)
         return results, total
+
+    async def _attach_pipeline_commercial_domains(
+        self,
+        *,
+        organizacion_id: UUID,
+        rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Completa el dominio de oportunidades inmobiliarias históricas.
+
+        Algunas oportunidades creadas antes de la separación no tienen
+        `dominio_comercial`, pero sí conservan la relación explícita con una
+        operación o unidad inmobiliaria. Esa relación es la fuente de verdad
+        para decidir qué constructor debe abrir el embudo.
+        """
+        opportunity_ids = [
+            str(row.get("id"))
+            for row in rows
+            if row.get("id") and row.get("dominio_comercial") not in {"propiedades", "mixto"}
+        ]
+        if not opportunity_ids:
+            return rows
+        ids_filter = f"in.({','.join(opportunity_ids)})"
+        property_opportunity_ids: set[str] = set()
+        for resource, select in (
+            ("operaciones_inmobiliarias", "oportunidad_id"),
+            ("propiedad_unidades", "oportunidad_id"),
+        ):
+            resource_params: dict[str, Any] = {
+                "oportunidad_id": ids_filter,
+                "select": select,
+                "limit": str(min(1000, len(opportunity_ids))),
+            }
+            if resource == "operaciones_inmobiliarias":
+                resource_params["organizacion_id"] = f"eq.{organizacion_id}"
+            response = await self._request(
+                "GET",
+                f"/rest/v1/{resource}",
+                params=resource_params,
+            )
+            data = response.json()
+            if not isinstance(data, list):
+                continue
+            property_opportunity_ids.update(
+                str(item.get("oportunidad_id"))
+                for item in data
+                if isinstance(item, dict) and item.get("oportunidad_id")
+            )
+        for row in rows:
+            if str(row.get("id")) in property_opportunity_ids and not row.get("dominio_comercial"):
+                row["dominio_comercial"] = "propiedades"
+        return rows
 
     async def _attach_pipeline_contact_accounts(
         self,

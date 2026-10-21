@@ -36014,12 +36014,13 @@ async def _prepare_property_proposal_payload(
     )
     if opportunity is None:
         raise HTTPException(status_code=404, detail="oportunidad_no_encontrada")
-    if opportunity.get("dominio_comercial") != "propiedades":
-        raise HTTPException(status_code=409, detail="property_proposal_requires_property_opportunity")
     context = await repo.get_property_opportunity_context(
         organizacion_id=organizacion_id,
         oportunidad_id=oportunidad_id,
     )
+    has_property_context = isinstance(context.get("operation"), dict) or isinstance(context.get("unit"), dict)
+    if opportunity.get("dominio_comercial") != "propiedades" and not has_property_context:
+        raise HTTPException(status_code=409, detail="property_proposal_requires_property_opportunity")
     unit = context.get("unit")
     if not isinstance(unit, dict) or not unit.get("id"):
         raise HTTPException(status_code=409, detail="property_unit_context_required")
@@ -36113,14 +36114,16 @@ def _property_proposal_render_details(
         or _as_number(operation.get("precio_ofrecido"))
         or _as_number(unit.get("precio"))
     )
-    apartado_amount = _as_number(operation.get("importe_apartado"))
+    apartado_amount = _as_number(operation.get("reserva_importe"))
     currency = _clean_text(operation.get("moneda")) or "MXN"
     return {
         "unidad": _clean_text(unit.get("nombre") or unit.get("unidad")),
         "desarrollo": _clean_text(development.get("nombre")),
         "precio_acordado": f"{price:,.2f} {currency}" if price is not None else None,
         "importe_apartado": f"{apartado_amount:,.2f} {currency}" if apartado_amount is not None else None,
-        "apartado_vencimiento_en": _clean_text(operation.get("apartado_vencimiento_en")),
+        "apartado_vencimiento_en": _clean_text(
+            operation.get("fecha_limite_reserva") or operation.get("apartado_vencimiento_en")
+        ),
         "forma_adquisicion": _clean_text(operation.get("forma_adquisicion")),
     }
 
@@ -36481,19 +36484,20 @@ async def preview_lead_quote_pdf(
         or cuenta.get("nombre")
         or "Oportunidad sin nombre"
     )
-    property_context = None
-    if opportunity_row.get("dominio_comercial") == "propiedades":
-        property_context = await repo.get_property_opportunity_context(
-            organizacion_id=organizacion_id,
-            oportunidad_id=oportunidad_id,
-        )
     try:
         base_payload = LeadQuoteCreatePayload.model_validate(payload)
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=exc.errors()) from exc
     if opportunity_row.get("dominio_comercial") == "propiedades" and base_payload.dominio_comercial != "propiedades":
         raise HTTPException(status_code=409, detail="property_opportunity_requires_property_proposal")
-    if base_payload.dominio_comercial == "propiedades" and opportunity_row.get("dominio_comercial") != "propiedades":
+    property_context = None
+    if base_payload.dominio_comercial == "propiedades" or opportunity_row.get("dominio_comercial") == "propiedades":
+        property_context = await repo.get_property_opportunity_context(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+    has_property_context = isinstance(property_context.get("operation"), dict) or isinstance(property_context.get("unit"), dict)
+    if base_payload.dominio_comercial == "propiedades" and opportunity_row.get("dominio_comercial") != "propiedades" and not has_property_context:
         raise HTTPException(status_code=409, detail="property_proposal_requires_property_opportunity")
 
     currency = base_payload.moneda or opportunity_row.get("moneda") or "MXN"
