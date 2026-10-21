@@ -3295,6 +3295,12 @@ async def _build_quote_pdf_context_from_quote_entry(
         usuario_id=usuario_id,
     )
     quote_model = _quote_from_row(dict(quote_row))
+    property_context = None
+    if opportunity_row.get("dominio_comercial") == "propiedades":
+        property_context = await repo.get_property_opportunity_context(
+            organizacion_id=organizacion_id,
+            oportunidad_id=quote_model.oportunidad_id,
+        )
     quote_metadata = quote_model.metadatos or {}
     quote_vendor_settings = _resolve_effective_quote_vendor_settings(
         payload_settings=quote_metadata.get("quote_vendedores")
@@ -3361,6 +3367,7 @@ async def _build_quote_pdf_context_from_quote_entry(
         vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
         is_property_proposal=opportunity_row.get("dominio_comercial") == "propiedades",
+        property_proposal_details=_property_proposal_render_details(property_context),
     )
 
 
@@ -3712,6 +3719,7 @@ async def _render_quote_pdf_after_sale(
         vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
         is_property_proposal=opportunity.get("dominio_comercial") == "propiedades",
+        property_proposal_details=_property_proposal_render_details(property_context),
     )
     try:
         pdf_doc = await quotes_service.render_quote_pdf(quote_context)
@@ -36086,6 +36094,37 @@ async def _prepare_property_proposal_payload(
     )
 
 
+def _property_proposal_render_details(
+    property_context: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(property_context, Mapping):
+        return None
+    unit = property_context.get("unit")
+    operation = property_context.get("operation")
+    development = property_context.get("development")
+    if not isinstance(unit, Mapping) and not isinstance(operation, Mapping):
+        return None
+    operation = operation if isinstance(operation, Mapping) else {}
+    unit = unit if isinstance(unit, Mapping) else {}
+    development = development if isinstance(development, Mapping) else {}
+    price = (
+        _as_number(operation.get("precio_final"))
+        or _as_number(operation.get("precio_acordado"))
+        or _as_number(operation.get("precio_ofrecido"))
+        or _as_number(unit.get("precio"))
+    )
+    apartado_amount = _as_number(operation.get("importe_apartado"))
+    currency = _clean_text(operation.get("moneda")) or "MXN"
+    return {
+        "unidad": _clean_text(unit.get("nombre") or unit.get("unidad")),
+        "desarrollo": _clean_text(development.get("nombre")),
+        "precio_acordado": f"{price:,.2f} {currency}" if price is not None else None,
+        "importe_apartado": f"{apartado_amount:,.2f} {currency}" if apartado_amount is not None else None,
+        "apartado_vencimiento_en": _clean_text(operation.get("apartado_vencimiento_en")),
+        "forma_adquisicion": _clean_text(operation.get("forma_adquisicion")),
+    }
+
+
 @router.get("/oportunidades/{oportunidad_id}/property-context")
 async def get_property_opportunity_context(
     *,
@@ -36442,6 +36481,12 @@ async def preview_lead_quote_pdf(
         or cuenta.get("nombre")
         or "Oportunidad sin nombre"
     )
+    property_context = None
+    if opportunity_row.get("dominio_comercial") == "propiedades":
+        property_context = await repo.get_property_opportunity_context(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
     try:
         base_payload = LeadQuoteCreatePayload.model_validate(payload)
     except ValidationError as exc:
@@ -36539,6 +36584,7 @@ async def preview_lead_quote_pdf(
         vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
         is_property_proposal=oportunidad_row.get("dominio_comercial") == "propiedades",
+        property_proposal_details=_property_proposal_render_details(property_context),
     )
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
@@ -36616,6 +36662,12 @@ async def send_lead_quote(
         or cuenta.get("nombre")
         or "Oportunidad sin nombre"
     )
+    property_context = None
+    if oportunidad_row.get("dominio_comercial") == "propiedades":
+        property_context = await repo.get_property_opportunity_context(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
     content_type = (request.headers.get("content-type") or "").lower()
     uploaded_attachments: list[UploadFile] = []
     if "multipart/form-data" in content_type:

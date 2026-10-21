@@ -177,6 +177,7 @@ class QuoteRenderContext:
     organization_country: str | None = None
     organization_website: str | None = None
     is_property_proposal: bool = False
+    property_proposal_details: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         """Normaliza fechas que llegan desde capas externas."""
@@ -890,6 +891,28 @@ def _build_modern_quote_html(
     folio_label = "Propuesta Folio" if context.is_property_proposal else "Cotización Folio"
     project_label = "Desarrollo y unidad" if context.is_property_proposal else "Proyecto"
     conditions_title = "Condiciones de reserva" if context.is_property_proposal else "Condiciones comerciales"
+    property_details_html = ""
+    if context.is_property_proposal and context.property_proposal_details:
+        details = context.property_proposal_details
+        detail_rows = []
+        for label, key in (
+            ("Unidad", "unidad"),
+            ("Precio acordado", "precio_acordado"),
+            ("Importe de apartado", "importe_apartado"),
+            ("Apartado vence", "apartado_vencimiento_en"),
+            ("Forma de adquisición", "forma_adquisicion"),
+        ):
+            value = details.get(key)
+            if value is not None and str(value).strip():
+                detail_rows.append(
+                    f'<p><strong>{html_escape(label)}:</strong> {html_escape(str(value))}</p>'
+                )
+        if detail_rows:
+            property_details_html = (
+                '<div class="card property-details-card"><h3>Datos de la operación</h3>'
+                + "".join(detail_rows)
+                + "</div>"
+            )
 
     return f"""
     <html>
@@ -959,6 +982,7 @@ def _build_modern_quote_html(
               <p>{html_escape(vendor_phone)}</p>
               <p>{html_escape(vendor_email)}</p>
             </div>
+            {property_details_html}
           </div>
 
           <div class="section">
