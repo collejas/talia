@@ -1069,6 +1069,14 @@ export function PropertyMap() {
         if (props.catalog_item_id != null && props.catalog_item_id !== "") {
           props.catalog_item_id = String(props.catalog_item_id);
         }
+        props.__map_label =
+          kind === "capa"
+            ? props.nombre ?? props.capa_nombre ?? null
+            : kind === "manzana"
+              ? props.nombre ?? props.manzana_nombre ?? null
+              : kind === "unidad"
+                ? props.unidad ?? props.nombre ?? null
+                : props.desarrollo_nombre ?? props.nombre ?? null;
         clone.properties = props;
         return clone;
       });
@@ -3790,6 +3798,7 @@ export function PropertyMap() {
       const sourceId = "propiedad-3d";
       const fillLayerId = "propiedad-3d-fill";
       const lineLayerId = "propiedad-3d-outline";
+      const labelLayerId = "propiedad-3d-labels";
       const addLayerRules = () => {
         const styleReady = map.isStyleLoaded();
         logMapboxEvent(
@@ -3798,6 +3807,7 @@ export function PropertyMap() {
             styleLoaded: styleReady,
             fillLayer: Boolean(map.getLayer(fillLayerId)),
             outlineLayer: Boolean(map.getLayer(lineLayerId)),
+            labelLayer: Boolean(map.getLayer(labelLayerId)),
           },
           "add-layer",
         );
@@ -3879,6 +3889,51 @@ export function PropertyMap() {
               "line-width": 1,
               "line-opacity": 0.6,
             },
+          });
+        }
+        if (!map.getLayer(labelLayerId)) {
+          map.addLayer({
+            id: labelLayerId,
+            type: "symbol",
+            source: sourceId,
+            layout: {
+              "text-field": ["coalesce", ["get", "__map_label"], ""],
+              "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+              "text-size": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                12,
+                10,
+                17,
+                15,
+                20,
+                18,
+              ],
+              "text-anchor": "center",
+              "text-justify": "center",
+              "text-max-width": 12,
+              "text-padding": 3,
+              "text-allow-overlap": false,
+              "text-ignore-placement": false,
+            },
+            paint: {
+              "text-color": "#ffffff",
+              "text-halo-color": "#0f172a",
+              "text-halo-width": 2,
+              "text-halo-blur": 0.4,
+              "text-opacity": [
+                "case",
+                ["boolean", ["feature-state", "hidden"], false],
+                0,
+                1,
+              ],
+            },
+            filter: [
+              "all",
+              ["has", "__map_label"],
+              ["!=", ["get", "__map_label"], ""],
+            ],
           });
         }
       };
