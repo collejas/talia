@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LeadOnboardingPanel } from "@/components/embudo/lead-onboarding";
+import { PropertyProposalBuilder, type PropertyProposalContext } from "@/components/embudo/property-proposal-builder";
 import { NoteAttachments } from "@/components/crm/note-attachments";
 import { uploadNoteAttachment } from "@/lib/crm/note-attachments";
 import {
@@ -375,50 +376,6 @@ type QuoteItemForm = {
   moneda: string;
   listaPrecioId: string | null;
   listaPrecioNombre: string | null;
-};
-
-type PropertyProposalContext = {
-  dominio_comercial: "productos_servicios" | "propiedades" | "mixto" | null;
-  oportunidad?: {
-    id: string;
-    titulo: string | null;
-    moneda: string;
-    contacto_nombre: string | null;
-    contacto_email: string | null;
-    contacto_telefono: string | null;
-  };
-  operation: {
-    id: string;
-    unidad_id: string;
-    estado: string;
-    precio_ofrecido: number | null;
-    precio_acordado: number | null;
-    precio_final: number | null;
-    moneda: string | null;
-    apartado_vencimiento_en: string | null;
-    apartado_iniciado_en: string | null;
-    apartado_horas: number | null;
-    forma_adquisicion: string | null;
-    enviado_a_validacion_en: string | null;
-  } | null;
-  unit: {
-    id: string;
-    desarrollo_id: string | null;
-    catalog_item_id: string | null;
-    unidad: string | null;
-    nombre: string | null;
-    descripcion: string | null;
-    status: string | null;
-    precio: number | null;
-    area_m2: number | null;
-  } | null;
-  development: {
-    id: string;
-    nombre: string;
-    descripcion: string | null;
-    tipo: string | null;
-    status: string | null;
-  } | null;
 };
 
 type QuotePriceOption = {
@@ -5342,45 +5299,12 @@ export function LeadDrawer({
                     </p>
                   </div>
                   ) : (
-                    <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50/60 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <h4 className="text-sm font-semibold text-foreground">Propuesta inmobiliaria</h4>
-                          <p className="text-[11px] text-muted-foreground">La unidad está vinculada a la oportunidad y no se selecciona como producto.</p>
-                        </div>
-                        <Badge variant="outline">Propiedades</Badge>
-                      </div>
-                      {propertyProposalLoading ? <p className="text-xs text-muted-foreground">Cargando unidad...</p> : null}
-                      {propertyProposalError ? <p className="text-xs text-destructive">{propertyProposalError}</p> : null}
-                      {propertyProposalContext?.development || propertyProposalContext?.unit ? (
-                        <div className="grid gap-1 text-xs sm:grid-cols-2">
-                          <span><strong>Desarrollo:</strong> {propertyProposalContext.development?.nombre || "Sin desarrollo"}</span>
-                          <span><strong>Unidad:</strong> {propertyProposalContext.unit?.nombre || propertyProposalContext.unit?.unidad || "Sin unidad"}</span>
-                          <span><strong>Estado:</strong> {propertyProposalContext.unit?.status || propertyProposalContext.operation?.estado || "Sin estado"}</span>
-                          <span><strong>Área:</strong> {propertyProposalContext.unit?.area_m2 != null ? `${propertyProposalContext.unit.area_m2} m²` : "Sin área"}</span>
-                          <span><strong>Precio vigente:</strong> {formatQuoteCurrency(
-                            propertyProposalContext.operation?.precio_final
-                              ?? propertyProposalContext.operation?.precio_acordado
-                              ?? propertyProposalContext.operation?.precio_ofrecido
-                              ?? propertyProposalContext.unit?.precio
-                              ?? 0,
-                            propertyProposalContext.operation?.moneda || quoteMoneda,
-                          )}</span>
-                          <span><strong>Operación:</strong> {propertyProposalContext.operation?.estado || "Sin operación"}</span>
-                          {propertyProposalContext.operation?.forma_adquisicion ? (
-                            <span><strong>Adquisición:</strong> {propertyProposalContext.operation.forma_adquisicion}</span>
-                          ) : null}
-                          {propertyProposalContext.operation?.apartado_vencimiento_en ? (
-                            <span><strong>Apartado vence:</strong> {formatDateTime(propertyProposalContext.operation.apartado_vencimiento_en)}</span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      {propertyProposalContext?.operation?.estado === "apartado" ? (
-                        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
-                          La unidad está apartada. El precio y las condiciones se toman de la operación inmobiliaria.
-                        </p>
-                      ) : null}
-                    </div>
+                    <PropertyProposalBuilder
+                      context={propertyProposalContext}
+                      loading={propertyProposalLoading}
+                      error={propertyProposalError}
+                      currency={quoteMoneda}
+                    />
                   )}
 
                   <div className="space-y-2 pb-3">

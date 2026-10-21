@@ -176,6 +176,7 @@ class QuoteRenderContext:
     organization_city: str | None = None
     organization_country: str | None = None
     organization_website: str | None = None
+    is_property_proposal: bool = False
 
     def __post_init__(self) -> None:
         """Normaliza fechas que llegan desde capas externas."""
@@ -779,7 +780,11 @@ async def _render_modern_pdf(
     except Exception as exc:
         logger.exception("quote_modern_weasyprint_render_failed", exc_info=exc)
         raise
-    filename = _quote_pdf_filename(context.folio, context.reference)
+    filename = _quote_pdf_filename(
+        context.folio,
+        context.reference,
+        is_property_proposal=context.is_property_proposal,
+    )
     return QuoteDocument(filename=filename, content=pdf_bytes)
 
 
@@ -881,6 +886,10 @@ def _build_modern_quote_html(
     subtotal = _format_currency(context.subtotal, context.moneda, include_currency_code=False)
     taxes = _format_currency(context.impuestos, context.moneda, include_currency_code=False)
     total = _format_currency(_resolve_total(context), context.moneda, include_currency_code=False)
+    document_title = "Propuesta inmobiliaria" if context.is_property_proposal else "Cotización"
+    folio_label = "Propuesta Folio" if context.is_property_proposal else "Cotización Folio"
+    project_label = "Desarrollo y unidad" if context.is_property_proposal else "Proyecto"
+    conditions_title = "Condiciones de reserva" if context.is_property_proposal else "Condiciones comerciales"
 
     return f"""
     <html>
@@ -905,7 +914,11 @@ def _build_modern_quote_html(
             </div>
             <div class="top-meta">
               <div class="meta-block">
-                <span class="meta-label">Cotización Folio</span>
+                <span class="meta-label">Documento</span>
+                <span class="meta-value">{html_escape(document_title)}</span>
+              </div>
+              <div class="meta-block">
+                <span class="meta-label">{html_escape(folio_label)}</span>
                 <span class="meta-value">{html_escape(folio)}</span>
               </div>
               <div class="meta-block">
@@ -935,7 +948,7 @@ def _build_modern_quote_html(
               <p>{html_escape(client_email)}</p>
             </div>
             <div class="card">
-              <h3>Proyecto</h3>
+              <h3>{html_escape(project_label)}</h3>
               <p><strong>{html_escape(project_name)}</strong></p>
               <p><strong>{html_escape(project_description or "Sin necesidades")}</strong></p>
             </div>
@@ -978,7 +991,7 @@ def _build_modern_quote_html(
 
               <div class="section" style="margin-top:0;">
                 <div class="prose-box">
-                  <p class="box-title">Condiciones comerciales</p>
+                  <p class="box-title">{html_escape(conditions_title)}</p>
                   <div class="richtext">{conditions_html}</div>
                 </div>
               </div>
@@ -1395,7 +1408,11 @@ def _render_plaintext_pdf(context: QuoteRenderContext) -> QuoteDocument:
         ]
     )
     pdf_bytes = WeasyHTML(string=fallback_html, base_url=_resolve_template_base_url()).write_pdf()
-    filename = _quote_pdf_filename(context.folio, context.reference)
+    filename = _quote_pdf_filename(
+        context.folio,
+        context.reference,
+        is_property_proposal=context.is_property_proposal,
+    )
     return QuoteDocument(filename=filename, content=pdf_bytes)
 
 
@@ -1406,11 +1423,18 @@ def _safe_text(value: str | None, fallback: str = "—") -> str:
     return trimmed if trimmed else fallback
 
 
-def _quote_pdf_filename(folio: str | None, reference: str) -> str:
+def _quote_pdf_filename(
+    folio: str | None,
+    reference: str,
+    *,
+    is_property_proposal: bool = False,
+) -> str:
     candidate = _safe_text(folio, "")
     if not candidate:
         candidate = f"Cot-{reference.upper()}"
     candidate = Path(candidate).name
+    if is_property_proposal and not candidate.lower().startswith("propuesta-inmobiliaria"):
+        candidate = f"Propuesta-inmobiliaria-{candidate}"
     candidate = unicodedata.normalize("NFKC", candidate)
     candidate = re.sub(r"[^\w.-]+", "-", candidate, flags=re.UNICODE)
     candidate = re.sub(r"-{2,}", "-", candidate).strip("._-")
@@ -1547,7 +1571,8 @@ def _resolve_template_base_url() -> str | None:
 
 def compose_email_subject(context: QuoteRenderContext) -> str:
     lead = context.lead_label or "tu proyecto"
-    return f"Cotización Tal-IA · {lead}"
+    label = "Propuesta inmobiliaria" if context.is_property_proposal else "Cotización"
+    return f"{label} Tal-IA · {lead}"
 
 
 def compose_email_body(context: QuoteRenderContext, custom_message: str | None) -> str:
@@ -1558,8 +1583,13 @@ def compose_email_body(context: QuoteRenderContext, custom_message: str | None) 
         lines.extend(_wrap_text(custom_message))
     else:
         lines.append(
-            "Te comparto la cotización actualizada con los servicios solicitados. "
-            "Puedes responder este correo si necesitas un ajuste."
+            (
+                "Te comparto la propuesta inmobiliaria actualizada con la unidad seleccionada. "
+                "Puedes responder este correo si necesitas revisar las condiciones."
+                if context.is_property_proposal
+                else "Te comparto la cotización actualizada con los servicios solicitados. "
+                "Puedes responder este correo si necesitas un ajuste."
+            )
         )
     lines.append("")
     lines.append(f"Total estimado: {_format_currency(_resolve_total(context), context.moneda)}")
@@ -1572,7 +1602,9 @@ def compose_email_body(context: QuoteRenderContext, custom_message: str | None) 
 
 def compose_whatsapp_body(context: QuoteRenderContext, custom_message: str | None) -> str:
     summary = custom_message or (
-        "Te comparto la cotización de Tal-IA; cualquier ajuste lo podemos ver por este medio."
+        "Te comparto la propuesta inmobiliaria de Tal-IA; cualquier ajuste lo podemos ver por este medio."
+        if context.is_property_proposal
+        else "Te comparto la cotización de Tal-IA; cualquier ajuste lo podemos ver por este medio."
     )
     total_text = _format_currency(_resolve_total(context), context.moneda)
     return f"{summary}\nTotal estimado: {total_text}"

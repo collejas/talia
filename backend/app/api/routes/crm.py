@@ -3360,6 +3360,7 @@ async def _build_quote_pdf_context_from_quote_entry(
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
         vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
+        is_property_proposal=opportunity_row.get("dominio_comercial") == "propiedades",
     )
 
 
@@ -3710,6 +3711,7 @@ async def _render_quote_pdf_after_sale(
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
         vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
+        is_property_proposal=opportunity.get("dominio_comercial") == "propiedades",
     )
     try:
         pdf_doc = await quotes_service.render_quote_pdf(quote_context)
@@ -36354,6 +36356,7 @@ async def create_lead_quote(
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
         vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
+        is_property_proposal=opportunity_row.get("dominio_comercial") == "propiedades",
     )
 
     try:
@@ -36535,6 +36538,7 @@ async def preview_lead_quote_pdf(
         vendor_assessor_phone=vendor_context["vendor_assessor_phone"],
         vendor_assessor_email=vendor_context["vendor_assessor_email"],
         logo_url=logo_url,
+        is_property_proposal=oportunidad_row.get("dominio_comercial") == "propiedades",
     )
 
     pdf_doc = await quotes_service.render_quote_pdf(quote_context)
