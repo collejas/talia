@@ -36013,6 +36013,9 @@ async def _prepare_property_proposal_payload(
     unit = context.get("unit")
     if not isinstance(unit, dict) or not unit.get("id"):
         raise HTTPException(status_code=409, detail="property_unit_context_required")
+    unit_status = _clean_text(unit.get("status")).lower()
+    if unit_status in {"vendido", "cancelado", "inhabilitado", "no_disponible"}:
+        raise HTTPException(status_code=409, detail="property_unit_not_available")
     operation = context.get("operation")
     operation_id = _safe_uuid(operation.get("id")) if isinstance(operation, dict) else None
     development_id = _safe_uuid(unit.get("desarrollo_id"))
@@ -36034,6 +36037,8 @@ async def _prepare_property_proposal_payload(
         or payload.moneda
         or "MXN"
     ).upper()
+    if price is None or price <= 0:
+        raise HTTPException(status_code=409, detail="property_price_context_required")
     items = list(payload.items or [])
     if not items:
         items = [
@@ -36054,9 +36059,18 @@ async def _prepare_property_proposal_payload(
                 update={
                     "propiedad_id": development_id,
                     "unidad_id": _safe_uuid(unit.get("id")),
+                    "cantidad": 1,
+                    "precio_unitario": price,
+                    "precio_lista_unitario": price,
+                    "descuento": 0,
+                    "descuento_porcentaje_aplicado": 0,
+                    "titulo": _clean_text(unit.get("nombre") or unit.get("unidad")) or "Unidad inmobiliaria",
+                    "descripcion": _clean_text(unit.get("descripcion")) or "Propuesta inmobiliaria",
+                    "unidad": "unidad",
+                    "moneda": currency,
                 }
             )
-            for item in items
+            for item in items[:1]
         ]
     return payload.model_copy(
         update={
@@ -36095,6 +36109,9 @@ async def get_property_opportunity_context(
             "id": str(oportunidad_id),
             "titulo": opportunity.get("titulo"),
             "moneda": opportunity.get("moneda") or "MXN",
+            "contacto_nombre": opportunity.get("contacto_nombre") or opportunity.get("nombre_completo"),
+            "contacto_email": opportunity.get("contacto_email") or opportunity.get("email"),
+            "contacto_telefono": opportunity.get("contacto_telefono") or opportunity.get("telefono"),
         },
         **context,
     }

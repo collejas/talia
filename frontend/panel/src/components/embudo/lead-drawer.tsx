@@ -379,6 +379,14 @@ type QuoteItemForm = {
 
 type PropertyProposalContext = {
   dominio_comercial: "productos_servicios" | "propiedades" | "mixto" | null;
+  oportunidad?: {
+    id: string;
+    titulo: string | null;
+    moneda: string;
+    contacto_nombre: string | null;
+    contacto_email: string | null;
+    contacto_telefono: string | null;
+  };
   operation: {
     id: string;
     unidad_id: string;
@@ -387,6 +395,11 @@ type PropertyProposalContext = {
     precio_acordado: number | null;
     precio_final: number | null;
     moneda: string | null;
+    apartado_vencimiento_en: string | null;
+    apartado_iniciado_en: string | null;
+    apartado_horas: number | null;
+    forma_adquisicion: string | null;
+    enviado_a_validacion_en: string | null;
   } | null;
   unit: {
     id: string;
@@ -5345,7 +5358,27 @@ export function LeadDrawer({
                           <span><strong>Unidad:</strong> {propertyProposalContext.unit?.nombre || propertyProposalContext.unit?.unidad || "Sin unidad"}</span>
                           <span><strong>Estado:</strong> {propertyProposalContext.unit?.status || propertyProposalContext.operation?.estado || "Sin estado"}</span>
                           <span><strong>Área:</strong> {propertyProposalContext.unit?.area_m2 != null ? `${propertyProposalContext.unit.area_m2} m²` : "Sin área"}</span>
+                          <span><strong>Precio vigente:</strong> {formatQuoteCurrency(
+                            propertyProposalContext.operation?.precio_final
+                              ?? propertyProposalContext.operation?.precio_acordado
+                              ?? propertyProposalContext.operation?.precio_ofrecido
+                              ?? propertyProposalContext.unit?.precio
+                              ?? 0,
+                            propertyProposalContext.operation?.moneda || quoteMoneda,
+                          )}</span>
+                          <span><strong>Operación:</strong> {propertyProposalContext.operation?.estado || "Sin operación"}</span>
+                          {propertyProposalContext.operation?.forma_adquisicion ? (
+                            <span><strong>Adquisición:</strong> {propertyProposalContext.operation.forma_adquisicion}</span>
+                          ) : null}
+                          {propertyProposalContext.operation?.apartado_vencimiento_en ? (
+                            <span><strong>Apartado vence:</strong> {formatDateTime(propertyProposalContext.operation.apartado_vencimiento_en)}</span>
+                          ) : null}
                         </div>
+                      ) : null}
+                      {propertyProposalContext?.operation?.estado === "apartado" ? (
+                        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+                          La unidad está apartada. El precio y las condiciones se toman de la operación inmobiliaria.
+                        </p>
                       ) : null}
                     </div>
                   )}
@@ -5355,7 +5388,9 @@ export function LeadDrawer({
                       <div>
                         <h4 className="text-sm font-semibold text-foreground">Partidas cotizadas</h4>
                         <p className="text-[11px] text-muted-foreground">
-                          Edita aquí los conceptos ya agregados a la cotización.
+                          {isPropertyOpportunity
+                            ? "La unidad y sus condiciones se toman de la operación inmobiliaria."
+                            : "Edita aquí los conceptos ya agregados a la cotización."}
                         </p>
                       </div>
                     </div>
@@ -5409,14 +5444,14 @@ export function LeadDrawer({
                                 <Input
                                   value={item.nombre}
                                   onChange={(event) => handleItemFieldChange(index, "nombre", event.target.value)}
-                                  disabled={quotePending}
+                                  disabled={quotePending || isPropertyOpportunity}
                                   placeholder="Nombre del concepto"
                                   className={quoteCompactInputClass}
                                 />
                                 <Input
                                   value={item.descripcion}
                                   onChange={(event) => handleItemFieldChange(index, "descripcion", event.target.value)}
-                                  disabled={quotePending}
+                                  disabled={quotePending || isPropertyOpportunity}
                                   placeholder="Descripción breve"
                                   className={quoteCompactInputClass}
                                 />
@@ -5477,21 +5512,21 @@ export function LeadDrawer({
                               <Input
                                 value={item.cantidad}
                                 onChange={(event) => handleItemFieldChange(index, "cantidad", event.target.value)}
-                                disabled={quotePending}
+                                disabled={quotePending || isPropertyOpportunity}
                                 placeholder="1"
                                 className={quoteCompactInputClass}
                               />
                               <Input
                                 value={item.unidad}
                                 onChange={(event) => handleItemFieldChange(index, "unidad", event.target.value)}
-                                disabled={quotePending}
+                                disabled={quotePending || isPropertyOpportunity}
                                 placeholder="und"
                                 className={quoteCompactInputClass}
                               />
                               <Input
                                 value={item.precioUnitario}
                                 onChange={(event) => handleItemFieldChange(index, "precioUnitario", event.target.value)}
-                                disabled={quotePending}
+                                disabled={quotePending || isPropertyOpportunity}
                                 placeholder="0.00"
                                 title="Precio de cotización. Puede ser igual o mayor al precio oficial."
                                 className={`${quoteCompactInputClass} ${(() => {
@@ -5505,7 +5540,7 @@ export function LeadDrawer({
                               <Input
                                 value={item.descuento}
                                 onChange={(event) => handleItemFieldChange(index, "descuento", event.target.value)}
-                                disabled={quotePending}
+                                disabled={quotePending || isPropertyOpportunity}
                                 placeholder="0.00"
                                 className={`${quoteCompactInputClass} ${discountNotice ? "border border-red-500 bg-red-50 text-red-900" : ""}`}
                               />
@@ -5513,7 +5548,7 @@ export function LeadDrawer({
                                 <Input
                                   value={item.descuentoPorcentaje}
                                   onChange={(event) => handleItemFieldChange(index, "descuentoPorcentaje", event.target.value)}
-                                  disabled={quotePending}
+                                  disabled={quotePending || isPropertyOpportunity}
                                   placeholder="0"
                                   aria-label="Porcentaje de descuento"
                                   title={discountNotice ? `Máximo autorizado: ${discountNotice.maxPercent}%` : undefined}
@@ -5534,9 +5569,9 @@ export function LeadDrawer({
                                 variant="ghost"
                                 className="size-8"
                                 onClick={() => handleRemoveItem(index)}
-                                disabled={quotePending}
+                                disabled={quotePending || isPropertyOpportunity}
                               >
-                                <IconTrash className="size-4" />
+                                {isPropertyOpportunity ? <span className="text-[10px] text-muted-foreground">Fijo</span> : <IconTrash className="size-4" />}
                               </Button>
                             </div>
                             );

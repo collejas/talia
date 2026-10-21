@@ -6014,7 +6014,7 @@ class CRMRepository:
             params={
                 "organizacion_id": f"eq.{organizacion_id}",
                 "oportunidad_id": f"eq.{oportunidad_id}",
-                "select": "id,unidad_id,estado,precio_ofrecido,precio_acordado,precio_final,moneda,apartado_vencimiento_en,actualizado_en",
+                "select": "id,unidad_id,estado,precio_ofrecido,precio_acordado,precio_final,moneda,apartado_vencimiento_en,apartado_iniciado_en,apartado_horas,forma_adquisicion,enviado_a_validacion_en,actualizado_en",
                 "order": "actualizado_en.desc,id.desc",
                 "limit": "1",
             },
