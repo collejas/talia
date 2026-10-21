@@ -2364,6 +2364,100 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_desarrollos_invalid_response:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def search_propiedad_unidades(
+        self,
+        *,
+        organizacion_id: UUID,
+        search: str | None = None,
+        desarrollo_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "select": (
+                "id,desarrollo_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
+                "desarrollo:propiedad_desarrollos!inner(id,nombre,descripcion,tipo,status,organizacion_id)"
+            ),
+            "desarrollo.organizacion_id": f"eq.{organizacion_id}",
+            "order": "actualizado_en.desc,id.desc",
+            "limit": str(max(1, min(limit, 100))),
+        }
+        if desarrollo_id:
+            params["desarrollo_id"] = f"eq.{desarrollo_id}"
+        if search and search.strip():
+            literal = _postgrest_ilike_literal(search.strip()[:100])
+            development_response = await self._request(
+                "GET",
+                "/rest/v1/propiedad_desarrollos",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "nombre": f"ilike.{literal}",
+                    "select": "id",
+                    "limit": "100",
+                },
+                organizacion_id=organizacion_id,
+            )
+            development_rows = development_response.json()
+            development_ids = [
+                str(row["id"])
+                for row in development_rows
+                if isinstance(row, dict) and row.get("id")
+            ] if isinstance(development_rows, list) else []
+            search_clauses = [
+                f"nombre.ilike.{literal}",
+                f"unidad.ilike.{literal}",
+                f"descripcion.ilike.{literal}",
+            ]
+            if development_ids:
+                search_clauses.append(f"desarrollo_id.in.({','.join(development_ids)})")
+            params["or"] = f"({','.join(search_clauses)})"
+        response = await self._request(
+            "GET",
+            "/rest/v1/propiedad_unidades",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"propiedad_unidades_search_invalid_response:{data!r}")
+        rows: list[dict[str, Any]] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            development = row.pop("desarrollo", None)
+            if isinstance(development, dict):
+                row["desarrollo"] = development
+            rows.append(row)
+        return rows
+
+    async def get_propiedad_unidad_for_organizacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+    ) -> dict[str, Any] | None:
+        response = await self._request(
+            "GET",
+            "/rest/v1/propiedad_unidades",
+            params={
+                "id": f"eq.{unidad_id}",
+                "select": (
+                    "id,desarrollo_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
+                    "desarrollo:propiedad_desarrollos!inner(id,nombre,descripcion,tipo,status,organizacion_id)"
+                ),
+                "desarrollo.organizacion_id": f"eq.{organizacion_id}",
+                "limit": "1",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+        row = data[0]
+        development = row.pop("desarrollo", None)
+        if isinstance(development, dict):
+            row["desarrollo"] = development
+        return row
+
     async def delete_propiedad_capa(
         self,
         *,

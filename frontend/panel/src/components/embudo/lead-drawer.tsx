@@ -49,7 +49,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LeadOnboardingPanel } from "@/components/embudo/lead-onboarding";
-import { PropertyProposalBuilder, type PropertyProposalContext } from "@/components/embudo/property-proposal-builder";
+import {
+  PropertyProposalBuilder,
+  type PropertyProposalContext,
+  type PropertyUnitOption,
+} from "@/components/embudo/property-proposal-builder";
 import { NoteAttachments } from "@/components/crm/note-attachments";
 import { uploadNoteAttachment } from "@/lib/crm/note-attachments";
 import {
@@ -2875,6 +2879,35 @@ export function LeadDrawer({
         )
       ),
   );
+  const commercialDomainPending = Boolean(
+    card
+      && !card.dominioComercial
+      && !propertyContextMatchesCard,
+  );
+  const handlePropertyUnitSelect = useCallback((selectedUnit: PropertyUnitOption) => {
+    const { desarrollo: selectedDevelopment, ...unitFields } = selectedUnit;
+    const development = selectedDevelopment ?? propertyProposalContext?.development ?? null;
+    const price = unitFields.precio;
+    setPropertyProposalContext((current) => ({
+      dominio_comercial: "propiedades",
+      oportunidad: current?.oportunidad,
+      operation: null,
+      unit: unitFields,
+      development,
+    }));
+    setQuoteItems([
+      createQuoteItemForm({
+        catalogItemId: unitFields.catalog_item_id,
+        nombre: unitFields.nombre || unitFields.unidad || "Unidad inmobiliaria",
+        descripcion: unitFields.descripcion || development?.nombre || "Propuesta inmobiliaria",
+        unidad: "unidad",
+        cantidad: "1",
+        precioUnitario: price != null ? formatNumberInputValue(price) : "",
+        precioListaUnitario: price != null ? formatNumberInputValue(price) : "",
+        moneda: quoteMoneda || card?.moneda || "MXN",
+      }),
+    ]);
+  }, [card?.moneda, propertyProposalContext?.development, quoteMoneda]);
   const quoteSummarySubtotal = computedQuoteTotals?.subtotal ?? parseNumberInput(quoteSubtotal);
   const quoteSummaryTaxes = computedQuoteTotals?.taxes ?? parseNumberInput(quoteImpuestos);
   const quoteSummaryTotal = computedQuoteTotals?.total ?? parseNumberInput(quoteTotal);
@@ -4285,10 +4318,14 @@ export function LeadDrawer({
                         size="sm"
                         className="gap-1"
                         onClick={() => openQuoteDialog(quoteChannel)}
-                        disabled={isBusy}
+                        disabled={isBusy || commercialDomainPending}
                       >
                         <IconChecklist className="size-4" />
-                        {isPropertyOpportunity ? "Crear propuesta inmobiliaria" : "Cotizar"}
+                        {commercialDomainPending
+                          ? "Cargando..."
+                          : isPropertyOpportunity
+                            ? "Crear propuesta inmobiliaria"
+                            : "Cotizar"}
                       </Button>
                     </div>
                   </div>
@@ -5317,6 +5354,7 @@ export function LeadDrawer({
                       loading={propertyProposalLoading}
                       error={propertyProposalError}
                       currency={quoteMoneda}
+                      onSelectUnit={handlePropertyUnitSelect}
                     />
                   )}
 
@@ -5326,7 +5364,7 @@ export function LeadDrawer({
                         <h4 className="text-sm font-semibold text-foreground">Partidas cotizadas</h4>
                         <p className="text-[11px] text-muted-foreground">
                           {isPropertyOpportunity
-                            ? "La unidad y sus condiciones se toman de la operación inmobiliaria."
+                            ? "La partida corresponde a la unidad inmobiliaria seleccionada."
                             : "Edita aquí los conceptos ya agregados a la cotización."}
                         </p>
                       </div>

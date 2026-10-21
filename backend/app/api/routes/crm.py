@@ -36018,6 +36018,23 @@ async def _prepare_property_proposal_payload(
         organizacion_id=organizacion_id,
         oportunidad_id=oportunidad_id,
     )
+    selected_unit_id = payload.unidad_id
+    context_unit = context.get("unit")
+    if selected_unit_id and (
+        not isinstance(context_unit, dict)
+        or str(context_unit.get("id")) != str(selected_unit_id)
+    ):
+        selected_unit = await repo.get_propiedad_unidad_for_organizacion(
+            organizacion_id=organizacion_id,
+            unidad_id=selected_unit_id,
+        )
+        if selected_unit is None:
+            raise HTTPException(status_code=409, detail="property_unit_context_required")
+        context["unit"] = selected_unit
+        selected_development = selected_unit.get("desarrollo")
+        if isinstance(selected_development, dict):
+            context["development"] = selected_development
+        context["operation"] = None
     has_property_context = isinstance(context.get("operation"), dict) or isinstance(context.get("unit"), dict)
     if opportunity.get("dominio_comercial") != "propiedades" and not has_property_context:
         raise HTTPException(status_code=409, detail="property_proposal_requires_property_opportunity")
@@ -54054,6 +54071,28 @@ async def propiedades_hierarquia(
         return await repo.get_propiedad_hierarquia(organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/propiedad-unidades")
+async def buscar_propiedad_unidades(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("propiedades.view")),
+    query: str | None = Query(default=None, max_length=100),
+    desarrollo_id: UUID | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> dict[str, Any]:
+    try:
+        units = await repo.search_propiedad_unidades(
+            organizacion_id=organizacion_id,
+            search=query,
+            desarrollo_id=desarrollo_id,
+            limit=limit,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="property_units_search_failed") from exc
+    return {"units": units}
 
 
 @router.post("/propiedad-desarrollos")
