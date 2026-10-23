@@ -1,0 +1,17 @@
+# Vector Store · Atención ANAPROMEX WhatsApp
+
+Nombre sugerido: `anapromex_atencion_whatsapp_vs`.
+
+Contiene el conocimiento factual de atención. El tono, el flujo, los límites y el uso de funciones viven en `../Whats_prompt.md` y `../Whats_funciones.md`.
+
+## Archivos
+
+- `01_empresa_y_servicios.md`
+- `02_afiliacion_y_precios.md`
+- `03_amparo_identificacion_y_seguro.md`
+- `04_tramites_y_afiliados.md`
+- `05_sucursales_y_atencion_juridica.md`
+- `06_faq_atencion.md`
+- `07_limites_y_compliance.md`
+
+Los archivos locales deben cargarse en una vector store remota y asociarse únicamente al prompt de Atención. La existencia de estos archivos no demuestra que la vector store remota ya esté creada o vinculada.
