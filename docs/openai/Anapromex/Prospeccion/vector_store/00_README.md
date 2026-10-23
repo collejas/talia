@@ -1,6 +1,6 @@
 # Vector Store · Prospección ANAPROMEX WhatsApp
 
-Nombre sugerido: `anapromex_prospeccion_whatsapp_vs`.
+Nombre de la vector store: `vector_ana_prospeccion`.
 
 Contiene conocimiento factual para conversaciones de prospección. El comportamiento, tono, calificación y uso de funciones viven en `../whatsapp/whatsapp_prompt_prospeccion.md` y `../whatsapp/whatsapp_funciones_prospeccion.md`.
 
@@ -19,7 +19,7 @@ Los archivos locales no prueban publicación, carga completa o asociación remot
 
 ## Publicación
 
-1. Crear o conservar `anapromex_prospeccion_whatsapp_vs`.
+1. Crear o conservar `vector_ana_prospeccion`.
 2. Cargar los ocho archivos de esta carpeta, excepto este README si la carga operativa no lo requiere.
 3. Asociarla exclusivamente al prompt de Prospección ANAPROMEX.
 4. Registrar el ID remoto y la versión publicada en la configuración del tenant.
