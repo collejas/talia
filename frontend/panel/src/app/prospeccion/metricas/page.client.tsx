@@ -85,6 +85,39 @@ function getRecipientLabel(envio: ContactoEnvio, index: number) {
   return `Destinatario ${index + 1}`
 }
 
+function getRecipientPhone(envio: ContactoEnvio) {
+  const detail = envio.detalle && typeof envio.detalle === "object" ? envio.detalle : null
+  const phone = detail && typeof detail.phone === "string" ? detail.phone.trim() : ""
+  if (!phone) return "—"
+  const digits = phone.replace(/\D/g, "")
+  if (digits.length < 5) return "••••"
+  const suffix = digits.slice(-4)
+  const prefix = phone.trim().startsWith("+") ? "+" : ""
+  return `${prefix}••••${suffix}`
+}
+
+function getEnvioFailureReason(envio: ContactoEnvio) {
+  const detail = envio.detalle && typeof envio.detalle === "object" ? envio.detalle : null
+  const providerCode = detail
+    ? [detail.meta_error_code, detail.error_code]
+        .find((value) => typeof value === "string" && value.trim())
+    : null
+  const candidate = detail
+    ? [
+        detail.meta_error_message,
+        detail.meta_error_details,
+        detail.error,
+        detail.motivo,
+        detail.message,
+      ].find((value) => typeof value === "string" && value.trim())
+    : null
+  const reason = typeof candidate === "string" ? candidate.trim() : ""
+  const fallbackCode = typeof envio.error === "string" && envio.error.trim() ? envio.error.trim() : ""
+  const code = typeof providerCode === "string" && providerCode.trim() ? providerCode.trim() : fallbackCode
+  if (reason && code && !reason.startsWith(code)) return `${code}: ${reason}`
+  return reason || code || null
+}
+
 function getBatchContentLabel(batch: ContactoBatch) {
   const metadata = batch.metadata && typeof batch.metadata === "object" ? batch.metadata : {}
   const programacion = batch.programacion && typeof batch.programacion === "object" ? batch.programacion : {}
@@ -323,6 +356,37 @@ export default function ProspeccionMetricasPageClient() {
     () => data?.resultado_comercial_whatsapp?.items ?? [],
     [data?.resultado_comercial_whatsapp?.items],
   )
+  const commercialDisplayItems = useMemo(() => {
+    if (commercialItems.length) return commercialItems
+
+    // El resultado comercial puede estar vacío aunque sí existan envíos.
+    // En ese caso mostramos la campaña operativa para no ocultar la actividad
+    // solo porque todavía no hubo conversaciones u oportunidades CRM.
+    return (data?.campanas_whatsapp?.items ?? []).map((item) => ({
+      campana_id: item.campana_id,
+      campana_nombre: item.campana_nombre,
+      canal: item.canal,
+      envios: item.mensajes_salientes,
+      entregados: item.mensajes_entregados,
+      conversaciones: item.conversaciones_total,
+      respondieron: item.conversaciones_respondidas,
+      oportunidades: item.oportunidades_total,
+      clientes: 0,
+      costo_total: 0,
+      costo_por_conversacion: null,
+      costo_por_oportunidad: null,
+      costo_adquisicion: null,
+      pendientes_cobro: 0,
+      costo_estado: "sin_datos",
+      tasa_entrega_pct: item.mensajes_salientes > 0
+        ? (item.mensajes_entregados / item.mensajes_salientes) * 100
+        : 0,
+      tasa_respuesta_pct: item.mensajes_salientes > 0
+        ? (item.conversaciones_respondidas / item.mensajes_salientes) * 100
+        : 0,
+      tasa_cierre_pct: 0,
+    }))
+  }, [commercialItems, data?.campanas_whatsapp?.items])
   const summaryPhrases = data?.frases_whatsapp.summary
   const phraseCampaignGroups = useMemo(() => {
     const groups = new Map<
@@ -1317,6 +1381,7 @@ export default function ProspeccionMetricasPageClient() {
                     <thead>
                       <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                         <th className="px-2 py-2">Persona</th>
+                        <th className="px-2 py-2">Número</th>
                         <th className="px-2 py-2">Canal</th>
                         <th className="px-2 py-2">Estado</th>
                         <th className="px-2 py-2">Procesado</th>
@@ -1325,13 +1390,11 @@ export default function ProspeccionMetricasPageClient() {
                     </thead>
                     <tbody>
                       {batchEnvios.map((envio, index) => {
-                        const detail = envio.detalle && typeof envio.detalle === "object" ? envio.detalle : null
-                        const detailText = detail
-                          ? [detail.error, detail.motivo, detail.message, detail.status].find((value) => typeof value === "string" && value.trim())
-                          : null
+                        const detailText = getEnvioFailureReason(envio)
                         return (
                           <tr key={envio.id} className="border-b last:border-0">
                             <td className="px-2 py-2 font-medium">{getRecipientLabel(envio, index)}</td>
+                            <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{getRecipientPhone(envio)}</td>
                             <td className="px-2 py-2">{envio.canal === "llamada" ? "Voz" : envio.canal === "whatsapp" ? "WhatsApp" : "Correo"}</td>
                             <td className="px-2 py-2">{formatContactStatus(envio.estado)}</td>
                             <td className="px-2 py-2 text-muted-foreground">{envio.procesado_en ? new Date(envio.procesado_en).toLocaleString("es-MX") : "Pendiente"}</td>
@@ -1628,7 +1691,12 @@ export default function ProspeccionMetricasPageClient() {
                     </thead>
                     <tbody>
                       {(data?.campanas_whatsapp?.items ?? []).map((item) => (
-                        <tr key={item.campana_id ?? item.campana_nombre ?? "campana-whatsapp"} className="border-b last:border-0">
+                        <tr
+                          key={item.campana_id ?? item.campana_nombre ?? "campana-whatsapp"}
+                          className={`${item.campana_id ? "cursor-pointer transition hover:bg-muted/50" : ""} border-b last:border-0`}
+                          onClick={() => void openCampaignDetails(item.campana_id, item.campana_nombre)}
+                          title={item.campana_id ? "Ver los envíos de esta campaña" : undefined}
+                        >
                           <td className="px-2 py-2 font-medium">{item.campana_nombre ?? "Sin campaña"}</td>
                           <td className="px-2 py-2">{number.format(item.batches_total)}</td>
                           <td className="px-2 py-2">{number.format(item.mensajes_salientes)}</td>
@@ -1706,9 +1774,10 @@ export default function ProspeccionMetricasPageClient() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Resultado por campaña</CardTitle>
               <p className="text-xs text-muted-foreground">El mismo embudo comercial que muestra el mapa de conversión.</p>
+              <p className="text-xs text-muted-foreground">Los envíos aparecen aunque todavía no existan conversaciones u oportunidades.</p>
             </CardHeader>
             <CardContent>
-              {commercialItems.length ? (
+              {commercialDisplayItems.length ? (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[780px] text-sm">
                     <thead>
@@ -1724,7 +1793,7 @@ export default function ProspeccionMetricasPageClient() {
                       </tr>
                     </thead>
                     <tbody>
-                      {commercialItems.map((item) => {
+                      {commercialDisplayItems.map((item) => {
                         const costsPending = (item.pendientes_cobro ?? 0) > 0
                         return (
                           <tr

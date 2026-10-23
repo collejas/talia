@@ -41075,15 +41075,25 @@ async def crear_whats_prosp_template(
             "meta_template_access_denied",
             "meta_template_authorization_error",
         }
+        provider_code = (
+            f"{exc.code}:{exc.meta_code}"
+            if exc.meta_code
+            else exc.code
+        )
+        provider_reason = _clean_text(exc.provider_message)
+        if provider_reason:
+            # Conserva el diagnóstico útil de Meta sin guardar respuestas completas,
+            # payloads ni headers del proveedor.
+            provider_reason = provider_reason[:500]
         await repo.worker_update_whats_prosp_template_status(
             organizacion_id=organizacion_id,
             template_id=UUID(str(template["id"])),
             template_status="rejected" if rejected else "draft",
             meta_status="rejected" if rejected else None,
-            rejected_reason=exc.message if rejected else None,
-            last_error_code=exc.code,
+            rejected_reason=(provider_reason or exc.message) if rejected else None,
+            last_error_code=provider_code,
         )
-        raise HTTPException(status_code=502, detail=exc.code) from exc
+        raise HTTPException(status_code=502, detail=provider_code) from exc
 
     meta_template_id = str(meta_response.get("id") or "").strip() or None
     persisted = await repo.worker_update_whats_prosp_template_status(

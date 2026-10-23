@@ -577,6 +577,7 @@ export type ContactoEnvio = {
   canal: "correo" | "whatsapp" | "llamada"
   estado: string
   detalle?: Record<string, unknown> | null
+  error?: string | null
   mensaje_id?: string | null
   sesiones_utm?: number | null
   programado_en?: string | null

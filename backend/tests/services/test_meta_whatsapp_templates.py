@@ -1,7 +1,35 @@
 import httpx
 import pytest
 
-from app.services.meta_whatsapp_templates import MetaWhatsAppTemplateClient, MetaWhatsAppTemplateError
+from app.services.meta_whatsapp_templates import (
+    MetaWhatsAppTemplateClient,
+    MetaWhatsAppTemplateError,
+    normalize_meta_template_placeholders,
+)
+
+
+def test_normalize_meta_template_placeholders_uses_first_occurrence_order() -> None:
+    assert normalize_meta_template_placeholders(
+        "Hola {{nombre}}, {{nombre}} de {{empresa}}."
+    ) == "Hola {{1}}, {{1}} de {{2}}."
+
+
+def test_normalize_meta_template_placeholders_keeps_sequential_numeric_tokens() -> None:
+    assert normalize_meta_template_placeholders("Hola {{2}} {{1}}") == "Hola {{2}} {{1}}"
+
+
+def test_normalize_meta_template_placeholders_rejects_mixed_tokens() -> None:
+    with pytest.raises(MetaWhatsAppTemplateError) as error:
+        normalize_meta_template_placeholders("Hola {{nombre}} {{1}}")
+
+    assert error.value.code == "meta_template_variables_mixed"
+
+
+def test_normalize_meta_template_placeholders_rejects_numeric_gaps() -> None:
+    with pytest.raises(MetaWhatsAppTemplateError) as error:
+        normalize_meta_template_placeholders("Hola {{1}} {{3}}")
+
+    assert error.value.code == "meta_template_variables_not_sequential"
 
 
 @pytest.mark.asyncio
@@ -20,7 +48,7 @@ async def test_meta_whatsapp_template_client_builds_create_payload(monkeypatch):
         name=" Seguimiento_Demo ",
         language_code="es_MX",
         category="marketing",
-        body_text="Hola {{1}}, te damos seguimiento.",
+        body_text="Hola {{nombre}}, te damos seguimiento.",
     )
 
     assert response["id"] == "META_TEMPLATE_ID"
@@ -32,7 +60,11 @@ async def test_meta_whatsapp_template_client_builds_create_payload(monkeypatch):
             "name": "seguimiento_demo",
             "language": "es_MX",
             "category": "MARKETING",
-            "components": [{"type": "BODY", "text": "Hola {{1}}, te damos seguimiento."}],
+            "components": [{
+                "type": "BODY",
+                "text": "Hola {{1}}, te damos seguimiento.",
+                "example": {"body_text": [["Ejemplo 1"]]},
+            }],
         },
     }
 
@@ -56,6 +88,22 @@ async def test_meta_whatsapp_template_client_normalizes_rate_limit_error(monkeyp
 
     assert error.value.code == "meta_template_rate_limited"
     assert error.value.retryable is True
+    assert error.value.meta_code == "613"
+    assert error.value.provider_message == "Calls to this API have exceeded the rate limit."
+
+
+def test_meta_whatsapp_template_client_preserves_provider_rejection_details() -> None:
+    response = httpx.Response(
+        400,
+        json={"error": {"code": 132000, "message": "Invalid parameter: body"}},
+        request=httpx.Request("POST", "https://graph.facebook.com/v25.0/WABA_ID/message_templates"),
+    )
+
+    error = MetaWhatsAppTemplateClient._normalize_error(response, operation="create")
+
+    assert error.code == "meta_template_create_rejected"
+    assert error.meta_code == "132000"
+    assert error.provider_message == "Invalid parameter: body"
 
 
 @pytest.mark.asyncio
@@ -86,7 +134,7 @@ async def test_meta_whatsapp_template_client_builds_components(monkeypatch):
 
     assert captured["json"]["components"] == [
         {"type": "HEADER", "format": "IMAGE", "example": {"header_handle": ["4::sample-handle"]}},
-        {"type": "BODY", "text": "Hola {{1}}"},
+        {"type": "BODY", "text": "Hola {{1}}", "example": {"body_text": [["Ejemplo 1"]]}},
         {"type": "FOOTER", "text": "Responde para continuar"},
         {"type": "BUTTONS", "buttons": [
             {"type": "QUICK_REPLY", "text": "Me interesa"},

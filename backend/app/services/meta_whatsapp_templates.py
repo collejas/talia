@@ -9,6 +9,77 @@ from typing import Any
 import httpx
 
 
+META_TEMPLATE_PLACEHOLDER_PATTERN = re.compile(r"{{\s*([\w.-]+)\s*}}")
+
+
+def normalize_meta_template_placeholders(value: str | None) -> str:
+    """Convierte variables legibles por Tal-IA a posiciones numéricas de Meta.
+
+    La plantilla local conserva nombres como ``{{nombre}}``. Meta recibe una
+    copia normalizada con ``{{1}}``, ``{{2}}`` y así sucesivamente, reutilizando
+    la misma posición cuando una variable aparece más de una vez.
+    """
+
+    text = str(value or "")
+    matches = list(META_TEMPLATE_PLACEHOLDER_PATTERN.finditer(text))
+    if not matches:
+        return text
+
+    tokens = [match.group(1).strip() for match in matches]
+    numeric_tokens = [token for token in tokens if token.isdigit()]
+    named_tokens = [token for token in tokens if not token.isdigit()]
+    if numeric_tokens and named_tokens:
+        raise MetaWhatsAppTemplateError(
+            "meta_template_variables_mixed",
+            "La plantilla no puede mezclar variables numéricas y variables con nombre.",
+        )
+
+    if numeric_tokens:
+        positions = sorted({int(token) for token in numeric_tokens})
+        expected = list(range(1, len(positions) + 1))
+        if positions != expected:
+            raise MetaWhatsAppTemplateError(
+                "meta_template_variables_not_sequential",
+                "Las variables de Meta deben iniciar en 1 y continuar sin saltos.",
+            )
+        return META_TEMPLATE_PLACEHOLDER_PATTERN.sub(
+            lambda match: "{{" + str(int(match.group(1).strip())) + "}}",
+            text,
+        )
+
+    mapping: dict[str, int] = {}
+    next_position = 1
+    for token in tokens:
+        if token not in mapping:
+            mapping[token] = next_position
+            next_position += 1
+
+    return META_TEMPLATE_PLACEHOLDER_PATTERN.sub(
+        lambda match: "{{" + str(mapping[match.group(1).strip()]) + "}}",
+        text,
+    )
+
+
+def _meta_template_placeholder_positions(value: str) -> list[int]:
+    """Devuelve las posiciones numéricas usadas, en el orden de Meta."""
+
+    positions = {
+        int(match.group(1).strip())
+        for match in META_TEMPLATE_PLACEHOLDER_PATTERN.finditer(value)
+        if match.group(1).strip().isdigit()
+    }
+    return sorted(positions)
+
+
+def _meta_template_example_values(value: str) -> list[str] | None:
+    """Genera ejemplos mínimos para los placeholders de un componente."""
+
+    positions = _meta_template_placeholder_positions(value)
+    if not positions:
+        return None
+    return [f"Ejemplo {position}" for position in positions]
+
+
 class MetaWhatsAppTemplateError(RuntimeError):
     """Error normalizado de la API de plantillas Meta."""
 
@@ -19,12 +90,14 @@ class MetaWhatsAppTemplateError(RuntimeError):
         *,
         retryable: bool = False,
         meta_code: str | None = None,
+        provider_message: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.retryable = retryable
         self.meta_code = meta_code
+        self.provider_message = provider_message
 
 
 class MetaWhatsAppTemplateClient:
@@ -65,6 +138,7 @@ class MetaWhatsAppTemplateClient:
                 "Meta recibió demasiadas solicitudes. Inténtalo nuevamente más tarde.",
                 retryable=True,
                 meta_code=meta_code,
+                provider_message=message,
             )
         if response.status_code >= 500:
             return MetaWhatsAppTemplateError(
@@ -72,23 +146,27 @@ class MetaWhatsAppTemplateClient:
                 "Meta no está disponible en este momento.",
                 retryable=True,
                 meta_code=meta_code,
+                provider_message=message,
             )
         if meta_code == "190":
             return MetaWhatsAppTemplateError(
                 "meta_template_authorization_error",
                 "La conexión del tenant con Meta necesita atención.",
                 meta_code=meta_code,
+                provider_message=message,
             )
         if any(marker in message.lower() for marker in ("permission", "not authorized", "access")):
             return MetaWhatsAppTemplateError(
                 "meta_template_access_denied",
                 "La aplicación no tiene permisos para administrar plantillas en este WABA.",
                 meta_code=meta_code,
+                provider_message=message,
             )
         return MetaWhatsAppTemplateError(
             f"meta_template_{operation}_rejected",
             "Meta rechazó la operación de plantilla. Revisa los datos y permisos del WABA.",
             meta_code=meta_code,
+            provider_message=message,
         )
 
     async def _request(
@@ -186,7 +264,7 @@ class MetaWhatsAppTemplateClient:
     ) -> dict[str, Any]:
         waba = str(waba_id or "").strip()
         language = str(language_code or "").strip()
-        body = str(body_text or "").strip()
+        body = normalize_meta_template_placeholders(str(body_text or "").strip())
         if not waba or not language or not body:
             raise MetaWhatsAppTemplateError("meta_template_payload_invalid")
         normalized_name = self._validate_name(name)
@@ -231,10 +309,14 @@ class MetaWhatsAppTemplateClient:
             raise MetaWhatsAppTemplateError("meta_template_header_invalid")
         components: list[dict[str, Any]] = []
         if format_value == "text":
-            text = str(header_text or "").strip()
+            text = normalize_meta_template_placeholders(str(header_text or "").strip())
             if not text:
                 raise MetaWhatsAppTemplateError("meta_template_header_text_required")
-            components.append({"type": "HEADER", "format": "TEXT", "text": text})
+            header_component: dict[str, Any] = {"type": "HEADER", "format": "TEXT", "text": text}
+            header_examples = _meta_template_example_values(text)
+            if header_examples:
+                header_component["example"] = {"header_text": header_examples}
+            components.append(header_component)
         elif format_value in {"image", "video", "document"}:
             handle = str(header_handle or "").strip()
             if not handle:
@@ -244,8 +326,12 @@ class MetaWhatsAppTemplateClient:
                 "format": format_value.upper(),
                 "example": {"header_handle": [handle]},
             })
-        components.append({"type": "BODY", "text": body})
-        footer = str(footer_text or "").strip()
+        body_component: dict[str, Any] = {"type": "BODY", "text": body}
+        body_examples = _meta_template_example_values(body)
+        if body_examples:
+            body_component["example"] = {"body_text": [body_examples]}
+        components.append(body_component)
+        footer = normalize_meta_template_placeholders(str(footer_text or "").strip())
         if footer:
             components.append({"type": "FOOTER", "text": footer})
         normalized_buttons: list[dict[str, Any]] = []
