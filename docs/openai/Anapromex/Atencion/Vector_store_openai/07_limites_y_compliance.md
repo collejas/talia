@@ -7,3 +7,4 @@
 - No solicitar contraseñas, códigos, tarjetas o documentos sensibles por un canal no autorizado.
 - No revelar datos de otros afiliados ni información interna.
 - Ante BAJA, STOP o rechazo definitivo, detener el seguimiento y respetar la exclusión.
+

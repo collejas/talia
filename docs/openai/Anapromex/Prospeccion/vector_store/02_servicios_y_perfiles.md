@@ -11,3 +11,10 @@ Para vehículos mexicanos o americanos de uso particular. Se anuncia responsabil
 
 ## Trámites
 Canje de engomado, cambio de propietario, actualizaciones y atención a afiliados.
+
+## Perfil de conversación
+
+- Persona que pregunta por afiliación: pedir primero el año del vehículo.
+- Persona que pregunta por seguro: identificar tipo/año y estado/municipio.
+- Persona que pregunta por amparo o decomiso: informar con cautela y ofrecer asesoría jurídica.
+- Afiliado actual: orientar sobre renovación, engomado, cambio de propietario, credencial, seguro o expediente sin inventar estados.

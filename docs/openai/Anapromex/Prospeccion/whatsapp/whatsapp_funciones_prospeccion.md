@@ -35,15 +35,6 @@
 ---
 
 {
-  "name": "set_prospect_context",
-  "description": "Guardar el contexto comercial de prospección confirmado.",
-  "strict": true,
-  "parameters": {"type":"object","properties":{"conversacion_id":{"type":"string"},"giro":{"type":"string","description":"Perfil del prospecto, por ejemplo propietario de vehículo."},"necesidad_principal":{"type":"string","description":"Servicio, tipo y año del vehículo, estado y municipio si fueron confirmados."},"volumen_mensajes_aprox":{"type":["string","null"],"description":"Dato adicional confirmado o null."},"herramienta_actual":{"type":["string","null"],"description":"Situación o proveedor actual si fue indicado, o null."}},"required":["conversacion_id","giro","necesidad_principal","volumen_mensajes_aprox","herramienta_actual"],"additionalProperties":false}
-}
-
----
-
-{
   "name": "close_lead",
   "description": "Consolidar el prospecto cuando existe interés real.",
   "strict": true,
@@ -67,3 +58,41 @@
   "strict": true,
   "parameters": {"type":"object","properties":{"conversacion_id":{"type":"string"},"title":{"type":"string"},"details":{"type":"string"},"priority":{"type":"string"},"due_at":{"type":["string","null"]}},"required":["conversacion_id","title","details","priority","due_at"],"additionalProperties":false}
 }
+---
+
+{
+  "name": "send_information_email",
+  "description": "Enviar por correo la información solicitada de ANAPROMEX cuando el contacto lo pide.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {"type": "string", "description": "ID de la conversación actual."},
+      "email": {"type": "string", "description": "Correo confirmado del contacto."},
+      "full_name": {"type": ["string", "null"], "description": "Nombre confirmado o null."},
+      "company_name": {"type": ["string", "null"], "description": "Empresa o null si no aplica."},
+      "summary": {"type": ["string", "null"], "description": "Resumen breve del servicio o necesidad."},
+      "highlights": {"type": ["array", "null"], "items": {"type": "string"}, "description": "Puntos concretos a incluir o null."},
+      "resources": {"type": ["array", "null"], "items": {"type": "object", "properties": {"label": {"type": "string"}, "url": {"type": "string"}}, "required": ["label", "url"], "additionalProperties": false}, "description": "Enlaces autorizados o null."}
+    },
+    "required": ["conversacion_id", "email", "full_name", "company_name", "summary", "highlights", "resources"],
+    "additionalProperties": false
+  }
+}
+---
+
+{
+  "name": "restart_conversation_cycle",
+  "description": "Registrar que el contacto inició un tema o trámite distinto y requiere una nueva oportunidad de seguimiento.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {"type": "string", "description": "ID de la conversación actual."},
+      "reason": {"type": "string", "description": "Motivo breve, por ejemplo: quiere cotizar un seguro después de consultar afiliación."}
+    },
+    "required": ["conversacion_id", "reason"],
+    "additionalProperties": false
+  }
+}
+

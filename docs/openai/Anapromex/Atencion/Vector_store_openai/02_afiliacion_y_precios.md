@@ -20,3 +20,4 @@ La sucursal debe confirmar documentación adicional y elegibilidad.
 | 2020 en adelante | Por confirmar | Por confirmar |
 
 Son importes de referencia cuya vigencia no está confirmada. No calcules paquetes sumando servicios y no concluyas que el año garantiza la afiliación.
+

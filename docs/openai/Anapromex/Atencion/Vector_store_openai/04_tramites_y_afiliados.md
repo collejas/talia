@@ -9,4 +9,7 @@ Costos registrados:
 
 ANAPROMEX anuncia que la lámina y el servicio de Amparo Federal no tienen una fecha de vencimiento determinada y que la aportación correspondiente se realiza una sola vez. Esto no significa que una resolución judicial sea indefinida. La credencial puede requerir actualización; costo y periodicidad deben confirmarse.
 
+El precio de la renovación de credencial no está confirmado. La afiliación, el amparo, la lámina, el engomado y el seguro son servicios distintos; no se deben sumar ni asumir como incluidos en un paquete que no esté registrado.
+
 Para un afiliado actual, no inventar número de afiliación, expediente, vigencia, amparo, póliza o estado de trámite. Si no hay consulta autorizada, canalizar con un asesor.
+

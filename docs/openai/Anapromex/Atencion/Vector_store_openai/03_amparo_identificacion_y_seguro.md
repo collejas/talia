@@ -11,3 +11,6 @@ Identifica unidades incorporadas al padrón de ANAPROMEX. No es placa oficial, n
 ## Seguro de responsabilidad civil
 
 Precio registrado: $1,600 MXN. Se anuncia cobertura de hasta $600,000 MXN y servicios que pueden incluir daños a terceros, lesiones, asistencia jurídica, grúa y fianza. La cobertura, vigencia, deducibles, exclusiones y disponibilidad dependen de la póliza; deben confirmarse con un asesor.
+
+Está anunciado para vehículos mexicanos y americanos de uso particular. Para orientar una contratación se necesita tipo de vehículo, año, estado y municipio. No se debe afirmar que el precio es anual ni que un siniestro está cubierto sin revisar la póliza.
+
