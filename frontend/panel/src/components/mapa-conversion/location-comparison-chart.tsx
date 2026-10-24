@@ -362,57 +362,30 @@ function resolveWhatsappConversationTotal(
   return 0;
 }
 
-function resolveFilteredEntryTotal(
-  entry: DemografiaMapResponse["dataset"][number],
-  allowedChannels?: Set<ChannelKey>,
-  allowLeadFallback: boolean = true,
-): number {
-  if (!allowedChannels || !allowedChannels.size || allowedChannels.size === CHANNEL_KEYS.length) {
-    return resolveEntryTotal(entry, allowLeadFallback);
-  }
-  let total = 0;
-  for (const channel of allowedChannels) {
-    total += resolveChannelTotal(entry, channel, undefined);
-  }
-  return total;
-}
-
 function resolveConversationEntryTotal(
   entry: DemografiaMapResponse["dataset"][number],
   allowedChannels?: Set<ChannelKey>,
 ): number {
   const active = allowedChannels?.size ? allowedChannels : new Set(CHANNEL_KEYS);
   let total = 0;
-  if (active.has("webchat")) total += entry.conversacion_totales?.con_conversacion ?? 0;
+  if (active.has("webchat")) {
+    total += entry.conversation_channels?.conversaciones_webchat ?? 0;
+  }
   if (active.has("whatsapp")) total += entry.conversation_channels?.conversaciones_whatsapp ?? 0;
   if (active.has("voz")) total += entry.conversation_channels?.conversaciones_voz ?? 0;
   if (active.has("correo")) total += entry.conversation_channels?.conversaciones_correo ?? 0;
   return total;
 }
 
-function resolveEntryTotal(
+function resolveTrafficEntryTotal(
   entry: DemografiaMapResponse["dataset"][number],
-  allowLeadFallback: boolean = true,
 ): number {
-  const webVisits = typeof entry.total_visitas === "number" && Number.isFinite(entry.total_visitas)
-    ? entry.total_visitas
-    : 0;
-  if (webVisits > 0) {
-    return webVisits;
-  }
-  const channelTotals = entry.visitantes_totales_por_canal || {};
-  let channelSum = 0;
-  for (const channel of CHANNEL_KEYS) {
-    if (channel === "webchat") {
-      continue;
-    }
-    const value = channelTotals[channel];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      channelSum += value;
-    }
-  }
-  if (channelSum > 0) return channelSum;
-  if (!allowLeadFallback) return 0;
+  return entry.traffic_web?.sesiones_web_total ?? 0;
+}
+
+function resolveCampaignEntryTotal(
+  entry: DemografiaMapResponse["dataset"][number],
+): number {
   return entry.leads_total ?? 0;
 }
 
@@ -444,13 +417,14 @@ export function LocationComparisonChart({
   const activeChannelSet = useMemo(() => new Set<ChannelKey>(activeChannels), [activeChannels]);
   const showConversationMetrics = activeChannelSet.has("webchat");
   const showWhatsappConversationMetrics = activeChannelSet.has("whatsapp");
-  const allowLeadFallback = !attributionFilterActive;
   const resolveScopedEntryTotal = useCallback(
     (entry: DemografiaMapResponse["dataset"][number]) =>
-      mapScope === "conversations"
-        ? resolveConversationEntryTotal(entry, activeChannelSet)
-        : resolveFilteredEntryTotal(entry, activeChannelSet, allowLeadFallback),
-    [activeChannelSet, allowLeadFallback, mapScope],
+      mapScope === "traffic"
+        ? resolveTrafficEntryTotal(entry)
+        : mapScope === "conversations"
+          ? resolveConversationEntryTotal(entry, activeChannelSet)
+          : resolveCampaignEntryTotal(entry),
+    [activeChannelSet, mapScope],
   );
   const displayedChannelKeys = activeChannels.length ? activeChannels : CHANNEL_KEYS;
   const themeVersion = useThemeVersion();
@@ -522,6 +496,12 @@ export function LocationComparisonChart({
           channels.webchat ?? 0,
           channels.whatsapp ?? 0,
           channels.voz ?? 0,
+          channels.correo ?? 0,
+          entry.conversacion_totales?.con_conversacion ?? 0,
+          entry.conversation_channels?.conversaciones_webchat ?? 0,
+          entry.conversation_channels?.conversaciones_whatsapp ?? 0,
+          entry.conversation_channels?.conversaciones_voz ?? 0,
+          entry.conversation_channels?.conversaciones_correo ?? 0,
         ].join(":");
       })
       .join("|");
@@ -529,7 +509,13 @@ export function LocationComparisonChart({
 
   const mapLayerKey = useMemo(() => {
     if (!enhancedGeojson) return `empty-${activeChannels.join("|")}`;
-    return `${JSON.stringify(enhancedGeojson)}-${activeChannels.join("|")}-${colorMode}-${mapScope}-${attributionFilterActive ? "attr-on" : "attr-off"}-${dataSignature}-${themeVersion}`;
+    // No serializar todo el GeoJSON en cada render: a nivel municipal puede
+    // contener miles de coordenadas y bloquear el hilo principal. El nivel y
+    // la firma de datos ya fuerzan la reconstrucción cuando cambia el mapa.
+    const featureCount = enhancedGeojson.type === "FeatureCollection"
+      ? (enhancedGeojson as FeatureCollection).features.length
+      : 1;
+    return `${featureCount}-${activeChannels.join("|")}-${colorMode}-${mapScope}-${attributionFilterActive ? "attr-on" : "attr-off"}-${dataSignature}-${themeVersion}`;
   }, [activeChannels, attributionFilterActive, colorMode, dataSignature, enhancedGeojson, mapScope, themeVersion]);
 
   const maxTotal = useMemo(() => {
@@ -615,17 +601,30 @@ export function LocationComparisonChart({
     };
 
     for (const entry of data) {
-      const conversation = showConversationMetrics
-        ? resolveFilteredConversation(entry, activeChannelSet)
-        : { con_conversacion: 0, sin_conversacion: 0 };
+      const conversation = mapScope === "conversations"
+        ? {
+            con_conversacion: entry.conversation_channels?.conversaciones_webchat ?? 0,
+            sin_conversacion: 0,
+          }
+        : showConversationMetrics
+          ? resolveFilteredConversation(entry, activeChannelSet)
+          : { con_conversacion: 0, sin_conversacion: 0 };
       summary.totalVisitas += resolveScopedEntryTotal(entry);
       summary.conversation.con_conversacion += conversation.con_conversacion ?? 0;
       summary.conversation.sin_conversacion += conversation.sin_conversacion ?? 0;
       summary.whatsappConversations += resolveWhatsappConversationTotal(entry, activeChannelSet);
-      summary.channels.webchat += resolveChannelTotal(entry, "webchat", activeChannelSet);
-      summary.channels.whatsapp += resolveChannelTotal(entry, "whatsapp", activeChannelSet);
-      summary.channels.voz += resolveChannelTotal(entry, "voz", activeChannelSet);
-      summary.channels.correo += resolveChannelTotal(entry, "correo", activeChannelSet);
+      summary.channels.webchat += mapScope === "conversations"
+        ? entry.conversation_channels?.conversaciones_webchat ?? 0
+        : resolveChannelTotal(entry, "webchat", activeChannelSet);
+      summary.channels.whatsapp += mapScope === "conversations"
+        ? entry.conversation_channels?.conversaciones_whatsapp ?? 0
+        : resolveChannelTotal(entry, "whatsapp", activeChannelSet);
+      summary.channels.voz += mapScope === "conversations"
+        ? entry.conversation_channels?.conversaciones_voz ?? 0
+        : resolveChannelTotal(entry, "voz", activeChannelSet);
+      summary.channels.correo += mapScope === "conversations"
+        ? entry.conversation_channels?.conversaciones_correo ?? 0
+        : resolveChannelTotal(entry, "correo", activeChannelSet);
     }
 
     summary.stages =
@@ -641,14 +640,19 @@ export function LocationComparisonChart({
         : `${formatNumber(data.length)} ubicaciones`;
     summary.subtitle = `${formatNumber(summary.totalVisitas)} interacciones · ${locationSubtitle}`;
     return summary;
-  }, [activeChannelSet, aggregatedStages, attributionFilterActive, data, globalStages, resolveScopedEntryTotal, showConversationMetrics, stageKeys]);
+  }, [activeChannelSet, aggregatedStages, attributionFilterActive, data, globalStages, mapScope, resolveScopedEntryTotal, showConversationMetrics, stageKeys]);
 
   const activeMetrics = useMemo<MetricsPayload | null>(() => {
     if (!activeEntry) return null;
 
-    const conversation = showConversationMetrics
-      ? resolveFilteredConversation(activeEntry, activeChannelSet)
-      : { con_conversacion: 0, sin_conversacion: 0 };
+    const conversation = mapScope === "conversations"
+      ? {
+          con_conversacion: activeEntry.conversation_channels?.conversaciones_webchat ?? 0,
+          sin_conversacion: 0,
+        }
+      : showConversationMetrics
+        ? resolveFilteredConversation(activeEntry, activeChannelSet)
+        : { con_conversacion: 0, sin_conversacion: 0 };
     const whatsappConversations = showWhatsappConversationMetrics
       ? resolveWhatsappConversationTotal(activeEntry, activeChannelSet)
       : 0;
@@ -672,10 +676,18 @@ export function LocationComparisonChart({
       },
       whatsappConversations,
       channels: {
-        webchat: resolveChannelTotal(activeEntry, "webchat", activeChannelSet),
-        whatsapp: resolveChannelTotal(activeEntry, "whatsapp", activeChannelSet),
-        voz: resolveChannelTotal(activeEntry, "voz", activeChannelSet),
-        correo: resolveChannelTotal(activeEntry, "correo", activeChannelSet),
+        webchat: mapScope === "conversations"
+          ? activeEntry.conversation_channels?.conversaciones_webchat ?? 0
+          : resolveChannelTotal(activeEntry, "webchat", activeChannelSet),
+        whatsapp: mapScope === "conversations"
+          ? activeEntry.conversation_channels?.conversaciones_whatsapp ?? 0
+          : resolveChannelTotal(activeEntry, "whatsapp", activeChannelSet),
+        voz: mapScope === "conversations"
+          ? activeEntry.conversation_channels?.conversaciones_voz ?? 0
+          : resolveChannelTotal(activeEntry, "voz", activeChannelSet),
+        correo: mapScope === "conversations"
+          ? activeEntry.conversation_channels?.conversaciones_correo ?? 0
+          : resolveChannelTotal(activeEntry, "correo", activeChannelSet),
       },
       stages: stageTotals,
     };
@@ -686,6 +698,7 @@ export function LocationComparisonChart({
     resolveScopedEntryTotal,
     showConversationMetrics,
     showWhatsappConversationMetrics,
+    mapScope,
     stageKeys,
   ]);
 
@@ -841,7 +854,10 @@ export function LocationComparisonChart({
         0,
       );
       const conversationByChannel = {
-        webchat: conversation.con_conversacion,
+        webchat: entries.reduce(
+          (acc, current) => acc + (current.conversation_channels?.conversaciones_webchat ?? 0),
+          0,
+        ),
         whatsapp: whatsappConversationTotal,
         voz: entries.reduce(
           (acc, current) => acc + (current.conversation_channels?.conversaciones_voz ?? 0),
@@ -1242,6 +1258,15 @@ function findEntriesForFeature(
   datasetMap: Map<string, DemografiaMapResponse["dataset"][number]>,
   feature: Feature,
 ): DemografiaMapResponse["dataset"][number][] {
+  // El backend agrega `dataset_key` con la clave geográfica canónica. Cuando
+  // existe, debe ganar sobre nombres/códigos alternativos del GeoJSON; de lo
+  // contrario una entidad puede sumar accidentalmente otra fila y el tooltip
+  // muestra conversaciones de una ubicación distinta.
+  const exactKey = feature.properties?.dataset_key;
+  if (typeof exactKey === "string" && exactKey.trim()) {
+    const exactEntry = datasetMap.get(exactKey) ?? datasetMap.get(exactKey.toUpperCase());
+    if (exactEntry) return [exactEntry];
+  }
   const candidates = resolveFeatureCandidates(feature);
   const seen = new Set<string>();
   const entries: DemografiaMapResponse["dataset"][number][] = [];

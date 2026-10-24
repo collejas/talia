@@ -857,7 +857,8 @@ def _resolve_whatsapp_geo_bucket(
         return key, name
 
     if nivel_normalizado == "estado":
-        key = str(phone_location.estado_clave or "").strip().zfill(2) or "UNK"
+        raw_state = str(phone_location.estado_clave or "").strip()
+        key = raw_state.zfill(2) if raw_state else "UNK"
         name = str(phone_location.estado_nombre or "").strip()
         if not name and key != "UNK":
             name = get_state_name(key) or "Estado desconocido"
@@ -865,8 +866,13 @@ def _resolve_whatsapp_geo_bucket(
 
     state_code = str(phone_location.estado_clave or "").strip().zfill(2)
     municipality_name = str(phone_location.municipio_nombre or "").strip()
-    if not state_code or not municipality_name:
-        return None, None
+    if not state_code:
+        return "UNK", "Municipio desconocido"
+    if not municipality_name:
+        # La LADA permite conocer el estado, pero no siempre el municipio.
+        # Conservamos ese conteo en un bucket visible y filtrable del estado,
+        # en lugar de perderlo silenciosamente al bajar de nivel.
+        return f"{state_code}UNK", "Municipio desconocido"
     normalized_target = _normalize_geo_label(municipality_name)
     if not normalized_target:
         return None, None
@@ -924,6 +930,7 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
     nivel: str,
     date_from: datetime | None,
     date_to: datetime | None,
+    state_code: str | None = None,
     visitantes_payload: dict[str, Any],
 ) -> None:
     if not isinstance(visitantes_payload, dict):
@@ -937,6 +944,7 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
             repo=repo,
             organizacion_id=organizacion_id,
             nivel=nivel,
+            state_code=state_code,
             date_from=date_from,
             date_to=date_to,
         )
@@ -945,6 +953,25 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
         return
     if not aggregates:
         return
+
+    # El RPC geográfico usa la ubicación declarada en el contacto, mientras
+    # que este enriquecimiento resuelve WhatsApp por teléfono/LADA. Mezclar
+    # ambos contadores deja resultados incompatibles entre país, estado y
+    # municipio (por ejemplo, el país conserva 20 y el estado recibe 107).
+    # Para WhatsApp el enriquecimiento es la fuente canónica de esta capa;
+    # reiniciamos sus campos antes de aplicar el mismo universo en cada nivel.
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item["whatsapp_total"] = 0
+        item["conversaciones_whatsapp"] = 0
+        for parent_key in ("visitantes_totales_por_canal", "totales_por_canal"):
+            channel_totals = item.get(parent_key)
+            if isinstance(channel_totals, dict):
+                channel_totals.pop("whatsapp", None)
+        conversation_channels = item.get("conversation_channels")
+        if isinstance(conversation_channels, dict):
+            conversation_channels["conversaciones_whatsapp"] = 0
 
     item_by_key: dict[str, dict[str, Any]] = {}
     for item in items:
@@ -986,9 +1013,6 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
             }
             items.append(item)
             item_by_key[key] = item
-        elif _to_number(item.get("whatsapp_total")) > 0 or _to_number(item.get("conversaciones_whatsapp")) > 0:
-            # Si el bucket ya trae WhatsApp poblado, lo consideramos resuelto y no lo duplicamos.
-            continue
         _apply_whatsapp_bucket_counts(
             item=item,
             count=count,
@@ -1042,8 +1066,13 @@ async def _enrich_visitantes_payload_with_whatsapp_locations(
 
     totals = visitantes_payload.get("totals")
     if isinstance(totals, dict):
-        totals["whatsapp_total"] = _to_number(totals.get("whatsapp_total"))
-        totals["conversaciones_whatsapp"] = _to_number(totals.get("conversaciones_whatsapp"))
+        total_whatsapp = sum(
+            _to_number(item.get("conversaciones_whatsapp"))
+            for item in items
+            if isinstance(item, dict)
+        )
+        totals["whatsapp_total"] = total_whatsapp
+        totals["conversaciones_whatsapp"] = total_whatsapp
 
 
 async def _restrict_visitantes_payload_whatsapp_to_conversions(
@@ -1233,6 +1262,7 @@ def _build_whatsapp_location_cache_key(
     *,
     organizacion_id: UUID,
     nivel: str,
+    state_code: str | None,
     date_from: datetime | None,
     date_to: datetime | None,
 ) -> str:
@@ -1240,6 +1270,7 @@ def _build_whatsapp_location_cache_key(
         {
             "organizacion_id": str(organizacion_id),
             "nivel": (nivel or "").strip().lower() or "estado",
+            "state_code": (state_code or "").strip().zfill(2) or None,
             "date_from": date_from.isoformat() if date_from else None,
             "date_to": date_to.isoformat() if date_to else None,
         },
@@ -1286,10 +1317,12 @@ async def _resolve_whatsapp_location_aggregates(
     nivel: str,
     date_from: datetime | None,
     date_to: datetime | None,
+    state_code: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     cache_key = _build_whatsapp_location_cache_key(
         organizacion_id=organizacion_id,
         nivel=nivel,
+        state_code=state_code,
         date_from=date_from,
         date_to=date_to,
     )
@@ -1311,23 +1344,49 @@ async def _resolve_whatsapp_location_aggregates(
         return await inflight_future
 
     try:
-        whatsapp_rows = await repo.visitas_persona_whatsapp_conversaciones(
+        whatsapp_rows = await repo.panel_whatsapp_conversation_contacts(
             organizacion_id=organizacion_id,
-            limit=2000,
             date_from=date_from,
             date_to=date_to,
-            include_persona_details=True,
         )
 
         aggregates: dict[str, dict[str, Any]] = {}
-        total_resolved = 0
+        seen_conversation_ids: set[str] = set()
+        rows_with_phone = 0
         for row in whatsapp_rows:
             if not isinstance(row, dict):
                 continue
-            phone_value = _extract_whatsapp_phone_value(row)
+            conversation_id = str(row.get("conversacion_id") or row.get("id") or "").strip()
+            if conversation_id:
+                if conversation_id in seen_conversation_ids:
+                    continue
+                seen_conversation_ids.add(conversation_id)
+            phone_value = str(row.get("telefono_e164") or "").strip() or None
             if not phone_value:
                 continue
+            rows_with_phone += 1
             phone_location = leads_geo.phone_location_from_number(phone_value)
+            # La ubicación explícita de personas es prioritaria después del
+            # refactor. La LADA queda como fallback para personas sin datos
+            # geográficos declarados; no mezclar ambos orígenes de forma
+            # parcial evita que estado y municipio terminen en otro bucket.
+            declared_country = str(row.get("pais") or "").strip().upper() or None
+            declared_state = str(row.get("clave_entidad") or "").strip() or None
+            declared_state_name = str(row.get("entidad") or "").strip() or None
+            declared_municipality = str(row.get("municipio") or "").strip() or None
+            if declared_country or declared_state or declared_state_name or declared_municipality:
+                phone_location = leads_geo.PhoneLocationSummary(
+                    phone_e164=phone_value,
+                    country_code=declared_country or phone_location.country_code,
+                    country_name=phone_location.country_name,
+                    lada=phone_location.lada,
+                    estado_clave=declared_state or phone_location.estado_clave,
+                    estado_nombre=declared_state_name or phone_location.estado_nombre,
+                    municipio_nombre=declared_municipality or phone_location.municipio_nombre,
+                )
+            normalized_state = str(state_code or "").strip().zfill(2) or None
+            if normalized_state and phone_location.estado_clave != normalized_state:
+                continue
             key, name = _resolve_whatsapp_geo_bucket(phone_location, nivel=nivel)
             if not key:
                 continue
@@ -1339,9 +1398,20 @@ async def _resolve_whatsapp_location_aggregates(
                 in {"Desconocido", "Estado desconocido", "Municipio desconocido", "País desconocido"}
             ):
                 bucket["name"] = name
-            total_resolved += 1
 
-        if total_resolved > 0:
+        logger.info(
+            "crm.demografia.whatsapp_location_resolution",
+            extra={
+                "nivel": nivel,
+                "state_code": state_code,
+                "rows": len(whatsapp_rows),
+                "unique_conversations": len(seen_conversation_ids),
+                "rows_with_phone": rows_with_phone,
+                "buckets": {key: int(value.get("count") or 0) for key, value in aggregates.items()},
+            },
+        )
+
+        if aggregates:
             await _write_whatsapp_location_cache(cache_key, aggregates)
 
         if not inflight_future.done():
@@ -46946,6 +47016,7 @@ async def get_visits_whatsapp_total(
     try:
         total = await repo.visitas_whatsapp_total(
             usuario_token=_normalize_reports_user_token(user_token),
+            organizacion_id=organizacion_id,
             date_from=date_from,
             date_to=date_to,
         )
@@ -52157,6 +52228,7 @@ async def demografia_resumen_v2(
     hasta: str | None = Query(default=None),
     incluir_atribucion_campanas: bool = Query(default=False),
     solo_conversiones: bool = Query(default=False),
+    scope: Annotated[str, Query(pattern="^(overview|traffic|conversations|campaigns)$")] = "overview",
 ) -> dict[str, Any]:
     request_started = time.perf_counter()
     stage_timings: dict[str, float] = {}
@@ -52227,9 +52299,10 @@ async def demografia_resumen_v2(
         {
             "schema_version": (
                 "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities"
-                "-conversion-geo-v4-cache-reset"
+                "-conversion-geo-v5-phone-location-consistency"
+                "-personas-canonical-v11-country-rollup"
                 if solo_conversiones
-                else "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities-v8-cache-reset"
+                else "resumen-v2-attribution-rankings-v7-separated-whatsapp-opportunities-v9-phone-location-consistency-personas-canonical-v11-country-rollup"
             ),
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
@@ -52252,6 +52325,7 @@ async def demografia_resumen_v2(
             "timezone": effective_timezone,
             "incluir_atribucion_campanas": incluir_atribucion_campanas,
             "solo_conversiones": solo_conversiones,
+            "scope": scope,
         },
     )
     cached_resumen = await _read_demografia_response_cache(
@@ -52261,6 +52335,29 @@ async def demografia_resumen_v2(
     )
     stage_timings["cache_lookup_ms"] = round((time.perf_counter() - request_started) * 1000, 2)
     if cached_resumen is not None:
+        cached_visitantes = cached_resumen.get("visitantes")
+        if isinstance(cached_visitantes, dict) and not solo_conversiones:
+            whatsapp_locations_started = time.perf_counter()
+            await _enrich_visitantes_payload_with_whatsapp_locations(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                nivel=nivel_normalizado,
+                state_code=state_code,
+                date_from=date_from,
+                date_to=date_to,
+                visitantes_payload=cached_visitantes,
+            )
+            cached_resumen["visitantes"] = cached_visitantes
+            await _write_demografia_response_cache(
+                repo=repo,
+                cache_key=resumen_cache_key,
+                payload=cached_resumen,
+                ttl_seconds=cache_ttl_seconds,
+            )
+            stage_timings["whatsapp_locations_ms"] = round(
+                (time.perf_counter() - whatsapp_locations_started) * 1000,
+                2,
+            )
         duration_ms = (time.perf_counter() - request_started) * 1000
         stage_timings["total_ms"] = round(duration_ms, 2)
         await _record_prospectos_process_metrics(
@@ -52305,6 +52402,7 @@ async def demografia_resumen_v2(
                 wa_canal_publicitario=wa_canal_publicitario_value,
                 wa_campana_publicitaria=wa_campana_publicitaria_value,
                 wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+                include_conversation_metrics=scope == "conversations",
                 jwt=effective_user_token,
             ),
             demografia_service.fetch_visitantes_resumen_v2(
@@ -52357,6 +52455,7 @@ async def demografia_resumen_v2(
                 repo=repo,
                 organizacion_id=organizacion_id,
                 nivel=nivel_normalizado,
+                state_code=state_code,
                 date_from=date_from,
                 date_to=date_to,
                 visitantes_payload=visitantes_payload,
@@ -53085,6 +53184,7 @@ async def demografia_mapa_v2(
     hasta: str | None = Query(default=None),
     skip_visitantes: bool = Query(default=False),
     solo_conversiones: bool = Query(default=False),
+    scope: Annotated[str, Query(pattern="^(overview|traffic|conversations|campaigns)$")] = "overview",
 ) -> dict[str, Any]:
     request_started = time.perf_counter()
     stage_timings: dict[str, float] = {}
@@ -53148,7 +53248,7 @@ async def demografia_mapa_v2(
     mapa_cache_key = _build_demografia_response_cache_key(
         "mapa-v2-whatsapp-personas",
         {
-            "schema_version": "mapa-v2-conversion-geo-v4-cache-reset" if solo_conversiones else "mapa-v2-whatsapp-personas-v2-cache-reset",
+            "schema_version": "mapa-v2-conversion-geo-v6-phone-location-consistency-country-rollup" if solo_conversiones else "mapa-v2-whatsapp-personas-v4-phone-location-consistency-country-rollup",
             "organizacion_id": str(organizacion_id),
             "nivel": nivel_normalizado,
             "estado": state_code,
@@ -53170,6 +53270,7 @@ async def demografia_mapa_v2(
             "hasta": (hasta or "").strip() or None,
             "timezone": effective_timezone,
             "solo_conversiones": solo_conversiones,
+            "scope": scope,
         },
     )
     cached_mapa = await _read_demografia_response_cache(
@@ -53241,6 +53342,7 @@ async def demografia_mapa_v2(
                 wa_canal_publicitario=wa_canal_publicitario_value,
                 wa_campana_publicitaria=wa_campana_publicitaria_value,
                 wa_regla_id=str(wa_regla_uuid_value) if wa_regla_uuid_value else None,
+                include_conversation_metrics=scope == "conversations",
                 jwt=effective_user_token,
             )
             if not skip_visitantes
@@ -53276,6 +53378,7 @@ async def demografia_mapa_v2(
                 repo=repo,
                 organizacion_id=organizacion_id,
                 nivel=nivel_normalizado,
+                state_code=state_code,
                 date_from=date_from,
                 date_to=date_to,
                 visitantes_payload=visitantes_payload,

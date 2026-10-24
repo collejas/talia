@@ -90,6 +90,8 @@ export type DemografiaMapDataset = {
     sesiones_webchat_total: number;
     sesiones_con_chat_webchat: number;
     sesiones_sin_chat_webchat: number;
+    conversaciones_total?: number;
+    conversaciones_webchat?: number;
     conversaciones_whatsapp: number;
     conversaciones_voz: number;
     conversaciones_correo?: number;
@@ -207,6 +209,8 @@ export type DemografiaSummaryResponse = {
       sesiones_webchat_total?: number;
       sesiones_con_chat_webchat?: number;
       sesiones_sin_chat_webchat?: number;
+      conversaciones_total?: number;
+      conversaciones_webchat?: number;
       conversaciones_whatsapp?: number;
       conversaciones_voz?: number;
       conversaciones_correo?: number;
@@ -366,6 +370,8 @@ function mergeMapWithSummaryVisitors(
         sesiones_webchat_total: visitor.sesiones_webchat_total ?? 0,
         sesiones_con_chat_webchat: visitor.sesiones_con_chat_webchat ?? 0,
         sesiones_sin_chat_webchat: visitor.sesiones_sin_chat_webchat ?? 0,
+        conversaciones_total: visitor.conversaciones_total ?? 0,
+        conversaciones_webchat: visitor.conversaciones_webchat ?? 0,
         conversaciones_whatsapp: visitor.conversaciones_whatsapp ?? 0,
         conversaciones_voz: visitor.conversaciones_voz ?? 0,
         conversaciones_correo: visitor.conversaciones_correo ?? 0,
@@ -439,6 +445,8 @@ function mergeMapWithSummaryVisitors(
         sesiones_webchat_total: visitor.sesiones_webchat_total ?? 0,
         sesiones_con_chat_webchat: visitor.sesiones_con_chat_webchat ?? 0,
         sesiones_sin_chat_webchat: visitor.sesiones_sin_chat_webchat ?? 0,
+        conversaciones_total: visitor.conversaciones_total ?? 0,
+        conversaciones_webchat: visitor.conversaciones_webchat ?? 0,
         conversaciones_whatsapp: visitor.conversaciones_whatsapp ?? 0,
         conversaciones_voz: visitor.conversaciones_voz ?? 0,
         conversaciones_correo: visitor.conversaciones_correo ?? 0,
@@ -576,6 +584,7 @@ export async function loadDemografiaData(
     includeMap?: boolean;
     includeCampaignAttribution?: boolean;
     soloConversiones?: boolean;
+    scope?: "overview" | "traffic" | "conversations" | "campaigns";
   } = {},
 ): Promise<DemografiaData> {
   const resumenParams: DemografiaQueryParams = { nivel };
@@ -653,6 +662,10 @@ export async function loadDemografiaData(
   if (options.soloConversiones) {
     resumenParams.solo_conversiones = true;
     mapaParams.solo_conversiones = true;
+  }
+  if (options.scope) {
+    resumenParams.scope = options.scope;
+    mapaParams.scope = options.scope;
   }
   // En modo conversiones el mapa debe recibir el mismo universo filtrado que
   // los KPIs; de lo contrario conserva el conteo histórico del dataset de leads.

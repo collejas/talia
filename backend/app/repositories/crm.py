@@ -20108,9 +20108,21 @@ class CRMRepository:
         self,
         *,
         usuario_token: str | None = None,
+        organizacion_id: UUID | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> int:
+        if organizacion_id:
+            rows = await self.panel_whatsapp_conversation_contacts(
+                organizacion_id=organizacion_id,
+                date_from=date_from,
+                date_to=date_to,
+            )
+            return len({
+                str(row.get("conversacion_id") or "").strip()
+                for row in rows
+                if isinstance(row, dict) and str(row.get("conversacion_id") or "").strip()
+            })
         body: dict[str, Any] = {}
         if date_from:
             body["p_from"] = date_from.isoformat()
@@ -20166,7 +20178,7 @@ class CRMRepository:
         request_started = time.perf_counter()
         stage_timings: dict[str, float] = {}
         params = {
-            "select": "id,canal,iniciada_en,ultimo_mensaje_en,ultimo_entrante_en,contacto_id",
+            "select": "id,canal,iniciada_en,ultimo_mensaje_en,ultimo_entrante_en,persona_id,contacto_id",
             "canal": "eq.whatsapp",
             "order": "iniciada_en.desc",
             "limit": str(max(1, min(limit, 500))),
@@ -20224,25 +20236,25 @@ class CRMRepository:
             )
             return rows
         attach_started = time.perf_counter()
-        contact_ids: list[UUID] = []
-        seen_contact_ids: set[str] = set()
+        persona_ids: list[UUID] = []
+        seen_persona_ids: set[str] = set()
         for row in rows:
-            raw_contact_id = row.get("contacto_id")
-            if raw_contact_id is None:
+            raw_persona_id = row.get("persona_id") or row.get("contacto_id")
+            if raw_persona_id is None:
                 continue
             try:
-                contact_uuid = _coerce_uuid(str(raw_contact_id), field="contacto_id")
+                persona_uuid = _coerce_uuid(str(raw_persona_id), field="persona_id")
             except Exception:
                 continue
-            contact_key = str(contact_uuid)
-            if contact_key in seen_contact_ids:
+            persona_key = str(persona_uuid)
+            if persona_key in seen_persona_ids:
                 continue
-            seen_contact_ids.add(contact_key)
-            contact_ids.append(contact_uuid)
+            seen_persona_ids.add(persona_key)
+            persona_ids.append(persona_uuid)
 
         contact_rows = await self.get_personas_by_ids_light(
             organizacion_id=organizacion_id,
-            persona_ids=contact_ids,
+            persona_ids=persona_ids,
         )
         contact_map: dict[str, dict[str, Any]] = {}
         for contact in contact_rows:
@@ -20309,8 +20321,9 @@ class CRMRepository:
         rows = [
             {
                 **row,
-                "contacto": _compose_contact_row(contact_map[str(row.get("contacto_id"))])
-                if str(row.get("contacto_id") or "").strip() in contact_map
+                "persona_id": row.get("persona_id") or row.get("contacto_id"),
+                "contacto": _compose_contact_row(contact_map[str(row.get("persona_id") or row.get("contacto_id"))])
+                if str(row.get("persona_id") or row.get("contacto_id") or "").strip() in contact_map
                 else None,
             }
             for row in rows
@@ -20351,6 +20364,31 @@ class CRMRepository:
             conversation_ids=conversation_ids,
             inbound_date=inbound_date,
         )
+
+    async def panel_whatsapp_conversation_contacts(
+        self,
+        *,
+        organizacion_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        payload: dict[str, Any] = {
+            "p_organizacion_id": str(organizacion_id),
+            "p_from": date_from.isoformat() if date_from else None,
+            "p_to": date_to.isoformat() if date_to else None,
+        }
+        resp = await self._request(
+            "POST",
+            "/rest/v1/rpc/panel_visitantes_whatsapp_conversation_contacts_v1",
+            json=payload,
+            prefer="return=representation",
+        )
+        data = resp.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(
+                "Respuesta inesperada en panel_visitantes_whatsapp_conversation_contacts_v1"
+            )
+        return [row for row in data if isinstance(row, dict)]
 
     async def list_campana_conversion_conversations(
         self,

@@ -336,6 +336,7 @@ export default async function Page({
     hasta,
     includeMap: view !== "overview",
     includeCampaignAttribution: false,
+    scope: view,
     // La pestaña de conversaciones debe medir conversaciones del periodo.
     // El universo de conversiones/oportunidades corresponde a campaigns.
     soloConversiones: view === "campaigns",

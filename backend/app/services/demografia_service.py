@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import time
 from datetime import datetime
@@ -15,6 +17,13 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 COUNTRY_NAME_MAP: dict[str, str] = {}
 COUNTRY_CODE_ALIAS_MAP: dict[str, str] = {}
+
+# Resumen y mapa se solicitan en paralelo durante el render de la vista. Ambos
+# necesitan el mismo RPC y, sin single-flight, dos consultas costosas llegan a
+# Supabase antes de que la caché de respuestas pueda reutilizarse. Solo se
+# deduplican llamadas con JWT de usuario; nunca se comparte una respuesta entre
+# tenants cuando la llamada no trae contexto de usuario.
+_RPC_INFLIGHT: dict[str, asyncio.Task[Any]] = {}
 
 
 def _load_country_geo_maps() -> tuple[dict[str, str], dict[str, str]]:
@@ -185,6 +194,41 @@ async def _call_rpc(
     *,
     jwt: str | None = None,
 ) -> Any:
+    payload_value = payload or {}
+    request_key: str | None = None
+    if jwt:
+        fingerprint = hashlib.sha256(jwt.encode("utf-8")).hexdigest()
+        request_key = "|".join(
+            (
+                function,
+                fingerprint,
+                json.dumps(payload_value, sort_keys=True, separators=(",", ":")),
+            )
+        )
+        existing = _RPC_INFLIGHT.get(request_key)
+        if existing is not None:
+            return await existing
+
+        task = asyncio.create_task(
+            _call_rpc_uncached(function, payload_value, jwt=jwt),
+            name=f"demografia.rpc.{function}",
+        )
+        _RPC_INFLIGHT[request_key] = task
+        try:
+            return await task
+        finally:
+            if _RPC_INFLIGHT.get(request_key) is task:
+                _RPC_INFLIGHT.pop(request_key, None)
+
+    return await _call_rpc_uncached(function, payload_value, jwt=jwt)
+
+
+async def _call_rpc_uncached(
+    function: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    jwt: str | None = None,
+) -> Any:
     base_url, token = _ensure_supabase_config()
     url = f"{base_url}/rest/v1/rpc/{function}"
     auth_token = jwt or token
@@ -224,6 +268,39 @@ def _to_number(value: Any) -> int:
             except ValueError:
                 return 0
     return 0
+
+
+async def fetch_conversation_geo_resumen(
+    *,
+    nivel: str,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    state_code: str | None = None,
+    jwt: str | None = None,
+) -> list[dict[str, Any]]:
+    """Obtiene únicamente conversaciones de inbox agrupadas por ubicación.
+
+    Esta fuente no debe confundirse con web_sessions/webchat_visitantes:
+    ambas representan tráfico o visitantes, no conversaciones.
+    """
+    payload: dict[str, Any] = {"p_nivel": nivel}
+    if date_from:
+        payload["p_from"] = date_from.isoformat()
+    if date_to:
+        payload["p_to"] = date_to.isoformat()
+    if state_code:
+        payload["p_estado"] = state_code
+
+    rows = await _call_rpc(
+        "panel_conversion_conversation_geo_resumen_v1",
+        payload,
+        jwt=jwt,
+    )
+    if not isinstance(rows, list):
+        raise DemografiaServiceError(
+            f"Respuesta inesperada de panel_conversion_conversation_geo_resumen_v1: {rows!r}"
+        )
+    return [row for row in rows if isinstance(row, dict)]
 
 
 async def fetch_leads_resumen(
@@ -469,6 +546,7 @@ async def fetch_visitantes_resumen_v2(
     wa_canal_publicitario: str | None = None,
     wa_campana_publicitaria: str | None = None,
     wa_regla_id: str | None = None,
+    include_conversation_metrics: bool = False,
     jwt: str | None = None,
 ) -> dict[str, Any]:
     request_started = time.perf_counter()
@@ -535,6 +613,9 @@ async def fetch_visitantes_resumen_v2(
         "conversaciones_whatsapp": 0,
         "conversaciones_voz": 0,
         "conversaciones_correo": 0,
+        "conversaciones_total": 0,
+        "conversaciones_webchat": 0,
+        "conversaciones_otros": 0,
     }
 
     normalize_started = time.perf_counter()
@@ -656,6 +737,78 @@ async def fetch_visitantes_resumen_v2(
             grouped["whatsapp_atribucion_top"] = grouped["wa_atribucion_top"]
             items.append(grouped)
         items.sort(key=lambda row: (_to_number(row.get("total")), str(row.get("name") or "")), reverse=True)
+
+    if include_conversation_metrics:
+        conversation_rows = await fetch_conversation_geo_resumen(
+            nivel=nivel,
+            date_from=date_from,
+            date_to=date_to,
+            state_code=state_code,
+            jwt=jwt,
+        )
+        conversation_by_key = {
+            str(row.get("location_key") or "UNK"): row
+            for row in conversation_rows
+            if isinstance(row, dict)
+        }
+        item_by_key = {str(item.get("key") or "UNK"): item for item in items}
+        for key, row in conversation_by_key.items():
+            item = item_by_key.get(key)
+            if item is None:
+                item = {
+                    "level": nivel,
+                    "key": key,
+                    "name": str(row.get("location_name") or "Desconocido"),
+                    "total": 0,
+                    "con_chat": 0,
+                    "sin_chat": 0,
+                    "webchat_total": 0,
+                    "webchat_con_chat": 0,
+                    "webchat_sin_chat": 0,
+                    "whatsapp_total": 0,
+                    "voz_total": 0,
+                    "correo_total": 0,
+                    "sesiones_web_total": 0,
+                    "sesiones_webchat_total": 0,
+                    "sesiones_con_chat_webchat": 0,
+                    "sesiones_sin_chat_webchat": 0,
+                    "fuentes_top": [],
+                    "utm_top": [],
+                    "wa_atribucion_top": [],
+                    "whatsapp_atribucion_top": [],
+                    "wa_atribucion_total": 0,
+                    "whatsapp_atribucion_total": 0,
+                    "has_data": False,
+                }
+                items.append(item)
+                item_by_key[key] = item
+
+            item["conversaciones_total"] = _to_number(row.get("conversaciones_total"))
+            item["conversaciones_webchat"] = _to_number(row.get("conversaciones_webchat"))
+            item["conversaciones_whatsapp"] = _to_number(row.get("conversaciones_whatsapp"))
+            item["conversaciones_voz"] = _to_number(row.get("conversaciones_voz"))
+            item["conversaciones_correo"] = _to_number(row.get("conversaciones_correo"))
+            item["conversaciones_otros"] = _to_number(row.get("conversaciones_otros"))
+            item["has_data"] = bool(item.get("has_data") or item["conversaciones_total"] > 0)
+
+        totals["conversaciones_total"] = sum(
+            _to_number(row.get("conversaciones_total")) for row in conversation_rows if isinstance(row, dict)
+        )
+        totals["conversaciones_webchat"] = sum(
+            _to_number(row.get("conversaciones_webchat")) for row in conversation_rows if isinstance(row, dict)
+        )
+        totals["conversaciones_whatsapp"] = sum(
+            _to_number(row.get("conversaciones_whatsapp")) for row in conversation_rows if isinstance(row, dict)
+        )
+        totals["conversaciones_voz"] = sum(
+            _to_number(row.get("conversaciones_voz")) for row in conversation_rows if isinstance(row, dict)
+        )
+        totals["conversaciones_correo"] = sum(
+            _to_number(row.get("conversaciones_correo")) for row in conversation_rows if isinstance(row, dict)
+        )
+        totals["conversaciones_otros"] = sum(
+            _to_number(row.get("conversaciones_otros")) for row in conversation_rows if isinstance(row, dict)
+        )
 
     logger.info(
         "demografia.fetch_visitantes_resumen_v2.normalize",
