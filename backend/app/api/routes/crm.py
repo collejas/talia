@@ -42280,6 +42280,9 @@ async def prospeccion_metricas_dashboard(
                 extra={
                     "organizacion_id": str(organizacion_id),
                     "error_type": type(exc).__name__,
+                        "error": str(exc),
+                        "date_from": date_from_dt.isoformat() if date_from_dt else None,
+                        "date_to": date_to_dt.isoformat() if date_to_dt else None,
                 },
             )
             return []
@@ -43149,9 +43152,12 @@ async def prospeccion_metricas_dashboard(
     total_conversations = len({cid for cid in conversation_ids if cid})
     total_contacts = len(
         {
-            _clean_text(row.get("contacto_id"))
+            # `persona_id` es la identidad canónica del plan de personas.
+            # `contacto_id` se conserva únicamente para eventos históricos
+            # que todavía no tengan la columna canónica poblada.
+            _clean_text(row.get("persona_id")) or _clean_text(row.get("contacto_id"))
             for row in frase_events
-            if _clean_text(row.get("contacto_id"))
+            if _clean_text(row.get("persona_id")) or _clean_text(row.get("contacto_id"))
         }
     )
     total_opportunities = len(opp_by_conversation)
