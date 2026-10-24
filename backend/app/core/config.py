@@ -219,6 +219,10 @@ class Settings(BaseSettings):
         description="Graba energía cada N muestras cuando se depura la detección de voz.",
         validation_alias=AliasChoices("DEBUG_ENERGY_EVERY_N", "TALIA_DEBUG_ENERGY_EVERY_N"),
     )
+    database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DATABASE_URL", "TALIA_DATABASE_URL"),
+    )
     supabase_url: str | None = None
     supabase_service_role: str | None = None
     postmark_base_url: str = Field(

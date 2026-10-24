@@ -38946,22 +38946,69 @@ async def listar_prospectos(
             params.website_lookup_status,
         )
     )
-    # Los filtros de estado de correo representan una población operativa
-    # concreta. Un conteo planificado puede devolver la estimación del universo
-    # completo (por ejemplo, ~15k) aunque la lista sí venga filtrada a bajas.
-    # Fuerza count=exact para que el total visible corresponda a la consulta.
-    effective_count_exact = False if params.export_cursor else (
-        params.count_exact or exact_validation_filter
-    )
     con_envio_canales_values = sorted(
         set((con_envio_canal or []) + _parse_con_envio_canales_param(con_envio_canales))
     )
     # El filtro también forma parte de ProspectoListQuery para reutilizarlo en
     # payloads/listas guardadas. La ruta conserva el argumento explícito por
-    # compatibilidad, pero debe usar siempre el valor efectivo para no perderlo
-    # cuando FastAPI resuelve el modelo de dependencia y el query parameter.
+    # compatibilidad, pero debe usar siempre el valor efectivo.
     effective_opt_out_correo = (
         opt_out_correo if opt_out_correo is not None else params.opt_out_correo
+    )
+    # Los filtros de estado de correo representan una población operativa
+    # concreta. Un conteo planificado puede devolver la estimación del universo
+    # completo (por ejemplo, ~15k) aunque la lista sí venga filtrada a bajas.
+    # Fuerza count=exact para que el total visible corresponda a la consulta.
+    # Un conteo planificado puede quedar muy por debajo de las filas reales
+    # cuando el filtro es selectivo (por ejemplo segmento=p_1). La respuesta
+    # puede traer 19 filas y content-range estimar 4. Para cualquier consulta
+    # filtrada el total visible debe ser exacto; reservamos el conteo planned
+    # únicamente para el listado general sin filtros.
+    filtered_listing_requested = any(
+        value
+        for value in (
+            params.search,
+            params.fuente,
+            params.lookup_status,
+            params.email_lookup_status,
+            params.website_lookup_status,
+            params.email_domain_relation,
+            params.segmento,
+            segmentos,
+            params.tipo_negocio,
+            params.carrier_type,
+            params.stage,
+            params.whatsapp_permitido is not None,
+            params.llamada_permitida is not None,
+            params.phone_present is not None,
+            params.email_present is not None,
+            params.website_present is not None,
+            params.date_from,
+            params.date_to,
+            params.geo_estado,
+            params.geo_municipio,
+            params.min_rating is not None,
+            params.estrato_group,
+            metadata_query,
+            actividad,
+            params.campana_id,
+            template_id,
+            params.con_envio is not None,
+            con_envio_canales_values,
+            params.opt_out_canal,
+            params.opt_out_whatsapp is not None,
+            effective_opt_out_correo is not None,
+            params.con_scraper is not None,
+            envios_correo_min,
+            envios_correo_max,
+            envios_whatsapp_min,
+            envios_whatsapp_max,
+            envios_voz_min,
+            envios_voz_max,
+        )
+    )
+    effective_count_exact = False if params.export_cursor else (
+        params.count_exact or exact_validation_filter or filtered_listing_requested
     )
     fast_count_eligible = (
         not params.search

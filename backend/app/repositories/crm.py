@@ -24490,32 +24490,36 @@ class CRMRepository:
                 "p_date_from": date_from_utc,
                 "p_date_to": date_to_utc,
             }
-            queries_resp = await self._request_with_user(
-                "POST",
-                "/rest/v1/rpc/prospeccion_queries_resumen",
-                token=usuario_token,
-                json=query_payload,
+            rpc_results = await asyncio.gather(
+                self._request_with_user(
+                    "POST",
+                    "/rest/v1/rpc/prospeccion_queries_resumen",
+                    token=usuario_token,
+                    organizacion_id=organizacion_id,
+                    json=query_payload,
+                ),
+                self._request_with_user(
+                    "POST",
+                    "/rest/v1/rpc/prospeccion_activities_resumen",
+                    token=usuario_token,
+                    organizacion_id=organizacion_id,
+                    json=query_payload,
+                ),
+                self._request_with_user(
+                    "POST",
+                    "/rest/v1/rpc/prospeccion_segmentos_resumen",
+                    token=usuario_token,
+                    organizacion_id=organizacion_id,
+                    json=query_payload,
+                ),
             )
-            queries_data = queries_resp.json() or []
+            queries_data = rpc_results[0].json() or []
+            activities_data = rpc_results[1].json() or []
+            segmentos_data = rpc_results[2].json() or []
             if not isinstance(queries_data, list):
                 raise CRMRepositoryError(f"prospecto_queries_resumen_invalid:{queries_data!r}")
-
-            activities_resp = await self._request_with_user(
-                "POST",
-                "/rest/v1/rpc/prospeccion_activities_resumen",
-                token=usuario_token,
-                json=query_payload,
-            )
-            activities_data = activities_resp.json() or []
             if not isinstance(activities_data, list):
                 raise CRMRepositoryError(f"prospecto_activities_resumen_invalid:{activities_data!r}")
-            segmentos_resp = await self._request_with_user(
-                "POST",
-                "/rest/v1/rpc/prospeccion_segmentos_resumen",
-                token=usuario_token,
-                json=query_payload,
-            )
-            segmentos_data = segmentos_resp.json() or []
             if not isinstance(segmentos_data, list):
                 raise CRMRepositoryError(f"prospecto_segmentos_resumen_invalid:{segmentos_data!r}")
 
@@ -24571,17 +24575,52 @@ class CRMRepository:
                 }
             )
             if normalized_query_filters is None:
-                direct_taxonomy = await self._list_prospect_taxonomy(
-                    usuario_token=usuario_token,
-                    organizacion_id=organizacion_id,
-                    fuente=fuente,
-                    date_from=date_from,
-                    date_to=date_to,
-                    timezone_name=timezone_name,
-                )
-                activities = sorted(direct_taxonomy["activities"], key=lambda value: value.casefold())
-                segmentos = sorted(direct_taxonomy["segmentos"], key=lambda value: value.casefold())
-                tipos_negocio = sorted(direct_taxonomy["tipos_negocio"], key=lambda value: value.casefold())
+                try:
+                    taxonomy_resp = await self._request_with_user(
+                        "POST",
+                        "/rest/v1/rpc/prospeccion_taxonomia_resumen",
+                        token=usuario_token,
+                        organizacion_id=organizacion_id,
+                        json={
+                            "p_fuente": fuente or None,
+                            "p_date_from": date_from_utc,
+                            "p_date_to": date_to_utc,
+                        },
+                    )
+                    taxonomy_data = taxonomy_resp.json() or []
+                    if not isinstance(taxonomy_data, list):
+                        raise CRMRepositoryError(f"prospecto_taxonomia_resumen_invalid:{taxonomy_data!r}")
+                    activities = sorted(
+                        {
+                            str(row.get("activity") or "").strip()
+                            for row in taxonomy_data
+                            if isinstance(row, dict) and str(row.get("activity") or "").strip()
+                        },
+                        key=str.casefold,
+                    )
+                    segmentos = sorted(
+                        {
+                            str(row.get("segmento") or "").strip()
+                            for row in taxonomy_data
+                            if isinstance(row, dict) and str(row.get("segmento") or "").strip()
+                        },
+                        key=str.casefold,
+                    )
+                    tipos_negocio = sorted(
+                        {
+                            str(row.get(field) or "").strip()
+                            for row in taxonomy_data
+                            for field in ("tipo_negocio_display", "tipo_negocio")
+                            if isinstance(row, dict) and str(row.get(field) or "").strip()
+                        },
+                        key=str.casefold,
+                    )
+                except CRMRepositoryError:
+                    # Los catálogos principales ya provienen de la MV. Si el
+                    # catálogo ampliado falla, no volver al escaneo HTTP de
+                    # todos los prospectos: devolvemos lo disponible y tipos
+                    # vacíos para que la vista siga siendo rápida.
+                    tipos_negocio = []
             else:
                 tipos_negocio = []
             if normalized_query_filters is not None:
