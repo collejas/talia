@@ -101,6 +101,15 @@ Una acción `Reservado` iniciada desde una unidad disponible se conserva como
 vendedor completa el expediente y la operación pasa a `apartada`, cambia la
 unidad a apartado y activa la carga documental y la validación.
 
+La vista de propiedades también muestra una bandeja separada de **Reservas en
+borrador**. Incluye un contador, permite filtrar el mapa a esas unidades y abre
+cada operación para continuar el apartado. No se mezcla con `Validaciones
+inmobiliarias`, porque un borrador todavía no ha sido enviado a revisión.
+
+Al seleccionar una unidad en borrador, el detalle muestra `Reservado
+(borrador)` y la alerta `Operación incompleta`, con la acción para completar el
+apartado.
+
 Para que el mapa no la muestre como disponible, el GeoJSON combina el estado base
 de la unidad con la operación inmobiliaria activa y expone estos datos visuales:
 

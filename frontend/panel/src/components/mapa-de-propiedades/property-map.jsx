@@ -78,6 +78,14 @@ function getStatusLabel(status) {
   return STATUS_LABELS[normalized] ?? (normalized ? normalized : "Sin estado");
 }
 
+function getRelatedName(value) {
+  const relation = Array.isArray(value) ? value[0] : value;
+  if (relation && typeof relation === "object") {
+    return relation.nombre || relation.name || null;
+  }
+  return typeof relation === "string" ? relation : null;
+}
+
 const DEFAULT_CENTER_MAPBOX = [-99.1332, 19.4326];
 const DEFAULT_CENTER_LEAFLET = [23.6345, -102.5528];
 const TILE_SOURCE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -634,6 +642,9 @@ export function PropertyMap() {
   const [validationQueueItems, setValidationQueueItems] = useState([]);
   const [validationQueueTotal, setValidationQueueTotal] = useState(0);
   const [validationFilterActive, setValidationFilterActive] = useState(false);
+  const [draftFilterActive, setDraftFilterActive] = useState(false);
+  const [draftQueueOpen, setDraftQueueOpen] = useState(false);
+  const [draftOperationDetails, setDraftOperationDetails] = useState({});
   const [validationDetailOpen, setValidationDetailOpen] = useState(false);
   const [validationDetailLoading, setValidationDetailLoading] = useState(false);
   const [validationDetailError, setValidationDetailError] = useState(null);
@@ -1488,6 +1499,9 @@ export function PropertyMap() {
       (!validationFilterActive || (
         inferFeatureKind(feature) === "unidad" &&
         validationQueueItems.some((item) => String(item.unidad_id) === String(getFeatureId(feature) ?? feature?.id ?? feature?.properties?.id))
+      )) && (!draftFilterActive || (
+        inferFeatureKind(feature) === "unidad" &&
+        String(feature?.properties?.operation_status ?? "").toLowerCase() === "borrador"
       )) && matchesPropertyFeatureFilters(feature, {
         nivelFilter,
         tipoFilter,
@@ -1497,7 +1511,43 @@ export function PropertyMap() {
         buildFeatureMunicipioGeoKey: buildMunicipioGeoKey,
       }),
     );
-  }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey, validationFilterActive, validationQueueItems]);
+  }, [draftFilterActive, features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey, validationFilterActive, validationQueueItems]);
+
+  const draftOperationItems = useMemo(() => features
+    .filter((feature) => inferFeatureKind(feature) === "unidad")
+    .filter((feature) => String(feature?.properties?.operation_status ?? "").toLowerCase() === "borrador")
+    .map((feature) => ({
+      feature,
+      unidad_id: getFeatureId(feature) ?? feature?.id ?? feature?.properties?.id,
+      unidad: feature?.properties?.unidad ?? feature?.properties?.nombre ?? feature?.properties?.clave,
+      desarrollo: feature?.properties?.desarrollo_nombre ?? feature?.properties?.desarrollo,
+      macrolote: feature?.properties?.macrolote_nombre ?? getRelatedName(feature?.properties?.macrolote),
+      manzana: feature?.properties?.manzana_nombre ?? getRelatedName(feature?.properties?.manzana),
+    }))
+    .filter((item) => item.unidad_id != null), [features]);
+
+  const draftOperationTotal = draftOperationItems.length;
+
+  useEffect(() => {
+    if (!draftQueueOpen || !draftOperationItems.length) return undefined;
+    const controller = new AbortController();
+    const loadDraftDetails = async () => {
+      const entries = await Promise.all(draftOperationItems.map(async (item) => {
+        try {
+          const response = await fetch(`/api/crm/propiedad-unidades/${encodeURIComponent(item.unidad_id)}/reserva/actual`, { signal: controller.signal, cache: "no-store" });
+          const payload = await response.json().catch(() => null);
+          return response.ok && payload?.operacion ? [String(item.unidad_id), payload.operacion] : null;
+        } catch {
+          return null;
+        }
+      }));
+      if (!controller.signal.aborted) {
+        setDraftOperationDetails(Object.fromEntries(entries.filter(Boolean)));
+      }
+    };
+    void loadDraftDetails();
+    return () => controller.abort();
+  }, [draftOperationItems, draftQueueOpen]);
 
   const panelFeatures = useMemo(() => {
     const hasExplicitFilter = Boolean(nivelFilter || tipoFilter);
@@ -3166,6 +3216,7 @@ export function PropertyMap() {
     setValidationDetailOpen(true);
     setValidationDetailLoading(true);
     setValidationFilterActive(true);
+    setDraftFilterActive(false);
     const feature = (featuresRef.current ?? []).find((candidate) =>
       String(getFeatureId(candidate) ?? candidate?.id ?? candidate?.properties?.id) === String(item.unidad_id),
     );
@@ -3184,6 +3235,13 @@ export function PropertyMap() {
     } finally {
       setValidationDetailLoading(false);
     }
+  }, [openMapboxFeature]);
+
+  const openDraftOperation = useCallback((item) => {
+    if (!item?.feature) return;
+    setValidationFilterActive(false);
+    setDraftFilterActive(true);
+    openMapboxFeature(item.feature);
   }, [openMapboxFeature]);
 
   const reviewValidationDocument = useCallback(async (documentId, reviewStatus) => {
@@ -5035,21 +5093,47 @@ export function PropertyMap() {
               </div>
             </div>
           )}
-          {!mapboxActive && canValidateApartado && (
-            <div className="pointer-events-auto absolute right-4 top-4 z-50">
-              <button
-                type="button"
-                className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-slate-950/90 px-3 py-2 text-xs font-semibold text-amber-100 shadow-lg transition hover:bg-slate-900"
-                onClick={() => {
-                  setValidationQueueOpen(true);
-                  setValidationFilterActive(true);
-                  void loadValidationQueue();
-                }}
-              >
-                <IconClipboardCheck size={16} />
-                Validaciones inmobiliarias
-                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[0.7rem] font-bold text-amber-950">{validationQueueTotal}</span>
-              </button>
+          {!mapboxActive && (canValidateApartado || draftOperationTotal > 0) && (
+            <div className="pointer-events-auto absolute right-4 top-4 z-50 flex flex-wrap justify-end gap-2">
+              {draftOperationTotal > 0 && (
+                <button
+                  type="button"
+                  className="flex items-center gap-2 rounded-lg border border-orange-400/50 bg-slate-950/90 px-3 py-2 text-xs font-semibold text-orange-100 shadow-lg transition hover:bg-slate-900"
+                  onClick={() => {
+                    setValidationFilterActive(false);
+                    setDraftFilterActive(true);
+                    setDraftQueueOpen(true);
+                  }}
+                >
+                  <span aria-hidden="true" className="size-2 rounded-full bg-orange-400" />
+                  Reservas en borrador
+                  <span className="rounded-full bg-orange-400 px-2 py-0.5 text-[0.7rem] font-bold text-orange-950">{draftOperationTotal}</span>
+                </button>
+              )}
+              {canValidateApartado && (
+                <button
+                  type="button"
+                  className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-slate-950/90 px-3 py-2 text-xs font-semibold text-amber-100 shadow-lg transition hover:bg-slate-900"
+                  onClick={() => {
+                    setDraftFilterActive(false);
+                    setValidationQueueOpen(true);
+                    setValidationFilterActive(true);
+                    void loadValidationQueue();
+                  }}
+                >
+                  <IconClipboardCheck size={16} />
+                  Validaciones inmobiliarias
+                  <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[0.7rem] font-bold text-amber-950">{validationQueueTotal}</span>
+                </button>
+              )}
+            </div>
+          )}
+          {!mapboxActive && draftFilterActive && (
+            <div className="pointer-events-auto absolute left-4 top-4 z-50 max-w-sm rounded-lg border border-orange-400/50 bg-slate-950/90 px-3 py-2 text-xs text-orange-100 shadow-lg">
+              <div className="flex items-center justify-between gap-3">
+                <span>Mostrando reservas en borrador</span>
+                <button type="button" className="font-semibold underline" onClick={() => setDraftFilterActive(false)}>Mostrar todas</button>
+              </div>
             </div>
           )}
           {!mapboxActive && canValidateApartado && (
@@ -5067,9 +5151,15 @@ export function PropertyMap() {
                     {validationQueueItems.map((item) => {
                       const buyer = item.cliente || {};
                       const unit = item.unidad || {};
+                      const hierarchy = [
+                        getRelatedName(unit.desarrollo) || unit.desarrollo_nombre,
+                        getRelatedName(unit.macrolote) || unit.macrolote_nombre,
+                        getRelatedName(unit.manzana) || unit.manzana_nombre,
+                        unit.unidad || unit.nombre || unit.clave,
+                      ].filter(Boolean).join(" · ");
                       return (
                         <button key={item.id} type="button" className="w-full rounded border border-border bg-card p-3 text-left transition hover:border-primary hover:bg-muted" onClick={() => void openValidationDetail(item)}>
-                          <p className="font-semibold text-foreground">{unit.unidad || unit.nombre || unit.clave || item.unidad_id}</p>
+                          <p className="font-semibold text-foreground">{hierarchy || item.unidad_id}</p>
                           <p className="text-xs text-muted-foreground">Comprador: {buyer.nombre_completo || buyer.nombre || "Sin nombre"}</p>
                           <p className="mt-1 text-xs text-muted-foreground">{formatMoney(Number(item.precio_acordado ?? item.precio_ofrecido ?? unit.precio ?? 0))} · {item.forma_adquisicion || "Por definir"}</p>
                         </button>
@@ -5163,20 +5253,37 @@ export function PropertyMap() {
                     </button>
                   </div>
                 </div>
-                {canValidateApartado && (
-                  <div className="border-b border-slate-800 bg-slate-950/75 px-3 py-2">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between rounded border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-left text-xs font-semibold text-amber-100 transition hover:bg-amber-400/20"
-                      onClick={() => {
-                        setValidationQueueOpen(true);
-                        setValidationFilterActive(true);
-                        void loadValidationQueue();
-                      }}
-                    >
-                      <span className="flex items-center gap-2"><IconClipboardCheck size={16} />Validaciones inmobiliarias</span>
-                      <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[0.7rem] font-bold text-amber-950">{validationQueueTotal}</span>
-                    </button>
+                {(canValidateApartado || draftOperationTotal > 0) && (
+                  <div className="space-y-2 border-b border-slate-800 bg-slate-950/75 px-3 py-2">
+                    {draftOperationTotal > 0 && (
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between rounded border border-orange-400/40 bg-orange-400/10 px-3 py-2 text-left text-xs font-semibold text-orange-100 transition hover:bg-orange-400/20"
+                        onClick={() => {
+                          setValidationFilterActive(false);
+                          setDraftFilterActive(true);
+                          setDraftQueueOpen(true);
+                        }}
+                      >
+                        <span>Reservas en borrador</span>
+                        <span className="rounded-full bg-orange-400 px-2 py-0.5 text-[0.7rem] font-bold text-orange-950">{draftOperationTotal}</span>
+                      </button>
+                    )}
+                    {canValidateApartado && (
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between rounded border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-left text-xs font-semibold text-amber-100 transition hover:bg-amber-400/20"
+                        onClick={() => {
+                          setDraftFilterActive(false);
+                          setValidationQueueOpen(true);
+                          setValidationFilterActive(true);
+                          void loadValidationQueue();
+                        }}
+                      >
+                        <span className="flex items-center gap-2"><IconClipboardCheck size={16} />Validaciones inmobiliarias</span>
+                        <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[0.7rem] font-bold text-amber-950">{validationQueueTotal}</span>
+                      </button>
+                    )}
                   </div>
                 )}
                 <Dialog open={validationQueueOpen} onOpenChange={setValidationQueueOpen}>
@@ -5196,6 +5303,12 @@ export function PropertyMap() {
                         const unit = item.unidad || {};
                         const buyerName = buyer.nombre_completo || buyer.nombre || "Comprador sin nombre";
                         const unitName = unit.unidad || unit.nombre || unit.clave || unit.codigo || item.unidad_id;
+                        const hierarchy = [
+                          getRelatedName(unit.desarrollo) || unit.desarrollo_nombre,
+                          getRelatedName(unit.macrolote) || unit.macrolote_nombre,
+                          getRelatedName(unit.manzana) || unit.manzana_nombre,
+                          unitName,
+                        ].filter(Boolean).join(" · ");
                         return (
                           <button
                             key={item.id}
@@ -5205,7 +5318,7 @@ export function PropertyMap() {
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <p className="font-semibold text-foreground">{unitName}</p>
+                                <p className="font-semibold text-foreground">{hierarchy}</p>
                                 <p className="text-xs text-muted-foreground">Comprador: {buyerName}</p>
                               </div>
                               <span className="rounded-full bg-amber-100 px-2 py-1 text-[0.65rem] font-semibold text-amber-900">Pendiente</span>
@@ -5229,7 +5342,12 @@ export function PropertyMap() {
                     {validationDetail && (
                       <div className="space-y-4">
                         <div className="grid gap-3 rounded border border-border bg-muted/40 p-3 text-sm sm:grid-cols-2">
-                          <div><p className="text-xs text-muted-foreground">Propiedad</p><p className="font-medium">{validationDetail.unidad?.unidad || validationDetail.unidad?.nombre || validationDetail.unidad?.clave || validationDetail.unidad_id}</p></div>
+                          <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Ubicación inmobiliaria</p><p className="font-medium">{[
+                            getRelatedName(validationDetail.unidad?.desarrollo) || validationDetail.unidad?.desarrollo_nombre,
+                            getRelatedName(validationDetail.unidad?.macrolote) || validationDetail.unidad?.macrolote_nombre,
+                            getRelatedName(validationDetail.unidad?.manzana) || validationDetail.unidad?.manzana_nombre,
+                            validationDetail.unidad?.unidad || validationDetail.unidad?.nombre || validationDetail.unidad?.clave || validationDetail.unidad_id,
+                          ].filter(Boolean).join(" · ")}</p></div>
                           <div><p className="text-xs text-muted-foreground">Comprador</p><p className="font-medium">{validationDetail.cliente?.nombre_completo || validationDetail.cliente?.nombre || "Sin nombre"}</p></div>
                           <div><p className="text-xs text-muted-foreground">Correo</p><p>{validationDetail.cliente?.correo_principal || "—"}</p></div>
                           <div><p className="text-xs text-muted-foreground">Teléfono</p><p>{validationDetail.cliente?.telefono_principal_e164 || validationDetail.cliente?.telefono_movil_1_e164 || "—"}</p></div>
@@ -5325,6 +5443,12 @@ export function PropertyMap() {
                               <span>Status:</span>
                               <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
                             </div>
+                            {String(mapboxProps?.operation_status ?? "").toLowerCase() === "borrador" && (
+                              <div className="rounded border border-orange-400/40 bg-orange-400/10 px-3 py-2 text-xs normal-case tracking-normal text-orange-100">
+                                <p className="font-semibold">Operación incompleta</p>
+                                <p className="mt-1">Esta unidad está reservada en borrador. Completa el apartado para enviarlo a validación.</p>
+                              </div>
+                            )}
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
                               <span>Precio:</span>
                               <span className="font-semibold">{mapboxPriceLabel}</span>
@@ -6321,6 +6445,38 @@ export function PropertyMap() {
               </div>
             </div>
           )}
+          <Dialog open={draftQueueOpen} onOpenChange={setDraftQueueOpen}>
+            <DialogContent className="left-auto right-4 top-16 max-h-[calc(100vh-8rem)] w-full max-w-lg translate-x-0 translate-y-0 overflow-y-auto bg-background text-foreground">
+              <DialogHeader>
+                <DialogTitle>Reservas en borrador</DialogTitle>
+                <DialogDescription>Operaciones iniciadas que todavía necesitan completar el apartado.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                {draftOperationItems.length === 0 ? (
+                  <div className="rounded border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No hay reservas en borrador.</div>
+                ) : draftOperationItems.map((item) => {
+                  const operation = draftOperationDetails[String(item.unidad_id)] || {};
+                  const buyer = operation.cliente || {};
+                  const opportunity = operation.oportunidad || {};
+                  const unitDetail = operation.unidad || {};
+                  const location = [
+                    item.desarrollo || getRelatedName(unitDetail.desarrollo) || unitDetail.desarrollo_nombre,
+                    item.macrolote || getRelatedName(unitDetail.macrolote) || unitDetail.macrolote_nombre,
+                    item.manzana || getRelatedName(unitDetail.manzana) || unitDetail.manzana_nombre,
+                    item.unidad || unitDetail.unidad || unitDetail.nombre,
+                  ].filter(Boolean).join(" · ") || "Ubicación pendiente";
+                  return (
+                    <button key={String(item.unidad_id)} type="button" className="w-full rounded border border-border bg-card p-3 text-left transition hover:border-primary hover:bg-muted" onClick={() => { setDraftQueueOpen(false); openDraftOperation(item); }}>
+                      <p className="font-semibold text-foreground">{location}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Contacto: {buyer.nombre_completo || buyer.nombre || "Sin contacto ligado"}</p>
+                      <p className="text-xs text-muted-foreground">Oportunidad: {opportunity.titulo || "Sin oportunidad ligada"}{opportunity.codigo_oportunidad ? ` · ${opportunity.codigo_oportunidad}` : ""}</p>
+                      <p className="mt-1 text-xs text-orange-600">Reservado (borrador) · Completar apartado</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </section>
     </div>

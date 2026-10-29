@@ -1743,6 +1743,7 @@ class CRMRepository:
                 "fecha_limite_reserva,reserva_importe,condiciones_reserva,tipo_comprador,"
                 "estado_validacion,enviado_a_validacion_en,enviado_a_validacion_por,"
                 "validado_en,validado_por_usuario_id,observaciones_validacion,"
+                "oportunidad:oportunidades!operaciones_inmobiliarias_oportunidad_id_fkey(id,titulo,codigo_oportunidad,estado,etapa_id),"
                 "cliente:personas!operaciones_inmobiliarias_cliente_principal_id_fkey("
                 "id,nombre,nombre_completo,apellido_paterno,apellido_materno,"
                 "nacionalidad,ocupacion,estado_civil,curp,rfc,tipo_identificacion,"
@@ -1758,7 +1759,16 @@ class CRMRepository:
         data = response.json()
         if not isinstance(data, list):
             raise CRMRepositoryError("inmobiliaria_active_operation_invalid_response")
-        return data[0] if data and isinstance(data[0], dict) else None
+        if not data or not isinstance(data[0], dict):
+            return None
+        operation = data[0]
+        unit_uuid = _safe_uuid(operation.get("unidad_id"))
+        if unit_uuid:
+            operation["unidad"] = await self.get_propiedad_unidad_for_organizacion(
+                organizacion_id=organizacion_id,
+                unidad_id=unit_uuid,
+            ) or {}
+        return operation
 
     async def list_inmobiliaria_apartados_pendientes_validacion(
         self,
@@ -1778,6 +1788,7 @@ class CRMRepository:
                 "moneda,apartado_iniciado_en,apartado_vencimiento_en,enviado_a_validacion_en,"
                 "enviado_a_validacion_por,fecha_limite_reserva,reserva_importe,"
                 "condiciones_reserva,tipo_comprador,actualizado_en,"
+                "oportunidad:oportunidades!operaciones_inmobiliarias_oportunidad_id_fkey(id,titulo,codigo_oportunidad,estado,etapa_id),"
                 "cliente:personas!operaciones_inmobiliarias_cliente_principal_id_fkey("
                 "id,nombre,nombre_completo,apellido_paterno,apellido_materno,"
                 "correo_principal,telefono_principal_e164,telefono_movil_1_e164,"
@@ -1812,7 +1823,10 @@ class CRMRepository:
             unidad_id = _safe_uuid(row.get("unidad_id"))
             if not unidad_id:
                 continue
-            unidad = await self.get_propiedad_unidad(unidad_id=unidad_id)
+            unidad = await self.get_propiedad_unidad_for_organizacion(
+                organizacion_id=organizacion_id,
+                unidad_id=unidad_id,
+            )
             items.append({**row, "unidad": unidad or {}})
         return items, total
 
