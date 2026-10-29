@@ -885,6 +885,7 @@ export function EmbudoBoardClient({
         },
       };
       applyLeadResult(patchedResult);
+      continuePropertyOperationIfNeeded(patchedResult);
 
       if (furthestValidStage.id !== destinationStage.id) {
         const info = blockMessage
@@ -1080,6 +1081,17 @@ export function EmbudoBoardClient({
     toast.info(`${cardLabel} cambió a ${stageLabel} en otra sesión. Actualizamos la oportunidad.`, {
       duration: 6000,
     });
+  }
+
+  function continuePropertyOperationIfNeeded(result: LeadActionResult) {
+    if (
+      !result.ok ||
+      result.stage?.categoria !== "ganada" ||
+      result.card?.dominioComercial !== "propiedades"
+    ) {
+      return;
+    }
+    window.location.assign(`/propiedades?oportunidad_id=${encodeURIComponent(result.card.oportunidadId)}`);
   }
 
   async function handleLeadSubmit(payload: LeadDrawerSubmitPayload) {
@@ -1562,6 +1574,7 @@ export function EmbudoBoardClient({
     }
     setDragMessage(null);
     applyLeadResult(result);
+    continuePropertyOperationIfNeeded(result);
     handleDragCancel();
   };
 

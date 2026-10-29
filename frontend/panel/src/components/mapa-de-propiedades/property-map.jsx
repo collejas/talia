@@ -2211,6 +2211,7 @@ export function PropertyMap() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cliente_principal_id: apartadoClient.id,
+          oportunidad_id: apartadoClient.oportunidad_id,
           apartado_horas: Number(apartadoHours),
           forma_adquisicion: apartadoForma,
           apartado_motivo: apartadoMotivo,
@@ -2655,6 +2656,7 @@ export function PropertyMap() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...((mapboxProps?.status ?? "").toString().toLowerCase() !== "apartado" ? { cliente_principal_id: apartadoClient.id } : {}),
+          ...((mapboxProps?.status ?? "").toString().toLowerCase() !== "apartado" ? { oportunidad_id: apartadoClient.oportunidad_id } : {}),
           precio_acordado: reservaPrecio ? Number(reservaPrecio) : null,
           fecha_limite_reserva: reservaFechaLimite ? `${reservaFechaLimite}T23:59:59Z` : null,
           forma_adquisicion: reservaForma,
@@ -2859,7 +2861,7 @@ export function PropertyMap() {
     }
     const controller = new AbortController();
     setApartadoClientsLoading(true);
-    fetch(`/api/personas/search?q=${encodeURIComponent(query)}&limit=8`, {
+    fetch(`/api/personas/search?q=${encodeURIComponent(query)}&limit=8&solo_con_oportunidad=true&dominio_comercial=propiedades`, {
       signal: controller.signal,
     })
       .then(async (response) => {

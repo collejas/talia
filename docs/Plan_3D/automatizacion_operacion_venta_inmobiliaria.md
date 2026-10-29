@@ -1,7 +1,7 @@
 # Automatización de la operación y venta inmobiliaria
 
 Fecha: 2026-10-19 (UTC)  
-Estado: Implementación inicial aplicada; pendiente de validación en flujo real
+Estado: Implementación inicial aplicada; conexión Embudo-Propiedades preparada; pendiente de deploy y validación en flujo real
 
 ## Objetivo
 

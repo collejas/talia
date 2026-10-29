@@ -2982,46 +2982,105 @@ async def _ensure_property_operation_opportunity(
         if not opportunity:
             raise HTTPException(status_code=404, detail="opportunity_not_found")
         if opportunity.get("dominio_comercial") not in {"propiedades", "mixto"}:
-            try:
-                opportunity = await repo.update_opportunity(
-                    organizacion_id=organizacion_id,
-                    oportunidad_id=oportunidad_id,
-                    payload={"dominio_comercial": "propiedades"},
-                )
-            except CRMRepositoryError as exc:
-                raise HTTPException(status_code=502, detail="property_opportunity_domain_update_failed") from exc
+            raise HTTPException(status_code=409, detail="property_opportunity_domain_required")
+        linked_contact_id = _safe_uuid(
+            opportunity.get("contacto_principal_id") or opportunity.get("persona_id")
+        )
+        if linked_contact_id != cliente_principal_id:
+            raise HTTPException(status_code=409, detail="property_opportunity_contact_mismatch")
         return oportunidad_id, opportunity
 
-    stage_id = await repo.get_default_stage_id(organizacion_id=organizacion_id)
-    unit_label = _clean_text(unidad.get("unidad") or unidad.get("nombre")) or str(unidad.get("id"))
-    request_id = uuid5(
-        NAMESPACE_URL,
-        f"talia:property-operation:{organizacion_id}:{unidad.get('id')}:{cliente_principal_id}",
+    raise HTTPException(status_code=409, detail="property_opportunity_required")
+
+
+async def _ensure_property_operation_for_won(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+    opportunity: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Crea el apartado inicial al ganar comercialmente una oportunidad inmobiliaria."""
+    context = await repo.get_property_opportunity_context(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
     )
-    try:
-        opportunity = await repo.create_opportunity(
+    operation = context.get("operation") if isinstance(context, dict) else None
+    if isinstance(operation, dict) and operation.get("id"):
+        operation_state = _clean_text(operation.get("estado")).lower()
+        if operation_state in {"reservada", "apartada", "vendida"}:
+            return operation
+
+    unit = context.get("unit") if isinstance(context, dict) else None
+    unit_id = _safe_uuid((unit or {}).get("id")) if isinstance(unit, dict) else None
+    contact_id = _safe_uuid(
+        opportunity.get("contacto_principal_id") or opportunity.get("persona_id")
+    )
+    if not contact_id:
+        raise HTTPException(status_code=409, detail="won_property_contact_required")
+
+    accepted_quotes = await repo.list_accepted_quotes_by_opportunity_ids(
+        organizacion_id=organizacion_id,
+        oportunidad_ids=[oportunidad_id],
+    )
+    accepted_quote = next(
+        (
+            row for row in accepted_quotes
+            if isinstance(row, dict)
+            and _clean_text(row.get("dominio_comercial")).lower() == "propiedades"
+        ),
+        None,
+    )
+    quote_items = []
+    accepted_quote_id = _safe_uuid((accepted_quote or {}).get("id"))
+    if accepted_quote_id:
+        quote_items = await repo.list_quote_items(
             organizacion_id=organizacion_id,
-            payload={
-                "contacto_principal_id": str(cliente_principal_id),
-                "etapa_id": str(stage_id),
-                "request_id": str(request_id),
-                "titulo": f"Operación inmobiliaria · {unit_label}",
-                "descripcion": "Oportunidad creada automáticamente desde Propiedades.",
-                "monto_estimado": _decimal_to_number(precio),
-                "moneda": "MXN",
-                "dominio_comercial": "propiedades",
-                "metadata": {
-                    "source": "property_operation",
-                    "unidad_id": str(unidad.get("id")),
-                },
-            },
+            cotizacion_id=accepted_quote_id,
+        )
+    if not unit_id:
+        quote_unit_id = next(
+            (
+                _safe_uuid(item.get("unidad_id"))
+                for item in quote_items
+                if isinstance(item, dict) and _safe_uuid(item.get("unidad_id"))
+            ),
+            None,
+        )
+        if quote_unit_id:
+            unit = await repo.get_propiedad_unidad_for_organizacion(
+                organizacion_id=organizacion_id,
+                unidad_id=quote_unit_id,
+            )
+            unit_id = _safe_uuid((unit or {}).get("id")) if isinstance(unit, dict) else None
+    if not unit_id:
+        raise HTTPException(status_code=409, detail="won_property_unit_required")
+    price = _decimal_or_none((accepted_quote or {}).get("total"))
+    if price is None and isinstance(unit, dict):
+        price = _decimal_or_none(unit.get("precio"))
+    try:
+        return await repo.guardar_avance_reserva_directa(
+            organizacion_id=organizacion_id,
+            unidad_id=unit_id,
+            cliente_principal_id=contact_id,
+            agente_usuario_id=None,
+            oportunidad_id=oportunidad_id,
+            precio_acordado=price,
+            fecha_limite_reserva=datetime.now(timezone.utc) + timedelta(days=30),
+            forma_adquisicion="por_definir",
+            reserva_importe=None,
+            condiciones_reserva="Apartado creado al ganar la oportunidad inmobiliaria.",
+            tipo_comprador="persona_fisica",
         )
     except CRMRepositoryError as exc:
-        raise HTTPException(status_code=502, detail="property_opportunity_creation_failed") from exc
-    created_id = _safe_uuid(opportunity.get("id"))
-    if not created_id:
-        raise HTTPException(status_code=502, detail="property_opportunity_creation_invalid")
-    return created_id, opportunity
+        message = str(exc)
+        if any(marker in message for marker in (
+            "property_unit_not_found",
+            "property_unit_not_available_for_direct_reservation",
+            "property_client_not_found",
+        )):
+            raise HTTPException(status_code=409, detail=message) from exc
+        raise HTTPException(status_code=502, detail="won_property_operation_creation_failed") from exc
 
 
 async def _advance_opportunity_to_won(
@@ -11431,6 +11490,20 @@ async def _validate_opportunity_won_requirements(
         )
         unit = context.get("unit") if isinstance(context, dict) else None
         if not isinstance(unit, dict) or not unit.get("id"):
+            quote_unit_id = next(
+                (
+                    _safe_uuid(item.get("unidad_id"))
+                    for item in quote_items
+                    if isinstance(item, dict) and _safe_uuid(item.get("unidad_id"))
+                ),
+                None,
+            )
+            if quote_unit_id:
+                unit = await repo.get_propiedad_unidad_for_organizacion(
+                    organizacion_id=organizacion_id,
+                    unidad_id=quote_unit_id,
+                )
+        if not isinstance(unit, dict) or not unit.get("id"):
             raise HTTPException(status_code=409, detail="won_property_unit_required")
         has_unit_item = any(
             isinstance(item, dict)
@@ -15456,6 +15529,11 @@ class CRMContactSearchItem(BaseModel):
     correo: str | None = None
     telefono: str | None = None
     empresa: str | None = None
+    oportunidad_id: UUID | None = None
+    oportunidad_titulo: str | None = None
+    oportunidad_codigo: str | None = None
+    oportunidad_dominio_comercial: str | None = None
+    oportunidad_estado: str | None = None
 
 
 class CRMPersonaSearchItem(CRMContactSearchItem):
@@ -22175,6 +22253,14 @@ async def pipeline_update_opportunity(
             oportunidad_id=oportunidad_id,
             opportunity={**current, **update_body},
         )
+        target_opportunity = {**current, **update_body}
+        if _clean_text(target_opportunity.get("dominio_comercial")).lower() == "propiedades":
+            await _ensure_property_operation_for_won(
+                repo=repo,
+                organizacion_id=organizacion_id,
+                oportunidad_id=oportunidad_id,
+                opportunity=target_opportunity,
+            )
         update_body.setdefault("estado", "ganada")
         update_body.setdefault("cerrado_en", datetime.now(timezone.utc).isoformat())
     current_metadata = _ensure_dict(current.get("metadata"), default={})
@@ -28144,12 +28230,26 @@ async def search_personas(
     q: str = Query(default=""),
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
+    solo_con_oportunidad: bool = Query(default=False),
+    dominio_comercial: Literal["propiedades", "productos_servicios", "mixto"] | None = Query(default=None),
 ) -> CRMPersonaSearchResponse:
-    rows = await repo.search_personas(
-        organizacion_id=organizacion_id,
-        query=q or "",
-        limit=limit,
-        offset=offset,
+    if solo_con_oportunidad and not q.strip():
+        return CRMPersonaSearchResponse(items=[], limit=limit, offset=offset)
+    rows = (
+        await repo.search_personas_with_opportunities(
+            organizacion_id=organizacion_id,
+            query=q or "",
+            limit=limit,
+            offset=offset,
+            dominio_comercial=dominio_comercial,
+        )
+        if solo_con_oportunidad
+        else await repo.search_personas(
+            organizacion_id=organizacion_id,
+            query=q or "",
+            limit=limit,
+            offset=offset,
+        )
     )
     items: list[CRMPersonaSearchItem] = []
     for row in rows:
@@ -28168,6 +28268,11 @@ async def search_personas(
                 correo=row.get("correo_secundario") or row.get("correo_institucional") or row.get("correo_principal") or row.get("correo"),
                 telefono=row.get("telefono_movil_1_e164") or row.get("telefono_principal_e164") or row.get("telefono_e164"),
                 empresa=row.get("company_name"),
+                oportunidad_id=_safe_uuid(row.get("oportunidad_id")),
+                oportunidad_titulo=row.get("oportunidad_titulo"),
+                oportunidad_codigo=row.get("oportunidad_codigo"),
+                oportunidad_dominio_comercial=row.get("oportunidad_dominio_comercial"),
+                oportunidad_estado=row.get("oportunidad_estado"),
             )
         )
     return CRMPersonaSearchResponse(items=items, limit=limit, offset=offset)

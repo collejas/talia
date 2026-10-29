@@ -79,6 +79,64 @@ async def test_won_product_opportunity_requires_accepted_quote_items() -> None:
     assert exc_info.value.detail == "won_opportunity_quote_items_required"
 
 
+@pytest.mark.asyncio
+async def test_won_property_creates_apartado_operation_when_missing() -> None:
+    repo = AsyncMock()
+    organization_id = uuid.uuid4()
+    opportunity_id = uuid.uuid4()
+    unit_id = uuid.uuid4()
+    contact_id = uuid.uuid4()
+    repo.get_property_opportunity_context.return_value = {
+        "operation": None,
+        "unit": {"id": str(unit_id), "precio": 850000},
+    }
+    repo.list_accepted_quotes_by_opportunity_ids.return_value = [
+        {"id": str(uuid.uuid4()), "dominio_comercial": "propiedades", "total": 845000, "moneda": "MXN"}
+    ]
+    repo.guardar_avance_reserva_directa.return_value = {
+        "id": str(uuid.uuid4()),
+        "unidad_id": str(unit_id),
+        "estado": "apartada",
+    }
+
+    operation = await crm_routes._ensure_property_operation_for_won(
+        repo=repo,
+        organizacion_id=organization_id,
+        oportunidad_id=opportunity_id,
+        opportunity={
+            "dominio_comercial": "propiedades",
+            "contacto_principal_id": str(contact_id),
+            "moneda": "MXN",
+        },
+    )
+
+    assert operation["estado"] == "apartada"
+    repo.guardar_avance_reserva_directa.assert_awaited_once()
+    call = repo.guardar_avance_reserva_directa.await_args.kwargs
+    assert call["oportunidad_id"] == opportunity_id
+    assert call["unidad_id"] == unit_id
+    assert call["cliente_principal_id"] == contact_id
+
+
+@pytest.mark.asyncio
+async def test_property_operation_requires_existing_opportunity() -> None:
+    repo = AsyncMock()
+
+    with pytest.raises(crm_routes.HTTPException) as exc_info:
+        await crm_routes._ensure_property_operation_opportunity(
+            repo=repo,
+            organizacion_id=uuid.uuid4(),
+            unidad={"id": str(uuid.uuid4()), "precio": 100000},
+            cliente_principal_id=uuid.uuid4(),
+            oportunidad_id=None,
+            precio=None,
+            usuario_id=None,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "property_opportunity_required"
+
+
 def test_build_property_sale_records_uses_persisted_movement_and_unit_name() -> None:
     unit_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
 

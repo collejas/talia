@@ -12233,6 +12233,85 @@ class CRMRepository:
             offset=offset,
         )
 
+    async def search_personas_with_opportunities(
+        self,
+        *,
+        organizacion_id: UUID,
+        query: str,
+        limit: int = 8,
+        offset: int = 0,
+        dominio_comercial: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Busca contactos y conserva solo los que tienen oportunidad ligada."""
+        candidate_limit = min(max(limit * 5, 50), 500)
+        candidates = await self.search_personas(
+            organizacion_id=organizacion_id,
+            query=query,
+            limit=candidate_limit,
+            offset=offset,
+        )
+        contact_ids = [
+            str(row.get("id"))
+            for row in candidates
+            if isinstance(row, dict) and row.get("id")
+        ]
+        if not contact_ids:
+            return []
+
+        opportunity_params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "or": (
+                f"(contacto_principal_id.in.({','.join(contact_ids)}),"
+                f"persona_id.in.({','.join(contact_ids)}))"
+            ),
+            "select": (
+                "id,contacto_principal_id,persona_id,titulo,codigo_oportunidad,"
+                "dominio_comercial,estado,creado_en"
+            ),
+            "order": "creado_en.desc",
+            "limit": "1000",
+        }
+        if dominio_comercial:
+            opportunity_params["dominio_comercial"] = f"in.({dominio_comercial},mixto)"
+        response = await self._request(
+            "GET",
+            "/rest/v1/oportunidades",
+            params=opportunity_params,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("Respuesta inválida al buscar oportunidades de contactos")
+
+        by_contact: dict[str, dict[str, Any]] = {}
+        for opportunity in data:
+            if not isinstance(opportunity, dict):
+                continue
+            for contact_key in ("contacto_principal_id", "persona_id"):
+                contact_id = str(opportunity.get(contact_key) or "").strip()
+                if contact_id and contact_id not in by_contact:
+                    by_contact[contact_id] = opportunity
+
+        results: list[dict[str, Any]] = []
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            opportunity = by_contact.get(str(candidate.get("id") or ""))
+            if not opportunity:
+                continue
+            results.append(
+                {
+                    **candidate,
+                    "oportunidad_id": opportunity.get("id"),
+                    "oportunidad_titulo": opportunity.get("titulo"),
+                    "oportunidad_codigo": opportunity.get("codigo_oportunidad"),
+                    "oportunidad_dominio_comercial": opportunity.get("dominio_comercial"),
+                    "oportunidad_estado": opportunity.get("estado"),
+                }
+            )
+            if len(results) >= limit:
+                break
+        return results
+
     async def list_geo_countries(self) -> list[dict[str, Any]]:
         params = {
             "select": "codigo_iso2,nombre,nombre_largo",
