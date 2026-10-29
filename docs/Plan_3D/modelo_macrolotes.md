@@ -14,29 +14,23 @@ Desarrollo → Macrolote → Manzana → Unidad
 Esto permitirá identificar una unidad de forma clara en propuestas,
 reservas, oportunidades y reportes.
 
-## Problema actual
+## Estructura actual
 
-Actualmente la manzana guarda un `macrolote_id`, pero no existe una tabla
-formal de macrolotes con nombre y relación explícita con el desarrollo.
+La base de datos ya tiene una entidad para este nivel: `propiedad_capas`.
 
-Por eso la aplicación puede conocer un identificador, pero no puede saber con
-seguridad si corresponde a `Campero`, `Cerrito` u otro macrolote.
+En la jerarquía inmobiliaria actual, una capa representa el macrolote y tiene
+relación con el desarrollo. `propiedad_manzanas.macrolote_id` apunta a esa
+capa.
 
-## Propuesta
+Por lo tanto, no se creará una tabla nueva. La solución será usar y validar la
+estructura existente:
 
-Crear una tabla `propiedad_macrolotes` con:
+- `propiedad_capas`: macrolote.
+- `propiedad_manzanas`: manzana.
+- `propiedad_unidades`: lote o unidad.
 
-- `id`
-- `organizacion_id`
-- `desarrollo_id`
-- `nombre`
-- `descripcion`
-- `status`
-- `creado_en`
-- `actualizado_en`
-
-Después, `propiedad_manzanas.macrolote_id` deberá apuntar formalmente a esta
-tabla.
+En Grupo Gran Peñon ya existen, entre otros, los macrolotes `CAMPERO` y
+`CERRITO`.
 
 La relación quedaría así:
 
@@ -59,12 +53,11 @@ Gran Peñón Residencial
 
 ## Fases posteriores
 
-1. Crear la tabla de macrolotes.
-2. Convertir los identificadores actuales en registros.
-3. Asignar los nombres reales, como `Campero` y `Cerrito`.
-4. Agregar la relación formal con las manzanas.
-5. Validar unidades sin manzana o con relaciones inconsistentes.
-6. Ejecutar el backfill de oportunidades, propuestas y operaciones.
+1. Validar la relación desarrollo → capa/macrolote → manzana → unidad.
+2. Identificar unidades sin manzana o con relaciones inconsistentes.
+3. Generar un reporte por tenant inmobiliario.
+4. Corregir las oportunidades y propuestas históricas con relación inequívoca.
+5. Actualizar las operaciones inmobiliarias y verificar los informes.
 
 ## Alcance del backfill
 
