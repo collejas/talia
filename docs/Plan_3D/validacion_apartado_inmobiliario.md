@@ -20,6 +20,24 @@ Apartado · Firme
 
 “Firme” es un estado de validación del expediente, no un nuevo color ni un nuevo estado de disponibilidad del mapa.
 
+## Relación con las oportunidades
+
+Una operación inmobiliaria debe quedar ligada a una oportunidad comercial. Por
+eso, al seleccionar un comprador desde el modal de Reservar o Apartar, el
+sistema debe mostrar únicamente contactos que tengan una oportunidad creada.
+
+Cuando exista una oportunidad inmobiliaria relacionada con la unidad, debe
+reutilizarse esa oportunidad. La operación debe conservar la relación:
+
+```text
+Contacto → Oportunidad → Unidad → Operación inmobiliaria
+```
+
+Si la oportunidad se mueve primero a **Ganada** desde el Embudo, el sistema
+crea o reutiliza el apartado y envía al usuario a Propiedades para completar el
+expediente. Ganada no significa todavía documentación validada ni propiedad
+vendida.
+
 ## Documentos del comprador
 
 El vendedor adjunta:

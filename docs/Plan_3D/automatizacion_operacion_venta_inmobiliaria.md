@@ -27,6 +27,64 @@ La cotización sí debe existir antes de crear una venta formal. Para mantener l
 trazabilidad, Tal-IA la crea automáticamente y la utiliza como documento
 comercial interno del flujo.
 
+## Cómo se conectan el Embudo y Propiedades
+
+La oportunidad y la operación inmobiliaria son procesos distintos, pero deben
+quedar ligados:
+
+```text
+Oportunidad inmobiliaria ganada
+        |
+        v
+Apartado de la unidad
+        |
+        v
+Documentación y validación superior
+        |
+        v
+Propiedad vendida
+```
+
+### Cuando se gana desde el Embudo
+
+Al mover una oportunidad inmobiliaria a **Ganada**, el sistema debe:
+
+1. Confirmar que exista una unidad inmobiliaria.
+2. Confirmar que exista una cotización inmobiliaria aceptada.
+3. Crear o reutilizar la operación inmobiliaria de esa oportunidad.
+4. Dejar la operación en estado **Apartado** (`apartada` internamente).
+5. Marcar temporalmente la unidad como apartada.
+6. Enviar al usuario a la vista de Propiedades para completar la información.
+
+Este movimiento no marca la propiedad como vendida y no omite la carga de
+documentos ni la validación del usuario autorizado.
+
+### Cuando se aparta desde Propiedades
+
+El flujo debe hacer la conexión inversa:
+
+1. Mostrar únicamente contactos que tengan una oportunidad creada.
+2. Preferir la oportunidad inmobiliaria relacionada con la unidad seleccionada.
+3. Crear o reutilizar la operación inmobiliaria para esa oportunidad.
+4. Conservar la relación entre oportunidad, contacto, unidad y operación.
+5. Permitir continuar con la documentación y la validación desde Propiedades.
+
+No se debe crear una segunda oportunidad ni una segunda operación para la misma
+unidad y negocio.
+
+### Estados y responsabilidades
+
+| Situación | Significado |
+| --- | --- |
+| Oportunidad `Ganada` | El cierre comercial fue confirmado. |
+| Operación `Apartada` | El expediente inmobiliario debe completarse y validarse. |
+| Propiedad `Vendida` | La documentación y el cierre fueron aprobados. |
+
+La regla principal es:
+
+> Ganar la oportunidad crea o liga el apartado; completar y validar la
+> operación convierte la propiedad en vendida.
+
 ```text
 Disponible
     |
