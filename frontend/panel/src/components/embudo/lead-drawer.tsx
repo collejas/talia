@@ -1338,7 +1338,14 @@ export function LeadDrawer({
         if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Error ${response.status}`);
         if (cancelled) return;
         const context = payload as PropertyProposalContext;
-        setPropertyProposalContext(context);
+        setPropertyProposalContext((current) => {
+          // La carga inicial puede terminar después de una selección manual.
+          // No debemos reemplazar la unidad elegida por un contexto histórico vacío.
+          if (current?.unit && (!context.unit || current.unit.id !== context.unit.id)) {
+            return current;
+          }
+          return context;
+        });
         const unit = context.unit;
         const operation = context.operation;
         if (quoteDialogOpen && unit) {

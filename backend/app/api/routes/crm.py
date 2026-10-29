@@ -36379,10 +36379,24 @@ async def create_lead_quote(
             oportunidad_id=oportunidad_id,
         )
         context_unit = property_context.get("unit")
+        if payload.unidad_id and (
+            not isinstance(context_unit, dict)
+            or str(payload.unidad_id) != str(context_unit.get("id"))
+        ):
+            selected_unit = await repo.get_propiedad_unidad_for_organizacion(
+                organizacion_id=organizacion_id,
+                unidad_id=payload.unidad_id,
+            )
+            if selected_unit is None:
+                raise HTTPException(status_code=409, detail="property_unit_context_required")
+            context_unit = selected_unit
+            property_context["unit"] = selected_unit
+            property_context["operation"] = None
+            selected_development = selected_unit.get("desarrollo")
+            if isinstance(selected_development, dict):
+                property_context["development"] = selected_development
         if not isinstance(context_unit, dict) or not context_unit.get("id"):
-            raise HTTPException(status_code=409, detail="property_unit_context_required")
-        if payload.unidad_id and str(payload.unidad_id) != str(context_unit["id"]):
-            raise HTTPException(status_code=409, detail="property_unit_context_mismatch")
+            raise HTTPException(status_code=409, detail="property_unit_selection_required")
         context_operation = property_context.get("operation")
         context_development_id = _safe_uuid(context_unit.get("desarrollo_id"))
         context_operation_id = _safe_uuid(context_operation.get("id")) if isinstance(context_operation, dict) else None
