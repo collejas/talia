@@ -8,39 +8,31 @@ import { CatalogSalesCard } from "@/components/dashboard/catalog-sales-card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type CatalogLazySectionProps = {
-  months?: number;
+  dateFrom: string | null;
+  dateTo: string | null;
 };
 
-function addMonths(date: Date, months: number): Date {
-  const result = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-  result.setUTCMonth(result.getUTCMonth() + months);
-  return result;
-}
-
-function formatMonth(date: Date): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${year}-${month}-01`;
-}
-
-export function CatalogLazySection({ months = 6 }: CatalogLazySectionProps) {
+export function CatalogLazySection({ dateFrom, dateTo }: CatalogLazySectionProps) {
   const [salesRows, setSalesRows] = React.useState<CatalogSalesRow[] | null>(null);
   const [pipelineRows, setPipelineRows] = React.useState<CatalogPipelineRow[] | null>(null);
 
   React.useEffect(() => {
+    setSalesRows(null);
+    setPipelineRows(null);
     const timer = window.setTimeout(() => {
-      const now = new Date();
-      const desde = formatMonth(addMonths(now, -months + 1));
-      const hasta = formatMonth(now);
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("fecha_desde", dateFrom);
+      if (dateTo) params.set("fecha_hasta", dateTo);
+      const query = params.toString();
 
-      fetch(`/api/analytics/catalog/ventas?mes_desde=${encodeURIComponent(desde)}&mes_hasta=${encodeURIComponent(hasta)}`, {
+      fetch(`/api/analytics/catalog/ventas${query ? `?${query}` : ""}`, {
         cache: "no-store",
       })
         .then(async (response) => (response.ok ? response.json() : { rows: [] }))
         .then((json) => setSalesRows(Array.isArray(json?.rows) ? json.rows : []))
         .catch(() => setSalesRows([]));
 
-      fetch("/api/analytics/catalog/embudo", {
+      fetch(`/api/analytics/catalog/embudo${query ? `?${query}` : ""}`, {
         cache: "no-store",
       })
         .then(async (response) => (response.ok ? response.json() : { rows: [] }))
@@ -49,7 +41,7 @@ export function CatalogLazySection({ months = 6 }: CatalogLazySectionProps) {
     }, 700);
 
     return () => window.clearTimeout(timer);
-  }, [months]);
+  }, [dateFrom, dateTo]);
 
   if (!salesRows || !pipelineRows) {
     return (
@@ -62,7 +54,7 @@ export function CatalogLazySection({ months = 6 }: CatalogLazySectionProps) {
 
   return (
     <div className="grid gap-4 px-4 lg:px-6 @[1000px]/main:grid-cols-2">
-      <CatalogSalesCard data={salesRows} />
+      <CatalogSalesCard data={salesRows} dateFrom={dateFrom} dateTo={dateTo} />
       <CatalogPipelineCard data={pipelineRows} />
     </div>
   );

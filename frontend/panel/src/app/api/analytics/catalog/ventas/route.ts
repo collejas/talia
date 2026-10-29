@@ -9,6 +9,8 @@ export async function GET(request: Request) {
     searchParams: {
       mes_desde: url.searchParams.get("mes_desde"),
       mes_hasta: url.searchParams.get("mes_hasta"),
+      fecha_desde: url.searchParams.get("fecha_desde"),
+      fecha_hasta: url.searchParams.get("fecha_hasta"),
       moneda: url.searchParams.get("moneda"),
     },
   });

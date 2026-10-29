@@ -51,7 +51,7 @@ export default async function Page({ searchParams }: DashboardPageProps) {
                 dateTo={range.dateTo}
               />
 
-              <CatalogLazySection />
+              <CatalogLazySection dateFrom={range.dateFrom} dateTo={range.dateTo} />
             </div>
           </div>
         </div>

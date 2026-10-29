@@ -19529,10 +19529,12 @@ class CRMRepository:
         usuario_token: str,
         mes_desde: str | None = None,
         mes_hasta: str | None = None,
+        fecha_desde: str | None = None,
+        fecha_hasta: str | None = None,
         moneda: str | None = None,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
-            "select": "mes,catalog_item_id,item_nombre,moneda,total_vendido,unidades_vendidas,leads_ganados",
+            "select": "mes,fecha_referencia,catalog_item_id,item_nombre,moneda,total_vendido,unidades_vendidas,leads_ganados",
             "order": "mes.asc,item_nombre.asc",
         }
         if mes_desde and mes_hasta:
@@ -19541,6 +19543,13 @@ class CRMRepository:
             params["mes"] = f"gte.{mes_desde}"
         elif mes_hasta:
             params["mes"] = f"lte.{mes_hasta}"
+        if fecha_desde and fecha_hasta:
+            params["fecha_referencia"] = f"gte.{fecha_desde}"
+            params["and"] = f"(fecha_referencia.gte.{fecha_desde},fecha_referencia.lte.{fecha_hasta})"
+        elif fecha_desde:
+            params["fecha_referencia"] = f"gte.{fecha_desde}"
+        elif fecha_hasta:
+            params["fecha_referencia"] = f"lte.{fecha_hasta}"
         if moneda:
             params["moneda"] = f"eq.{moneda.upper()}"
         resp = await self._request_with_user(
@@ -19560,14 +19569,22 @@ class CRMRepository:
         usuario_token: str,
         tablero_id: UUID | None = None,
         etapa_id: UUID | None = None,
+        fecha_desde: str | None = None,
+        fecha_hasta: str | None = None,
     ) -> list[dict[str, Any]]:
         params: dict[str, str] = {
-            "select": "tablero_id,etapa_id,catalog_item_id,item_nombre,moneda,monto_estimado,leads_con_cotizacion",
+            "select": "tablero_id,etapa_id,fecha_referencia,catalog_item_id,item_nombre,moneda,monto_estimado,leads_con_cotizacion",
         }
         if tablero_id:
             params["tablero_id"] = f"eq.{tablero_id}"
         if etapa_id:
             params["etapa_id"] = f"eq.{etapa_id}"
+        if fecha_desde and fecha_hasta:
+            params["and"] = f"(fecha_referencia.gte.{fecha_desde},fecha_referencia.lte.{fecha_hasta})"
+        elif fecha_desde:
+            params["fecha_referencia"] = f"gte.{fecha_desde}"
+        elif fecha_hasta:
+            params["fecha_referencia"] = f"lte.{fecha_hasta}"
         resp = await self._request_with_user(
             "GET",
             "/rest/v1/embudo_por_producto",

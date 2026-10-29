@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils"
 
 type CatalogSalesCardProps = {
   data: CatalogSalesRow[]
+  dateFrom: string | null
+  dateTo: string | null
   className?: string
 }
 
@@ -27,7 +29,7 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-export function CatalogSalesCard({ data, className }: CatalogSalesCardProps) {
+export function CatalogSalesCard({ data, dateFrom, dateTo, className }: CatalogSalesCardProps) {
   const summary = useMemo(() => summarizeSales(data), [data])
   const chartData = summary.slice(0, 5)
   const empty = chartData.length === 0
@@ -39,7 +41,14 @@ export function CatalogSalesCard({ data, className }: CatalogSalesCardProps) {
         <CardDescription>Top 5 productos cerrados en los últimos meses</CardDescription>
         <CardAction>
           <Button asChild variant="outline" size="sm">
-            <a href="/api/analytics/catalog/ventas/export" target="_blank" rel="noreferrer">
+            <a
+              href={`/api/analytics/catalog/ventas/export?${new URLSearchParams({
+                ...(dateFrom ? { fecha_desde: dateFrom } : {}),
+                ...(dateTo ? { fecha_hasta: dateTo } : {}),
+              }).toString()}`}
+              target="_blank"
+              rel="noreferrer"
+            >
               Descargar CSV
             </a>
           </Button>
