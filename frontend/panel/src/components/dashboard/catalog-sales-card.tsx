@@ -53,7 +53,7 @@ export function CatalogSalesCard({ data, className }: CatalogSalesCardProps) {
             <BarChart data={chartData} margin={{ left: 12, right: 12 }} barSize={28} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" hide domain={[0, "auto"]} />
-              <YAxis dataKey="name" type="category" width={140} tickLine={false} axisLine={false} />
+              <YAxis dataKey="name" type="category" width={240} tickLine={false} axisLine={false} />
               <Tooltip cursor={{ fill: "hsl(var(--muted))" }} content={<ChartTooltipContent />} />
               <Bar dataKey="total" fill="var(--color-total)" radius={[0, 4, 4, 0]} />
             </BarChart>
