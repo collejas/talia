@@ -2993,6 +2993,39 @@ async def _ensure_property_operation_opportunity(
     raise HTTPException(status_code=409, detail="property_opportunity_required")
 
 
+async def _ensure_property_opportunity_unit_is_current(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID,
+    unidad_id: UUID,
+) -> None:
+    """Evita crear una segunda reserva para otra unidad de la misma oportunidad."""
+    quotes = await repo.list_quote_entries(
+        organizacion_id=organizacion_id,
+        oportunidad_id=oportunidad_id,
+    )
+    for quote in quotes:
+        if not isinstance(quote, dict):
+            continue
+        if _clean_text(quote.get("dominio_comercial")).lower() != "propiedades":
+            continue
+        if _clean_text(quote.get("estatus")).lower() in {"cancelada", "reembolsada", "sustituida"}:
+            continue
+        quote_unit_id = _safe_uuid(quote.get("unidad_id"))
+        if quote_unit_id is None and isinstance(quote.get("items"), list):
+            quote_unit_id = next(
+                (
+                    _safe_uuid(item.get("unidad_id"))
+                    for item in quote["items"]
+                    if isinstance(item, dict) and _safe_uuid(item.get("unidad_id"))
+                ),
+                None,
+            )
+        if quote_unit_id and quote_unit_id != unidad_id:
+            raise HTTPException(status_code=409, detail="property_opportunity_unit_change_required")
+
+
 async def _ensure_property_operation_for_won(
     *,
     repo: CRMRepository,
@@ -7238,6 +7271,21 @@ class PropiedadUnidadCambiarCompradorRequest(BaseModel):
         normalized = " ".join(value.split())
         if len(normalized) < 5:
             raise ValueError("property_buyer_change_reason_required")
+        return normalized
+
+
+class PropiedadUnidadCambiarUnidadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nueva_unidad_id: UUID
+    motivo: str = Field(..., min_length=5, max_length=1000)
+
+    @field_validator("motivo")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if len(normalized) < 5:
+            raise ValueError("property_unit_change_reason_required")
         return normalized
 
 
@@ -55343,6 +55391,12 @@ async def apartar_propiedad_unidad(
         precio=payload.precio_ofrecido or _decimal_or_none(unidad.get("precio")),
         usuario_id=usuario_id,
     )
+    await _ensure_property_opportunity_unit_is_current(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=resolved_oportunidad_id,
+        unidad_id=unidad_id,
+    )
     try:
         operation = await repo.apartar_propiedad(
             organizacion_id=organizacion_id,
@@ -55529,6 +55583,86 @@ async def cambiar_comprador_reserva_propiedad_unidad(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_buyer_change_failed") from exc
     return {"ok": True, "operacion": operation, "cambio": cambio}
+
+
+@router.post("/propiedad-unidades/{unidad_id}/reserva/cambiar-unidad")
+async def cambiar_unidad_reserva_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    payload: PropiedadUnidadCambiarUnidadRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inmobiliaria.apartados.change_unit")),
+) -> dict[str, Any]:
+    if not usuario_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    if unidad_id == payload.nueva_unidad_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="property_unit_change_without_changes")
+    operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
+        organizacion_id=organizacion_id,
+        unidad_id=unidad_id,
+    )
+    if not operation or not operation.get("oportunidad_id"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_reserva_actual_not_found")
+    try:
+        change = await repo.cambiar_unidad_operacion(
+            organizacion_id=organizacion_id,
+            oportunidad_id=_safe_uuid(operation["oportunidad_id"]),
+            unidad_nueva_id=payload.nueva_unidad_id,
+            usuario_id=usuario_id,
+            motivo=payload.motivo,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if any(marker in message for marker in (
+            "property_opportunity_not_found",
+            "property_opportunity_not_open",
+            "property_operation_not_found",
+            "property_new_unit_not_available",
+            "property_unit_change_without_changes",
+            "property_new_unit_price_required",
+            "property_unit_change_reason_required",
+        )):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_unit_change_failed") from exc
+    return {"ok": True, "cambio": change}
+
+
+@router.post("/oportunidades/{oportunidad_id}/property-unit-change")
+async def cambiar_unidad_por_oportunidad(
+    *,
+    oportunidad_id: UUID,
+    payload: PropiedadUnidadCambiarUnidadRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inmobiliaria.apartados.change_unit")),
+) -> dict[str, Any]:
+    if not usuario_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="auth_required")
+    try:
+        change = await repo.cambiar_unidad_operacion(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            unidad_nueva_id=payload.nueva_unidad_id,
+            usuario_id=usuario_id,
+            motivo=payload.motivo,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if any(marker in message for marker in (
+            "property_opportunity_not_found",
+            "property_opportunity_not_open",
+            "property_operation_not_found",
+            "property_new_unit_not_available",
+            "property_unit_change_without_changes",
+            "property_new_unit_price_required",
+            "property_unit_change_reason_required",
+        )):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_unit_change_failed") from exc
+    return {"ok": True, "cambio": change}
 
 
 @router.get("/propiedad-unidades/{unidad_id}/reserva/cambios-comprador")
@@ -55870,6 +56004,12 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
         oportunidad_id=payload.oportunidad_id,
         precio=payload.precio_acordado or _decimal_or_none(unidad.get("precio")),
         usuario_id=usuario_id,
+    )
+    await _ensure_property_opportunity_unit_is_current(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        oportunidad_id=resolved_oportunidad_id,
+        unidad_id=unidad_id,
     )
     try:
         operation = await repo.guardar_avance_reserva_directa(

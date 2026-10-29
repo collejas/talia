@@ -586,6 +586,8 @@ export function PropertyMap() {
   const [apartadoForma, setApartadoForma] = useState("por_definir");
   const [apartadoMotivo, setApartadoMotivo] = useState("");
   const [apartadoError, setApartadoError] = useState(null);
+  const [unitChangeRequired, setUnitChangeRequired] = useState(false);
+  const [unitChangeLoading, setUnitChangeLoading] = useState(false);
   const [apartadoLoading, setApartadoLoading] = useState(false);
   const [apartadoClientsLoading, setApartadoClientsLoading] = useState(false);
   const [isReservaPanelOpen, setReservaPanelOpen] = useState(false);
@@ -2195,8 +2197,41 @@ export function PropertyMap() {
     setApartadoForma("por_definir");
     setApartadoMotivo("");
     setApartadoError(null);
+    setUnitChangeRequired(false);
     setApartadoPanelOpen(true);
   }, []);
+
+  const handleChangePropertyUnit = useCallback(async () => {
+    const opportunityId = apartadoClient?.oportunidad_id;
+    if (!unidadId || !opportunityId) {
+      setApartadoError("Selecciona un contacto con una oportunidad abierta.");
+      return;
+    }
+    setUnitChangeLoading(true);
+    setApartadoError(null);
+    try {
+      const response = await fetch(`/api/crm/oportunidades/${opportunityId}/property-unit-change`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nueva_unidad_id: unidadId,
+          motivo: "El cliente eligió una unidad inmobiliaria diferente.",
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || payload?.detail || "property_unit_change_failed");
+      }
+      setStatusMessage("Unidad cambiada y apartada correctamente. Completa nuevamente la documentación.");
+      setUnitChangeRequired(false);
+      setApartadoPanelOpen(false);
+      refreshGeojson();
+    } catch (error) {
+      setApartadoError(error instanceof Error ? error.message : "property_unit_change_failed");
+    } finally {
+      setUnitChangeLoading(false);
+    }
+  }, [apartadoClient?.oportunidad_id, refreshGeojson, unidadId]);
 
   const handleConfirmApartado = useCallback(async () => {
     if (!unidadId || !apartadoClient?.id || !apartadoMotivo) {
@@ -2221,6 +2256,11 @@ export function PropertyMap() {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
+        if (payload?.detail === "property_opportunity_unit_change_required") {
+          setUnitChangeRequired(true);
+          setApartadoError("Esta oportunidad ya tiene otra unidad. Puedes cambiarla a esta unidad.");
+          return;
+        }
         throw new Error(payload?.error || payload?.detail || "property_apartado_failed");
       }
       setStatusMessage("Propiedad reservada correctamente.");
@@ -2668,6 +2708,10 @@ export function PropertyMap() {
       );
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
+        if (payload?.detail === "property_opportunity_unit_change_required") {
+          setUnitChangeRequired(true);
+          throw new Error("Esta oportunidad ya tiene otra unidad. Puedes cambiarla a esta unidad.");
+        }
         throw new Error(payload?.error || payload?.detail || "property_reserva_avance_failed");
       }
       const operationId = payload?.operacion?.id;
@@ -5555,6 +5599,11 @@ export function PropertyMap() {
                                   </select>
                                 </div>
                                 {apartadoError && <p className="text-xs text-rose-400">{apartadoError}</p>}
+                                {unitChangeRequired && apartadoClient?.oportunidad_id && (
+                                  <Button type="button" variant="outline" onClick={handleChangePropertyUnit} disabled={unitChangeLoading}>
+                                    {unitChangeLoading ? "Cambiando unidad..." : "Cambiar unidad y continuar"}
+                                  </Button>
+                                )}
                               </div>
                               <div className="flex justify-end gap-2">
                                 <Button type="button" variant="secondary" onClick={() => setApartadoPanelOpen(false)}>
@@ -6167,6 +6216,11 @@ export function PropertyMap() {
                                 </>
                                 )}
                                 {reservaError && <p className="text-xs text-rose-400">{reservaError}</p>}
+                                {unitChangeRequired && apartadoClient?.oportunidad_id && (
+                                  <Button type="button" variant="outline" onClick={handleChangePropertyUnit} disabled={unitChangeLoading}>
+                                    {unitChangeLoading ? "Cambiando unidad..." : "Cambiar unidad y continuar"}
+                                  </Button>
+                                )}
                               </div>}
                               <div className="flex justify-end gap-2">
                                 <Button type="button" variant="secondary" onClick={() => buyerChangeOpen ? setBuyerChangeOpen(false) : setReservaPanelOpen(false)}>Cancelar</Button>

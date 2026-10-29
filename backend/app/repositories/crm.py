@@ -1653,6 +1653,31 @@ class CRMRepository:
             return result
         raise CRMRepositoryError("property_buyer_change_invalid_response")
 
+    async def cambiar_unidad_operacion(
+        self,
+        *,
+        organizacion_id: UUID,
+        oportunidad_id: UUID,
+        unidad_nueva_id: UUID,
+        usuario_id: UUID,
+        motivo: str,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_cambiar_unidad_operacion",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_oportunidad_id": str(oportunidad_id),
+                "p_unidad_nueva_id": str(unidad_nueva_id),
+                "p_usuario_id": str(usuario_id),
+                "p_motivo": motivo,
+            },
+        )
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError("property_unit_change_invalid_response")
+
     async def list_cambios_comprador_operacion(
         self,
         *,
@@ -5056,7 +5081,7 @@ class CRMRepository:
             "organizacion_id": f"eq.{organizacion_id}",
             "oportunidad_id": f"eq.{oportunidad_id}",
             "order": "creado_en.desc",
-            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
+            "select": "id,organizacion_id,oportunidad_id,folio,cuenta_id,contacto_id,estatus,total,moneda,valida_hasta,creada_por_usuario_id,dominio_comercial,propiedad_id,unidad_id,operacion_inmobiliaria_id,sustituida_por_cotizacion_id,metadata,creado_en,actualizado_en,items:cotizacion_items(*,catalog_item:catalog_items(id,slug,nombre,tipo,unidad,precio_base,moneda,activo,descripcion,maneja_inventario,propiedad_id,unidad_id))",
             "items.order": "orden.asc,id.asc",
         }
         resp = await self._request("GET", "/rest/v1/cotizaciones", params=params)

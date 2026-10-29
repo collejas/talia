@@ -72,6 +72,25 @@ El flujo debe hacer la conexión inversa:
 No se debe crear una segunda oportunidad ni una segunda operación para la misma
 unidad y negocio.
 
+### Cambiar unidad de una oportunidad
+
+Si el cliente elige otra unidad, el usuario debe usar la acción **Cambiar
+unidad de la oportunidad**. El sistema ejecuta una sola operación transaccional:
+
+1. Verifica que la nueva unidad esté disponible.
+2. Crea una nueva propuesta inmobiliaria en borrador.
+3. Marca la propuesta anterior como `sustituida`, sin borrarla.
+4. Libera la unidad anterior y registra el movimiento.
+5. Liga la operación y la oportunidad con la nueva unidad.
+6. Aparta la nueva unidad y reinicia la validación documental.
+7. Actualiza el monto estimado de la oportunidad.
+
+Si alguna validación falla, no se modifica ninguna unidad ni cotización.
+
+Las oportunidades `ganada` o `perdida` no aparecen en el selector de Reservar o
+Apartar; solo las oportunidades abiertas pueden cambiar de unidad desde ese
+flujo.
+
 ### Estados y responsabilidades
 
 | Situación | Significado |
