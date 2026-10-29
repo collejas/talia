@@ -3742,6 +3742,24 @@ class CRMRepository:
             include_metadata=True,
             allow_title_fallback=True,
         )
+        try:
+            tenant_config = await self.get_organizacion_config(organizacion_id=organizacion_id)
+            tenant_features = tenant_config.get("features") if isinstance(tenant_config, dict) else None
+            property_feature = tenant_features.get("propiedades") if isinstance(tenant_features, dict) else None
+            product_feature = tenant_features.get("productos") if isinstance(tenant_features, dict) else None
+            property_only_tenant = bool(
+                isinstance(tenant_features, dict)
+                and isinstance(property_feature, dict)
+                and _coerce_bool(property_feature.get("enabled"))
+                and not (isinstance(product_feature, dict) and _coerce_bool(product_feature.get("enabled")))
+            )
+            if property_only_tenant and body.get("dominio_comercial") != "propiedades":
+                body["dominio_comercial"] = "propiedades"
+        except CRMRepositoryError as exc:
+            logger.warning(
+                "crm.create_opportunity_domain_resolution_failed",
+                extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+            )
         request_id = str(body.get("request_id") or "").strip()
         if not request_id:
             request_id = str(uuid4())
@@ -11587,19 +11605,17 @@ class CRMRepository:
         """
         tenant_config = await self.get_organizacion_config(organizacion_id=organizacion_id)
         tenant_features = tenant_config.get("features") if isinstance(tenant_config, dict) else None
+        property_feature = tenant_features.get("propiedades") if isinstance(tenant_features, dict) else None
+        product_feature = tenant_features.get("productos") if isinstance(tenant_features, dict) else None
         property_only_tenant = bool(
             isinstance(tenant_features, dict)
-            and isinstance(tenant_features.get("propiedades"), dict)
-            and tenant_features["propiedades"].get("enabled") is True
-            and not (
-                isinstance(tenant_features.get("productos"), dict)
-                and tenant_features["productos"].get("enabled") is True
-            )
+            and isinstance(property_feature, dict)
+            and _coerce_bool(property_feature.get("enabled"))
+            and not (isinstance(product_feature, dict) and _coerce_bool(product_feature.get("enabled")))
         )
         if property_only_tenant:
             for row in rows:
-                if row.get("dominio_comercial") != "mixto":
-                    row["dominio_comercial"] = "propiedades"
+                row["dominio_comercial"] = "propiedades"
             return rows
 
         opportunity_ids = [
