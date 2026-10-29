@@ -25,6 +25,60 @@ def test_lead_quote_item_rejects_unbounded_description() -> None:
         crm_routes.LeadQuoteItemPayload(descripcion=description)
 
 
+@pytest.mark.asyncio
+async def test_won_property_opportunity_requires_accepted_quote_and_unit() -> None:
+    repo = AsyncMock()
+    organization_id = uuid.uuid4()
+    opportunity_id = uuid.uuid4()
+    unit_id = uuid.uuid4()
+    quote_id = uuid.uuid4()
+    repo.list_accepted_quotes_by_opportunity_ids.return_value = [
+        {"id": str(quote_id), "dominio_comercial": "propiedades"}
+    ]
+    repo.list_quote_items.return_value = [{"unidad_id": str(unit_id)}]
+    repo.get_property_opportunity_context.return_value = {"unit": {"id": str(unit_id)}}
+
+    await crm_routes._validate_opportunity_won_requirements(
+        repo=repo,
+        organizacion_id=organization_id,
+        oportunidad_id=opportunity_id,
+        opportunity={"dominio_comercial": "propiedades"},
+    )
+
+    repo.get_property_opportunity_context.return_value = {"unit": None}
+    with pytest.raises(crm_routes.HTTPException) as exc_info:
+        await crm_routes._validate_opportunity_won_requirements(
+            repo=repo,
+            organizacion_id=organization_id,
+            oportunidad_id=opportunity_id,
+            opportunity={"dominio_comercial": "propiedades"},
+        )
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "won_property_unit_required"
+
+
+@pytest.mark.asyncio
+async def test_won_product_opportunity_requires_accepted_quote_items() -> None:
+    repo = AsyncMock()
+    organization_id = uuid.uuid4()
+    opportunity_id = uuid.uuid4()
+    quote_id = uuid.uuid4()
+    repo.list_accepted_quotes_by_opportunity_ids.return_value = [
+        {"id": str(quote_id), "dominio_comercial": "productos_servicios"}
+    ]
+    repo.list_quote_items.return_value = []
+
+    with pytest.raises(crm_routes.HTTPException) as exc_info:
+        await crm_routes._validate_opportunity_won_requirements(
+            repo=repo,
+            organizacion_id=organization_id,
+            oportunidad_id=opportunity_id,
+            opportunity={"dominio_comercial": "productos_servicios"},
+        )
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "won_opportunity_quote_items_required"
+
+
 def test_build_property_sale_records_uses_persisted_movement_and_unit_name() -> None:
     unit_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
 

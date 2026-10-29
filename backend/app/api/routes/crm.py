@@ -11384,6 +11384,78 @@ async def _ensure_won_stage_metadata(
     return metadata
 
 
+async def _validate_opportunity_won_requirements(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    oportunidad_id: UUID | None,
+    opportunity: Mapping[str, Any],
+) -> None:
+    """Bloquea cierres ganados sin evidencia comercial mínima."""
+    domain = _clean_text(opportunity.get("dominio_comercial")).lower()
+    if domain not in {"propiedades", "productos_servicios", "mixto"}:
+        raise HTTPException(status_code=409, detail="won_opportunity_domain_required")
+    if oportunidad_id is None:
+        raise HTTPException(status_code=409, detail="won_opportunity_quote_required")
+
+    accepted_quotes = await repo.list_accepted_quotes_by_opportunity_ids(
+        organizacion_id=organizacion_id,
+        oportunidad_ids=[oportunidad_id],
+    )
+    accepted_quote = next(
+        (
+            quote
+            for quote in accepted_quotes
+            if isinstance(quote, dict)
+            and (
+                domain == "mixto"
+                or _clean_text(quote.get("dominio_comercial")).lower() == domain
+            )
+        ),
+        None,
+    )
+    if not accepted_quote or not accepted_quote.get("id"):
+        raise HTTPException(status_code=409, detail="won_opportunity_accepted_quote_required")
+
+    quote_items = await repo.list_quote_items(
+        organizacion_id=organizacion_id,
+        cotizacion_id=UUID(str(accepted_quote["id"])),
+    )
+    if not quote_items:
+        raise HTTPException(status_code=409, detail="won_opportunity_quote_items_required")
+
+    if domain == "propiedades":
+        context = await repo.get_property_opportunity_context(
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+        )
+        unit = context.get("unit") if isinstance(context, dict) else None
+        if not isinstance(unit, dict) or not unit.get("id"):
+            raise HTTPException(status_code=409, detail="won_property_unit_required")
+        has_unit_item = any(
+            isinstance(item, dict)
+            and str(item.get("unidad_id") or "") == str(unit.get("id"))
+            for item in quote_items
+        )
+        if not has_unit_item:
+            raise HTTPException(status_code=409, detail="won_property_quote_unit_required")
+
+
+async def _pipeline_stage_is_won(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    etapa_id: UUID | None,
+) -> bool:
+    if etapa_id is None:
+        return False
+    stages = await repo.list_pipelines(organizacion_id=organizacion_id)
+    stage = next((row for row in stages if _safe_uuid(row.get("id")) == etapa_id), None)
+    if not isinstance(stage, dict):
+        return False
+    return _clean_text(stage.get("categoria")).lower() == "ganada"
+
+
 async def _auto_move_opportunity_to_won(
     *,
     repo: CRMRepository,
@@ -21921,6 +21993,18 @@ async def create_opportunity(
     payload: CRMOpportunityCreate,
 ) -> CRMOpportunity:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    stage_is_won = await _pipeline_stage_is_won(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        etapa_id=payload.etapa_id,
+    )
+    if stage_is_won or payload.estado.lower() == "ganada":
+        await _validate_opportunity_won_requirements(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            oportunidad_id=None,
+            opportunity=body,
+        )
     existing_row = None
     if payload.request_id:
         try:
@@ -21995,6 +22079,18 @@ async def pipeline_create_opportunity(
     payload: CRMOpportunityCreate,
 ) -> CRMPipelineCardResponse:
     body = payload.model_dump(mode="json", exclude_unset=True)
+    stage_is_won = await _pipeline_stage_is_won(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        etapa_id=payload.etapa_id,
+    )
+    if stage_is_won or payload.estado.lower() == "ganada":
+        await _validate_opportunity_won_requirements(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            oportunidad_id=None,
+            opportunity=body,
+        )
     existing_row = None
     if payload.request_id:
         try:
@@ -22061,6 +22157,26 @@ async def pipeline_update_opportunity(
         exclude_none=True,
         exclude={"expected_etapa_id", "motivo", "fuente"},
     )
+    target_stage_is_won = await _pipeline_stage_is_won(
+        repo=repo,
+        organizacion_id=organizacion_id,
+        etapa_id=payload.etapa_id or current_stage,
+    )
+    current_stage_data = current.get("etapa")
+    current_stage_is_won = (
+        isinstance(current_stage_data, dict)
+        and _clean_text(current_stage_data.get("categoria")).lower() == "ganada"
+    )
+    target_is_won = target_stage_is_won or _clean_text(payload.estado).lower() == "ganada"
+    if target_is_won and not current_stage_is_won:
+        await _validate_opportunity_won_requirements(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            oportunidad_id=oportunidad_id,
+            opportunity={**current, **update_body},
+        )
+        update_body.setdefault("estado", "ganada")
+        update_body.setdefault("cerrado_en", datetime.now(timezone.utc).isoformat())
     current_metadata = _ensure_dict(current.get("metadata"), default={})
     previous_booking_id = _extract_demo_booking_id(current_metadata)
     merged_metadata = current_metadata

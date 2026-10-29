@@ -4878,7 +4878,7 @@ class CRMRepository:
                 "organizacion_id": f"eq.{organizacion_id}",
                 "oportunidad_id": _postgrest_in_clause(chunk),
                 "estatus": "eq.aceptada",
-                "select": "id,oportunidad_id,total,moneda,metadata,creado_en,actualizado_en",
+                "select": "id,oportunidad_id,total,moneda,dominio_comercial,metadata,creado_en,actualizado_en",
                 "order": "actualizado_en.desc,creado_en.desc",
                 "limit": str(len(chunk) * 2),
             }
