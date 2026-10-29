@@ -94,26 +94,24 @@ Los usuarios con el permiso `inmobiliaria.apartados.validate` tienen un acceso v
 - Al abrirlo, se listan las unidades pendientes de revisión.
 - El mapa se filtra para mostrar únicamente esas unidades.
 
-## Reserva en borrador y representación visual
+## Reserva temporal y representación visual
 
-Una acción `Reservado` iniciada desde una unidad disponible se conserva como
-`borrador` y representa únicamente el bloqueo inicial. Al abrir `Apartado`, el
-vendedor completa el expediente y la operación pasa a `apartada`, cambia la
-unidad a apartado y activa la carga documental y la validación.
+Una acción `Reservar` solo crea una operación `reservada` cuando el usuario ya
+capturó los datos obligatorios. La unidad queda bloqueada por 24, 48 o 72 horas.
+No existe una operación inmobiliaria en estado `borrador`.
 
-La vista de propiedades también muestra una bandeja separada de **Reservas en
-borrador**. Incluye un contador, permite filtrar el mapa a esas unidades y abre
-cada operación para continuar el apartado. No se mezcla con `Validaciones
-inmobiliarias`, porque un borrador todavía no ha sido enviado a revisión.
+La reserva temporal no crea automáticamente un apartado. Si el cliente decide
+continuar, el usuario ejecuta explícitamente `Convertir en apartado`; entonces
+la operación pasa a `apartada`, la unidad cambia a apartado y se habilita el
+expediente documental y la validación.
 
-Al seleccionar una unidad en borrador, el detalle muestra `Reservado
-(borrador)` y la alerta `Operación incompleta`, con la acción para completar el
-apartado.
+Si la reserva vence o se cancela, la operación y su propuesta se conservan como
+historial cancelado y la unidad vuelve a `disponible`. La expiración se ejecuta
+automáticamente cada 15 minutos.
 
 Para que el mapa no la muestre como disponible, el GeoJSON combina el estado base
 de la unidad con la operación inmobiliaria activa y expone estos datos visuales:
 
-- `Reservado (borrador)`: color ámbar `#F59E0B`.
 - `Apartado en validación`: color amarillo intermedio `#F8D568`.
 - `Apartado firme`: color amarillo `#F1C40F`.
 - `Reservado`: color naranja `#F97316`.

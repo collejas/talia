@@ -48,7 +48,6 @@ const STATUS_COLORS = {
   disponible: "#2ECC71",
   apartado: "#F1C40F",
   reservado: "#F97316",
-  reservado_borrador: "#F59E0B",
   apartado_revision: "#F8D568",
   apartado_firme: "#F1C40F",
   vendido: "#E74C3C",
@@ -58,7 +57,6 @@ const STATUS_LABELS = {
   disponible: "Disponible",
   apartado: "Apartado",
   reservado: "Reservado",
-  reservado_borrador: "Reservado (borrador)",
   apartado_revision: "Apartado en validación",
   apartado_firme: "Apartado firme",
   vendido: "Vendido",
@@ -642,9 +640,6 @@ export function PropertyMap() {
   const [validationQueueItems, setValidationQueueItems] = useState([]);
   const [validationQueueTotal, setValidationQueueTotal] = useState(0);
   const [validationFilterActive, setValidationFilterActive] = useState(false);
-  const [draftFilterActive, setDraftFilterActive] = useState(false);
-  const [draftQueueOpen, setDraftQueueOpen] = useState(false);
-  const [draftOperationDetails, setDraftOperationDetails] = useState({});
   const [validationDetailOpen, setValidationDetailOpen] = useState(false);
   const [validationDetailLoading, setValidationDetailLoading] = useState(false);
   const [validationDetailError, setValidationDetailError] = useState(null);
@@ -1499,9 +1494,6 @@ export function PropertyMap() {
       (!validationFilterActive || (
         inferFeatureKind(feature) === "unidad" &&
         validationQueueItems.some((item) => String(item.unidad_id) === String(getFeatureId(feature) ?? feature?.id ?? feature?.properties?.id))
-      )) && (!draftFilterActive || (
-        inferFeatureKind(feature) === "unidad" &&
-        String(feature?.properties?.operation_status ?? "").toLowerCase() === "borrador"
       )) && matchesPropertyFeatureFilters(feature, {
         nivelFilter,
         tipoFilter,
@@ -1511,43 +1503,7 @@ export function PropertyMap() {
         buildFeatureMunicipioGeoKey: buildMunicipioGeoKey,
       }),
     );
-  }, [draftFilterActive, features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey, validationFilterActive, validationQueueItems]);
-
-  const draftOperationItems = useMemo(() => features
-    .filter((feature) => inferFeatureKind(feature) === "unidad")
-    .filter((feature) => String(feature?.properties?.operation_status ?? "").toLowerCase() === "borrador")
-    .map((feature) => ({
-      feature,
-      unidad_id: getFeatureId(feature) ?? feature?.id ?? feature?.properties?.id,
-      unidad: feature?.properties?.unidad ?? feature?.properties?.nombre ?? feature?.properties?.clave,
-      desarrollo: feature?.properties?.desarrollo_nombre ?? feature?.properties?.desarrollo,
-      macrolote: feature?.properties?.macrolote_nombre ?? getRelatedName(feature?.properties?.macrolote),
-      manzana: feature?.properties?.manzana_nombre ?? getRelatedName(feature?.properties?.manzana),
-    }))
-    .filter((item) => item.unidad_id != null), [features]);
-
-  const draftOperationTotal = draftOperationItems.length;
-
-  useEffect(() => {
-    if (!draftQueueOpen || !draftOperationItems.length) return undefined;
-    const controller = new AbortController();
-    const loadDraftDetails = async () => {
-      const entries = await Promise.all(draftOperationItems.map(async (item) => {
-        try {
-          const response = await fetch(`/api/crm/propiedad-unidades/${encodeURIComponent(item.unidad_id)}/reserva/actual`, { signal: controller.signal, cache: "no-store" });
-          const payload = await response.json().catch(() => null);
-          return response.ok && payload?.operacion ? [String(item.unidad_id), payload.operacion] : null;
-        } catch {
-          return null;
-        }
-      }));
-      if (!controller.signal.aborted) {
-        setDraftOperationDetails(Object.fromEntries(entries.filter(Boolean)));
-      }
-    };
-    void loadDraftDetails();
-    return () => controller.abort();
-  }, [draftOperationItems, draftQueueOpen]);
+  }, [features, nivelFilter, tipoFilter, mapLevel, selectedMunicipioGeoKey, selectedStateKey, validationFilterActive, validationQueueItems]);
 
   const panelFeatures = useMemo(() => {
     const hasExplicitFilter = Boolean(nivelFilter || tipoFilter);
@@ -1813,7 +1769,6 @@ export function PropertyMap() {
         return "vendidas";
       case "reservado":
       case "apartado":
-      case "reservado_borrador":
       case "apartado_revision":
       case "apartado_firme":
         return "apartadas";
@@ -2325,7 +2280,7 @@ export function PropertyMap() {
 
   const handleOpenReservaPanel = useCallback(() => {
     const deadline = new Date();
-    deadline.setDate(deadline.getDate() + 30);
+    deadline.setHours(deadline.getHours() + 48);
     if ((mapboxProps?.status ?? "").toString().toLowerCase() === "disponible") {
       setApartadoClientQuery("");
       setApartadoClients([]);
@@ -2526,7 +2481,7 @@ export function PropertyMap() {
     const loadContact = async () => {
       try {
         let contactId = apartadoClient?.id;
-        const shouldLoadOperation = status === "apartado" || operationStatus === "borrador";
+        const shouldLoadOperation = status === "apartado" || status === "reservado" || operationStatus === "reservada";
         if (shouldLoadOperation) {
           const operationResponse = await fetch(
             `/api/crm/propiedad-unidades/${unidadId}/reserva/actual`,
@@ -2739,20 +2694,32 @@ export function PropertyMap() {
       if (!buyerProfileResponse.ok) {
         throw new Error(buyerProfilePayload?.detail || buyerProfilePayload?.error || "No se pudieron guardar los datos del comprador.");
       }
+      const isApartado = (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado";
       const response = await fetch(
-        `/api/crm/propiedad-unidades/${unidadId}/reserva/${(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" ? "avance" : "avance-directo"}`,
+        isApartado
+          ? `/api/crm/propiedad-unidades/${unidadId}/apartar`
+          : `/api/crm/propiedad-unidades/${unidadId}/reserva/avance-directo`,
         {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...((mapboxProps?.status ?? "").toString().toLowerCase() !== "apartado" ? { cliente_principal_id: apartadoClient.id } : {}),
-          ...((mapboxProps?.status ?? "").toString().toLowerCase() !== "apartado" ? { oportunidad_id: apartadoClient.oportunidad_id } : {}),
-          precio_acordado: reservaPrecio ? Number(reservaPrecio) : null,
-          fecha_limite_reserva: reservaFechaLimite ? `${reservaFechaLimite}T23:59:59Z` : null,
-          forma_adquisicion: reservaForma,
-          reserva_importe: reservaImporte ? Number(reservaImporte) : null,
-          condiciones_reserva: reservaCondiciones || null,
-          tipo_comprador: reservaTipoComprador,
+          cliente_principal_id: apartadoClient.id,
+          oportunidad_id: apartadoClient.oportunidad_id,
+          ...(isApartado
+            ? {
+                apartado_horas: Number(apartadoHours),
+                apartado_motivo: reservaCondiciones || "El cliente solicita continuar con el proceso de apartado.",
+                precio_ofrecido: reservaPrecio ? Number(reservaPrecio) : null,
+                moneda: "MXN",
+              }
+            : {
+                precio_acordado: reservaPrecio ? Number(reservaPrecio) : null,
+                fecha_limite_reserva: reservaFechaLimite ? `${reservaFechaLimite}T23:59:59Z` : null,
+                forma_adquisicion: reservaForma,
+                reserva_importe: reservaImporte ? Number(reservaImporte) : null,
+                condiciones_reserva: reservaCondiciones || null,
+                tipo_comprador: reservaTipoComprador,
+              }),
         }),
         },
       );
@@ -2765,6 +2732,12 @@ export function PropertyMap() {
         throw new Error(payload?.error || payload?.detail || "property_reserva_avance_failed");
       }
       const operationId = payload?.operacion?.id;
+      if (!isApartado) {
+        setStatusMessage("Reserva temporal creada. Vencerá automáticamente si no se convierte en apartado.");
+        setReservaPanelOpen(false);
+        refreshGeojson();
+        return;
+      }
       const requiresApartadoValidation = !canValidateApartado;
       const requiredDocumentTypes = APARTADO_DOCUMENT_TYPES
         .filter(([type]) => type !== "acta_matrimonio")
@@ -3216,7 +3189,6 @@ export function PropertyMap() {
     setValidationDetailOpen(true);
     setValidationDetailLoading(true);
     setValidationFilterActive(true);
-    setDraftFilterActive(false);
     const feature = (featuresRef.current ?? []).find((candidate) =>
       String(getFeatureId(candidate) ?? candidate?.id ?? candidate?.properties?.id) === String(item.unidad_id),
     );
@@ -3235,13 +3207,6 @@ export function PropertyMap() {
     } finally {
       setValidationDetailLoading(false);
     }
-  }, [openMapboxFeature]);
-
-  const openDraftOperation = useCallback((item) => {
-    if (!item?.feature) return;
-    setValidationFilterActive(false);
-    setDraftFilterActive(true);
-    openMapboxFeature(item.feature);
   }, [openMapboxFeature]);
 
   const reviewValidationDocument = useCallback(async (documentId, reviewStatus) => {
@@ -5093,29 +5058,13 @@ export function PropertyMap() {
               </div>
             </div>
           )}
-          {!mapboxActive && (canValidateApartado || draftOperationTotal > 0) && (
+          {!mapboxActive && canValidateApartado && (
             <div className="pointer-events-auto absolute right-4 top-4 z-50 flex flex-wrap justify-end gap-2">
-              {draftOperationTotal > 0 && (
-                <button
-                  type="button"
-                  className="flex items-center gap-2 rounded-lg border border-orange-400/50 bg-slate-950/90 px-3 py-2 text-xs font-semibold text-orange-100 shadow-lg transition hover:bg-slate-900"
-                  onClick={() => {
-                    setValidationFilterActive(false);
-                    setDraftFilterActive(true);
-                    setDraftQueueOpen(true);
-                  }}
-                >
-                  <span aria-hidden="true" className="size-2 rounded-full bg-orange-400" />
-                  Reservas en borrador
-                  <span className="rounded-full bg-orange-400 px-2 py-0.5 text-[0.7rem] font-bold text-orange-950">{draftOperationTotal}</span>
-                </button>
-              )}
               {canValidateApartado && (
                 <button
                   type="button"
                   className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-slate-950/90 px-3 py-2 text-xs font-semibold text-amber-100 shadow-lg transition hover:bg-slate-900"
                   onClick={() => {
-                    setDraftFilterActive(false);
                     setValidationQueueOpen(true);
                     setValidationFilterActive(true);
                     void loadValidationQueue();
@@ -5126,14 +5075,6 @@ export function PropertyMap() {
                   <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[0.7rem] font-bold text-amber-950">{validationQueueTotal}</span>
                 </button>
               )}
-            </div>
-          )}
-          {!mapboxActive && draftFilterActive && (
-            <div className="pointer-events-auto absolute left-4 top-4 z-50 max-w-sm rounded-lg border border-orange-400/50 bg-slate-950/90 px-3 py-2 text-xs text-orange-100 shadow-lg">
-              <div className="flex items-center justify-between gap-3">
-                <span>Mostrando reservas en borrador</span>
-                <button type="button" className="font-semibold underline" onClick={() => setDraftFilterActive(false)}>Mostrar todas</button>
-              </div>
             </div>
           )}
           {!mapboxActive && canValidateApartado && (
@@ -5253,28 +5194,13 @@ export function PropertyMap() {
                     </button>
                   </div>
                 </div>
-                {(canValidateApartado || draftOperationTotal > 0) && (
+                {canValidateApartado && (
                   <div className="space-y-2 border-b border-slate-800 bg-slate-950/75 px-3 py-2">
-                    {draftOperationTotal > 0 && (
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between rounded border border-orange-400/40 bg-orange-400/10 px-3 py-2 text-left text-xs font-semibold text-orange-100 transition hover:bg-orange-400/20"
-                        onClick={() => {
-                          setValidationFilterActive(false);
-                          setDraftFilterActive(true);
-                          setDraftQueueOpen(true);
-                        }}
-                      >
-                        <span>Reservas en borrador</span>
-                        <span className="rounded-full bg-orange-400 px-2 py-0.5 text-[0.7rem] font-bold text-orange-950">{draftOperationTotal}</span>
-                      </button>
-                    )}
                     {canValidateApartado && (
                       <button
                         type="button"
                         className="flex w-full items-center justify-between rounded border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-left text-xs font-semibold text-amber-100 transition hover:bg-amber-400/20"
                         onClick={() => {
-                          setDraftFilterActive(false);
                           setValidationQueueOpen(true);
                           setValidationFilterActive(true);
                           void loadValidationQueue();
@@ -5443,12 +5369,6 @@ export function PropertyMap() {
                               <span>Status:</span>
                               <span className="font-semibold">{mapboxStatusLabel ?? "Sin status"}</span>
                             </div>
-                            {String(mapboxProps?.operation_status ?? "").toLowerCase() === "borrador" && (
-                              <div className="rounded border border-orange-400/40 bg-orange-400/10 px-3 py-2 text-xs normal-case tracking-normal text-orange-100">
-                                <p className="font-semibold">Operación incompleta</p>
-                                <p className="mt-1">Esta unidad está reservada en borrador. Completa el apartado para enviarlo a validación.</p>
-                              </div>
-                            )}
                             <div className="flex items-center justify-between text-[0.75rem] uppercase tracking-[0.2em]">
                               <span>Precio:</span>
                               <span className="font-semibold">{mapboxPriceLabel}</span>
@@ -5599,7 +5519,7 @@ export function PropertyMap() {
                                 onClick={handleOpenReservaPanel}
                                 disabled={statusLoading || reservaLoading}
                               >
-                                {reservaLoading ? "Preparando..." : "Apartado"}
+                                  {reservaLoading ? "Preparando..." : "Reservar"}
                               </button>
                               <button
                                 type="button"
@@ -5976,7 +5896,7 @@ export function PropertyMap() {
                                     ? "Guardando..."
                                     : (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
                                       ? "Continuar apartado"
-                                      : "Apartado"}
+                                      : "Convertir en apartado"}
                                 </button>
                                 {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && (
                                   <button
@@ -6003,15 +5923,15 @@ export function PropertyMap() {
                           >
                             <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
                               <DialogHeader>
-                                <DialogTitle>{buyerChangeOpen ? "Corregir comprador" : "Completar apartado"}</DialogTitle>
+                                <DialogTitle>{buyerChangeOpen ? "Corregir comprador" : ((mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" ? "Completar apartado" : "Crear reserva temporal")}</DialogTitle>
                                 <DialogDescription>
                                   {buyerChangeOpen
                                     ? "Selecciona el comprador correcto y registra el motivo. Los documentos y contratos anteriores deberán revisarse nuevamente."
                                     : (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
                                       ? `Completa el expediente del apartado. Estado: ${apartadoValidationStatus === "firme" ? "Firme" : apartadoValidationStatus === "pendiente_revision" ? "Pendiente de validación" : "Pendiente de captura"}.`
-                                      : "Completa los datos iniciales para preparar el apartado de esta propiedad."}
+                                      : "Completa los datos obligatorios. Al guardar se crea una reserva temporal; el apartado se inicia después mediante una acción explícita."}
                                 </DialogDescription>
-                                {!canValidateApartado && (
+                                {!canValidateApartado && (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && (
                                   <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
                                     En este formulario, después de los datos del comprador, encontrarás la sección <strong>Documentos del comprador</strong> para adjuntar acta de nacimiento, acta de matrimonio si aplica, INE, constancia fiscal, CURP y comprobante de domicilio.
                                   </p>
@@ -6097,7 +6017,7 @@ export function PropertyMap() {
                                     )}
                                   </div>
                                 )}
-                                <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
+                                {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
                                   <div>
                                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Cómo celebrará el contrato</p>
                                   <p className="mt-1 text-xs text-muted-foreground">Esto define qué datos del comprador se usarán en el contrato.</p>
@@ -6177,8 +6097,8 @@ export function PropertyMap() {
                                       <p className="text-xs text-muted-foreground">Estos datos se actualizan en la empresa o cuenta vinculada, no en el contacto.</p>
                                     </div>
                                   ) : null}
-                                </div>
-                                <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
+                                </div>}
+                                {(mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
                                   <div>
                                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Documentos del comprador</p>
                                     <p className="mt-1 text-xs text-muted-foreground">Adjunta aquí la documentación del comprador para que el usuario autorizado revise y formalice el apartado.</p>
@@ -6192,7 +6112,7 @@ export function PropertyMap() {
                                       </div>
                                     ))}
                                   </div>
-                                </div>
+                                </div>}
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <div className="space-y-1">
                                     <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-precio">Precio acordado <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. 3,500,000)</span></label>
@@ -6445,38 +6365,6 @@ export function PropertyMap() {
               </div>
             </div>
           )}
-          <Dialog open={draftQueueOpen} onOpenChange={setDraftQueueOpen}>
-            <DialogContent className="left-auto right-4 top-16 max-h-[calc(100vh-8rem)] w-full max-w-lg translate-x-0 translate-y-0 overflow-y-auto bg-background text-foreground">
-              <DialogHeader>
-                <DialogTitle>Reservas en borrador</DialogTitle>
-                <DialogDescription>Operaciones iniciadas que todavía necesitan completar el apartado.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3">
-                {draftOperationItems.length === 0 ? (
-                  <div className="rounded border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No hay reservas en borrador.</div>
-                ) : draftOperationItems.map((item) => {
-                  const operation = draftOperationDetails[String(item.unidad_id)] || {};
-                  const buyer = operation.cliente || {};
-                  const opportunity = operation.oportunidad || {};
-                  const unitDetail = operation.unidad || {};
-                  const location = [
-                    item.desarrollo || getRelatedName(unitDetail.desarrollo) || unitDetail.desarrollo_nombre,
-                    item.macrolote || getRelatedName(unitDetail.macrolote) || unitDetail.macrolote_nombre,
-                    item.manzana || getRelatedName(unitDetail.manzana) || unitDetail.manzana_nombre,
-                    item.unidad || unitDetail.unidad || unitDetail.nombre,
-                  ].filter(Boolean).join(" · ") || "Ubicación pendiente";
-                  return (
-                    <button key={String(item.unidad_id)} type="button" className="w-full rounded border border-border bg-card p-3 text-left transition hover:border-primary hover:bg-muted" onClick={() => { setDraftQueueOpen(false); openDraftOperation(item); }}>
-                      <p className="font-semibold text-foreground">{location}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Contacto: {buyer.nombre_completo || buyer.nombre || "Sin contacto ligado"}</p>
-                      <p className="text-xs text-muted-foreground">Oportunidad: {opportunity.titulo || "Sin oportunidad ligada"}{opportunity.codigo_oportunidad ? ` · ${opportunity.codigo_oportunidad}` : ""}</p>
-                      <p className="mt-1 text-xs text-orange-600">Reservado (borrador) · Completar apartado</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
       </section>
     </div>

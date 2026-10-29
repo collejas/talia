@@ -7289,6 +7289,20 @@ class PropiedadUnidadCambiarUnidadRequest(BaseModel):
         return normalized
 
 
+class PropiedadUnidadCancelarRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    motivo: str = Field(default="cancelacion_manual", min_length=5, max_length=1000)
+
+    @field_validator("motivo")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if len(normalized) < 5:
+            raise ValueError("property_reserva_cancel_reason_required")
+        return normalized
+
+
 class InmobiliariaContratoPlantilla(BaseModel):
     id: UUID
     organizacion_id: UUID
@@ -55419,6 +55433,7 @@ async def apartar_propiedad_unidad(
             "property_apartado_hours_invalid",
             "property_acquisition_method_invalid",
             "property_apartado_reason_required",
+            "property_reserva_not_found",
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_apartado_failed") from exc
@@ -55540,6 +55555,37 @@ async def obtener_operacion_reserva_actual_propiedad_unidad(
     if operation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_reserva_actual_not_found")
     return {"ok": True, "operacion": operation}
+
+
+@router.post("/propiedad-unidades/{unidad_id}/reserva/cancelar")
+async def cancelar_reserva_propiedad_unidad(
+    *,
+    unidad_id: UUID,
+    payload: PropiedadUnidadCancelarRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("sales.orders.submit")),
+) -> dict[str, Any]:
+    operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
+        organizacion_id=organizacion_id,
+        unidad_id=unidad_id,
+    )
+    if not operation or str(operation.get("estado") or "").lower() != "reservada":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="property_reserva_not_found")
+    try:
+        cancelled = await repo.cancelar_reserva_inmobiliaria(
+            organizacion_id=organizacion_id,
+            operacion_id=_safe_uuid(operation["id"]),
+            usuario_id=usuario_id,
+            motivo=payload.motivo,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        if "property_reserva_not_found" in message:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_reserva_cancel_failed") from exc
+    return {"ok": True, "operacion": cancelled}
 
 
 @router.post("/propiedad-unidades/{unidad_id}/reserva/cambiar-comprador")
@@ -56032,6 +56078,10 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
             "property_unit_not_available_for_direct_reservation",
             "property_client_not_found",
             "property_acquisition_method_invalid",
+            "property_agreed_price_required",
+            "property_acquisition_method_required",
+            "property_buyer_type_required",
+            "property_reservation_deadline_invalid",
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_direct_reservation_failed") from exc

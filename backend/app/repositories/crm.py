@@ -1732,7 +1732,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "unidad_id": f"eq.{unidad_id}",
-            "estado": "in.(apartada,borrador,reservado)",
+            "estado": "in.(apartada,reservada)",
             "order": "actualizado_en.desc",
             "limit": "1",
             "select": (
@@ -1769,6 +1769,29 @@ class CRMRepository:
                 unidad_id=unit_uuid,
             ) or {}
         return operation
+
+    async def cancelar_reserva_inmobiliaria(
+        self,
+        *,
+        organizacion_id: UUID,
+        operacion_id: UUID,
+        usuario_id: UUID | None,
+        motivo: str,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_cancelar_reserva_inmobiliaria",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_operacion_id": str(operacion_id),
+                "p_usuario_id": str(usuario_id) if usuario_id else None,
+                "p_motivo": motivo,
+            },
+        )
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            return result[0]
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError("property_reserva_cancel_invalid_response")
 
     async def list_inmobiliaria_apartados_pendientes_validacion(
         self,

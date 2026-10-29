@@ -6,7 +6,6 @@ const STATUS_COLORS: Record<string, string> = {
   disponible: "#2ECC71",
   apartado: "#F1C40F",
   reservado: "#F97316",
-  reservado_borrador: "#F59E0B",
   apartado_revision: "#F8D568",
   apartado_firme: "#F1C40F",
   vendido: "#E74C3C",
