@@ -5555,6 +5555,12 @@ export function PropertyMap() {
                                               {(client.telefono || client.correo) && (
                                                 <span className="block truncate text-xs text-slate-400">{client.telefono || client.correo}</span>
                                               )}
+                                              <span className="mt-1 block truncate text-xs text-primary">
+                                                Oportunidad: {client.oportunidad_titulo || "Sin título"}
+                                              </span>
+                                              <span className="block truncate text-xs text-muted-foreground">
+                                                Número: {client.oportunidad_codigo || client.oportunidad_id || "Sin número"}
+                                              </span>
                                             </button>
                                           ))}
                                         </div>
@@ -5952,7 +5958,13 @@ export function PropertyMap() {
                                                 className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
                                                 onClick={() => setApartadoClient(client)}
                                               >
-                                                {client.nombre || client.nombre_completo}
+                                                <span className="block truncate font-medium">{client.nombre || client.nombre_completo}</span>
+                                                <span className="block truncate text-xs text-primary">
+                                                  Oportunidad: {client.oportunidad_titulo || "Sin título"}
+                                                </span>
+                                                <span className="block truncate text-xs text-muted-foreground">
+                                                  Número: {client.oportunidad_codigo || client.oportunidad_id || "Sin número"}
+                                                </span>
                                               </button>
                                             ))}
                                           </div>
