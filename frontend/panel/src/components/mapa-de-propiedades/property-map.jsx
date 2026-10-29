@@ -5492,6 +5492,7 @@ export function PropertyMap() {
                                         onChange={(event) => setApartadoClientQuery(event.target.value)}
                                         placeholder="Busca por nombre, correo o teléfono"
                                       />
+                                      <p className="text-xs text-muted-foreground">Solo se muestran contactos con oportunidades abiertas.</p>
                                       {apartadoClientsLoading && <p className="text-xs text-muted-foreground">Buscando...</p>}
                                       {apartadoClients.length > 0 && (
                                           <div className="max-h-40 overflow-auto rounded border border-border bg-card">
@@ -5891,6 +5892,7 @@ export function PropertyMap() {
                                           onChange={(event) => setApartadoClientQuery(event.target.value)}
                                           placeholder="Buscar por nombre, teléfono o correo"
                                         />
+                                        <p className="text-xs text-muted-foreground">Solo se muestran contactos con oportunidades abiertas.</p>
                                         {apartadoClientsLoading && <p className="text-xs text-muted-foreground">Buscando...</p>}
                                         {apartadoClients.length > 0 && (
                                           <div className="max-h-36 overflow-y-auto rounded border border-border bg-card">

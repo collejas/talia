@@ -12260,6 +12260,7 @@ class CRMRepository:
 
         opportunity_params: dict[str, Any] = {
             "organizacion_id": f"eq.{organizacion_id}",
+            "estado": "eq.abierta",
             "or": (
                 f"(contacto_principal_id.in.({','.join(contact_ids)}),"
                 f"persona_id.in.({','.join(contact_ids)}))"
