@@ -2888,6 +2888,11 @@ export function LeadDrawer({
     const { desarrollo: selectedDevelopment, ...unitFields } = selectedUnit;
     const development = selectedDevelopment ?? propertyProposalContext?.development ?? null;
     const price = unitFields.precio;
+    const propertyLocation = [
+      development?.nombre,
+      unitFields.macrolote?.nombre,
+      unitFields.manzana?.nombre,
+    ].filter(Boolean).join(" · ");
     setPropertyProposalContext((current) => ({
       dominio_comercial: "propiedades",
       oportunidad: current?.oportunidad,
@@ -2899,7 +2904,7 @@ export function LeadDrawer({
       createQuoteItemForm({
         catalogItemId: unitFields.catalog_item_id,
         nombre: unitFields.nombre || unitFields.unidad || "Unidad inmobiliaria",
-        descripcion: unitFields.descripcion || development?.nombre || "Propuesta inmobiliaria",
+        descripcion: [propertyLocation, unitFields.descripcion].filter(Boolean).join(" — ") || "Propuesta inmobiliaria",
         unidad: "unidad",
         cantidad: "1",
         precioUnitario: price != null ? formatNumberInputValue(price) : "",

@@ -2374,8 +2374,10 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "select": (
-                "id,desarrollo_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
-                "desarrollo:propiedad_desarrollos!inner(id,nombre,descripcion,tipo,status,organizacion_id)"
+                "id,desarrollo_id,nivel_id,manzana_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
+                "desarrollo:propiedad_desarrollos!inner(id,nombre,descripcion,tipo,status,organizacion_id),"
+                "macrolote:propiedad_capas!nivel_id(id,nombre,desarrollo_id),"
+                "manzana:propiedad_manzanas!manzana_id(id,nombre,macrolote_id)"
             ),
             "desarrollo.organizacion_id": f"eq.{organizacion_id}",
             "order": "actualizado_en.desc,id.desc",
@@ -2441,8 +2443,10 @@ class CRMRepository:
             params={
                 "id": f"eq.{unidad_id}",
                 "select": (
-                    "id,desarrollo_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
-                    "desarrollo:propiedad_desarrollos!inner(id,nombre,descripcion,tipo,status,organizacion_id)"
+                    "id,desarrollo_id,nivel_id,manzana_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
+                    "desarrollo:propiedad_desarrollos!inner(id,nombre,descripcion,tipo,status,organizacion_id),"
+                    "macrolote:propiedad_capas!nivel_id(id,nombre,desarrollo_id),"
+                    "manzana:propiedad_manzanas!manzana_id(id,nombre,macrolote_id)"
                 ),
                 "desarrollo.organizacion_id": f"eq.{organizacion_id}",
                 "limit": "1",
@@ -6121,7 +6125,11 @@ class CRMRepository:
             "/rest/v1/propiedad_unidades",
             params={
                 "oportunidad_id": f"eq.{oportunidad_id}",
-                "select": "id,desarrollo_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en",
+                "select": (
+                    "id,desarrollo_id,nivel_id,manzana_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
+                    "macrolote:propiedad_capas!nivel_id(id,nombre,desarrollo_id),"
+                    "manzana:propiedad_manzanas!manzana_id(id,nombre,macrolote_id)"
+                ),
                 "order": "actualizado_en.desc,id.desc",
                 "limit": "1",
             },
@@ -6134,7 +6142,11 @@ class CRMRepository:
                 "/rest/v1/propiedad_unidades",
                 params={
                     "id": f"eq.{operation['unidad_id']}",
-                    "select": "id,desarrollo_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en",
+                    "select": (
+                        "id,desarrollo_id,nivel_id,manzana_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
+                        "macrolote:propiedad_capas!nivel_id(id,nombre,desarrollo_id),"
+                        "manzana:propiedad_manzanas!manzana_id(id,nombre,macrolote_id)"
+                    ),
                     "limit": "1",
                 },
             )

@@ -43,6 +43,8 @@ export type PropertyProposalContext = {
   unit: {
     id: string;
     desarrollo_id: string | null;
+    nivel_id?: string | null;
+    manzana_id?: string | null;
     catalog_item_id: string | null;
     unidad: string | null;
     nombre: string | null;
@@ -50,6 +52,16 @@ export type PropertyProposalContext = {
     status: string | null;
     precio: number | null;
     area_m2: number | null;
+    macrolote?: {
+      id: string;
+      nombre: string | null;
+      desarrollo_id: string | null;
+    } | null;
+    manzana?: {
+      id: string;
+      nombre: string | null;
+      macrolote_id: string | null;
+    } | null;
   } | null;
   development: {
     id: string;
@@ -85,6 +97,15 @@ function formatDate(value: string): string {
   return Number.isNaN(parsed.getTime())
     ? value
     : new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+}
+
+function formatUnitLocation(unit: PropertyUnitOption): string {
+  return [
+    unit.desarrollo?.nombre || "Sin desarrollo",
+    unit.macrolote?.nombre || "Sin macrolote",
+    unit.manzana?.nombre || "Sin manzana",
+    unit.nombre || unit.unidad || "Unidad",
+  ].join(" · ");
 }
 
 export function PropertyProposalBuilder({
@@ -225,7 +246,7 @@ export function PropertyProposalBuilder({
                   >
                     <span className="min-w-0">
                       <span className="block truncate font-medium">
-                        {option.desarrollo?.nombre || "Sin desarrollo"} · {option.nombre || option.unidad || "Unidad"}
+                        {formatUnitLocation(option)}
                       </span>
                       <span className="block truncate text-[10px] text-muted-foreground">
                         {option.descripcion || "Sin descripción"}
@@ -251,6 +272,8 @@ export function PropertyProposalBuilder({
       {context?.development || unit ? (
         <div className="grid gap-1 text-xs sm:grid-cols-2">
           <span><strong>Desarrollo:</strong> {context?.development?.nombre || "Sin desarrollo"}</span>
+          <span><strong>Macrolote:</strong> {unit?.macrolote?.nombre || "Sin macrolote"}</span>
+          <span><strong>Manzana:</strong> {unit?.manzana?.nombre || "Sin manzana"}</span>
           <span><strong>Unidad:</strong> {unit?.nombre || unit?.unidad || "Sin unidad"}</span>
           <span><strong>Estado:</strong> {unit?.status || operation?.estado || "Sin estado"}</span>
           <span><strong>Área:</strong> {unit?.area_m2 != null ? `${unit.area_m2} m²` : "Sin área"}</span>
@@ -332,7 +355,7 @@ export function PropertyProposalBuilder({
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-medium">
-                          {option.desarrollo?.nombre || "Sin desarrollo"} · {option.nombre || option.unidad || "Unidad"}
+                          {formatUnitLocation(option)}
                         </span>
                         <span className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
                           {option.descripcion || "Sin descripción"}
