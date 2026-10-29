@@ -36113,7 +36113,7 @@ async def _prepare_property_proposal_payload(
         raise HTTPException(status_code=409, detail="property_proposal_requires_property_opportunity")
     unit = context.get("unit")
     if not isinstance(unit, dict) or not unit.get("id"):
-        raise HTTPException(status_code=409, detail="property_unit_context_required")
+        raise HTTPException(status_code=409, detail="property_unit_selection_required")
     unit_status = _clean_text(unit.get("status")).lower()
     if unit_status in {"vendido", "cancelado", "inhabilitado", "no_disponible"}:
         raise HTTPException(status_code=409, detail="property_unit_not_available")

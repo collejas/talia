@@ -3143,6 +3143,10 @@ export function LeadDrawer({
   }, [fetchRenderedQuotePdf, quotePreviewPdfUrl]);
 
   const handleOpenQuotePreview = useCallback(async () => {
+    if (isPropertyOpportunity && !propertyProposalContext?.unit?.id) {
+      setQuoteError("Selecciona una unidad inmobiliaria antes de generar la propuesta.");
+      return;
+    }
     if (quoteVendorSettingsLoading) {
       setQuoteError("Espera a que cargue la configuración de cotización.");
       return;
@@ -3153,10 +3157,14 @@ export function LeadDrawer({
     } catch (error) {
       setQuoteError(error instanceof Error ? error.message : "No se pudo reservar el folio de la cotización.");
     }
-  }, [buildQuoteBasePayload, ensureQuoteFolio, openGeneratedQuotePdfPreview, quoteVendorSettingsLoading]);
+  }, [buildQuoteBasePayload, ensureQuoteFolio, isPropertyOpportunity, openGeneratedQuotePdfPreview, propertyProposalContext?.unit?.id, quoteVendorSettingsLoading]);
 
   const handleCreateQuote = () => {
     if (!card) return;
+    if (isPropertyOpportunity && !propertyProposalContext?.unit?.id) {
+      setQuoteError("Selecciona una unidad inmobiliaria antes de crear la propuesta.");
+      return;
+    }
     if (quoteVendorSettingsLoading) {
       setQuoteError("Espera a que cargue la configuración de cotización.");
       return;
@@ -3219,6 +3227,10 @@ export function LeadDrawer({
 
   const handleSendQuote = () => {
     if (!card) return;
+    if (isPropertyOpportunity && !propertyProposalContext?.unit?.id) {
+      setQuoteError("Selecciona una unidad inmobiliaria antes de enviar la propuesta.");
+      return;
+    }
     if (quoteVendorSettingsLoading) {
       setQuoteError("Espera a que cargue la configuración de cotización.");
       return;
