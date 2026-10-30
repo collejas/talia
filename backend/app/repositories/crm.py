@@ -1530,6 +1530,7 @@ class CRMRepository:
         apartado_motivo: str,
         precio_ofrecido: Decimal | None,
         moneda: str,
+        precio_override_motivo: str | None = None,
     ) -> dict[str, Any]:
         result = await self._rpc(
             "crm_apartar_propiedad",
@@ -1544,6 +1545,7 @@ class CRMRepository:
                 "p_apartado_motivo": apartado_motivo,
                 "p_precio_ofrecido": str(precio_ofrecido) if precio_ofrecido is not None else None,
                 "p_moneda": moneda,
+                "p_precio_override_motivo": precio_override_motivo,
             },
         )
         if isinstance(result, list):
@@ -1565,6 +1567,7 @@ class CRMRepository:
         reserva_importe: Decimal | None,
         condiciones_reserva: str | None,
         tipo_comprador: str | None,
+        precio_override_motivo: str | None = None,
     ) -> dict[str, Any]:
         result = await self._rpc(
             "crm_guardar_avance_reserva",
@@ -1601,6 +1604,7 @@ class CRMRepository:
         reserva_importe: Decimal | None,
         condiciones_reserva: str | None,
         tipo_comprador: str | None,
+        precio_override_motivo: str | None = None,
     ) -> dict[str, Any]:
         result = await self._rpc(
             "crm_guardar_avance_reserva_directa",
@@ -1616,6 +1620,7 @@ class CRMRepository:
                 "p_reserva_importe": str(reserva_importe) if reserva_importe is not None else None,
                 "p_condiciones_reserva": condiciones_reserva,
                 "p_tipo_comprador": tipo_comprador,
+                "p_precio_override_motivo": precio_override_motivo,
             },
         )
         if isinstance(result, list):
@@ -2437,7 +2442,7 @@ class CRMRepository:
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "select": (
-                "id,desarrollo_id,nivel_id,manzana_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
+                "id,desarrollo_id,nivel_id,manzana_id,catalog_item_id,unidad,nombre,descripcion,status,precio,precio_tipo,precio_m2,area_m2,actualizado_en,"
                 "desarrollo:propiedad_desarrollos!inner(id,nombre,descripcion,tipo,status,organizacion_id),"
                 "macrolote:propiedad_capas!nivel_id(id,nombre,desarrollo_id),"
                 "manzana:propiedad_manzanas!manzana_id(id,nombre,macrolote_id)"
@@ -2506,7 +2511,7 @@ class CRMRepository:
             params={
                 "id": f"eq.{unidad_id}",
                 "select": (
-                    "id,desarrollo_id,nivel_id,manzana_id,catalog_item_id,unidad,nombre,descripcion,status,precio,area_m2,actualizado_en,"
+                    "id,desarrollo_id,nivel_id,manzana_id,catalog_item_id,unidad,nombre,descripcion,status,precio,precio_tipo,precio_m2,area_m2,actualizado_en,"
                     "desarrollo:propiedad_desarrollos!inner(id,nombre,descripcion,tipo,status,organizacion_id),"
                     "macrolote:propiedad_capas!nivel_id(id,nombre,desarrollo_id),"
                     "manzana:propiedad_manzanas!manzana_id(id,nombre,macrolote_id)"

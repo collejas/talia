@@ -2437,6 +2437,38 @@ def _decimal_or_none(value: Any) -> Decimal | None:
     return None
 
 
+def _established_property_unit_price(unidad: dict[str, Any]) -> Decimal | None:
+    """Returns the price defined in the unit card, never a seller-entered price."""
+    precio_tipo = str(unidad.get("precio_tipo") or "manual").strip().lower()
+    if precio_tipo == PropiedadPrecioTipo.m2.value:
+        area_m2 = _decimal_or_none(unidad.get("area_m2"))
+        precio_m2 = _decimal_or_none(unidad.get("precio_m2"))
+        if area_m2 is not None and precio_m2 is not None:
+            return area_m2 * precio_m2
+    return _decimal_or_none(unidad.get("precio"))
+
+
+async def _resolve_property_operation_price(
+    *,
+    repo: CRMRepository,
+    unidad: dict[str, Any],
+    requested_price: Decimal | None,
+    override_reason: str | None,
+) -> Decimal:
+    established_price = _established_property_unit_price(unidad)
+    if established_price is None or established_price <= 0:
+        raise HTTPException(status_code=409, detail="property_price_required")
+    if requested_price is None:
+        return established_price
+    if abs(requested_price - established_price) <= Decimal("0.01"):
+        return established_price
+    if not await repo.current_user_has_perm(codigo="inmobiliaria.apartados.price_override"):
+        raise HTTPException(status_code=403, detail="property_price_override_forbidden")
+    if not override_reason or not override_reason.strip():
+        raise HTTPException(status_code=422, detail="property_price_override_reason_required")
+    return requested_price
+
+
 def _build_propiedad_unidad_payload(
     payload: PropiedadUnidadCreateRequest,
     *,
@@ -2710,7 +2742,7 @@ async def _ensure_property_quote_for_status(
     resolved_propiedad_id = propiedad_id or _safe_uuid(unidad.get("propiedad_id"))
     resolved_price = _decimal_to_number(precio_final)
     if resolved_price is None:
-        resolved_price = _as_number(unidad.get("precio"))
+        resolved_price = _as_number(_established_property_unit_price(unidad))
     if resolved_price is None or resolved_price <= 0:
         raise HTTPException(status_code=409, detail="property_price_required")
 
@@ -2843,7 +2875,7 @@ async def _sync_property_quote_price(
 
     resolved_price = _decimal_to_number(precio_final)
     if resolved_price is None:
-        resolved_price = _as_number(unidad.get("precio"))
+        resolved_price = _as_number(_established_property_unit_price(unidad))
     if resolved_price is None or resolved_price <= 0:
         raise HTTPException(status_code=409, detail="property_price_required")
 
@@ -3088,9 +3120,7 @@ async def _ensure_property_operation_for_won(
             unit_id = _safe_uuid((unit or {}).get("id")) if isinstance(unit, dict) else None
     if not unit_id:
         raise HTTPException(status_code=409, detail="won_property_unit_required")
-    price = _decimal_or_none((accepted_quote or {}).get("total"))
-    if price is None and isinstance(unit, dict):
-        price = _decimal_or_none(unit.get("precio"))
+    price = _established_property_unit_price(unit) if isinstance(unit, dict) else None
     try:
         return await repo.guardar_avance_reserva_directa(
             organizacion_id=organizacion_id,
@@ -7225,6 +7255,7 @@ class PropiedadUnidadApartarRequest(BaseModel):
     forma_adquisicion: Literal["contado", "credito", "mixto", "otro", "por_definir"] = "por_definir"
     apartado_motivo: str = Field(..., min_length=1, max_length=500)
     precio_ofrecido: Decimal | None = Field(default=None, ge=0)
+    motivo_precio_override: str | None = Field(default=None, min_length=5, max_length=1000)
     moneda: str = Field(default="MXN", min_length=3, max_length=3)
     oportunidad_id: UUID | None = None
 
@@ -7246,6 +7277,7 @@ class PropiedadUnidadReservaAvanceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     precio_acordado: Decimal | None = Field(default=None, ge=0)
+    motivo_precio_override: str | None = Field(default=None, min_length=5, max_length=1000)
     fecha_limite_reserva: datetime | None = None
     forma_adquisicion: Literal["contado", "credito", "mixto", "otro", "por_definir"] | None = None
     reserva_importe: Decimal | None = Field(default=None, ge=0)
@@ -55396,13 +55428,19 @@ async def apartar_propiedad_unidad(
         raise HTTPException(status_code=404, detail="property_unit_not_found")
     if not _safe_uuid(unidad.get("catalog_item_id")):
         raise HTTPException(status_code=409, detail="property_catalog_item_required")
+    resolved_price = await _resolve_property_operation_price(
+        repo=repo,
+        unidad=unidad,
+        requested_price=payload.precio_ofrecido,
+        override_reason=payload.motivo_precio_override,
+    )
     resolved_oportunidad_id, opportunity = await _ensure_property_operation_opportunity(
         repo=repo,
         organizacion_id=organizacion_id,
         unidad=unidad,
         cliente_principal_id=payload.cliente_principal_id,
         oportunidad_id=payload.oportunidad_id,
-        precio=payload.precio_ofrecido or _decimal_or_none(unidad.get("precio")),
+        precio=resolved_price,
         usuario_id=usuario_id,
     )
     await _ensure_property_opportunity_unit_is_current(
@@ -55421,8 +55459,9 @@ async def apartar_propiedad_unidad(
             apartado_horas=payload.apartado_horas,
             forma_adquisicion=payload.forma_adquisicion,
             apartado_motivo=payload.apartado_motivo,
-            precio_ofrecido=payload.precio_ofrecido,
+            precio_ofrecido=resolved_price,
             moneda=payload.moneda,
+            precio_override_motivo=payload.motivo_precio_override,
         )
     except CRMRepositoryError as exc:
         message = str(exc)
@@ -55434,6 +55473,9 @@ async def apartar_propiedad_unidad(
             "property_acquisition_method_invalid",
             "property_apartado_reason_required",
             "property_reserva_not_found",
+            "property_price_required",
+            "property_price_override_forbidden",
+            "property_price_override_reason_required",
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_apartado_failed") from exc
@@ -55446,7 +55488,7 @@ async def apartar_propiedad_unidad(
         cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
         catalog_item_id=_safe_uuid(unidad.get("catalog_item_id")),
         propiedad_id=_safe_uuid(unidad.get("propiedad_id")),
-        precio_final=payload.precio_ofrecido,
+        precio_final=resolved_price,
         moneda=payload.moneda,
         usuario_id=usuario_id,
     )
@@ -55465,6 +55507,12 @@ async def guardar_avance_reserva_propiedad_unidad(
     unidad = await repo.get_propiedad_unidad(unidad_id=unidad_id)
     if not unidad:
         raise HTTPException(status_code=404, detail="property_unit_not_found")
+    resolved_price = await _resolve_property_operation_price(
+        repo=repo,
+        unidad=unidad,
+        requested_price=payload.precio_acordado,
+        override_reason=payload.motivo_precio_override,
+    )
     current_operation = await repo.get_operacion_inmobiliaria_activa_por_unidad(
         organizacion_id=organizacion_id,
         unidad_id=unidad_id,
@@ -55488,7 +55536,7 @@ async def guardar_avance_reserva_propiedad_unidad(
             cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
             catalog_item_id=_safe_uuid(unidad.get("catalog_item_id")),
             propiedad_id=_safe_uuid(unidad.get("propiedad_id")),
-            precio_final=payload.precio_acordado,
+            precio_final=resolved_price,
             moneda=str((current_operation or {}).get("moneda") or "MXN"),
             usuario_id=None,
             validate_only=True,
@@ -55497,7 +55545,7 @@ async def guardar_avance_reserva_propiedad_unidad(
         operation = await repo.guardar_avance_reserva(
             organizacion_id=organizacion_id,
             unidad_id=unidad_id,
-            precio_acordado=payload.precio_acordado,
+            precio_acordado=resolved_price,
             fecha_limite_reserva=payload.fecha_limite_reserva,
             forma_adquisicion=payload.forma_adquisicion,
             reserva_importe=payload.reserva_importe,
@@ -55511,6 +55559,9 @@ async def guardar_avance_reserva_propiedad_unidad(
             "property_acquisition_method_invalid",
             "property_agreed_price_invalid",
             "property_reservation_amount_invalid",
+            "property_price_required",
+            "property_price_override_forbidden",
+            "property_price_override_reason_required",
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_reserva_avance_failed") from exc
@@ -55530,7 +55581,7 @@ async def guardar_avance_reserva_propiedad_unidad(
             cuenta_id=_safe_uuid((opportunity or {}).get("cuenta_id")),
             catalog_item_id=_safe_uuid(unidad.get("catalog_item_id")),
             propiedad_id=_safe_uuid(unidad.get("propiedad_id")),
-            precio_final=payload.precio_acordado,
+            precio_final=resolved_price,
             moneda=str(operation.get("moneda") or "MXN"),
             usuario_id=None,
         )
@@ -56042,13 +56093,19 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
         raise HTTPException(status_code=404, detail="property_unit_not_found")
     if not _safe_uuid(unidad.get("catalog_item_id")):
         raise HTTPException(status_code=409, detail="property_catalog_item_required")
+    resolved_price = await _resolve_property_operation_price(
+        repo=repo,
+        unidad=unidad,
+        requested_price=payload.precio_acordado,
+        override_reason=payload.motivo_precio_override,
+    )
     resolved_oportunidad_id, opportunity = await _ensure_property_operation_opportunity(
         repo=repo,
         organizacion_id=organizacion_id,
         unidad=unidad,
         cliente_principal_id=payload.cliente_principal_id,
         oportunidad_id=payload.oportunidad_id,
-        precio=payload.precio_acordado or _decimal_or_none(unidad.get("precio")),
+        precio=resolved_price,
         usuario_id=usuario_id,
     )
     await _ensure_property_opportunity_unit_is_current(
@@ -56064,12 +56121,13 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
             cliente_principal_id=payload.cliente_principal_id,
             agente_usuario_id=usuario_id,
             oportunidad_id=resolved_oportunidad_id,
-            precio_acordado=payload.precio_acordado,
+            precio_acordado=resolved_price,
             fecha_limite_reserva=payload.fecha_limite_reserva,
             forma_adquisicion=payload.forma_adquisicion,
             reserva_importe=payload.reserva_importe,
             condiciones_reserva=payload.condiciones_reserva,
             tipo_comprador=payload.tipo_comprador,
+            precio_override_motivo=payload.motivo_precio_override,
         )
     except CRMRepositoryError as exc:
         message = str(exc)
@@ -56082,6 +56140,9 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
             "property_acquisition_method_required",
             "property_buyer_type_required",
             "property_reservation_deadline_invalid",
+            "property_price_required",
+            "property_price_override_forbidden",
+            "property_price_override_reason_required",
         )):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="property_direct_reservation_failed") from exc
@@ -56100,7 +56161,7 @@ async def guardar_avance_reserva_directa_propiedad_unidad(
         cuenta_id=_safe_uuid(opportunity.get("cuenta_id")),
         catalog_item_id=_safe_uuid(unidad.get("catalog_item_id")),
         propiedad_id=_safe_uuid(unidad.get("propiedad_id")),
-        precio_final=payload.precio_acordado,
+        precio_final=resolved_price,
         moneda="MXN",
         usuario_id=usuario_id,
     )

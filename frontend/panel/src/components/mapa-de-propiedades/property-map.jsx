@@ -84,6 +84,15 @@ function getRelatedName(value) {
   return typeof relation === "string" ? relation : null;
 }
 
+function getPropertyOperationErrorMessage(detail, fallback) {
+  const messages = {
+    property_price_required: "Esta unidad no tiene un precio establecido válido en su ficha. Solicita que se complete la ficha antes de reservarla.",
+    property_price_override_forbidden: "No tienes autorización para modificar el precio establecido de la unidad.",
+    property_price_override_reason_required: "Captura el motivo de la autorización del precio diferente.",
+  };
+  return messages[String(detail || "")] || fallback;
+}
+
 const DEFAULT_CENTER_MAPBOX = [-99.1332, 19.4326];
 const DEFAULT_CENTER_LEAFLET = [23.6345, -102.5528];
 const TILE_SOURCE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -589,6 +598,9 @@ export function PropertyMap() {
   const [apartadoClients, setApartadoClients] = useState([]);
   const [apartadoClient, setApartadoClient] = useState(null);
   const [apartadoHours, setApartadoHours] = useState("48");
+  const [apartadoPrecio, setApartadoPrecio] = useState("");
+  const [precioOverrideActivo, setPrecioOverrideActivo] = useState(false);
+  const [precioOverrideMotivo, setPrecioOverrideMotivo] = useState("");
   const [apartadoForma, setApartadoForma] = useState("por_definir");
   const [apartadoMotivo, setApartadoMotivo] = useState("");
   const [apartadoError, setApartadoError] = useState(null);
@@ -634,6 +646,7 @@ export function PropertyMap() {
   const [contratoFirmadoFile, setContratoFirmadoFile] = useState(null);
   const [contratoFechaFirma, setContratoFechaFirma] = useState("");
   const [canValidateApartado, setCanValidateApartado] = useState(false);
+  const [canOverridePropertyPrice, setCanOverridePropertyPrice] = useState(false);
   const [validationQueueOpen, setValidationQueueOpen] = useState(false);
   const [validationQueueLoading, setValidationQueueLoading] = useState(false);
   const [validationQueueError, setValidationQueueError] = useState(null);
@@ -722,9 +735,13 @@ export function PropertyMap() {
         if (!mounted) return;
         const permissions = Array.isArray(payload?.permisos) ? payload.permisos.map((value) => String(value).toLowerCase()) : [];
         setCanValidateApartado(Boolean(payload?.es_admin || payload?.es_owner || permissions.includes("inmobiliaria.apartados.validate")));
+        setCanOverridePropertyPrice(Boolean(payload?.es_admin || payload?.es_owner || permissions.includes("inmobiliaria.apartados.price_override")));
       })
       .catch(() => {
-        if (mounted) setCanValidateApartado(false);
+        if (mounted) {
+          setCanValidateApartado(false);
+          setCanOverridePropertyPrice(false);
+        }
       });
     return () => { mounted = false; };
   }, []);
@@ -2186,6 +2203,18 @@ export function PropertyMap() {
         .join(" · ")
     : null;
 
+  const establishedUnitPrice = (() => {
+    if (!mapboxProps) return null;
+    const priceType = String(mapboxProps.precio_tipo || "manual").toLowerCase();
+    if (priceType === "m2") {
+      const area = Number(mapboxProps.area_m2);
+      const priceM2 = Number(mapboxProps.precio_m2);
+      if (Number.isFinite(area) && area > 0 && Number.isFinite(priceM2) && priceM2 > 0) return area * priceM2;
+    }
+    const price = Number(mapboxProps.precio);
+    return Number.isFinite(price) && price > 0 ? price : null;
+  })();
+
   const handleOpenSaleModal = useCallback(() => {
     const priceValue = mapboxProps?.precio;
     setSaleModalPrice(priceValue != null ? String(priceValue) : "");
@@ -2199,12 +2228,15 @@ export function PropertyMap() {
     setApartadoClients([]);
     setApartadoClient(null);
     setApartadoHours("48");
+    setApartadoPrecio(establishedUnitPrice != null ? String(establishedUnitPrice) : "");
+    setPrecioOverrideActivo(false);
+    setPrecioOverrideMotivo("");
     setApartadoForma("por_definir");
     setApartadoMotivo("");
     setApartadoError(null);
     setUnitChangeRequired(false);
     setApartadoPanelOpen(true);
-  }, []);
+  }, [establishedUnitPrice]);
 
   const handleChangePropertyUnit = useCallback(async () => {
     const opportunityId = apartadoClient?.oportunidad_id;
@@ -2239,8 +2271,16 @@ export function PropertyMap() {
   }, [apartadoClient?.oportunidad_id, refreshGeojson, unidadId]);
 
   const handleConfirmApartado = useCallback(async () => {
-    if (!unidadId || !apartadoClient?.id || !apartadoMotivo) {
-      setApartadoError("Selecciona el cliente y el motivo del bloqueo temporal.");
+    if (establishedUnitPrice == null || establishedUnitPrice <= 0) {
+      setApartadoError("Esta unidad no tiene un precio establecido válido en su ficha. Solicita que se complete la ficha antes de reservarla.");
+      return;
+    }
+    if (!unidadId || !apartadoClient?.id || !apartadoMotivo || (precioOverrideActivo && (!apartadoPrecio || Number(apartadoPrecio) <= 0))) {
+      setApartadoError("Selecciona el cliente y el motivo. El precio se toma de la ficha de la unidad.");
+      return;
+    }
+    if (precioOverrideActivo && !precioOverrideMotivo.trim()) {
+      setApartadoError("Captura el motivo de la autorización del precio diferente.");
       return;
     }
     setApartadoLoading(true);
@@ -2255,7 +2295,8 @@ export function PropertyMap() {
           apartado_horas: Number(apartadoHours),
           forma_adquisicion: apartadoForma,
           apartado_motivo: apartadoMotivo,
-          precio_ofrecido: mapboxProps?.precio ?? null,
+          precio_ofrecido: precioOverrideActivo ? Number(apartadoPrecio) : null,
+          motivo_precio_override: precioOverrideActivo ? precioOverrideMotivo.trim() : null,
           moneda: "MXN",
         }),
       });
@@ -2266,7 +2307,7 @@ export function PropertyMap() {
           setApartadoError("Esta oportunidad ya tiene otra unidad. Puedes cambiarla a esta unidad.");
           return;
         }
-        throw new Error(payload?.error || payload?.detail || "property_apartado_failed");
+        throw new Error(getPropertyOperationErrorMessage(payload?.error || payload?.detail, "No se pudo crear la reserva de la unidad."));
       }
       setStatusMessage("Propiedad reservada correctamente.");
       setApartadoPanelOpen(false);
@@ -2276,7 +2317,7 @@ export function PropertyMap() {
     } finally {
       setApartadoLoading(false);
     }
-  }, [apartadoClient?.id, apartadoForma, apartadoHours, apartadoMotivo, mapboxProps?.precio, refreshGeojson, unidadId]);
+  }, [apartadoClient?.id, apartadoForma, apartadoHours, apartadoMotivo, apartadoPrecio, establishedUnitPrice, precioOverrideActivo, precioOverrideMotivo, refreshGeojson, unidadId]);
 
   const handleOpenReservaPanel = useCallback(() => {
     const deadline = new Date();
@@ -2286,7 +2327,9 @@ export function PropertyMap() {
       setApartadoClients([]);
       setApartadoClient(null);
     }
-    setReservaPrecio(mapboxProps?.precio != null ? String(mapboxProps.precio) : "");
+    setReservaPrecio(establishedUnitPrice != null ? String(establishedUnitPrice) : "");
+    setPrecioOverrideActivo(false);
+    setPrecioOverrideMotivo("");
     setReservaFechaLimite(deadline.toISOString().slice(0, 10));
     setReservaForma("por_definir");
     setReservaImporte("");
@@ -2313,7 +2356,7 @@ export function PropertyMap() {
     setParteVendedoraFirmante("");
     setParteVendedoraCargo("");
     setReservaPanelOpen(true);
-  }, [mapboxProps?.precio, mapboxProps?.status]);
+  }, [establishedUnitPrice, mapboxProps?.status]);
 
   useEffect(() => {
     if (!isReservaPanelOpen || !unidadId || (mapboxProps?.status ?? "").toString().toLowerCase() !== "apartado") return undefined;
@@ -2672,8 +2715,16 @@ export function PropertyMap() {
 
   const handleSaveReservaAvance = useCallback(async () => {
     if (!unidadId) return;
+    if (establishedUnitPrice == null || establishedUnitPrice <= 0) {
+      setReservaError("Esta unidad no tiene un precio establecido válido en su ficha. Solicita que se complete la ficha antes de reservarla.");
+      return;
+    }
     if (!apartadoClient?.id) {
       setReservaError("Selecciona el contacto o comprador principal antes de guardar la reserva.");
+      return;
+    }
+    if (precioOverrideActivo && (!reservaPrecio || Number(reservaPrecio) <= 0 || !precioOverrideMotivo.trim())) {
+      setReservaError("El precio autorizado y su motivo son obligatorios cuando se modifica el precio establecido.");
       return;
     }
     setReservaLoading(true);
@@ -2709,11 +2760,13 @@ export function PropertyMap() {
             ? {
                 apartado_horas: Number(apartadoHours),
                 apartado_motivo: reservaCondiciones || "El cliente solicita continuar con el proceso de apartado.",
-                precio_ofrecido: reservaPrecio ? Number(reservaPrecio) : null,
+                precio_ofrecido: precioOverrideActivo ? Number(reservaPrecio) : null,
+                motivo_precio_override: precioOverrideActivo ? precioOverrideMotivo.trim() : null,
                 moneda: "MXN",
               }
             : {
-                precio_acordado: reservaPrecio ? Number(reservaPrecio) : null,
+                precio_acordado: precioOverrideActivo ? Number(reservaPrecio) : null,
+                motivo_precio_override: precioOverrideActivo ? precioOverrideMotivo.trim() : null,
                 fecha_limite_reserva: reservaFechaLimite ? `${reservaFechaLimite}T23:59:59Z` : null,
                 forma_adquisicion: reservaForma,
                 reserva_importe: reservaImporte ? Number(reservaImporte) : null,
@@ -2729,7 +2782,7 @@ export function PropertyMap() {
           setUnitChangeRequired(true);
           throw new Error("Esta oportunidad ya tiene otra unidad. Puedes cambiarla a esta unidad.");
         }
-        throw new Error(payload?.error || payload?.detail || "property_reserva_avance_failed");
+        throw new Error(getPropertyOperationErrorMessage(payload?.error || payload?.detail, "No se pudo guardar la reserva de la unidad."));
       }
       const operationId = payload?.operacion?.id;
       if (!isApartado) {
@@ -2830,7 +2883,7 @@ export function PropertyMap() {
     } finally {
       setReservaLoading(false);
     }
-  }, [apartadoClient?.id, apartadoDocumentFiles, apartadoDocuments, canValidateApartado, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, loadValidationQueue, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, refreshGeojson, renderContratoPreview, reservaCompradorDatos, reservaCondiciones, reservaCuentaDatos, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, reservaTipoComprador, unidadId]);
+  }, [apartadoClient?.id, apartadoDocumentFiles, apartadoDocuments, canValidateApartado, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, establishedUnitPrice, loadValidationQueue, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, precioOverrideActivo, precioOverrideMotivo, refreshGeojson, renderContratoPreview, reservaCompradorDatos, reservaCondiciones, reservaCuentaDatos, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, reservaTipoComprador, unidadId]);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
@@ -5612,6 +5665,22 @@ export function PropertyMap() {
                                     </>
                                   )}
                                 </div>
+                                <div className="space-y-1">
+                                  <label className="text-[0.65rem] uppercase tracking-[0.2em] text-foreground" htmlFor="apartado-price">
+                                    Precio establecido (MXN)
+                                  </label>
+                                  <Input id="apartado-price" value={apartadoPrecio} onChange={(event) => setApartadoPrecio(event.target.value)} inputMode="decimal" readOnly={!canOverridePropertyPrice || !precioOverrideActivo} className={!canOverridePropertyPrice || !precioOverrideActivo ? "bg-muted" : undefined} placeholder="Precio de la ficha de la unidad" />
+                                  <p className="text-xs text-muted-foreground">Se toma de la ficha de la unidad: precio fijo o área × precio por m².</p>
+                                  {canOverridePropertyPrice && (
+                                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <input type="checkbox" checked={precioOverrideActivo} onChange={(event) => setPrecioOverrideActivo(event.target.checked)} />
+                                      Autorizar un precio diferente
+                                    </label>
+                                  )}
+                                  {canOverridePropertyPrice && precioOverrideActivo && (
+                                    <Input value={precioOverrideMotivo} onChange={(event) => setPrecioOverrideMotivo(event.target.value)} placeholder="Motivo de la autorización" />
+                                  )}
+                                </div>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <div className="space-y-1">
                                     <label className="text-[0.65rem] uppercase tracking-[0.2em] text-foreground" htmlFor="apartado-hours">
@@ -6115,8 +6184,18 @@ export function PropertyMap() {
                                 </div>}
                                 <div className="grid gap-4 sm:grid-cols-2">
                                   <div className="space-y-1">
-                                    <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-precio">Precio acordado <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. 3,500,000)</span></label>
-                                    <Input id="reserva-precio" value={reservaPrecio} onChange={(event) => setReservaPrecio(event.target.value)} inputMode="decimal" placeholder="Ej. 3,500,000" />
+                                    <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-precio">Precio establecido (MXN)</label>
+                                    <Input id="reserva-precio" value={reservaPrecio} onChange={(event) => setReservaPrecio(event.target.value)} inputMode="decimal" readOnly={!canOverridePropertyPrice || !precioOverrideActivo} className={!canOverridePropertyPrice || !precioOverrideActivo ? "bg-muted" : undefined} placeholder="Precio de la ficha de la unidad" />
+                                    <p className="text-xs text-muted-foreground">Se toma de la ficha de la unidad: precio fijo o área × precio por m².</p>
+                                    {canOverridePropertyPrice && (
+                                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <input type="checkbox" checked={precioOverrideActivo} onChange={(event) => setPrecioOverrideActivo(event.target.checked)} />
+                                        Autorizar un precio diferente
+                                      </label>
+                                    )}
+                                    {canOverridePropertyPrice && precioOverrideActivo && (
+                                      <Input value={precioOverrideMotivo} onChange={(event) => setPrecioOverrideMotivo(event.target.value)} placeholder="Motivo de la autorización" />
+                                    )}
                                   </div>
                                   <div className="space-y-1">
                                     <label className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-foreground" htmlFor="reserva-fecha">Fecha límite <span className="font-normal normal-case tracking-normal text-muted-foreground">(Ej. 30/11/2026)</span></label>
