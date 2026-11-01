@@ -23,6 +23,7 @@ import {
   inferFeatureLayer,
   matchesPropertyFeatureFilters,
 } from "./property-map.logic.mjs";
+import { ExternalOperationDialog } from "./external-operation-dialog";
 
 function buildOpportunityOptionLabel(opportunity) {
   const contactLabel =
@@ -679,6 +680,7 @@ export function PropertyMap() {
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [statusError, setStatusError] = useState(null);
+  const [externalOperationOpen, setExternalOperationOpen] = useState(false);
   const [geojsonRefreshVersion, setGeojsonRefreshVersion] = useState(0);
   const lastSaleTimestampRef = useRef(null);
   const refreshGeojson = useCallback(() => {
@@ -5585,6 +5587,14 @@ export function PropertyMap() {
                               >
                                 {saleLoading ? "Preparando..." : "Preparar cierre"}
                               </button>
+                              <button
+                                type="button"
+                                className="flex-1 min-w-[160px] rounded border border-slate-500 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-100 transition hover:bg-slate-800 disabled:opacity-50"
+                                onClick={() => setExternalOperationOpen(true)}
+                                disabled={statusLoading || apartadoLoading || reservaLoading}
+                              >
+                                Registrar operación externa
+                              </button>
                             </div>
                             {statusMessage && (
                               <p className="text-[0.65rem] text-emerald-300">{statusMessage}</p>
@@ -6444,6 +6454,16 @@ export function PropertyMap() {
               </div>
             </div>
           )}
+          <ExternalOperationDialog
+            open={externalOperationOpen}
+            onOpenChange={setExternalOperationOpen}
+            unidadId={unidadId}
+            unitProps={mapboxProps}
+            onSuccess={() => {
+              setStatusMessage("Operación externa registrada. La unidad quedó ligada a su oportunidad.");
+              refreshGeojson();
+            }}
+          />
         </div>
       </section>
     </div>

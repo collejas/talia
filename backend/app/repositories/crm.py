@@ -2497,6 +2497,14 @@ class CRMRepository:
             raise CRMRepositoryError(f"inmobiliaria_socio_comercial_update_failed:{data!r}")
         return data[0]
 
+    async def delete_inmobiliaria_socio_comercial(self, *, organizacion_id: UUID, socio_id: UUID) -> None:
+        await self._request(
+            "DELETE",
+            f"/rest/v1/inmobiliaria_socios_comerciales?id=eq.{socio_id}&organizacion_id=eq.{organizacion_id}",
+            prefer="return=minimal",
+            organizacion_id=organizacion_id,
+        )
+
     async def list_inmobiliaria_agentes_externos(
         self,
         *,
@@ -2561,6 +2569,61 @@ class CRMRepository:
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise CRMRepositoryError(f"inmobiliaria_agente_externo_update_failed:{data!r}")
         return data[0]
+
+    async def delete_inmobiliaria_agente_externo(self, *, organizacion_id: UUID, agente_id: UUID) -> None:
+        await self._request(
+            "DELETE",
+            f"/rest/v1/inmobiliaria_agentes_externos?id=eq.{agente_id}&organizacion_id=eq.{organizacion_id}",
+            prefer="return=minimal",
+            organizacion_id=organizacion_id,
+        )
+
+    async def registrar_inmobiliaria_operacion_externa(
+        self,
+        *,
+        organizacion_id: UUID,
+        unidad_id: UUID,
+        cliente_principal_id: UUID,
+        oportunidad_id: UUID,
+        socio_comercial_externo_id: UUID,
+        agente_externo_id: UUID,
+        estado: str,
+        apartado_horas: int,
+        forma_adquisicion: str,
+        referencia_externa: str | None,
+        fecha_evento_externo: datetime | None,
+        comision_porcentaje: Decimal | None,
+        comision_monto: Decimal | None,
+        responsable_interno_usuario_id: UUID | None,
+        registrado_por_usuario_id: UUID | None,
+        motivo: str | None,
+    ) -> dict[str, Any]:
+        result = await self._rpc(
+            "crm_registrar_operacion_externa",
+            {
+                "p_organizacion_id": str(organizacion_id),
+                "p_unidad_id": str(unidad_id),
+                "p_cliente_principal_id": str(cliente_principal_id),
+                "p_oportunidad_id": str(oportunidad_id),
+                "p_socio_comercial_externo_id": str(socio_comercial_externo_id),
+                "p_agente_externo_id": str(agente_externo_id),
+                "p_estado": estado,
+                "p_apartado_horas": apartado_horas,
+                "p_forma_adquisicion": forma_adquisicion,
+                "p_referencia_externa": referencia_externa,
+                "p_fecha_evento_externo": fecha_evento_externo.isoformat() if fecha_evento_externo else None,
+                "p_comision_porcentaje": str(comision_porcentaje) if comision_porcentaje is not None else None,
+                "p_comision_monto": str(comision_monto) if comision_monto is not None else None,
+                "p_responsable_interno_usuario_id": str(responsable_interno_usuario_id) if responsable_interno_usuario_id else None,
+                "p_registrado_por_usuario_id": str(registrado_por_usuario_id) if registrado_por_usuario_id else None,
+                "p_motivo": motivo,
+            },
+        )
+        if isinstance(result, list):
+            result = result[0] if result and isinstance(result[0], dict) else None
+        if isinstance(result, dict):
+            return result
+        raise CRMRepositoryError(f"external_property_operation_invalid_response:{result!r}")
 
     async def search_propiedad_unidades(
         self,

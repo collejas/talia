@@ -105,6 +105,8 @@ function apiError(payload: unknown, fallback: string) {
         inmobiliaria_socio_ya_existente: "Ya existe un socio comercial con ese nombre.",
         inmobiliaria_agente_ya_existente: "Ya existe un agente con ese nombre dentro del socio comercial.",
         inmobiliaria_socio_not_found: "No se encontró el socio comercial seleccionado.",
+        inmobiliaria_socio_tiene_operaciones_o_agentes: "No se puede eliminar porque tiene agentes u operaciones relacionadas.",
+        inmobiliaria_agente_tiene_operaciones: "No se puede eliminar porque el agente tiene operaciones relacionadas.",
       }
       return messages[detail] ?? detail
     }
@@ -247,6 +249,40 @@ export function ExternalPartnersManager() {
     }
   }
 
+  async function deletePartner(partner: Partner) {
+    if (!window.confirm(`¿Eliminar el socio comercial ${partner.nombre}?`)) return
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/crm/inmobiliaria/socios-comerciales/${partner.id}`, { method: "DELETE" })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(apiError(payload, "No se pudo eliminar el socio comercial."))
+      await loadPartners()
+      setSuccess("Socio comercial eliminado.")
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "No se pudo eliminar el socio comercial.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteAgent(agent: ExternalAgent) {
+    if (!window.confirm(`¿Eliminar el agente ${agent.nombre}?`)) return
+    setSaving(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/crm/inmobiliaria/agentes-externos/${agent.id}`, { method: "DELETE" })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(apiError(payload, "No se pudo eliminar el agente externo."))
+      await loadAgents(selectedPartnerId)
+      setSuccess("Agente externo eliminado.")
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "No se pudo eliminar el agente externo.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -282,7 +318,7 @@ export function ExternalPartnersManager() {
         <Card>
           <CardHeader><CardTitle>Socios registrados</CardTitle><CardDescription>Elige un socio para administrar sus agentes.</CardDescription></CardHeader>
           <CardContent>
-            {loading ? <p className="text-sm text-muted-foreground">Cargando socios...</p> : partners.length === 0 ? <p className="text-sm text-muted-foreground">Aún no hay socios comerciales.</p> : <div className="space-y-2">{partners.map((partner) => <div key={partner.id} className={`flex items-center justify-between gap-3 rounded-md border p-3 ${selectedPartnerId === partner.id ? "border-primary bg-primary/5" : ""}`}><button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedPartnerId(partner.id)}><p className="truncate font-medium">{partner.nombre}</p><p className="text-xs text-muted-foreground">{partner.tipo} · {partner.activo ? "Activo" : "Inactivo"}</p></button><Button type="button" variant="outline" size="sm" onClick={() => togglePartner(partner)} disabled={saving}>{partner.activo ? "Desactivar" : "Activar"}</Button></div>)}</div>}
+            {loading ? <p className="text-sm text-muted-foreground">Cargando socios...</p> : partners.length === 0 ? <p className="text-sm text-muted-foreground">Aún no hay socios comerciales.</p> : <div className="space-y-2">{partners.map((partner) => <div key={partner.id} className={`flex items-center justify-between gap-3 rounded-md border p-3 ${selectedPartnerId === partner.id ? "border-primary bg-primary/5" : ""}`}><button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSelectedPartnerId(partner.id)}><p className="truncate font-medium">{partner.nombre}</p><p className="text-xs text-muted-foreground">{partner.tipo} · {partner.activo ? "Activo" : "Inactivo"}</p></button><div className="flex gap-2"><Button type="button" variant="outline" size="sm" onClick={() => togglePartner(partner)} disabled={saving}>{partner.activo ? "Desactivar" : "Activar"}</Button><Button type="button" variant="ghost" size="sm" onClick={() => deletePartner(partner)} disabled={saving}>Eliminar</Button></div></div>)}</div>}
           </CardContent>
         </Card>
       </div>
@@ -290,7 +326,7 @@ export function ExternalPartnersManager() {
       <Card>
         <CardHeader><CardTitle>Agentes externos{selectedPartner ? ` · ${selectedPartner.nombre}` : ""}</CardTitle><CardDescription>Estos agentes recibirán la atribución comercial de las operaciones externas.</CardDescription></CardHeader>
         <CardContent className="space-y-6">
-          {!selectedPartnerId ? <p className="text-sm text-muted-foreground">Primero registra o selecciona un socio comercial.</p> : <>
+            {!selectedPartnerId ? <p className="text-sm text-muted-foreground">Primero registra o selecciona un socio comercial.</p> : <>
             <form className="grid gap-4 rounded-md border bg-muted/20 p-4 md:grid-cols-2" onSubmit={saveAgent}>
               <div className="space-y-2"><Label htmlFor="agent-name">Nombre del agente</Label><Input id="agent-name" value={agentForm.nombre} onChange={(event) => setAgentForm((current) => ({ ...current, nombre: event.target.value }))} required /></div>
               <div className="space-y-2"><Label htmlFor="agent-reference">Referencia externa</Label><Input id="agent-reference" value={agentForm.referencia_externa} onChange={(event) => setAgentForm((current) => ({ ...current, referencia_externa: event.target.value }))} /></div>
@@ -298,7 +334,7 @@ export function ExternalPartnersManager() {
               <div className="space-y-2"><Label htmlFor="agent-phone">Teléfono</Label><Input id="agent-phone" value={agentForm.telefono} onChange={(event) => setAgentForm((current) => ({ ...current, telefono: event.target.value }))} /></div>
               <div className="md:col-span-2 flex justify-end"><Button type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar agente"}</Button></div>
             </form>
-            {agents.length === 0 ? <p className="text-sm text-muted-foreground">Aún no hay agentes para este socio.</p> : <div className="divide-y rounded-md border">{agents.map((agent) => <div key={agent.id} className="flex items-center justify-between gap-3 p-3"><div><p className="font-medium">{agent.nombre}</p><p className="text-xs text-muted-foreground">{agent.correo || "Sin correo"} · {agent.telefono || "Sin teléfono"}</p></div><span className="text-xs text-muted-foreground">{agent.activo ? "Activo" : "Inactivo"}</span></div>)}</div>}
+            {agents.length === 0 ? <p className="text-sm text-muted-foreground">Aún no hay agentes para este socio.</p> : <div className="divide-y rounded-md border">{agents.map((agent) => <div key={agent.id} className="flex items-center justify-between gap-3 p-3"><div><p className="font-medium">{agent.nombre}</p><p className="text-xs text-muted-foreground">{agent.correo || "Sin correo"} · {agent.telefono || "Sin teléfono"}</p></div><div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">{agent.activo ? "Activo" : "Inactivo"}</span><Button type="button" variant="ghost" size="sm" onClick={() => deleteAgent(agent)} disabled={saving}>Eliminar</Button></div></div>)}</div>}
           </>}
         </CardContent>
       </Card>

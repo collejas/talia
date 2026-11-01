@@ -7224,6 +7224,25 @@ class InmobiliariaAgenteExternoUpdateRequest(InmobiliariaAgenteExternoCreateRequ
     pass
 
 
+class InmobiliariaOperacionExternaCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    unidad_id: UUID
+    cliente_principal_id: UUID
+    oportunidad_id: UUID
+    socio_comercial_externo_id: UUID
+    agente_externo_id: UUID
+    estado: Literal["reservada", "apartada"] = "reservada"
+    apartado_horas: Literal[24, 48, 72] = 48
+    forma_adquisicion: Literal["contado", "credito", "mixto", "otro", "por_definir"] = "por_definir"
+    referencia_externa: str | None = Field(default=None, max_length=200)
+    fecha_evento_externo: datetime | None = None
+    comision_porcentaje: Decimal | None = Field(default=None, ge=0, le=100)
+    comision_monto: Decimal | None = Field(default=None, ge=0)
+    responsable_interno_usuario_id: UUID | None = None
+    motivo: str | None = Field(default=None, max_length=1000)
+
+
 class PropiedadDesarrolloCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     nombre: str = Field(..., min_length=1)
@@ -54693,6 +54712,22 @@ async def actualizar_socio_comercial_inmobiliario(
     return {"ok": True, "item": item}
 
 
+@router.delete("/inmobiliaria/socios-comerciales/{socio_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_socio_comercial_inmobiliario(
+    *,
+    socio_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
+) -> None:
+    try:
+        await repo.delete_inmobiliaria_socio_comercial(organizacion_id=organizacion_id, socio_id=socio_id)
+    except CRMRepositoryError as exc:
+        if "foreign key" in str(exc).lower() or "violates" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="inmobiliaria_socio_tiene_operaciones_o_agentes") from exc
+        raise HTTPException(status_code=502, detail="inmobiliaria_socio_delete_failed") from exc
+
+
 @router.get("/inmobiliaria/socios-comerciales/{socio_id}/agentes")
 async def listar_agentes_externos_inmobiliarios(
     *,
@@ -54763,6 +54798,73 @@ async def actualizar_agente_externo_inmobiliario(
             raise HTTPException(status_code=409, detail="inmobiliaria_agente_ya_existente") from exc
         raise HTTPException(status_code=502, detail="inmobiliaria_agente_update_failed") from exc
     return {"ok": True, "item": item}
+
+
+@router.delete("/inmobiliaria/agentes-externos/{agente_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_agente_externo_inmobiliario(
+    *,
+    agente_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
+) -> None:
+    try:
+        await repo.delete_inmobiliaria_agente_externo(organizacion_id=organizacion_id, agente_id=agente_id)
+    except CRMRepositoryError as exc:
+        if "foreign key" in str(exc).lower() or "violates" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="inmobiliaria_agente_tiene_operaciones") from exc
+        raise HTTPException(status_code=502, detail="inmobiliaria_agente_delete_failed") from exc
+
+
+@router.post("/inmobiliaria/operaciones-externas", status_code=status.HTTP_201_CREATED)
+async def registrar_operacion_externa_inmobiliaria(
+    *,
+    payload: InmobiliariaOperacionExternaCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inmobiliaria.operaciones_externas.create")),
+) -> dict[str, Any]:
+    try:
+        operation = await repo.registrar_inmobiliaria_operacion_externa(
+            organizacion_id=organizacion_id,
+            unidad_id=payload.unidad_id,
+            cliente_principal_id=payload.cliente_principal_id,
+            oportunidad_id=payload.oportunidad_id,
+            socio_comercial_externo_id=payload.socio_comercial_externo_id,
+            agente_externo_id=payload.agente_externo_id,
+            estado=payload.estado,
+            apartado_horas=payload.apartado_horas,
+            forma_adquisicion=payload.forma_adquisicion,
+            referencia_externa=payload.referencia_externa,
+            fecha_evento_externo=payload.fecha_evento_externo,
+            comision_porcentaje=payload.comision_porcentaje,
+            comision_monto=payload.comision_monto,
+            responsable_interno_usuario_id=payload.responsable_interno_usuario_id,
+            registrado_por_usuario_id=usuario_id,
+            motivo=payload.motivo,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc)
+        conflict_markers = (
+            "external_operation_state_invalid",
+            "external_partner_not_found",
+            "external_agent_not_found",
+            "property_unit_not_available",
+            "property_opportunity_required",
+            "property_opportunity_not_found",
+            "property_opportunity_contact_mismatch",
+            "property_client_not_found",
+            "property_price_required",
+            "external_commission_percentage_invalid",
+            "external_commission_amount_invalid",
+        )
+        if any(marker in message for marker in conflict_markers):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message) from exc
+        if "42501" in message or "permission" in message.lower():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="inmobiliaria_operacion_externa_failed") from exc
+    return {"ok": True, "operacion": operation}
 
 
 @router.get("/propiedades/hierarquia")

@@ -1,7 +1,7 @@
 # Ventas inmobiliarias con brokers y agentes externos
 
 Fecha: 2026-10-30 (UTC)  
-Estado: Fase 1 en implementación; catálogo de socios y agentes pendiente de aplicar en Supabase y desplegar
+Estado: Fase 1 en implementación; catálogo y registro transaccional aplicados en Supabase, pendientes de desplegar backend y frontend
 
 ## Fase 1 iniciada
 
@@ -13,9 +13,11 @@ Se preparó la primera entrega técnica:
 - Pantalla de administración dentro de Configuración > Propiedades.
 - Endpoints CRUD protegidos para socios y agentes.
 
-La migración todavía debe ser aplicada en Supabase y posteriormente se debe
-desplegar backend y frontend. El registro de la operación externa se implementa
-en la siguiente parte de esta fase, después de validar el catálogo.
+Las migraciones del catálogo y del registro transaccional ya fueron aplicadas
+en Supabase. Falta desplegar backend y frontend y realizar una prueba controlada
+con una unidad disponible. El registro exige una oportunidad inmobiliaria
+existente y un comprador relacionado; la creación automática de oportunidad y
+propuesta queda como la siguiente ampliación.
 
 ## Objetivo
 
@@ -238,6 +240,16 @@ coordinador, gerente o administrador operativo.
 ## Fases de implementación
 
 ### Fase 1: Catálogo y registro
+
+Implementación actual:
+
+- Catálogo de socios y agentes externos.
+- Permisos y RLS tenant-scoped.
+- Acción `Registrar operación externa` desde una unidad disponible.
+- Registro atómico de reserva o apartado, usando el precio establecido de la
+  ficha y guardando comisión, referencia, agente y usuario interno auditor.
+- Una venta reportada no se marca automáticamente como vendida definitiva;
+  continúa el expediente y la validación interna.
 
 - Crear socios comerciales externos y agentes externos.
 - Crear permisos.
