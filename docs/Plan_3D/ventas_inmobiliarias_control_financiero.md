@@ -1,7 +1,7 @@
 # Ventas inmobiliarias: control financiero y cierre
 
 Fecha: 2026-11-01  
-Estado: propuesta pendiente de implementación
+Estado: Fase 1 implementada; pagos, cierre y comisiones pendientes
 
 ## Idea principal
 
@@ -169,10 +169,15 @@ Estado · Precio · Pagado · Saldo · Socio · Agente · Fecha
 ### Fase 1: Vista y consulta
 
 - Crear `/ventas-inmobiliarias`.
-- Listar operaciones inmobiliarias firmes y cerradas.
-- Agregar filtros y búsqueda.
-- Mostrar relaciones completas de la unidad.
-- Mostrar socio y agente externo.
+- Listar operaciones inmobiliarias existentes, con estado y validación.
+- Agregar filtros por estado, origen interno/externo y búsqueda textual.
+- Mostrar desarrollo, macrolote, manzana y unidad.
+- Mostrar oportunidad, comprador, socio y agente externo.
+- Exponer la consulta protegida por módulo `propiedades` y permisos comerciales.
+
+La primera versión es de consulta. Todavía no registra pagos, no calcula
+saldo financiero y no autoriza comisiones; esos procesos permanecen en las
+fases siguientes.
 
 ### Fase 2: Pagos
 

@@ -130,6 +130,7 @@ const NAVIGATION: {
     { title: "Agenda", url: "/agenda", icon: IconCalendar, permission: "agenda.view" },
     { title: "Mapa de Conversion", url: "/mapa-de-conversion", icon: IconMap, permission: "reports.view" },
     { title: "Propiedades 3D", url: "/propiedades", icon: IconBuilding, permission: "propiedades.view" },
+    { title: "Ventas inmobiliarias", url: "/ventas-inmobiliarias", icon: IconBuilding, permission: "propiedades.view" },
     {
       title: "Prospeccion",
       url: "/prospeccion/busqueda",

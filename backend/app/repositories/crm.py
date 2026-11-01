@@ -1517,6 +1517,92 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_ventas_invalid_response:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_inmobiliaria_ventas(
+        self,
+        *,
+        organizacion_id: UUID,
+        estado: str | None = None,
+        estado_validacion: str | None = None,
+        origen_venta: str | None = None,
+        socio_comercial_externo_id: UUID | None = None,
+        agente_externo_id: UUID | None = None,
+        desde: datetime | None = None,
+        hasta: datetime | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "creado_en.desc,id.desc",
+            "limit": str(max(1, min(limit, 200))),
+            "offset": str(max(0, offset)),
+            "select": (
+                "id,organizacion_id,unidad_id,oportunidad_id,cliente_principal_id,"
+                "estado,estado_validacion,apartado_horas,apartado_iniciado_en,"
+                "apartado_vencimiento_en,forma_adquisicion,precio_ofrecido,"
+                "precio_acordado,precio_final,precio_establecido,moneda,"
+                "fecha_limite_reserva,reserva_importe,creado_en,actualizado_en,"
+                "origen_venta,socio_comercial_externo_id,agente_externo_id,"
+                "registrado_por_usuario_id,responsable_interno_usuario_id,"
+                "referencia_externa,fecha_evento_externo,comision_porcentaje,"
+                "comision_monto,comision_estado,"
+                "oportunidad:oportunidades!operaciones_inmobiliarias_oportunidad_id_fkey(id,titulo,codigo_oportunidad,estado),"
+                "cliente:personas!operaciones_inmobiliarias_cliente_principal_id_fkey(id,nombre,nombre_completo,correo_principal,telefono_principal_e164),"
+                "socio_comercial:inmobiliaria_socios_comerciales!operaciones_inmobiliarias_socio_comercial_externo_id_fkey(id,nombre,tipo),"
+                "agente_externo:inmobiliaria_agentes_externos!operaciones_inmobiliarias_agente_externo_id_fkey(id,nombre,correo,telefono)"
+            ),
+        }
+        if estado:
+            params["estado"] = f"eq.{estado}"
+        if estado_validacion:
+            params["estado_validacion"] = f"eq.{estado_validacion}"
+        if origen_venta:
+            params["origen_venta"] = f"eq.{origen_venta}"
+        if socio_comercial_externo_id:
+            params["socio_comercial_externo_id"] = f"eq.{socio_comercial_externo_id}"
+        if agente_externo_id:
+            params["agente_externo_id"] = f"eq.{agente_externo_id}"
+        if desde and hasta:
+            params["creado_en"] = f"and(gte.{desde.isoformat()},lt.{hasta.isoformat()})"
+        elif desde:
+            params["creado_en"] = f"gte.{desde.isoformat()}"
+        elif hasta:
+            params["creado_en"] = f"lt.{hasta.isoformat()}"
+
+        response = await self._request(
+            "GET",
+            "/rest/v1/operaciones_inmobiliarias",
+            params=params,
+            prefer="count=exact",
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError("inmobiliaria_sales_invalid_response")
+        total = len(data)
+        content_range = response.headers.get("content-range", "")
+        if "/" in content_range:
+            try:
+                total = int(content_range.rsplit("/", 1)[1])
+            except ValueError:
+                total = len(data)
+
+        rows: list[dict[str, Any]] = []
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            unit_id = _safe_uuid(row.get("unidad_id"))
+            row["unidad"] = (
+                await self.get_propiedad_unidad_for_organizacion(
+                    organizacion_id=organizacion_id,
+                    unidad_id=unit_id,
+                )
+                if unit_id
+                else {}
+            )
+            rows.append(row)
+        return rows, total
+
     async def apartar_propiedad(
         self,
         *,

@@ -7243,6 +7243,13 @@ class InmobiliariaOperacionExternaCreateRequest(BaseModel):
     motivo: str | None = Field(default=None, max_length=1000)
 
 
+class InmobiliariaVentasResponse(BaseModel):
+    items: list[dict[str, Any]] = Field(default_factory=list)
+    total: int = 0
+    limit: int
+    offset: int
+
+
 class PropiedadDesarrolloCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     nombre: str = Field(..., min_length=1)
@@ -54867,6 +54874,44 @@ async def registrar_operacion_externa_inmobiliaria(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="inmobiliaria_operacion_externa_failed") from exc
     return {"ok": True, "operacion": operation}
+
+
+@router.get("/inmobiliaria/ventas", response_model=InmobiliariaVentasResponse)
+async def listar_ventas_inmobiliarias(
+    *,
+    estado: Literal["reservada", "apartada", "vendida", "cancelada"] | None = Query(default=None),
+    estado_validacion: Literal["pendiente_captura", "pendiente_revision", "en_revision", "firme", "rechazada"] | None = Query(default=None),
+    origen_venta: Literal["interno", "externo"] | None = Query(default=None),
+    socio_comercial_externo_id: UUID | None = Query(default=None),
+    agente_externo_id: UUID | None = Query(default=None),
+    desde: date | None = Query(default=None),
+    hasta: date | None = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_any_permission(["sales.view", "propiedades.view", "inmobiliaria.apartados.validate"])),
+) -> InmobiliariaVentasResponse:
+    if desde and hasta and desde > hasta:
+        raise HTTPException(status_code=422, detail="invalid_date_range")
+    desde_dt = datetime.combine(desde, dt_time.min, tzinfo=timezone.utc) if desde else None
+    hasta_dt = datetime.combine(hasta + timedelta(days=1), dt_time.min, tzinfo=timezone.utc) if hasta else None
+    try:
+        items, total = await repo.list_inmobiliaria_ventas(
+            organizacion_id=organizacion_id,
+            estado=estado,
+            estado_validacion=estado_validacion,
+            origen_venta=origen_venta,
+            socio_comercial_externo_id=socio_comercial_externo_id,
+            agente_externo_id=agente_externo_id,
+            desde=desde_dt,
+            hasta=hasta_dt,
+            limit=limit,
+            offset=offset,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="inmobiliaria_sales_list_failed") from exc
+    return InmobiliariaVentasResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/propiedades/hierarquia")
