@@ -1823,7 +1823,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "unidad_id": f"eq.{unidad_id}",
-            "estado": "in.(apartada,reservada)",
+            "estado": "in.(apartada,reservada,vendida)",
             "order": "actualizado_en.desc",
             "limit": "1",
             "select": (
@@ -1892,7 +1892,7 @@ class CRMRepository:
     ) -> tuple[list[dict[str, Any]], int]:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
-            "estado": "eq.apartada",
+            "estado": "in.(apartada,vendida)",
             "estado_validacion": "eq.pendiente_revision",
             "order": "enviado_a_validacion_en.asc,actualizado_en.asc",
             "limit": str(max(1, min(limit, 100))),

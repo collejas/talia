@@ -2526,7 +2526,7 @@ export function PropertyMap() {
     const loadContact = async () => {
       try {
         let contactId = apartadoClient?.id;
-        const shouldLoadOperation = status === "apartado" || status === "reservado" || operationStatus === "reservada";
+        const shouldLoadOperation = status === "apartado" || status === "reservado" || status === "vendido" || operationStatus === "reservada" || operationStatus === "vendida";
         if (shouldLoadOperation) {
           const operationResponse = await fetch(
             `/api/crm/propiedad-unidades/${unidadId}/reserva/actual`,
@@ -5138,12 +5138,12 @@ export function PropertyMap() {
                 <DialogContent className="left-auto right-4 top-16 max-h-[calc(100vh-8rem)] w-full max-w-lg translate-x-0 translate-y-0 overflow-y-auto bg-background text-foreground">
                   <DialogHeader>
                     <DialogTitle>Validaciones inmobiliarias</DialogTitle>
-                    <DialogDescription>Expedientes de Apartado pendientes de revisión.</DialogDescription>
+                    <DialogDescription>Apartados y ventas históricas pendientes de revisión.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-3">
                     {validationQueueLoading && <p className="text-sm text-muted-foreground">Cargando expedientes...</p>}
                     {validationQueueError && <p className="text-sm text-rose-600">{validationQueueError}</p>}
-                    {!validationQueueLoading && !validationQueueItems.length && !validationQueueError && <div className="rounded border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No hay apartados pendientes de validación.</div>}
+                    {!validationQueueLoading && !validationQueueItems.length && !validationQueueError && <div className="rounded border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No hay expedientes pendientes de validación.</div>}
                     {validationQueueItems.map((item) => {
                       const buyer = item.cliente || {};
                       const unit = item.unidad || {};
@@ -5157,7 +5157,7 @@ export function PropertyMap() {
                         <button key={item.id} type="button" className="w-full rounded border border-border bg-card p-3 text-left transition hover:border-primary hover:bg-muted" onClick={() => void openValidationDetail(item)}>
                           <p className="font-semibold text-foreground">{hierarchy || item.unidad_id}</p>
                           <p className="text-xs text-muted-foreground">Comprador: {buyer.nombre_completo || buyer.nombre || "Sin nombre"}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{formatMoney(Number(item.precio_acordado ?? item.precio_ofrecido ?? unit.precio ?? 0))} · {item.forma_adquisicion || "Por definir"}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{item.estado === "vendida" ? "Venta histórica" : "Apartado"} · {formatMoney(Number(item.precio_acordado ?? item.precio_ofrecido ?? unit.precio ?? 0))} · {item.forma_adquisicion || "Por definir"}</p>
                         </button>
                       );
                     })}
@@ -5271,13 +5271,13 @@ export function PropertyMap() {
                   <DialogContent className="left-auto right-2 top-16 max-h-[calc(100vh-8rem)] w-full max-w-lg translate-x-0 translate-y-0 overflow-y-auto bg-background text-foreground">
                     <DialogHeader>
                       <DialogTitle>Validaciones inmobiliarias</DialogTitle>
-                      <DialogDescription>Expedientes de Apartado enviados por vendedores y pendientes de revisión.</DialogDescription>
+                      <DialogDescription>Apartados y ventas históricas enviados a revisión.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3">
                       {validationQueueLoading && <p className="text-sm text-muted-foreground">Cargando expedientes...</p>}
                       {validationQueueError && <p className="text-sm text-rose-600">{validationQueueError}</p>}
                       {!validationQueueLoading && !validationQueueItems.length && !validationQueueError && (
-                        <div className="rounded border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No hay apartados pendientes de validación.</div>
+                        <div className="rounded border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No hay expedientes pendientes de validación.</div>
                       )}
                       {validationQueueItems.map((item) => {
                         const buyer = item.cliente || {};
@@ -5302,7 +5302,7 @@ export function PropertyMap() {
                                 <p className="font-semibold text-foreground">{hierarchy}</p>
                                 <p className="text-xs text-muted-foreground">Comprador: {buyerName}</p>
                               </div>
-                              <span className="rounded-full bg-amber-100 px-2 py-1 text-[0.65rem] font-semibold text-amber-900">Pendiente</span>
+                              <span className="rounded-full bg-amber-100 px-2 py-1 text-[0.65rem] font-semibold text-amber-900">{item.estado === "vendida" ? "Venta histórica" : "Apartado"}</span>
                             </div>
                             <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
                               <span>Precio: {formatMoney(Number(item.precio_acordado ?? item.precio_ofrecido ?? unit.precio ?? 0))}</span>

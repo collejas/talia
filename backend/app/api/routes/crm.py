@@ -56193,8 +56193,10 @@ async def subir_documento_apartado_propiedad_unidad(
     )
     if not operation or not operation.get("id") or not operation.get("cliente_principal_id"):
         raise HTTPException(status_code=404, detail="property_reserva_actual_not_found")
-    if operation.get("estado") != "apartada":
+    if operation.get("estado") not in {"apartada", "vendida"}:
         raise HTTPException(status_code=409, detail="property_apartado_document_upload_not_allowed")
+    if operation.get("estado") == "vendida" and operation.get("estado_validacion") not in {"pendiente_revision", "en_revision"}:
+        raise HTTPException(status_code=409, detail="property_historical_sale_validation_not_pending")
 
     original_name = Path(file.filename or "").name
     content_type = (file.content_type or "application/octet-stream").lower()
