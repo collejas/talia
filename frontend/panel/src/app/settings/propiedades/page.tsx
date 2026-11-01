@@ -43,9 +43,14 @@ export default async function SettingsPropiedadesPage() {
     <AppViewLayout title="Settings · Propiedades inmobiliarias">
       <div className="px-4 py-0 lg:px-6">
         <div className="flex justify-end py-4">
-          <Button asChild variant="outline">
-            <Link href="/settings/propiedades/contratos">Administrar contratos</Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <Link href="/settings/propiedades/socios-comerciales">Socios comerciales externos</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/settings/propiedades/contratos">Administrar contratos</Link>
+            </Button>
+          </div>
         </div>
         <section className="space-y-0">
           <PropiedadForm lineas={lineas} familias={familias} modelos={modelos} tipos={tipos} />

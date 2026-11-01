@@ -2432,6 +2432,136 @@ class CRMRepository:
             raise CRMRepositoryError(f"propiedad_desarrollos_invalid_response:{data!r}")
         return [row for row in data if isinstance(row, dict)]
 
+    async def list_inmobiliaria_socios_comerciales(
+        self,
+        *,
+        organizacion_id: UUID,
+        search: str | None = None,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "order": "activo.desc,nombre.asc",
+            "limit": "500",
+            "select": "id,organizacion_id,tipo,nombre,rfc,contacto_nombre,correo,telefono,comision_porcentaje,activo,notas,creado_en,actualizado_en",
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        if search and search.strip():
+            params["nombre"] = f"ilike.{_postgrest_ilike_literal(search.strip()[:100])}"
+        response = await self._request(
+            "GET",
+            "/rest/v1/inmobiliaria_socios_comerciales",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"inmobiliaria_socios_comerciales_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def create_inmobiliaria_socio_comercial(
+        self,
+        *,
+        organizacion_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            "/rest/v1/inmobiliaria_socios_comerciales",
+            json={"organizacion_id": str(organizacion_id), **payload},
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"inmobiliaria_socio_comercial_create_failed:{data!r}")
+        return data[0]
+
+    async def update_inmobiliaria_socio_comercial(
+        self,
+        *,
+        organizacion_id: UUID,
+        socio_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "PATCH",
+            f"/rest/v1/inmobiliaria_socios_comerciales?id=eq.{socio_id}&organizacion_id=eq.{organizacion_id}",
+            json={**payload, "actualizado_en": datetime.now(timezone.utc).isoformat()},
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"inmobiliaria_socio_comercial_update_failed:{data!r}")
+        return data[0]
+
+    async def list_inmobiliaria_agentes_externos(
+        self,
+        *,
+        organizacion_id: UUID,
+        socio_id: UUID,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "socio_comercial_id": f"eq.{socio_id}",
+            "order": "activo.desc,nombre.asc",
+            "limit": "500",
+            "select": "id,organizacion_id,socio_comercial_id,nombre,correo,telefono,referencia_externa,activo,notas,creado_en,actualizado_en",
+        }
+        if not include_inactive:
+            params["activo"] = "eq.true"
+        response = await self._request(
+            "GET",
+            "/rest/v1/inmobiliaria_agentes_externos",
+            params=params,
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list):
+            raise CRMRepositoryError(f"inmobiliaria_agentes_externos_invalid_response:{data!r}")
+        return [row for row in data if isinstance(row, dict)]
+
+    async def create_inmobiliaria_agente_externo(
+        self,
+        *,
+        organizacion_id: UUID,
+        socio_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            "/rest/v1/inmobiliaria_agentes_externos",
+            json={"organizacion_id": str(organizacion_id), "socio_comercial_id": str(socio_id), **payload},
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"inmobiliaria_agente_externo_create_failed:{data!r}")
+        return data[0]
+
+    async def update_inmobiliaria_agente_externo(
+        self,
+        *,
+        organizacion_id: UUID,
+        agente_id: UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "PATCH",
+            f"/rest/v1/inmobiliaria_agentes_externos?id=eq.{agente_id}&organizacion_id=eq.{organizacion_id}",
+            json={**payload, "actualizado_en": datetime.now(timezone.utc).isoformat()},
+            prefer="return=representation",
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            raise CRMRepositoryError(f"inmobiliaria_agente_externo_update_failed:{data!r}")
+        return data[0]
+
     async def search_propiedad_unidades(
         self,
         *,

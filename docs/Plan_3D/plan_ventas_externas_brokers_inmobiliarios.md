@@ -1,7 +1,21 @@
 # Ventas inmobiliarias con brokers y agentes externos
 
 Fecha: 2026-10-30 (UTC)  
-Estado: Propuesta funcional pendiente de implementación
+Estado: Fase 1 en implementación; catálogo de socios y agentes pendiente de aplicar en Supabase y desplegar
+
+## Fase 1 iniciada
+
+Se preparó la primera entrega técnica:
+
+- Catálogo separado de socios comerciales y agentes externos.
+- Permisos para administrar brokers y agentes.
+- Relaciones tenant-scoped y constraints de integridad.
+- Pantalla de administración dentro de Configuración > Propiedades.
+- Endpoints CRUD protegidos para socios y agentes.
+
+La migración todavía debe ser aplicada en Supabase y posteriormente se debe
+desplegar backend y frontend. El registro de la operación externa se implementa
+en la siguiente parte de esta fase, después de validar el catálogo.
 
 ## Objetivo
 

@@ -7169,6 +7169,61 @@ class PropiedadDesarrolloModo(str, Enum):
     vertical = "vertical"
 
 
+class InmobiliariaSocioComercialTipo(str, Enum):
+    inmobiliaria = "inmobiliaria"
+    broker_independiente = "broker_independiente"
+    agencia = "agencia"
+
+
+class InmobiliariaSocioComercialCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tipo: InmobiliariaSocioComercialTipo = InmobiliariaSocioComercialTipo.inmobiliaria
+    nombre: str = Field(..., min_length=2, max_length=200)
+    rfc: str | None = Field(default=None, max_length=13)
+    contacto_nombre: str | None = Field(default=None, max_length=200)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono: str | None = Field(default=None, max_length=50)
+    comision_porcentaje: Decimal | None = Field(default=None, ge=0, le=100)
+    activo: bool = True
+    notas: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("nombre")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("nombre_required")
+        return normalized
+
+
+class InmobiliariaSocioComercialUpdateRequest(InmobiliariaSocioComercialCreateRequest):
+    pass
+
+
+class InmobiliariaAgenteExternoCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(..., min_length=2, max_length=200)
+    correo: str | None = Field(default=None, max_length=320)
+    telefono: str | None = Field(default=None, max_length=50)
+    referencia_externa: str | None = Field(default=None, max_length=200)
+    activo: bool = True
+    notas: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("nombre")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("nombre_required")
+        return normalized
+
+
+class InmobiliariaAgenteExternoUpdateRequest(InmobiliariaAgenteExternoCreateRequest):
+    pass
+
+
 class PropiedadDesarrolloCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     nombre: str = Field(..., min_length=1)
@@ -54568,6 +54623,146 @@ async def propiedades_tipos(
         return await repo.list_propiedad_tipos(organizacion_id=organizacion_id)
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/inmobiliaria/socios-comerciales")
+async def listar_socios_comerciales_inmobiliarios(
+    *,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
+    query: str | None = Query(default=None, max_length=100),
+    incluir_inactivos: bool = Query(default=False),
+) -> dict[str, Any]:
+    try:
+        items = await repo.list_inmobiliaria_socios_comerciales(
+            organizacion_id=organizacion_id,
+            search=query,
+            include_inactive=incluir_inactivos,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="inmobiliaria_socios_list_failed") from exc
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/inmobiliaria/socios-comerciales", status_code=status.HTTP_201_CREATED)
+async def crear_socio_comercial_inmobiliario(
+    *,
+    payload: InmobiliariaSocioComercialCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
+) -> dict[str, Any]:
+    body = payload.model_dump(exclude_none=True, mode="json")
+    if usuario_id:
+        body["creado_por_usuario_id"] = str(usuario_id)
+    try:
+        item = await repo.create_inmobiliaria_socio_comercial(
+            organizacion_id=organizacion_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc).lower()
+        if "duplicate" in message or "unique" in message:
+            raise HTTPException(status_code=409, detail="inmobiliaria_socio_ya_existente") from exc
+        raise HTTPException(status_code=502, detail="inmobiliaria_socio_create_failed") from exc
+    return {"ok": True, "item": item}
+
+
+@router.patch("/inmobiliaria/socios-comerciales/{socio_id}")
+async def actualizar_socio_comercial_inmobiliario(
+    *,
+    socio_id: UUID,
+    payload: InmobiliariaSocioComercialUpdateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
+) -> dict[str, Any]:
+    try:
+        item = await repo.update_inmobiliaria_socio_comercial(
+            organizacion_id=organizacion_id,
+            socio_id=socio_id,
+            payload=payload.model_dump(exclude_none=True, mode="json"),
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc).lower()
+        if "duplicate" in message or "unique" in message:
+            raise HTTPException(status_code=409, detail="inmobiliaria_socio_ya_existente") from exc
+        raise HTTPException(status_code=502, detail="inmobiliaria_socio_update_failed") from exc
+    return {"ok": True, "item": item}
+
+
+@router.get("/inmobiliaria/socios-comerciales/{socio_id}/agentes")
+async def listar_agentes_externos_inmobiliarios(
+    *,
+    socio_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
+    incluir_inactivos: bool = Query(default=False),
+) -> dict[str, Any]:
+    try:
+        items = await repo.list_inmobiliaria_agentes_externos(
+            organizacion_id=organizacion_id,
+            socio_id=socio_id,
+            include_inactive=incluir_inactivos,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="inmobiliaria_agentes_list_failed") from exc
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/inmobiliaria/socios-comerciales/{socio_id}/agentes", status_code=status.HTTP_201_CREATED)
+async def crear_agente_externo_inmobiliario(
+    *,
+    socio_id: UUID,
+    payload: InmobiliariaAgenteExternoCreateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    usuario_id: UUID | None = Depends(optional_usuario_id),
+    _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
+) -> dict[str, Any]:
+    body = payload.model_dump(exclude_none=True, mode="json")
+    if usuario_id:
+        body["creado_por_usuario_id"] = str(usuario_id)
+    try:
+        item = await repo.create_inmobiliaria_agente_externo(
+            organizacion_id=organizacion_id,
+            socio_id=socio_id,
+            payload=body,
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc).lower()
+        if "duplicate" in message or "unique" in message:
+            raise HTTPException(status_code=409, detail="inmobiliaria_agente_ya_existente") from exc
+        if "foreign key" in message or "violates" in message:
+            raise HTTPException(status_code=404, detail="inmobiliaria_socio_not_found") from exc
+        raise HTTPException(status_code=502, detail="inmobiliaria_agente_create_failed") from exc
+    return {"ok": True, "item": item}
+
+
+@router.patch("/inmobiliaria/agentes-externos/{agente_id}")
+async def actualizar_agente_externo_inmobiliario(
+    *,
+    agente_id: UUID,
+    payload: InmobiliariaAgenteExternoUpdateRequest,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
+) -> dict[str, Any]:
+    try:
+        item = await repo.update_inmobiliaria_agente_externo(
+            organizacion_id=organizacion_id,
+            agente_id=agente_id,
+            payload=payload.model_dump(exclude_none=True, mode="json"),
+        )
+    except CRMRepositoryError as exc:
+        message = str(exc).lower()
+        if "duplicate" in message or "unique" in message:
+            raise HTTPException(status_code=409, detail="inmobiliaria_agente_ya_existente") from exc
+        raise HTTPException(status_code=502, detail="inmobiliaria_agente_update_failed") from exc
+    return {"ok": True, "item": item}
 
 
 @router.get("/propiedades/hierarquia")
