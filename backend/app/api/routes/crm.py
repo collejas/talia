@@ -54712,20 +54712,21 @@ async def actualizar_socio_comercial_inmobiliario(
     return {"ok": True, "item": item}
 
 
-@router.delete("/inmobiliaria/socios-comerciales/{socio_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/inmobiliaria/socios-comerciales/{socio_id}")
 async def eliminar_socio_comercial_inmobiliario(
     *,
     socio_id: UUID,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
-) -> None:
+) -> dict[str, bool]:
     try:
         await repo.delete_inmobiliaria_socio_comercial(organizacion_id=organizacion_id, socio_id=socio_id)
     except CRMRepositoryError as exc:
         if "foreign key" in str(exc).lower() or "violates" in str(exc).lower():
             raise HTTPException(status_code=409, detail="inmobiliaria_socio_tiene_operaciones_o_agentes") from exc
         raise HTTPException(status_code=502, detail="inmobiliaria_socio_delete_failed") from exc
+    return {"ok": True}
 
 
 @router.get("/inmobiliaria/socios-comerciales/{socio_id}/agentes")
@@ -54800,20 +54801,21 @@ async def actualizar_agente_externo_inmobiliario(
     return {"ok": True, "item": item}
 
 
-@router.delete("/inmobiliaria/agentes-externos/{agente_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/inmobiliaria/agentes-externos/{agente_id}")
 async def eliminar_agente_externo_inmobiliario(
     *,
     agente_id: UUID,
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_permission("inmobiliaria.brokers.manage")),
-) -> None:
+) -> dict[str, bool]:
     try:
         await repo.delete_inmobiliaria_agente_externo(organizacion_id=organizacion_id, agente_id=agente_id)
     except CRMRepositoryError as exc:
         if "foreign key" in str(exc).lower() or "violates" in str(exc).lower():
             raise HTTPException(status_code=409, detail="inmobiliaria_agente_tiene_operaciones") from exc
         raise HTTPException(status_code=502, detail="inmobiliaria_agente_delete_failed") from exc
+    return {"ok": True}
 
 
 @router.post("/inmobiliaria/operaciones-externas", status_code=status.HTTP_201_CREATED)
