@@ -13,6 +13,22 @@
   administrativas invalidan esos cachés.
 - Los cursores IMAP se cargan agrupados una vez por buzón y se conservan en
   memoria; los ciclos idle ya no hacen un `GET` por carpeta.
+- Las sincronizaciones y la verificación de webhooks Postmark ya no fuerzan
+  una lectura de `postmark.server_token` en cada ciclo; respetan el caché de
+  runtime y la invalidación administrativa.
+
+### Evidencia posterior al despliegue
+
+- En la ventana `2026-11-02 19:19–19:23 UTC`, los workers Postmark quedaron
+  `active/running` sin reinicios adicionales.
+- `postmark.server_token` registró 2 lecturas, frente a 18 antes de retirar el
+  `force_refresh=True`.
+- La hidratación IMAP produjo 10 lecturas iniciales de
+  `tenant_mailbox_sync_state` y 0 escrituras; los ciclos idle posteriores no
+  repitieron esas consultas.
+- La ingesta observada en `edge_logs` fue de 0.20 MB en esa ventana. Esta
+  métrica es observacional y no representa todavía el cierre del ciclo de
+  facturación de Supabase.
 
 - El filtro `Estado correo` fuerza `count=exact` en la API de prospectos. Antes
   la consulta podía filtrar correctamente las bajas, pero el contador usaba

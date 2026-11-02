@@ -30,6 +30,18 @@
 Registro de hallazgos, decisiones y mejoras propuestas para reducir la latencia
 en Supabase, Prospección y los workers de comunicación.
 
+## 2026-11-02 — Reducción de lecturas de secretos y checkpoints IMAP
+
+- Se identificaron las lecturas de `public.secretos` por operación: token
+  Postmark, credenciales IMAP, runtime WhatsApp/Twilio y runtime OpenAI.
+- Se eliminó `force_refresh=True` de las sincronizaciones y webhooks Postmark,
+  evitando invalidar el caché en cada ciclo.
+- Se agregó caché de secretos con TTL acotado, caché de descubrimiento de
+  buzones y checkpoints IMAP agrupados por buzón.
+- La validación posterior al reinicio confirmó 2 lecturas de
+  `postmark.server_token`, 10 lecturas iniciales de checkpoints IMAP y 0
+  escrituras de checkpoints durante la ventana observada.
+
 ## [2026-10-01] — Mapa de Conversión y exportaciones
 
 Se confirmó un cuello independiente de `/prospeccion/metricas`: las

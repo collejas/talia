@@ -107,7 +107,6 @@ async def synchronize_outbound_messages(
     token = await get_secret_plaintext(
         organizacion_id=organizacion_id,
         clave=str(server.get("server_token_secret_key") or "postmark.server_token"),
-        force_refresh=True,
     )
     if not token:
         raise RuntimeError("postmark_server_token_missing")
@@ -244,7 +243,6 @@ async def synchronize_hard_bounces(
     token = await get_secret_plaintext(
         organizacion_id=organizacion_id,
         clave=str(server.get("server_token_secret_key") or "postmark.server_token"),
-        force_refresh=True,
     )
     if not token:
         raise RuntimeError("postmark_server_token_missing")

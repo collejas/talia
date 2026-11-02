@@ -13,6 +13,17 @@ Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIO
 - El lector IMAP hidrata los checkpoints del buzón en una sola consulta y
   conserva los cursores localmente hasta el siguiente reinicio.
 
+### Verificación operativa
+
+- Después del reinicio de `2026-11-02 19:19 UTC`,
+  `talia-email-worker`, `talia-postmark-preparer`, `talia-mailbox-worker` y
+  `talia-prospeccion-atribucion-worker` quedaron activos sin reinicios.
+- El acceso repetitivo a `postmark.server_token` quedó reducido a la
+  hidratación inicial/caché; no se observaron escrituras de checkpoints IMAP
+  durante la ventana validada.
+- El error IMAP `Connection refused` persiste para un buzón externo concreto y
+  queda separado del problema de volumen de Supabase.
+
 ## 2026-09-19 — Corrección del cierre de batches Postmark
 
 - Se agregó una migración correctiva para calificar las columnas de `tenant_email_messages` al cerrar `tenant_email_delivery_batches`.

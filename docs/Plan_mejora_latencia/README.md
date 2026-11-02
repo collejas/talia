@@ -23,6 +23,13 @@ generar consultas REST y logs de API Gateway innecesarios. La siguiente fase
 debe sustituir el escaneo periódico por tenant por una reclamación global de
 trabajo con cola, lease y backpressure.
 
+La misma contención se aplicó a configuración y checkpoints: los secretos de
+runtime usan caché con TTL e invalidación administrativa; Postmark ya no fuerza
+la lectura del token en cada sincronización; y el lector IMAP hidrata sus
+cursores una vez por buzón, conservándolos en memoria. En la verificación
+posterior al reinicio, `postmark.server_token` pasó de 18 a 2 lecturas en una
+ventana comparable y `tenant_mailbox_sync_state` no registró escrituras.
+
 ## Archivos
 
 - `01_diagnostico_actual.md`
