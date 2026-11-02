@@ -32,6 +32,18 @@ class PostmarkWorker:
         self._stop_event = asyncio.Event()
         self._last_sync_at: datetime | None = None
         self._tenant_cursor = 0
+        self._idle_backoff_seconds = self.interval_seconds
+
+    def _next_idle_backoff(self) -> float:
+        """Reduce el polling cuando no hay trabajo, sin perder reactividad."""
+        self._idle_backoff_seconds = min(
+            max(self.interval_seconds, self._idle_backoff_seconds * 2),
+            max(30.0, self.interval_seconds * 12),
+        )
+        return self._idle_backoff_seconds
+
+    def _reset_idle_backoff(self) -> None:
+        self._idle_backoff_seconds = self.interval_seconds
 
     def _rotate_tenants(self, tenant_ids: list[UUID]) -> list[UUID]:
         """Rota el primer tenant de cada ciclo para evitar monopolios."""
@@ -498,16 +510,23 @@ class PostmarkWorker:
 
     async def _run_loop(self) -> None:
         while not self._stop_event.is_set():
+            processed = 0
             try:
-                await self.run_once()
+                processed = await self.run_once()
             except (PostmarkError, PostmarkRepositoryError) as exc:
                 logger.exception("postmark.worker_cycle_failed", extra={"error": str(exc)})
             except Exception as exc:  # pragma: no cover - protección del proceso
                 # Un fallo no tipado no debe matar silenciosamente la tarea
                 # asyncio mientras systemd sigue mostrando el servicio activo.
                 logger.exception("postmark.worker_cycle_unexpected", extra={"error": str(exc)})
+            if processed:
+                self._reset_idle_backoff()
+            else:
+                self._next_idle_backoff()
             try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval_seconds)
+                await asyncio.wait_for(
+                    self._stop_event.wait(), timeout=self._idle_backoff_seconds
+                )
             except asyncio.TimeoutError:
                 continue
 

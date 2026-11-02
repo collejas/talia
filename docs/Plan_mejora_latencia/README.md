@@ -18,6 +18,11 @@ La latencia del panel y la cadencia del sender son problemas distintos. La
 optimización de consultas no garantiza la separación entre despachos; esa
 separación debe auditarse con los timestamps del worker y del proveedor.
 
+Desde 2026-11-02 los workers aplican backoff cuando no hay trabajo para evitar
+generar consultas REST y logs de API Gateway innecesarios. La siguiente fase
+debe sustituir el escaneo periódico por tenant por una reclamación global de
+trabajo con cola, lease y backpressure.
+
 ## Archivos
 
 - `01_diagnostico_actual.md`

@@ -2,6 +2,17 @@
 
 Este archivo controla los avances del plan documentado en [AUDITORIA_COMUNICACIONES_Y_PLAN_SEPARACION.md](./AUDITORIA_COMUNICACIONES_Y_PLAN_SEPARACION.md).
 
+## 2026-11-02 — Checkpoints IMAP y sondeo sin actividad
+
+- Se evita escribir repetidamente el mismo cursor en
+  `tenant_mailbox_sync_state` durante ciclos IMAP sin mensajes nuevos.
+- El lector de correo entrante aplica backoff acotado cuando no hay actividad y
+  recupera el intervalo base cuando procesa mensajes.
+- La configuración de correo y secretos de runtime evita lecturas repetidas
+  mediante cachés con TTL acotado e invalidación al modificar credenciales.
+- El lector IMAP hidrata los checkpoints del buzón en una sola consulta y
+  conserva los cursores localmente hasta el siguiente reinicio.
+
 ## 2026-09-19 — Corrección del cierre de batches Postmark
 
 - Se agregó una migración correctiva para calificar las columnas de `tenant_email_messages` al cerrar `tenant_email_delivery_batches`.
@@ -349,6 +360,15 @@ La concurrencia se limitará por bloques completos; no se aumentará a 500 por
 defecto. La validación requerirá lotes de 25, 500 y más de 500, con medición de
 p50/p95, CPU, memoria, conexiones Supabase, tamaño efectivo del batch y efecto
 en la latencia de la API. Brevo, WhatsApp e IMAP permanecen sin cambios.
+
+## 2026-11-02 — Backoff cuando las colas están vacías
+
+Los loops de Postmark y del sender de prospección conservan su intervalo base
+para reaccionar rápido durante actividad, pero aplican backoff exponencial
+acotado después de ciclos sin trabajo. Esto evita consultar Supabase cada 3–5
+segundos durante periodos idle. La reducción de polling es una contención; la
+arquitectura definitiva debe reclamar trabajo globalmente sin recorrer todos los
+tenants.
 
 ### Implementación aplicada
 

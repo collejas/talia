@@ -3778,6 +3778,29 @@ class CRMRepository:
         row = data[0]
         return row if isinstance(row, dict) else None
 
+    async def list_email_inbound_sync_states(
+        self,
+        *,
+        organizacion_id: UUID,
+        mailbox_email: str,
+    ) -> list[dict[str, Any]]:
+        mailbox_value = mailbox_email.strip().lower()
+        if not mailbox_value:
+            return []
+        resp = await self._request_service_role(
+            "GET",
+            "/rest/v1/tenant_mailbox_sync_state",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "mailbox_email": f"eq.{mailbox_value}",
+                "select": "folder_name,last_seen_uid,last_error",
+                "limit": "20",
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = resp.json() or []
+        return [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+
     async def upsert_email_inbound_sync_state(
         self,
         *,

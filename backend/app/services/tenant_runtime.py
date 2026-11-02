@@ -32,13 +32,19 @@ _CONFIG_CACHE: dict[str, Any] = {}
 _CONFIG_CACHE_EXPIRES: dict[str, datetime] = {}
 _SECRET_CACHE: dict[str, Any] = {}
 _SECRET_CACHE_EXPIRES: dict[str, datetime] = {}
+_MAIL_RUNTIME_MAILBOXES_CACHE: list["TenantMailRuntimeMailbox"] | None = None
+_MAIL_RUNTIME_MAILBOXES_CACHE_EXPIRES: datetime | None = None
 _PUBLIC_URL_CACHE: dict[str, str | None] = {}
 _PUBLIC_URL_CACHE_EXPIRES: dict[str, datetime] = {}
 _CLOSE_LEAD_POLICY_CACHE: dict[str, CloseLeadPolicy] = {}
 _CLOSE_LEAD_POLICY_CACHE_EXPIRES: dict[str, datetime] = {}
 
 CONFIG_TTL_SECONDS = 60
-SECRET_TTL_SECONDS = 60
+# Los cambios administrativos llaman a invalidate_runtime_cache. En procesos
+# worker separados, el TTL acotado evita consultar Supabase en cada ciclo sin
+# dejar secretos obsoletos durante un periodo largo.
+SECRET_TTL_SECONDS = 300
+MAIL_RUNTIME_MAILBOXES_TTL_SECONDS = 60
 PUBLIC_URL_TTL_SECONDS = 300
 SUPABASE_CONNECTIVITY_LOG_FILE = resolve_log_path("supabase-connectivity.log")
 _TRANSIENT_SUPABASE_ERROR_MARKERS = (
@@ -230,6 +236,9 @@ def invalidate_runtime_cache(*, organizacion_id: UUID | None = None) -> None:
         _CONFIG_CACHE_EXPIRES.clear()
         _SECRET_CACHE.clear()
         _SECRET_CACHE_EXPIRES.clear()
+        global _MAIL_RUNTIME_MAILBOXES_CACHE, _MAIL_RUNTIME_MAILBOXES_CACHE_EXPIRES
+        _MAIL_RUNTIME_MAILBOXES_CACHE = None
+        _MAIL_RUNTIME_MAILBOXES_CACHE_EXPIRES = None
         _CLOSE_LEAD_POLICY_CACHE.clear()
         _CLOSE_LEAD_POLICY_CACHE_EXPIRES.clear()
         return
@@ -243,6 +252,10 @@ def invalidate_runtime_cache(*, organizacion_id: UUID | None = None) -> None:
         if key.startswith(cache_prefix):
             _SECRET_CACHE.pop(key, None)
             _SECRET_CACHE_EXPIRES.pop(key, None)
+    # La lista es global por proceso; cualquier cambio de tenant puede alterar
+    # la membresía o las credenciales descubiertas.
+    _MAIL_RUNTIME_MAILBOXES_CACHE = None
+    _MAIL_RUNTIME_MAILBOXES_CACHE_EXPIRES = None
     for key in list(_CLOSE_LEAD_POLICY_CACHE.keys()):
         if key.startswith(cache_prefix):
             _CLOSE_LEAD_POLICY_CACHE.pop(key, None)
@@ -883,6 +896,15 @@ async def list_tenant_mail_runtime_settings() -> list[TenantMailRuntimeMailbox]:
     if not _has_supabase():
         return []
 
+    global _MAIL_RUNTIME_MAILBOXES_CACHE, _MAIL_RUNTIME_MAILBOXES_CACHE_EXPIRES
+    now = datetime.now(timezone.utc)
+    if (
+        _MAIL_RUNTIME_MAILBOXES_CACHE is not None
+        and _MAIL_RUNTIME_MAILBOXES_CACHE_EXPIRES is not None
+        and _MAIL_RUNTIME_MAILBOXES_CACHE_EXPIRES > now
+    ):
+        return list(_MAIL_RUNTIME_MAILBOXES_CACHE)
+
     data = await _supabase_get(
         "/rest/v1/secretos",
         params={
@@ -891,6 +913,10 @@ async def list_tenant_mail_runtime_settings() -> list[TenantMailRuntimeMailbox]:
         },
     )
     if not isinstance(data, list):
+        _MAIL_RUNTIME_MAILBOXES_CACHE = []
+        _MAIL_RUNTIME_MAILBOXES_CACHE_EXPIRES = now + timedelta(
+            seconds=MAIL_RUNTIME_MAILBOXES_TTL_SECONDS
+        )
         return []
 
     required_keys_by_org: dict[UUID, set[str]] = {}
@@ -913,7 +939,11 @@ async def list_tenant_mail_runtime_settings() -> list[TenantMailRuntimeMailbox]:
             continue
         settings_payload = await get_mail_runtime_settings(organizacion_id=org_id)
         mailboxes.append(TenantMailRuntimeMailbox(organizacion_id=org_id, settings=settings_payload))
-    return mailboxes
+    _MAIL_RUNTIME_MAILBOXES_CACHE = mailboxes
+    _MAIL_RUNTIME_MAILBOXES_CACHE_EXPIRES = now + timedelta(
+        seconds=MAIL_RUNTIME_MAILBOXES_TTL_SECONDS
+    )
+    return list(mailboxes)
 
 
 async def get_user_mail_runtime_settings(

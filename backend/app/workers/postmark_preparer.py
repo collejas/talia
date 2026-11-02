@@ -163,6 +163,17 @@ class PostmarkPreparationWorker:
         self.campaign_target_preparer = PostmarkCampaignTargetPreparationWorker(batch_size=500)
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
+        self._idle_backoff_seconds = self.interval_seconds
+
+    def _next_idle_backoff(self) -> float:
+        self._idle_backoff_seconds = min(
+            max(self.interval_seconds, self._idle_backoff_seconds * 2),
+            max(30.0, self.interval_seconds * 12),
+        )
+        return self._idle_backoff_seconds
+
+    def _reset_idle_backoff(self) -> None:
+        self._idle_backoff_seconds = self.interval_seconds
 
     async def run_once(self) -> int:
         repository = PostmarkRepository()
@@ -220,14 +231,21 @@ class PostmarkPreparationWorker:
 
     async def _run_loop(self) -> None:
         while not self._stop.is_set():
+            prepared = 0
             try:
-                await self.run_once()
+                prepared = await self.run_once()
             except (PostmarkRepositoryError, ValueError) as exc:
                 logger.warning("postmark.preparer_cycle_failed", extra={"error": str(exc)})
             except Exception as exc:  # pragma: no cover - protección del proceso
                 logger.exception("postmark.preparer_cycle_unexpected", extra={"error": str(exc)})
+            if prepared:
+                self._reset_idle_backoff()
+            else:
+                self._next_idle_backoff()
             try:
-                await asyncio.wait_for(self._stop.wait(), timeout=self.interval_seconds)
+                await asyncio.wait_for(
+                    self._stop.wait(), timeout=self._idle_backoff_seconds
+                )
             except asyncio.TimeoutError:
                 pass
 

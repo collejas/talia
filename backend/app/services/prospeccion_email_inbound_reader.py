@@ -544,6 +544,18 @@ class ProspeccionEmailInboundReader:
         self._enabled = True
         self._folder_names = DEFAULT_IMAP_FOLDERS
         self._mailbox_failures: dict[tuple[str, str, int, bool], _MailboxFailureState] = {}
+        self._folder_cursor_cache: dict[tuple[str, str], dict[str, int]] = {}
+        self._idle_backoff_seconds = self._poll_interval
+
+    def _next_idle_backoff(self) -> float:
+        self._idle_backoff_seconds = min(
+            max(self._poll_interval, self._idle_backoff_seconds * 2),
+            max(60.0, self._poll_interval * 4),
+        )
+        return self._idle_backoff_seconds
+
+    def _reset_idle_backoff(self) -> None:
+        self._idle_backoff_seconds = self._poll_interval
 
     @staticmethod
     def _mailbox_key(*, organizacion_id: UUID, host: str, username: str, port: int, use_ssl: bool) -> tuple[str, str, int, bool]:
@@ -580,6 +592,7 @@ class ProspeccionEmailInboundReader:
             return
         self._enabled = True
         self._stop_event.clear()
+        self._folder_cursor_cache.clear()
         self._task = asyncio.create_task(self._run_loop(), name="prospeccion-email-inbound-reader")
         log_event(logger, "prospeccion.email_inbound_reader_started")
 
@@ -596,21 +609,28 @@ class ProspeccionEmailInboundReader:
     async def _run_loop(self) -> None:
         while not self._stop_event.is_set():
             try:
-                await self._process_once()
+                activity = await self._process_once()
             except Exception as exc:  # pragma: no cover - defensivo en worker continuo
                 logger.exception("prospeccion.email_inbound_reader_unhandled", extra={"error": str(exc)})
+                activity = 0
+            if activity:
+                self._reset_idle_backoff()
+                wait_seconds = self._poll_interval
+            else:
+                wait_seconds = self._next_idle_backoff()
             try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=self._poll_interval)
+                await asyncio.wait_for(self._stop_event.wait(), timeout=wait_seconds)
             except asyncio.TimeoutError:
                 continue
 
-    async def _process_once(self) -> None:
+    async def _process_once(self) -> int:
         repo = CRMRepository()
+        activity_total = 0
 
         mailboxes = await self._list_mailboxes()
         if not mailboxes:
             log_event(logger, "prospeccion.email_inbound_reader_mailboxes_missing")
-            return
+            return activity_total
 
         for organizacion_id, mail_settings in mailboxes:
             host = _clean_text(mail_settings.incoming_server)
@@ -689,7 +709,9 @@ class ProspeccionEmailInboundReader:
             fetched_total = 0
             for folder_result in folder_results:
                 fetched_total += len(folder_result.events)
-                last_completed_uid = folder_cursor_map.get(folder_result.folder_name.strip().lower(), 0)
+                folder_key = folder_result.folder_name.strip().lower()
+                previous_cursor = folder_cursor_map.get(folder_key, 0)
+                last_completed_uid = previous_cursor
                 for event in folder_result.events:
                     try:
                         if await _event_already_recorded(
@@ -763,14 +785,20 @@ class ProspeccionEmailInboundReader:
                             },
                         )
                         break
-                await repo.upsert_email_inbound_sync_state(
-                    organizacion_id=organizacion_id,
-                    mailbox_email=username,
-                    folder_name=folder_result.folder_name,
-                    last_seen_uid=last_completed_uid,
-                    last_sync_at=datetime.now(timezone.utc).isoformat(),
-                    last_error=None,
-                )
+                # No escribas el mismo cursor en cada sondeo: esta tabla se usa
+                # como checkpoint y no como heartbeat. El POST upsertivo era una
+                # de las principales fuentes de volumen de logs en Supabase.
+                if last_completed_uid > previous_cursor:
+                    await repo.upsert_email_inbound_sync_state(
+                        organizacion_id=organizacion_id,
+                        mailbox_email=username,
+                        folder_name=folder_result.folder_name,
+                        last_seen_uid=last_completed_uid,
+                        last_sync_at=datetime.now(timezone.utc).isoformat(),
+                        last_error=None,
+                    )
+                    folder_cursor_map[folder_key] = last_completed_uid
+                    activity_total += 1
             log_event(
                 logger,
                 "prospeccion.email_inbound_reader_cycle",
@@ -779,6 +807,8 @@ class ProspeccionEmailInboundReader:
                 **mailbox_scope,
             )
 
+        return activity_total
+
     async def _get_folder_cursor_map(
         self,
         *,
@@ -786,19 +816,37 @@ class ProspeccionEmailInboundReader:
         organizacion_id: UUID,
         mailbox_email: str,
     ) -> dict[str, int]:
+        cache_key = (str(organizacion_id), mailbox_email.strip().lower())
+        cached = self._folder_cursor_cache.get(cache_key)
+        if cached is not None:
+            return dict(cached)
+
         cursor_map: dict[str, int] = {}
-        for folder_name in self._folder_names:
-            row = await repo.get_email_inbound_sync_state(
+        list_states = getattr(repo, "list_email_inbound_sync_states", None)
+        if callable(list_states):
+            rows = await list_states(
                 organizacion_id=organizacion_id,
                 mailbox_email=mailbox_email,
-                folder_name=folder_name,
             )
-            if not isinstance(row, dict):
+        else:  # Compatibilidad con repositorios de pruebas o adaptadores antiguos.
+            rows = []
+            for folder_name in self._folder_names:
+                row = await repo.get_email_inbound_sync_state(
+                    organizacion_id=organizacion_id,
+                    mailbox_email=mailbox_email,
+                    folder_name=folder_name,
+                )
+                if isinstance(row, dict):
+                    rows.append(row)
+        for row in rows:
+            folder_name = str(row.get("folder_name") or "").strip().lower()
+            if not folder_name:
                 continue
             try:
-                cursor_map[folder_name.strip().lower()] = max(0, int(row.get("last_seen_uid") or 0))
+                cursor_map[folder_name] = max(0, int(row.get("last_seen_uid") or 0))
             except (TypeError, ValueError):
                 continue
+        self._folder_cursor_cache[cache_key] = cursor_map
         return cursor_map
 
     async def _list_mailboxes(self) -> list[tuple[UUID, Any]]:

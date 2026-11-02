@@ -1,5 +1,19 @@
 # Próxima entrega
 
+## 2026-11-02 — Lector IMAP: checkpoints sin escrituras repetidas
+
+- El lector de correo entrante ya no hace `upsert` de
+  `tenant_mailbox_sync_state` cuando el UID no avanzó.
+- El estado se persiste únicamente al completar mensajes nuevos, conservando
+  el checkpoint y reduciendo tráfico innecesario hacia Supabase.
+- El sondeo sin actividad usa backoff acotado a dos minutos y vuelve al
+  intervalo normal cuando detecta actividad.
+- La resolución de secretos de runtime usa un TTL acotado de cinco minutos y
+  el descubrimiento de buzones se reutiliza durante un minuto; las mutaciones
+  administrativas invalidan esos cachés.
+- Los cursores IMAP se cargan agrupados una vez por buzón y se conservan en
+  memoria; los ciclos idle ya no hacen un `GET` por carpeta.
+
 - El filtro `Estado correo` fuerza `count=exact` en la API de prospectos. Antes
   la consulta podía filtrar correctamente las bajas, pero el contador usaba
   `count=planned` y mostraba una estimación del universo general (por ejemplo,
@@ -80,6 +94,17 @@ destinatarios ni URLs en estas métricas.
 # Changelog — Plan Postmark
 
 Registro de avances, decisiones, validaciones y pendientes de la migración del correo de Talia.
+
+## [2026-11-02] — Backoff de workers sin trabajo
+
+- El worker de entrega Postmark, el preparador y el sender de prospección ya no
+  repiten el polling base indefinidamente cuando no hay trabajo.
+- Después de un ciclo vacío, el intervalo aumenta progresivamente hasta un
+  máximo acotado; al detectar trabajo procesable vuelve al intervalo base.
+- La notificación existente del sender continúa despertándolo inmediatamente,
+  por lo que el backoff no retrasa altas normales de envíos.
+- Esta contención reduce llamadas REST y logs del API Gateway, pero no sustituye
+  la siguiente fase de claim global por cola, que eliminará el escaneo por tenant.
 
 ## [2026-09-25] — Eventos Brevo en métricas unificadas
 

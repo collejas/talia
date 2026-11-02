@@ -2182,6 +2182,7 @@ class ProspeccionContactSender:
         self._error_events: dict[tuple[str, str, str], deque[float]] = {}
         self._cooldown_until: dict[tuple[str, str, str], float] = {}
         self._last_queue_observation_at = 0.0
+        self._idle_backoff_seconds = self._poll_interval
         self._provider_scope_cached_at = 0.0
         self._provider_scope_cache: list[UUID] | None = None
         self._postmark_preparation_cache = _PostmarkPreparationCache()
@@ -2245,7 +2246,15 @@ class ProspeccionContactSender:
                 logger.exception("prospeccion.sender_unhandled", extra={"error": str(exc)})
                 processed = False
 
-            wait_timeout = 0 if processed else self._poll_interval
+            if processed:
+                self._idle_backoff_seconds = self._poll_interval
+                wait_timeout = 0
+            else:
+                self._idle_backoff_seconds = min(
+                    max(self._poll_interval, self._idle_backoff_seconds * 2),
+                    max(30.0, self._poll_interval * 12),
+                )
+                wait_timeout = self._idle_backoff_seconds
             try:
                 await asyncio.wait_for(self._wake_event.wait(), timeout=wait_timeout)
             except asyncio.TimeoutError:
