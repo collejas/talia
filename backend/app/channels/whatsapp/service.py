@@ -3233,19 +3233,26 @@ async def handle_incoming_message(
         )
         return
 
-    if org_uuid:
-        schedule = await tenant_runtime.get_whatsapp_assistant_schedule(
-            organizacion_id=org_uuid,
-        )
-    else:
-        schedule = tenant_runtime.WhatsAppAssistantSchedule.disabled()
     assistant_flow = "prospeccion" if is_prospeccion_mode else "normal"
-    assistant_allowed, schedule_reason = tenant_runtime.should_run_whatsapp_assistant(
-        schedule=schedule,
-        now=datetime.now(timezone.utc),
-        flow=assistant_flow,
-        manual_override=False,
-    )
+    if simple_greeting_fast_path:
+        # El saludo configurado no usa IA ni herramientas; no debe bloquearse
+        # por una consulta de horario ni por el timeout de Supabase.
+        schedule = tenant_runtime.WhatsAppAssistantSchedule.disabled()
+        assistant_allowed = True
+        schedule_reason = "simple_greeting_fast_path"
+    else:
+        if org_uuid:
+            schedule = await tenant_runtime.get_whatsapp_assistant_schedule(
+                organizacion_id=org_uuid,
+            )
+        else:
+            schedule = tenant_runtime.WhatsAppAssistantSchedule.disabled()
+        assistant_allowed, schedule_reason = tenant_runtime.should_run_whatsapp_assistant(
+            schedule=schedule,
+            now=datetime.now(timezone.utc),
+            flow=assistant_flow,
+            manual_override=False,
+        )
     log_event(
         logger,
         "whatsapp.assistant_schedule_decision",
