@@ -8,7 +8,7 @@ export default async function VentasInmobiliariasPage() {
   await requireTenantModuleEnabled("propiedades");
 
   return (
-    <AppViewLayout title="Ventas inmobiliarias">
+    <AppViewLayout title="Ventas inmobiliarias" contentClassName="px-4 sm:px-6 lg:px-8">
       <InmobiliariaSalesView />
     </AppViewLayout>
   );

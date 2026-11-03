@@ -9,7 +9,7 @@ export default async function VentaInmobiliariaDetailPage({ params }: { params: 
   const { operacionId } = await params;
 
   return (
-    <AppViewLayout title="Expediente inmobiliario">
+    <AppViewLayout title="Expediente inmobiliario" contentClassName="px-4 sm:px-6 lg:px-8">
       <InmobiliariaOperationDetailView operationId={operacionId} />
     </AppViewLayout>
   );
