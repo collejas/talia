@@ -1605,6 +1605,151 @@ class CRMRepository:
             rows.append(row)
         return rows, total
 
+    async def get_inmobiliaria_operacion_expediente(
+        self,
+        *,
+        organizacion_id: UUID,
+        operacion_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Obtiene el expediente completo de una operación inmobiliaria."""
+
+        response = await self._request(
+            "GET",
+            "/rest/v1/operaciones_inmobiliarias",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": f"eq.{operacion_id}",
+                "limit": "1",
+                "select": (
+                    "id,organizacion_id,unidad_id,oportunidad_id,cliente_principal_id,"
+                    "agente_usuario_id,responsable_interno_usuario_id,estado,estado_validacion,"
+                    "apartado_horas,apartado_iniciado_en,apartado_vencimiento_en,apartado_motivo,"
+                    "forma_adquisicion,precio_ofrecido,precio_acordado,precio_final,precio_establecido,moneda,"
+                    "fecha_limite_reserva,reserva_importe,condiciones_reserva,tipo_comprador,"
+                    "enviado_a_validacion_en,enviado_a_validacion_por,validado_en,validado_por_usuario_id,"
+                    "observaciones_validacion,creado_en,actualizado_en,cancelada_en,cancelada_por,motivo_cancelacion,"
+                    "origen_venta,socio_comercial_externo_id,agente_externo_id,referencia_externa,"
+                    "fecha_evento_externo,comision_porcentaje,comision_monto,comision_estado,"
+                    "agente_usuario:usuarios!operaciones_inmobiliarias_agente_usuario_id_fkey(id,nombre_completo,correo),"
+                    "responsable_interno:usuarios!operaciones_inmobiliarias_responsable_interno_usuario_id_fkey(id,nombre_completo,correo),"
+                    "socio_comercial:inmobiliaria_socios_comerciales!operaciones_inmobiliarias_socio_comercial_externo_id_fkey(id,nombre,tipo),"
+                    "agente_externo:inmobiliaria_agentes_externos!operaciones_inmobiliarias_agente_externo_id_fkey(id,nombre,correo,telefono),"
+                    "oportunidad:oportunidades!operaciones_inmobiliarias_oportunidad_id_fkey(id,titulo,codigo_oportunidad,estado,etapa_id,asignado_a_usuario_id,propietario_usuario_id)"
+                ),
+            },
+            organizacion_id=organizacion_id,
+        )
+        data = response.json()
+        if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+            return None
+
+        operation = data[0]
+        unit_id = _safe_uuid(operation.get("unidad_id"))
+        client_id = _safe_uuid(operation.get("cliente_principal_id"))
+        opportunity_id = _safe_uuid(operation.get("oportunidad_id"))
+
+        operation["unidad"] = await self.get_propiedad_unidad_for_organizacion(
+            organizacion_id=organizacion_id,
+            unidad_id=unit_id,
+        ) if unit_id else {}
+        operation["cliente"] = await self.get_persona(
+            organizacion_id=organizacion_id,
+            persona_id=client_id,
+        ) if client_id else None
+
+        documents = await self.list_inmobiliaria_operacion_documentos(
+            organizacion_id=organizacion_id,
+            operacion_id=operacion_id,
+        )
+
+        contracts_response = await self._request(
+            "GET",
+            "/rest/v1/inmobiliaria_contratos_operacion",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "operacion_id": f"eq.{operacion_id}",
+                "order": "version_operacion.desc,actualizado_en.desc",
+                "select": "id,operacion_id,plantilla_id,plantilla_version,version_operacion,estado,contenido_generado,archivo_generado_id,archivo_firmado_id,generado_por,generado_en,firmado_en,fecha_firma,parte_vendedora_nombre,parte_vendedora_firmante,parte_vendedora_cargo,creado_en,actualizado_en",
+            },
+            organizacion_id=organizacion_id,
+        )
+        contracts = contracts_response.json()
+        contracts = [row for row in contracts if isinstance(row, dict)] if isinstance(contracts, list) else []
+
+        contract_ids = [_safe_uuid(row.get("id")) for row in contracts if _safe_uuid(row.get("id"))]
+        signers: list[dict[str, Any]] = []
+        if contract_ids:
+            signers_response = await self._request(
+                "GET",
+                "/rest/v1/inmobiliaria_contrato_firmantes",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "contrato_id": _postgrest_in_clause([str(value) for value in contract_ids]),
+                    "order": "orden_firma.asc",
+                    "select": "id,contrato_id,persona_id,rol_firmante,orden_firma,nombre_completo,tipo_persona,rfc,curp,domicilio,correo,estado_firma,firmado_en,creado_en,actualizado_en",
+                },
+                organizacion_id=organizacion_id,
+            )
+            signer_data = signers_response.json()
+            signers = [row for row in signer_data if isinstance(row, dict)] if isinstance(signer_data, list) else []
+        signers_by_contract: dict[str, list[dict[str, Any]]] = {}
+        for signer in signers:
+            signers_by_contract.setdefault(str(signer.get("contrato_id")), []).append(signer)
+        for contract in contracts:
+            contract["firmantes"] = signers_by_contract.get(str(contract.get("id")), [])
+
+        payments_response = await self._request(
+            "GET",
+            "/rest/v1/inmobiliaria_pagos_operacion",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "operacion_id": f"eq.{operacion_id}",
+                "order": "fecha_pago.desc,creado_en.desc",
+                "select": "id,operacion_id,concepto,importe,moneda,fecha_pago,forma_pago,estado,referencia,aplicado_al_precio,fecha_aplicacion,recibido_por,archivo_comprobante_id,observaciones,creado_por,creado_en,actualizado_en",
+            },
+            organizacion_id=organizacion_id,
+        )
+        payments = payments_response.json()
+        payments = [row for row in payments if isinstance(row, dict)] if isinstance(payments, list) else []
+
+        movement_params = {
+            "organizacion_id": f"eq.{organizacion_id}",
+            "unidad_id": f"eq.{unit_id}" if unit_id else "eq.00000000-0000-0000-0000-000000000000",
+            "order": "creado_en.desc",
+            "limit": "200",
+            "select": "id,unidad_id,oportunidad_id,persona_id,cuenta_id,estado_anterior,estado_nuevo,precio,moneda,motivo,creado_en,creado_por",
+        }
+        movements_response = await self._request(
+            "GET", "/rest/v1/propiedad_unidad_movimientos", params=movement_params, organizacion_id=organizacion_id
+        )
+        movements = movements_response.json()
+        movements = [row for row in movements if isinstance(row, dict)] if isinstance(movements, list) else []
+
+        quotes_response = await self._request(
+            "GET",
+            "/rest/v1/cotizaciones",
+            params={
+                "organizacion_id": f"eq.{organizacion_id}",
+                "operacion_inmobiliaria_id": f"eq.{operacion_id}",
+                "order": "actualizado_en.desc,creado_en.desc",
+                "select": "id,folio,oportunidad_id,operacion_inmobiliaria_id,propiedad_id,unidad_id,estatus,total,moneda,valida_hasta,dominio_comercial,sustituida_por_cotizacion_id,creado_en,actualizado_en",
+            },
+            organizacion_id=organizacion_id,
+        )
+        quotes = quotes_response.json()
+        quotes = [row for row in quotes if isinstance(row, dict)] if isinstance(quotes, list) else []
+
+        operation["documentos"] = documents
+        operation["contratos"] = contracts
+        operation["pagos"] = payments
+        operation["movimientos"] = movements
+        operation["cotizaciones"] = quotes
+        operation["cambios_comprador"] = await self.list_cambios_comprador_operacion(
+            organizacion_id=organizacion_id,
+            operacion_id=operacion_id,
+        )
+        return operation
+
     async def apartar_propiedad(
         self,
         *,

@@ -54914,6 +54914,26 @@ async def listar_ventas_inmobiliarias(
     return InmobiliariaVentasResponse(items=items, total=total, limit=limit, offset=offset)
 
 
+@router.get("/inmobiliaria/ventas/{operacion_id}/expediente")
+async def obtener_expediente_venta_inmobiliaria(
+    *,
+    operacion_id: UUID,
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_any_permission(["sales.view", "propiedades.view", "inmobiliaria.apartados.validate"])),
+) -> dict[str, Any]:
+    try:
+        expediente = await repo.get_inmobiliaria_operacion_expediente(
+            organizacion_id=organizacion_id,
+            operacion_id=operacion_id,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="inmobiliaria_operation_detail_failed") from exc
+    if not expediente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="inmobiliaria_operation_not_found")
+    return {"ok": True, "expediente": expediente}
+
+
 @router.get("/propiedades/hierarquia")
 async def propiedades_hierarquia(
     *,
@@ -56325,7 +56345,7 @@ async def descargar_documento_apartado_inmobiliario(
     descargar: bool = Query(default=False),
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
-    _: str = Depends(require_any_permission(["sales.orders.submit", "inmobiliaria.apartados.validate"])),
+    _: str = Depends(require_any_permission(["sales.view", "propiedades.view", "inmobiliaria.apartados.validate"])),
 ) -> dict[str, Any]:
     archivo = await repo.get_file(organizacion_id=organizacion_id, archivo_id=archivo_id)
     storage_path = _clean_text(archivo.get("storage_path")) if archivo else ""
