@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
-type Relation = { id?: string; nombre?: string | null; nombre_completo?: string | null; titulo?: string | null; codigo_oportunidad?: string | null; correo?: string | null }
+type Relation = { id?: string; nombre?: string | null; nombre_completo?: string | null; titulo?: string | null; codigo_oportunidad?: string | null; correo?: string | null; asignado?: Relation | null }
 type Unit = { unidad?: string | null; nombre?: string | null; clave?: string | null; precio?: number | string | null; desarrollo?: Relation | null; macrolote?: Relation | null; manzana?: Relation | null }
 type Operation = {
   id: string
@@ -24,7 +24,9 @@ type Operation = {
   comision_monto?: number | string | null
   unidad?: Unit | null
   cliente?: Relation | null
-  oportunidad?: Relation | null
+  oportunidad?: (Relation & { asignado?: Relation | null }) | null
+  agente_usuario?: Relation | null
+  responsable_interno?: Relation | null
   socio_comercial?: Relation | null
   agente_externo?: Relation | null
 }
@@ -46,6 +48,21 @@ const validationLabels: Record<string, string> = {
   rechazada: "Rechazada",
 }
 
+const statusClasses: Record<string, string> = {
+  reservada: "font-semibold text-orange-700",
+  apartada: "font-semibold text-amber-700",
+  vendida: "font-semibold text-emerald-700",
+  cancelada: "font-semibold text-slate-500 line-through",
+}
+
+const validationClasses: Record<string, string> = {
+  pendiente_captura: "text-amber-700",
+  pendiente_revision: "text-amber-700",
+  en_revision: "text-blue-700",
+  firme: "text-emerald-700",
+  rechazada: "text-rose-700",
+}
+
 function relationName(value?: Relation | null) {
   return value?.nombre_completo || value?.nombre || value?.titulo || "—"
 }
@@ -65,6 +82,15 @@ function date(value?: string | null) {
 function hierarchy(unit?: Unit | null) {
   if (!unit) return "Unidad no disponible"
   return [relationName(unit.desarrollo), relationName(unit.macrolote), relationName(unit.manzana), unit.unidad || unit.nombre || unit.clave].filter((value) => value && value !== "—").join(" · ")
+}
+
+function agentName(item: Operation) {
+  if (item.origen_venta === "externo") return relationName(item.agente_externo)
+  return relationName(item.agente_usuario) !== "—"
+    ? relationName(item.agente_usuario)
+    : relationName(item.responsable_interno) !== "—"
+      ? relationName(item.responsable_interno)
+      : relationName(item.oportunidad?.asignado)
 }
 
 export function InmobiliariaSalesView() {
@@ -147,8 +173,8 @@ export function InmobiliariaSalesView() {
                 <TableBody>{filteredItems.map((item) => <TableRow key={item.id}>
                   <TableCell className="min-w-[260px] font-medium">{hierarchy(item.unidad)}</TableCell>
                   <TableCell className="min-w-[220px]"><div>{relationName(item.cliente)}</div><div className="text-xs text-muted-foreground">{relationName(item.oportunidad)}{item.oportunidad?.codigo_oportunidad ? ` · ${item.oportunidad.codigo_oportunidad}` : ""}</div></TableCell>
-                  <TableCell className="min-w-[150px]"><div>{statusLabels[item.estado] || item.estado}</div><div className="text-xs text-muted-foreground">{item.estado_validacion ? validationLabels[item.estado_validacion] || item.estado_validacion : "Sin validación"}</div></TableCell>
-                  <TableCell className="min-w-[180px]"><div>{item.origen_venta === "externo" ? "Externa" : "Interna"}</div><div className="text-xs text-muted-foreground">{item.origen_venta === "externo" ? `${relationName(item.socio_comercial)} · ${relationName(item.agente_externo)}` : "Equipo interno"}</div></TableCell>
+                  <TableCell className="min-w-[150px]"><div className={statusClasses[item.estado] || "font-semibold text-foreground"}>{statusLabels[item.estado] || item.estado}</div><div className={`text-xs ${validationClasses[item.estado_validacion || ""] || "text-muted-foreground"}`}>{item.estado_validacion ? validationLabels[item.estado_validacion] || item.estado_validacion : "Sin validación"}</div></TableCell>
+                  <TableCell className="min-w-[210px]"><div>{item.origen_venta === "externo" ? "Externa" : "Interna"}</div><div className="text-xs text-muted-foreground">{item.origen_venta === "externo" ? `${relationName(item.socio_comercial)} · ${agentName(item)}` : agentName(item) === "—" ? "Asesor no asignado" : agentName(item)}</div></TableCell>
                   <TableCell className="whitespace-nowrap">{money(item.precio_final ?? item.precio_acordado ?? item.precio_establecido, item.moneda || "MXN")}</TableCell>
                   <TableCell className="whitespace-nowrap">{date(item.fecha_evento_externo || item.creado_en)}</TableCell>
                 </TableRow>)}</TableBody>
