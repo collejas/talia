@@ -764,14 +764,6 @@ def _is_simple_greeting_message(
     return any(normalized.startswith(prefix) for prefix in _SIMPLE_GREETING_PREFIXES)
 
 
-def _tenant_requires_prompt_for_simple_greeting(
-    policy: tenant_runtime.CloseLeadPolicy,
-) -> bool:
-    """Evita saltarse el prompt cuando el tenant cierra con solo WhatsApp."""
-
-    return bool(policy.activo and policy.required_fields() == ("telefono",))
-
-
 async def _resolve_whatsapp_brand_name(organizacion_id: UUID | None) -> str | None:
     if organizacion_id is None:
         return None
@@ -3019,25 +3011,10 @@ async def handle_incoming_message(
         openai_conversation_id=str(openai_conversation_id or "").strip() or None,
         prospeccion_mode=is_prospeccion_mode,
     )
-    if simple_greeting_fast_path and org_uuid:
-        # El saludo fijo no ejecuta OpenAI ni tools. Para tenants cuya política
-        # permite close_lead con el teléfono de WhatsApp, hay que dejar pasar
-        # el primer saludo al prompt configurado para que el modelo invoque la
-        # tool y dispare la notificación al vendedor. Los demás tenants
-        # conservan el fast path actual.
-        close_lead_policy = await tenant_runtime.get_close_lead_policy(
-            organizacion_id=org_uuid,
-            channel="whatsapp",
-        )
-        if _tenant_requires_prompt_for_simple_greeting(close_lead_policy):
-            simple_greeting_fast_path = False
-            log_event(
-                logger,
-                "whatsapp.simple_greeting_fast_path_bypassed_for_tenant_policy",
-                organizacion_id=str(org_uuid),
-                conversation_id=conversation_id,
-                inbound_message_id=inbound_message_id,
-            )
+    # El saludo inicial es independiente de la política de close_lead:
+    # se responde con el texto configurado sin llamar a OpenAI. La política
+    # sigue aplicándose en los turnos posteriores, cuando ya pueden existir
+    # nombre, teléfono y necesidad/interés para ejecutar close_lead.
     if origin_type == "general_whatsapp":
         try:
             await storage.merge_conversation_inbox_context(
