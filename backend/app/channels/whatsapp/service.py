@@ -3714,7 +3714,16 @@ async def handle_incoming_message(
     if inbound_meta_phone_number_id:
         metadata["meta_phone_number_id"] = inbound_meta_phone_number_id
 
-    resolved_persona_org = await resolve_whatsapp_organizacion(contact=persona_record) or organizacion_hint
+    # En el fast path no cargamos la persona antes de responder; conservar el
+    # tenant ya resuelto evita caer en el tenant por defecto al registrar el
+    # mensaje saliente.
+    resolved_persona_org = (
+        str(org_uuid or organizacion_hint or "").strip()
+        or await resolve_whatsapp_organizacion(
+            to_number=recipient_number,
+            contact=persona_record,
+        )
+    )
     try:
         persist_outbound_started = time.perf_counter()
         outgoing_registration = await storage.register_whatsapp_message(
