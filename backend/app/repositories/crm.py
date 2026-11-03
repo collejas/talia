@@ -1565,7 +1565,7 @@ class CRMRepository:
         if agente_externo_id:
             params["agente_externo_id"] = f"eq.{agente_externo_id}"
         if desde and hasta:
-            params["creado_en"] = f"and(gte.{desde.isoformat()},lt.{hasta.isoformat()})"
+            params["and"] = f"(creado_en.gte.{desde.isoformat()},creado_en.lt.{hasta.isoformat()})"
         elif desde:
             params["creado_en"] = f"gte.{desde.isoformat()}"
         elif hasta:

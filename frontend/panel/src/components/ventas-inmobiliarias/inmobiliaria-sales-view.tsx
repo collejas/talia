@@ -157,8 +157,8 @@ export function InmobiliariaSalesView() {
   const [estadoValidacion, setEstadoValidacion] = useState("")
   const [origen, setOrigen] = useState("")
   const [search, setSearch] = useState("")
-  const [periodo, setPeriodo] = useState("mes")
-  const [desde, setDesde] = useState(() => dateInputValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)))
+  const [periodo, setPeriodo] = useState("ano")
+  const [desde, setDesde] = useState(() => dateInputValue(new Date(new Date().getFullYear(), 0, 1)))
   const [hasta, setHasta] = useState(() => dateInputValue(new Date()))
   const [report, setReport] = useState<ReportData>({})
 
