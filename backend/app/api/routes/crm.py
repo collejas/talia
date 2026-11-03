@@ -56322,6 +56322,7 @@ async def revisar_documento_apartado_inmobiliario(
 async def descargar_documento_apartado_inmobiliario(
     *,
     archivo_id: UUID,
+    descargar: bool = Query(default=False),
     repo: CRMRepository = Depends(get_repository),
     organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
     _: str = Depends(require_any_permission(["sales.orders.submit", "inmobiliaria.apartados.validate"])),
@@ -56336,6 +56337,8 @@ async def descargar_documento_apartado_inmobiliario(
         )
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="property_document_signed_url_failed") from exc
+    if descargar:
+        signed_url = f"{signed_url}{'&' if '?' in signed_url else '?'}download=1"
     return {"url": signed_url, "expires_in": 300}
 
 

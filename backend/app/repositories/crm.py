@@ -1893,7 +1893,7 @@ class CRMRepository:
         params = {
             "organizacion_id": f"eq.{organizacion_id}",
             "estado": "in.(apartada,vendida)",
-            "estado_validacion": "eq.pendiente_revision",
+            "estado_validacion": "in.(pendiente_captura,pendiente_revision)",
             "order": "enviado_a_validacion_en.asc,actualizado_en.asc",
             "limit": str(max(1, min(limit, 100))),
             "select": (
