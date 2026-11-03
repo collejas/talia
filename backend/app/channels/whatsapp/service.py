@@ -2061,6 +2061,69 @@ async def _sync_inbound_to_prospeccion_log(
     return True
 
 
+async def _run_simple_greeting_background_enrichment(
+    *,
+    repo: CRMRepository,
+    organizacion_id: UUID,
+    conversation_id: str,
+    persona_id: str,
+    message_id: str | None,
+    message: schemas.WhatsAppIncomingMessage,
+) -> None:
+    """Ejecuta enriquecimientos no críticos después de enviar el saludo."""
+
+    try:
+        await storage.merge_conversation_inbox_context(
+            conversation_id,
+            {
+                "source": "general_whatsapp",
+                "source_detail": {"channel": "whatsapp", "mode": "assistant"},
+            },
+        )
+    except StorageError as exc:
+        logger.warning(
+            "whatsapp.simple_greeting_inbox_context_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
+    try:
+        await _maybe_apply_publicidad_whatsapp_attribution(
+            repo=repo,
+            organizacion_id=organizacion_id,
+            conversation_id=conversation_id,
+            persona_id=persona_id,
+            message_id=message_id,
+            message=message,
+        )
+    except Exception as exc:  # pragma: no cover - enriquecimiento best effort
+        logger.warning(
+            "whatsapp.simple_greeting_attribution_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
+    try:
+        await _sync_inbound_to_prospeccion_log(
+            repo=repo,
+            conversation_id=conversation_id,
+            organizacion_id=organizacion_id,
+            persona_id=persona_id,
+            message=message,
+        )
+    except Exception as exc:  # pragma: no cover - sincronización best effort
+        logger.warning(
+            "whatsapp.simple_greeting_prospeccion_sync_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
+    try:
+        await _maybe_update_persona_location(persona_id=persona_id)
+    except Exception as exc:  # pragma: no cover - enriquecimiento best effort
+        logger.warning(
+            "whatsapp.simple_greeting_location_enrichment_failed",
+            extra={"conversation_id": conversation_id, "error": str(exc)},
+        )
+
+
 async def _resolve_prospeccion_prospecto_id(
     *,
     repo: CRMRepository,
@@ -2954,6 +3017,14 @@ async def handle_incoming_message(
                 },
             )
 
+    simple_greeting_candidate = _is_simple_greeting_message(
+        message.body,
+        has_attachments=bool(attachment_content_items),
+        previous_response_id=str(openai_conversation_id or "").strip() or None,
+        openai_conversation_id=str(openai_conversation_id or "").strip() or None,
+        prospeccion_mode=False,
+    )
+
     try:
         repo = CRMRepository()
     except CRMRepositoryError as exc:
@@ -2962,40 +3033,49 @@ async def handle_incoming_message(
     is_prospeccion_context = False
     publicidad_atribucion_event: Mapping[str, Any] | None = None
     if repo:
-        # La atribución CTA pertenece al evento entrante y debe quedar
-        # disponible antes de cualquier enriquecimiento de prospección.
-        # Una consulta lenta de lotes/envíos no puede retrasarla ni hacer que
-        # la gráfica de CTAs dependa del sincronizador de campañas.
-        publicidad_atribucion_event = await _maybe_apply_publicidad_whatsapp_attribution(
-            repo=repo,
-            organizacion_id=org_uuid,
-            conversation_id=conversation_id,
-            persona_id=persona_id,
-            message_id=current_message_id,
-            message=message,
-        )
-        # Conservamos el modo de respuesta del asistente con una búsqueda
-        # ligera; la actualización completa del lote/envío queda fuera del
-        # camino crítico y no puede bloquear al CTA.
-        is_prospeccion_context = bool(
-            await _resolve_prospeccion_prospecto_id(
+        if simple_greeting_candidate and org_uuid:
+            # El saludo no debe esperar atribución, prospección ni ubicación.
+            # Esas tareas siguen ejecutándose después en segundo plano.
+            _schedule_background_coroutine(
+                _run_simple_greeting_background_enrichment(
+                    repo=repo,
+                    organizacion_id=org_uuid,
+                    conversation_id=conversation_id,
+                    persona_id=persona_id,
+                    message_id=current_message_id,
+                    message=message,
+                )
+            )
+        else:
+            # La atribución CTA y la resolución de prospección permanecen en
+            # el camino crítico cuando el mensaje no es un saludo inicial.
+            publicidad_atribucion_event = await _maybe_apply_publicidad_whatsapp_attribution(
                 repo=repo,
-                persona_id=persona_id,
                 organizacion_id=org_uuid,
+                conversation_id=conversation_id,
+                persona_id=persona_id,
+                message_id=current_message_id,
                 message=message,
             )
-        )
-        prospeccion_sync_started = time.perf_counter()
-        _schedule_background_coroutine(
-            _sync_inbound_to_prospeccion_log(
-                repo=repo,
-                conversation_id=conversation_id,
-                organizacion_id=org_uuid,
-                persona_id=persona_id,
-                message=message,
-            ),
-        )
-        _record_stage_timing(stage_timings, "prospeccion_sync_scheduled_ms", prospeccion_sync_started)
+            is_prospeccion_context = bool(
+                await _resolve_prospeccion_prospecto_id(
+                    repo=repo,
+                    persona_id=persona_id,
+                    organizacion_id=org_uuid,
+                    message=message,
+                )
+            )
+            prospeccion_sync_started = time.perf_counter()
+            _schedule_background_coroutine(
+                _sync_inbound_to_prospeccion_log(
+                    repo=repo,
+                    conversation_id=conversation_id,
+                    organizacion_id=org_uuid,
+                    persona_id=persona_id,
+                    message=message,
+                )
+            )
+            _record_stage_timing(stage_timings, "prospeccion_sync_scheduled_ms", prospeccion_sync_started)
     origin_type = (
         "publicidad_whatsapp"
         if publicidad_atribucion_event
@@ -3004,18 +3084,12 @@ async def handle_incoming_message(
         else "general_whatsapp"
     )
     is_prospeccion_mode = is_prospeccion_context or bool(publicidad_atribucion_event)
-    simple_greeting_fast_path = _is_simple_greeting_message(
-        message.body,
-        has_attachments=bool(attachment_content_items),
-        previous_response_id=str(openai_conversation_id or "").strip() or None,
-        openai_conversation_id=str(openai_conversation_id or "").strip() or None,
-        prospeccion_mode=is_prospeccion_mode,
-    )
+    simple_greeting_fast_path = simple_greeting_candidate and not is_prospeccion_mode
     # El saludo inicial es independiente de la política de close_lead:
     # se responde con el texto configurado sin llamar a OpenAI. La política
     # sigue aplicándose en los turnos posteriores, cuando ya pueden existir
     # nombre, teléfono y necesidad/interés para ejecutar close_lead.
-    if origin_type == "general_whatsapp":
+    if origin_type == "general_whatsapp" and not simple_greeting_fast_path:
         try:
             await storage.merge_conversation_inbox_context(
                 conversation_id,
@@ -3106,7 +3180,11 @@ async def handle_incoming_message(
             attribution_event=publicidad_atribucion_event,
         )
 
-    persona_record = await _maybe_update_persona_location(persona_id=persona_id)
+    persona_record = (
+        None
+        if simple_greeting_fast_path
+        else await _maybe_update_persona_location(persona_id=persona_id)
+    )
 
     restart_created = bool(restart_context and restart_context.get("restart_created"))
     if restart_created:
