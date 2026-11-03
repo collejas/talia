@@ -1125,6 +1125,7 @@ export type WhatsAppInitialValues = {
   whatsapp_prompt_id?: string
   whatsapp_prompt_version?: string
   whatsapp_welcome_document_prompt_version?: string
+  whatsapp_simple_greeting?: string
   whatsapp_location_href?: string
   whatsapp_assistant_id?: string
   whatsapp_inactivity_minutes?: number
@@ -1182,6 +1183,7 @@ function buildWhatsAppSettingsKey(initialValues: WhatsAppInitialValues): string 
     whatsapp_prompt_id: initialValues.whatsapp_prompt_id ?? "",
     whatsapp_prompt_version: initialValues.whatsapp_prompt_version ?? "",
     whatsapp_welcome_document_prompt_version: initialValues.whatsapp_welcome_document_prompt_version ?? "",
+    whatsapp_simple_greeting: initialValues.whatsapp_simple_greeting ?? "",
     whatsapp_location_href: initialValues.whatsapp_location_href ?? "",
     whatsapp_assistant_id: initialValues.whatsapp_assistant_id ?? "",
     whatsapp_inactivity_minutes: initialValues.whatsapp_inactivity_minutes ?? "",
@@ -2419,6 +2421,20 @@ function TenantWhatsAppSettingsForm({
               />
               <p className="text-xs text-muted-foreground">
                 Si coincide con whatsapp.prompt_version, el backend activa el envío automático del PDF de presentación.
+              </p>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="whatsapp_simple_greeting">Saludo rápido de WhatsApp</Label>
+              <Textarea
+                id="whatsapp_simple_greeting"
+                name="whatsapp_simple_greeting"
+                placeholder="Hola, soy Tal-IA de tu empresa. ¿Con quién tengo el gusto?"
+                defaultValue={initialValues.whatsapp_simple_greeting ?? ""}
+                maxLength={500}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                Se envía automáticamente ante un saludo corto. Si lo dejas vacío, se usa el saludo predeterminado de Tal-IA con el nombre comercial del tenant.
               </p>
             </div>
             <div className="space-y-2">

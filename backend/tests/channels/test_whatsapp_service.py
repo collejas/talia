@@ -107,6 +107,21 @@ def test_whatsapp_runtime_uses_global_meta_credentials(monkeypatch) -> None:
     assert runtime.meta_graph_api_version == "v25.0"
 
 
+@pytest.mark.asyncio
+async def test_whatsapp_runtime_reads_tenant_simple_greeting(monkeypatch) -> None:
+    async def fake_get_org_config(**_: object) -> dict[str, Any]:
+        return {"whatsapp": {"simple_greeting": "  Hola personalizado  "}}
+
+    monkeypatch.setattr(tenant_runtime, "get_org_config", fake_get_org_config)
+
+    runtime = await tenant_runtime.get_whatsapp_runtime_settings(
+        organizacion_id=UUID("7608c713-a9fb-460e-8b00-5878591b90d7"),
+        force_refresh=True,
+    )
+
+    assert runtime.simple_greeting == "Hola personalizado"
+
+
 def test_booking_confirmation_hint_detects_te_esperamos() -> None:
     text = "Perfecto, Juan. Queda todo listo, te esperamos el lunes a las 9 am."
     assert service._looks_like_booking_confirmation(text) is True
@@ -126,6 +141,30 @@ def test_compact_whatsapp_reply_preserves_line_breaks_for_lists() -> None:
 def test_inbound_burst_debounce_skips_greeting() -> None:
     assert service._resolve_inbound_burst_debounce_seconds("hola") == 0.0
     assert service._resolve_inbound_burst_debounce_seconds("hola buen dia") == 0.0
+
+
+@pytest.mark.asyncio
+async def test_simple_greeting_uses_tenant_override(monkeypatch) -> None:
+    monkeypatch.setattr(service, "_resolve_whatsapp_brand_name", _async_return("Marca predeterminada"))
+
+    result = await service._build_simple_greeting_reply(
+        UUID("7608c713-a9fb-460e-8b00-5878591b90d7"),
+        "Hola, soy Cinthia. ¿Con quién tengo el gusto?",
+    )
+
+    assert result == "Hola, soy Cinthia. ¿Con quién tengo el gusto?"
+
+
+@pytest.mark.asyncio
+async def test_simple_greeting_falls_back_to_brand_default(monkeypatch) -> None:
+    monkeypatch.setattr(service, "_resolve_whatsapp_brand_name", _async_return("Marca predeterminada"))
+
+    result = await service._build_simple_greeting_reply(UUID("7608c713-a9fb-460e-8b00-5878591b90d7"))
+
+    assert result == (
+        "Hola, soy Tal-IA de Marca predeterminada. ¿Con quién tengo el gusto? "
+        "Por favor, compárteme tu nombre y apellido."
+    )
 
 
 def test_inbound_burst_debounce_uses_fast_window_for_short_complete_message() -> None:

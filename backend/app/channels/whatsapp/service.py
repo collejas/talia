@@ -789,7 +789,14 @@ async def _resolve_whatsapp_brand_name(organizacion_id: UUID | None) -> str | No
     return None
 
 
-async def _build_simple_greeting_reply(organizacion_id: UUID | None) -> str:
+async def _build_simple_greeting_reply(
+    organizacion_id: UUID | None,
+    custom_greeting: str | None = None,
+) -> str:
+    configured_greeting = str(custom_greeting or "").strip()
+    if configured_greeting:
+        return configured_greeting
+
     brand_name = await _resolve_whatsapp_brand_name(organizacion_id)
     if brand_name:
         return (
@@ -3358,7 +3365,10 @@ async def handle_incoming_message(
 
     if simple_greeting_fast_path:
         assistant_generation_started = time.perf_counter()
-        fast_reply_text = await _build_simple_greeting_reply(org_uuid)
+        fast_reply_text = await _build_simple_greeting_reply(
+            org_uuid,
+            getattr(whatsapp_settings, "simple_greeting", None),
+        )
         assistant_reply = AssistantReply(
             text=fast_reply_text,
             openai_conversation_id=openai_conversation_id,

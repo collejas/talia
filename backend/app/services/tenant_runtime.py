@@ -1291,6 +1291,7 @@ class WhatsappRuntimeSettings:
     prompt_id: str | None
     prompt_version: str | None
     welcome_document_prompt_version: str | None
+    simple_greeting: str | None
     location_href: str | None
     inactivity_minutes: int
     close_after_lead_minutes: int
@@ -1344,6 +1345,7 @@ class WhatsappRuntimeSettings:
             prompt_id=settings.whatsapp_prompt_id,
             prompt_version=settings.whatsapp_prompt_version or settings.openai_prompt_version,
             welcome_document_prompt_version=settings.whatsapp_welcome_document_prompt_version,
+            simple_greeting=None,
             location_href=settings.whatsapp_location_href,
             inactivity_minutes=settings.whatsapp_inactivity_minutes,
             close_after_lead_minutes=12 * 60,
@@ -1439,6 +1441,10 @@ async def get_whatsapp_runtime_settings(
         )
     if welcome_prompt_version is not None:
         settings_payload.welcome_document_prompt_version = welcome_prompt_version
+
+    simple_greeting = _coerce_str_or_none(whatsapp_cfg.get("simple_greeting"))
+    if simple_greeting is not None:
+        settings_payload.simple_greeting = simple_greeting[:500].strip() or None
 
     location_href = _coerce_str_or_none(whatsapp_cfg.get("location_href"))
     if location_href is None:

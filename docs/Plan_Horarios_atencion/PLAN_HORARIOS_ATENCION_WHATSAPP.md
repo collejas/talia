@@ -349,6 +349,7 @@ whatsapp.provider
 whatsapp.prompt_id
 whatsapp.prompt_version
 whatsapp.assistant_id
+whatsapp.simple_greeting
 whatsapp.location_href
 whatsapp.inactivity_minutes
 whatsapp.reengage_minutes
@@ -361,6 +362,10 @@ whatsapp.templates_meta.*
 whatsapp.twilio.*
 whatsapp.meta.*
 ```
+
+`whatsapp.simple_greeting` es opcional y controla el saludo rápido del primer
+mensaje corto (`hola`, `buenos días`, etc.). Si queda vacío, el backend usa el
+saludo predeterminado de Tal-IA con el nombre comercial del tenant.
 
 ### 9.2 Whats-Prosp
 

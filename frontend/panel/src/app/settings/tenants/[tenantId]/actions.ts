@@ -989,6 +989,8 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     const promptId = getText(formData, "whatsapp_prompt_id")
     const promptVersion = getText(formData, "whatsapp_prompt_version")
     const welcomeDocumentPromptVersion = getText(formData, "whatsapp_welcome_document_prompt_version")
+    const simpleGreeting = getText(formData, "whatsapp_simple_greeting")
+    if (simpleGreeting.length > 500) throw new Error("El saludo rápido no puede exceder 500 caracteres.")
     const locationHref = getText(formData, "whatsapp_location_href")
     const assistantId = getText(formData, "whatsapp_assistant_id")
     const inactivityMinutesRaw = getText(formData, "whatsapp_inactivity_minutes")
@@ -1030,6 +1032,7 @@ export async function updateWhatsAppSettingsAction(_: CrudActionState, formData:
     if (promptId) whatsappPatch.prompt_id = promptId
     if (promptVersion) whatsappPatch.prompt_version = promptVersion
     if (welcomeDocumentPromptVersion) whatsappPatch.welcome_document_prompt_version = welcomeDocumentPromptVersion
+    whatsappPatch.simple_greeting = simpleGreeting
     if (locationHref) whatsappPatch.location_href = locationHref
     if (assistantId) whatsappPatch.assistant_id = assistantId
     const inactivityMinutes = parseNumber(inactivityMinutesRaw)
