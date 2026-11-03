@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -20,6 +21,8 @@ export type Operation = {
   precio_ofrecido?: number | string | null
   precio_acordado?: number | string | null
   precio_final?: number | string | null
+  total_cobrado?: number | string | null
+  saldo_pendiente?: number | string | null
   moneda?: string | null
   forma_adquisicion?: string | null
   creado_en?: string | null
@@ -36,7 +39,15 @@ export type Operation = {
   agente_externo?: Relation | null
 }
 
-type ApiResponse = { items?: Operation[]; total?: number; limit?: number; offset?: number }
+type ReportBucket = { estado?: string; origen?: string; nombre?: string; operaciones?: number; valor?: number | string }
+type ReportData = {
+  resumen?: { operaciones?: number; operaciones_activas?: number; pendientes_validacion?: number; operaciones_firmes?: number; valor_operaciones?: number | string; total_cobrado?: number | string; total_cobrado_periodo?: number | string; saldo_pendiente?: number | string; ticket_promedio?: number | string }
+  serie?: Array<{ mes: string; valor?: number | string; cobrado?: number | string }>
+  por_estado?: ReportBucket[]
+  por_origen?: ReportBucket[]
+  por_desarrollo?: ReportBucket[]
+  items?: Operation[]
+}
 export type OperationDocument = { id: string; tipo_documento?: string | null; archivo_id?: string | null; estado_revision?: string | null; observaciones_revision?: string | null; subido_en?: string | null; revisado_en?: string | null }
 export type OperationPayment = { id: string; concepto?: string | null; importe?: Amount; moneda?: string | null; fecha_pago?: string | null; forma_pago?: string | null; estado?: string | null; referencia?: string | null; archivo_comprobante_id?: string | null; observaciones?: string | null }
 export type OperationContract = { id: string; version_operacion?: number | null; estado?: string | null; archivo_generado_id?: string | null; archivo_firmado_id?: string | null; fecha_firma?: string | null; firmado_en?: string | null; parte_vendedora_nombre?: string | null; parte_vendedora_firmante?: string | null; firmantes?: Relation[] }
@@ -127,6 +138,15 @@ export function detailDate(value?: string | null) {
   return Number.isNaN(parsed.getTime()) ? "—" : new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" }).format(parsed)
 }
 
+function dateInputValue(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`
+}
+
+function periodLabel(value: string) {
+  const [year, month] = value.split("-").map(Number)
+  return new Intl.DateTimeFormat("es-MX", { month: "short", year: "2-digit" }).format(new Date(year, (month || 1) - 1, 1))
+}
+
 export function InmobiliariaSalesView() {
   const router = useRouter()
   const [items, setItems] = useState<Operation[]>([])
@@ -134,24 +154,31 @@ export function InmobiliariaSalesView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [estado, setEstado] = useState("")
+  const [estadoValidacion, setEstadoValidacion] = useState("")
   const [origen, setOrigen] = useState("")
   const [search, setSearch] = useState("")
+  const [periodo, setPeriodo] = useState("mes")
+  const [desde, setDesde] = useState(() => dateInputValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)))
+  const [hasta, setHasta] = useState(() => dateInputValue(new Date()))
+  const [report, setReport] = useState<ReportData>({})
 
   useEffect(() => {
     const controller = new AbortController()
-    const params = new URLSearchParams({ limit: "200", offset: "0" })
+    const params = new URLSearchParams({ desde, hasta })
     if (estado) params.set("estado", estado)
+    if (estadoValidacion) params.set("estado_validacion", estadoValidacion)
     if (origen) params.set("origen_venta", origen)
-    fetch(`/api/crm/inmobiliaria/ventas?${params.toString()}`, { cache: "no-store", signal: controller.signal })
+    fetch(`/api/crm/inmobiliaria/ventas/reporte?${params.toString()}`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
-        const payload = await response.json().catch(() => null) as ApiResponse & { error?: string } | null
+        const payload = await response.json().catch(() => null) as ReportData & { error?: string } | null
         if (!response.ok) throw new Error(payload?.error || "No se pudieron cargar las ventas inmobiliarias.")
         return payload || {}
       })
       .then((payload) => {
         if (controller.signal.aborted) return
+        setReport(payload)
         setItems(Array.isArray(payload.items) ? payload.items : [])
-        setTotal(Number(payload.total || 0))
+        setTotal(Number(payload.resumen?.operaciones || 0))
       })
       .catch((failure: unknown) => {
         if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "No se pudieron cargar las ventas inmobiliarias.")
@@ -160,19 +187,28 @@ export function InmobiliariaSalesView() {
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [estado, origen])
+  }, [desde, hasta, estado, estadoValidacion, origen])
 
   const filteredItems = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase("es-MX")
     if (!normalized) return items
     return items.filter((item) => [
       hierarchy(item.unidad), relationName(item.cliente), relationName(item.oportunidad), item.oportunidad?.codigo_oportunidad,
-      relationName(item.socio_comercial), relationName(item.agente_externo), item.referencia_externa,
+      relationName(item.socio_comercial), relationName(item.agente_externo), agentName(item), item.referencia_externa,
     ].filter(Boolean).join(" ").toLocaleLowerCase("es-MX").includes(normalized))
   }, [items, search])
 
-  const visibleAmount = filteredItems.reduce((sum, item) => sum + Number(item.precio_final ?? item.precio_acordado ?? item.precio_establecido ?? 0), 0)
-  const firmCount = filteredItems.filter((item) => item.estado_validacion === "firme" || item.estado === "vendida").length
+  const summary = report.resumen || {}
+  const chartData = (report.serie || []).map((point) => ({ ...point, label: periodLabel(point.mes), valor: Number(point.valor || 0), cobrado: Number(point.cobrado || 0) }))
+  const statusChartData = (report.por_estado || []).map((item) => ({ ...item, label: statusLabels[item.estado || ""] || item.estado || "Sin estado", operaciones: Number(item.operaciones || 0), valor: Number(item.valor || 0) }))
+  const originLabels: Record<string, string> = { interno: "Equipo interno", externo: "Agentes externos" }
+
+  const selectPeriod = (value: string) => {
+    const now = new Date()
+    const from = value === "90d" ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 89) : value === "ano" ? new Date(now.getFullYear(), 0, 1) : new Date(now.getFullYear(), now.getMonth(), 1)
+    setPeriodo(value)
+    if (value !== "personalizado") { setDesde(dateInputValue(from)); setHasta(dateInputValue(now)) }
+  }
 
   const openOperationDetail = (operationId: string) => {
     router.push(`/ventas-inmobiliarias/${encodeURIComponent(operationId)}`)
@@ -185,20 +221,43 @@ export function InmobiliariaSalesView() {
         <p className="mt-1 text-sm text-muted-foreground">Consulta operaciones inmobiliarias, su avance documental y la atribución comercial.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card><CardHeader className="pb-2"><CardDescription>Operaciones</CardDescription><CardTitle>{total.toLocaleString("es-MX")}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Registros que cumplen los filtros</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardDescription>Valor visible</CardDescription><CardTitle>{money(visibleAmount)}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Precio establecido o acordado</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardDescription>Firmes o vendidas</CardDescription><CardTitle>{firmCount.toLocaleString("es-MX")}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Dentro de los registros cargados</CardContent></Card>
+      <Card>
+        <CardHeader className="pb-3"><CardTitle>Filtros del reporte</CardTitle><CardDescription>El periodo afecta los KPIs, gráficas y listado de operaciones.</CardDescription></CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <div className="grid gap-1.5"><label htmlFor="property-sales-period" className="text-sm font-medium">Periodo</label><select id="property-sales-period" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={periodo} onChange={(event) => selectPeriod(event.target.value)}><option value="mes">Mes actual</option><option value="90d">Últimos 90 días</option><option value="ano">Año actual</option><option value="personalizado">Personalizado</option></select></div>
+          <div className="grid gap-1.5"><label htmlFor="property-sales-from" className="text-sm font-medium">Desde</label><Input id="property-sales-from" type="date" value={desde} onChange={(event) => { setPeriodo("personalizado"); setDesde(event.target.value) }} /></div>
+          <div className="grid gap-1.5"><label htmlFor="property-sales-to" className="text-sm font-medium">Hasta</label><Input id="property-sales-to" type="date" value={hasta} onChange={(event) => { setPeriodo("personalizado"); setHasta(event.target.value) }} /></div>
+          <div className="grid gap-1.5"><label htmlFor="property-sales-status" className="text-sm font-medium">Estado comercial</label><select id="property-sales-status" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={estado} onChange={(event) => setEstado(event.target.value)}><option value="">Todos</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+          <div className="grid gap-1.5"><label htmlFor="property-sales-validation" className="text-sm font-medium">Validación</label><select id="property-sales-validation" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={estadoValidacion} onChange={(event) => setEstadoValidacion(event.target.value)}><option value="">Todas</option>{Object.entries(validationLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+          <div className="grid gap-1.5"><label htmlFor="property-sales-origin" className="text-sm font-medium">Origen</label><select id="property-sales-origin" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={origen} onChange={(event) => setOrigen(event.target.value)}><option value="">Todos</option><option value="interno">Equipo interno</option><option value="externo">Agentes externos</option></select></div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card><CardHeader className="pb-2"><CardDescription>Operaciones</CardDescription><CardTitle>{Number(summary.operaciones || total).toLocaleString("es-MX")}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Dentro del periodo y filtros</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Operaciones activas</CardDescription><CardTitle>{Number(summary.operaciones_activas || 0).toLocaleString("es-MX")}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Reservadas o apartadas</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Ventas firmes</CardDescription><CardTitle>{Number(summary.operaciones_firmes || 0).toLocaleString("es-MX")}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Validación firme o cierre histórico</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Pendientes de validación</CardDescription><CardTitle>{Number(summary.pendientes_validacion || 0).toLocaleString("es-MX")}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Captura, revisión o autorización</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Valor de operaciones</CardDescription><CardTitle>{money(summary.valor_operaciones || 0)}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Excluye operaciones canceladas</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Cobrado</CardDescription><CardTitle>{money(summary.total_cobrado || 0)}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Pagos confirmados de estas operaciones</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Cobrado en periodo</CardDescription><CardTitle>{money(summary.total_cobrado_periodo || 0)}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Por fecha de pago confirmado</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Saldo pendiente</CardDescription><CardTitle>{money(summary.saldo_pendiente || 0)}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Valor menos pagos confirmados</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Ticket promedio</CardDescription><CardTitle>{money(summary.ticket_promedio || 0)}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Valor promedio por operación no cancelada</CardContent></Card>
       </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card><CardHeader><CardTitle>Valor y cobranza por mes</CardTitle><CardDescription>Valor de operaciones contra pagos confirmados.</CardDescription></CardHeader><CardContent className="h-72">{chartData.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: 8 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" tickLine={false} axisLine={false} /><YAxis tickFormatter={(value: number) => new Intl.NumberFormat("es-MX", { notation: "compact", maximumFractionDigits: 1 }).format(value)} tickLine={false} axisLine={false} /><Tooltip formatter={(value) => money(value as number)} /><Legend /><Bar dataKey="valor" name="Valor" fill="var(--chart-1)" radius={[4, 4, 0, 0]} /><Bar dataKey="cobrado" name="Cobrado" fill="var(--chart-2)" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{loading ? "Cargando reporte…" : "No hay datos en este periodo."}</div>}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Operaciones por estado</CardTitle><CardDescription>Las operaciones apartadas no equivalen a ventas firmes.</CardDescription></CardHeader><CardContent className="h-72">{statusChartData.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={statusChartData} margin={{ top: 8, right: 8, bottom: 4, left: 8 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" tickLine={false} axisLine={false} /><YAxis allowDecimals={false} tickLine={false} axisLine={false} /><Tooltip /><Legend /><Bar dataKey="operaciones" name="Operaciones" fill="var(--chart-3)" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Sin distribución disponible.</div>}</CardContent></Card>
+      </div>
+
+      <Card><CardHeader><CardTitle>Distribución comercial</CardTitle><CardDescription>Valor por origen y desarrollo.</CardDescription></CardHeader><CardContent className="grid gap-6 md:grid-cols-2"><div><h3 className="mb-2 text-sm font-semibold">Origen</h3><div className="space-y-2">{(report.por_origen || []).map((item) => <div key={item.origen} className="flex justify-between border-b pb-2 text-sm"><span>{originLabels[item.origen || ""] || item.origen || "—"} · {item.operaciones || 0} operaciones</span><span className="font-medium">{money(item.valor || 0)}</span></div>)}{!report.por_origen?.length ? <p className="text-sm text-muted-foreground">Sin datos.</p> : null}</div></div><div><h3 className="mb-2 text-sm font-semibold">Desarrollo</h3><div className="space-y-2">{(report.por_desarrollo || []).map((item) => <div key={item.nombre} className="flex justify-between border-b pb-2 text-sm"><span>{item.nombre} · {item.operaciones || 0} operaciones</span><span className="font-medium">{money(item.valor || 0)}</span></div>)}{!report.por_desarrollo?.length ? <p className="text-sm text-muted-foreground">Sin datos.</p> : null}</div></div></CardContent></Card>
 
       <Card>
         <CardHeader>
           <CardTitle>Operaciones</CardTitle>
           <CardDescription>Las reservas y apartados no representan ingresos cerrados hasta completar la validación financiera.</CardDescription>
-          <div className="grid gap-3 pt-3 md:grid-cols-[minmax(0,1fr)_180px_180px]">
+          <div className="grid gap-3 pt-3">
             <Input placeholder="Buscar comprador, oportunidad, unidad, socio o agente" value={search} onChange={(event) => setSearch(event.target.value)} />
-            <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={estado} onChange={(event) => { setLoading(true); setError(null); setEstado(event.target.value) }}><option value="">Todos los estados</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
-            <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={origen} onChange={(event) => { setLoading(true); setError(null); setOrigen(event.target.value) }}><option value="">Origen: todos</option><option value="interno">Interna</option><option value="externo">Externa</option></select>
           </div>
         </CardHeader>
         <CardContent>
@@ -208,13 +267,15 @@ export function InmobiliariaSalesView() {
           {!loading && !error && filteredItems.length > 0 && (
             <div className="overflow-x-auto rounded-md border">
               <Table>
-                <TableHeader><TableRow><TableHead>Unidad</TableHead><TableHead>Comprador / oportunidad</TableHead><TableHead>Estado</TableHead><TableHead>Origen / agente</TableHead><TableHead>Valor</TableHead><TableHead>Fecha</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Unidad</TableHead><TableHead>Comprador / oportunidad</TableHead><TableHead>Estado</TableHead><TableHead>Origen / agente</TableHead><TableHead>Valor</TableHead><TableHead>Cobrado</TableHead><TableHead>Saldo</TableHead><TableHead>Fecha</TableHead></TableRow></TableHeader>
                 <TableBody>{filteredItems.map((item) => <TableRow key={item.id} className="cursor-pointer" tabIndex={0} onClick={() => void openOperationDetail(item.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void openOperationDetail(item.id) } }}>
                   <TableCell className="min-w-[260px] font-medium">{hierarchy(item.unidad)}</TableCell>
                   <TableCell className="min-w-[220px]"><div>{relationName(item.cliente)}</div><div className="text-xs text-muted-foreground">{relationName(item.oportunidad)}{item.oportunidad?.codigo_oportunidad ? ` · ${item.oportunidad.codigo_oportunidad}` : ""}</div></TableCell>
                   <TableCell className="min-w-[150px]"><div className={statusClasses[item.estado] || "font-semibold text-foreground"}>{statusLabels[item.estado] || item.estado}</div><div className={`text-xs ${validationClasses[item.estado_validacion || ""] || "text-muted-foreground"}`}>{item.estado_validacion ? validationLabels[item.estado_validacion] || item.estado_validacion : "Sin validación"}</div></TableCell>
                   <TableCell className="min-w-[210px]"><div>{item.origen_venta === "externo" ? "Externa" : "Interna"}</div><div className="text-xs text-muted-foreground">{item.origen_venta === "externo" ? `${relationName(item.socio_comercial)} · ${agentName(item)}` : agentName(item) === "—" ? "Asesor no asignado" : agentName(item)}</div></TableCell>
                   <TableCell className="whitespace-nowrap">{money(item.precio_final ?? item.precio_acordado ?? item.precio_establecido, item.moneda || "MXN")}</TableCell>
+                  <TableCell className="whitespace-nowrap">{money(item.total_cobrado, item.moneda || "MXN")}</TableCell>
+                  <TableCell className="whitespace-nowrap">{money(item.saldo_pendiente, item.moneda || "MXN")}</TableCell>
                   <TableCell className="whitespace-nowrap"><div>{date(item.fecha_evento_externo || item.creado_en)}</div><Button type="button" variant="link" size="sm" className="h-auto px-0 text-xs" onClick={(event) => { event.stopPropagation(); void openOperationDetail(item.id) }}>Ver expediente</Button></TableCell>
                 </TableRow>)}</TableBody>
               </Table>

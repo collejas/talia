@@ -1605,6 +1605,152 @@ class CRMRepository:
             rows.append(row)
         return rows, total
 
+    async def get_inmobiliaria_ventas_reporte(
+        self,
+        *,
+        organizacion_id: UUID,
+        estado: str | None = None,
+        estado_validacion: str | None = None,
+        origen_venta: str | None = None,
+        desde: datetime | None = None,
+        hasta: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Construye el resumen operativo y financiero del módulo inmobiliario."""
+        all_rows: list[dict[str, Any]] = []
+        offset = 0
+        page_size = 200
+        while True:
+            rows, total = await self.list_inmobiliaria_ventas(
+                organizacion_id=organizacion_id,
+                estado=estado,
+                estado_validacion=estado_validacion,
+                origen_venta=origen_venta,
+                desde=desde,
+                hasta=hasta,
+                limit=page_size,
+                offset=offset,
+            )
+            all_rows.extend(rows)
+            if not rows or len(all_rows) >= total or len(rows) < page_size:
+                break
+            offset += page_size
+
+        operation_ids = [str(row["id"]) for row in all_rows if row.get("id")]
+        payments: list[dict[str, Any]] = []
+        if operation_ids:
+            payments_response = await self._request(
+                "GET",
+                "/rest/v1/inmobiliaria_pagos_operacion",
+                params={
+                    "organizacion_id": f"eq.{organizacion_id}",
+                    "operacion_id": _postgrest_in_clause(operation_ids),
+                    "select": "operacion_id,importe,moneda,estado,fecha_pago",
+                    "limit": "10000",
+                },
+                organizacion_id=organizacion_id,
+            )
+            payment_data = payments_response.json()
+            if not isinstance(payment_data, list):
+                raise CRMRepositoryError("inmobiliaria_sales_payments_invalid_response")
+            payments = [row for row in payment_data if isinstance(row, dict)]
+
+        confirmed_by_operation: dict[str, Decimal] = defaultdict(Decimal)
+        monthly: dict[str, dict[str, Decimal]] = {}
+        confirmed_period_total = Decimal("0")
+        for payment in payments:
+            if payment.get("estado") != "confirmado":
+                continue
+            operation_id = str(payment.get("operacion_id") or "")
+            amount = Decimal(str(payment.get("importe") or 0))
+            confirmed_by_operation[operation_id] += amount
+            payment_date = str(payment.get("fecha_pago") or "")
+            if (desde is None or payment_date >= desde.isoformat()) and (hasta is None or payment_date < hasta.isoformat()):
+                confirmed_period_total += amount
+            else:
+                continue
+            payment_month = payment_date[:7]
+            if payment_month:
+                monthly_point = monthly.setdefault(payment_month, {"valor": Decimal("0"), "cobrado": Decimal("0")})
+                monthly_point["cobrado"] += amount
+
+        status_counts: dict[str, dict[str, Any]] = {}
+        origin_counts: dict[str, dict[str, Any]] = {}
+        development_counts: dict[str, dict[str, Any]] = {}
+        total_value = Decimal("0")
+        total_balance = Decimal("0")
+        non_cancelled_count = 0
+        firm_count = 0
+        pending_validation_count = 0
+        active_count = 0
+        for row in all_rows:
+            operation_id = str(row.get("id") or "")
+            state = str(row.get("estado") or "sin_estado")
+            validation = str(row.get("estado_validacion") or "sin_validacion")
+            amount = Decimal(str(row.get("precio_final") or row.get("precio_acordado") or row.get("precio_establecido") or 0))
+            collected = confirmed_by_operation.get(operation_id, Decimal("0"))
+            is_cancelled = state == "cancelada"
+            if not is_cancelled:
+                non_cancelled_count += 1
+                total_value += amount
+                total_balance += max(amount - collected, Decimal("0"))
+            if state in {"reservada", "apartada"}:
+                active_count += 1
+            if validation in {"pendiente_captura", "pendiente_revision", "en_revision"}:
+                pending_validation_count += 1
+            if validation == "firme" or state == "vendida":
+                firm_count += 1
+
+            status_entry = status_counts.setdefault(state, {"estado": state, "operaciones": 0, "valor": Decimal("0")})
+            status_entry["operaciones"] += 1
+            status_entry["valor"] += amount if not is_cancelled else Decimal("0")
+            origin = str(row.get("origen_venta") or "interno")
+            origin_entry = origin_counts.setdefault(origin, {"origen": origin, "operaciones": 0, "valor": Decimal("0")})
+            origin_entry["operaciones"] += 1
+            origin_entry["valor"] += amount if not is_cancelled else Decimal("0")
+
+            unit = row.get("unidad") if isinstance(row.get("unidad"), dict) else {}
+            development = unit.get("desarrollo") if isinstance(unit.get("desarrollo"), dict) else {}
+            development_name = str(development.get("nombre") or development.get("nombre_completo") or "Sin desarrollo")
+            development_entry = development_counts.setdefault(development_name, {"nombre": development_name, "operaciones": 0, "valor": Decimal("0")})
+            development_entry["operaciones"] += 1
+            development_entry["valor"] += amount if not is_cancelled else Decimal("0")
+
+            event_date = str(row.get("fecha_evento_externo") or row.get("creado_en") or "")
+            month = event_date[:7]
+            if month:
+                point = monthly.setdefault(month, {"valor": Decimal("0"), "cobrado": Decimal("0")})
+                point["valor"] += amount if not is_cancelled else Decimal("0")
+            row["total_cobrado"] = float(collected)
+            row["saldo_pendiente"] = float(max(amount - collected, Decimal("0")))
+
+        def serialize(entries: dict[str, dict[str, Any]], key: str) -> list[dict[str, Any]]:
+            return [
+                {**entry, "valor": float(entry["valor"])}
+                for entry in sorted(entries.values(), key=lambda value: (-float(value["valor"]), str(value[key])))
+            ]
+
+        return {
+            "resumen": {
+                "operaciones": len(all_rows),
+                "operaciones_activas": active_count,
+                "pendientes_validacion": pending_validation_count,
+                "operaciones_firmes": firm_count,
+                "valor_operaciones": float(total_value),
+                "total_cobrado": float(sum(confirmed_by_operation.values())),
+                "total_cobrado_periodo": float(confirmed_period_total),
+                "saldo_pendiente": float(total_balance),
+                "ticket_promedio": float(total_value / non_cancelled_count) if non_cancelled_count else 0,
+            },
+            "serie": [
+                {"mes": month, "valor": float(point["valor"]), "cobrado": float(point["cobrado"])}
+                for month, point in sorted(monthly.items())
+            ],
+            "por_estado": serialize(status_counts, "estado"),
+            "por_origen": serialize(origin_counts, "origen"),
+            "por_desarrollo": serialize(development_counts, "nombre")[:10],
+            "items": all_rows,
+        }
+
     async def get_inmobiliaria_operacion_expediente(
         self,
         *,

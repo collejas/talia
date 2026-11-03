@@ -7250,6 +7250,15 @@ class InmobiliariaVentasResponse(BaseModel):
     offset: int
 
 
+class InmobiliariaVentasReporteResponse(BaseModel):
+    resumen: dict[str, Any] = Field(default_factory=dict)
+    serie: list[dict[str, Any]] = Field(default_factory=list)
+    por_estado: list[dict[str, Any]] = Field(default_factory=list)
+    por_origen: list[dict[str, Any]] = Field(default_factory=list)
+    por_desarrollo: list[dict[str, Any]] = Field(default_factory=list)
+    items: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class PropiedadDesarrolloCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     nombre: str = Field(..., min_length=1)
@@ -54894,6 +54903,8 @@ async def listar_ventas_inmobiliarias(
 ) -> InmobiliariaVentasResponse:
     if desde and hasta and desde > hasta:
         raise HTTPException(status_code=422, detail="invalid_date_range")
+    if desde and hasta and (hasta - desde).days > 3660:
+        raise HTTPException(status_code=422, detail="date_range_too_large")
     desde_dt = datetime.combine(desde, dt_time.min, tzinfo=timezone.utc) if desde else None
     hasta_dt = datetime.combine(hasta + timedelta(days=1), dt_time.min, tzinfo=timezone.utc) if hasta else None
     try:
@@ -54912,6 +54923,38 @@ async def listar_ventas_inmobiliarias(
     except CRMRepositoryError as exc:
         raise HTTPException(status_code=502, detail="inmobiliaria_sales_list_failed") from exc
     return InmobiliariaVentasResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/inmobiliaria/ventas/reporte", response_model=InmobiliariaVentasReporteResponse)
+async def reporte_ventas_inmobiliarias(
+    *,
+    estado: Literal["reservada", "apartada", "vendida", "cancelada"] | None = Query(default=None),
+    estado_validacion: Literal["pendiente_captura", "pendiente_revision", "en_revision", "firme", "rechazada"] | None = Query(default=None),
+    origen_venta: Literal["interno", "externo"] | None = Query(default=None),
+    desde: date | None = Query(default=None),
+    hasta: date | None = Query(default=None),
+    repo: CRMRepository = Depends(get_repository),
+    organizacion_id: UUID = Depends(require_tenant_module_enabled("propiedades")),
+    _: str = Depends(require_any_permission(["sales.view", "propiedades.view", "inmobiliaria.apartados.validate"])),
+) -> InmobiliariaVentasReporteResponse:
+    if desde and hasta and desde > hasta:
+        raise HTTPException(status_code=422, detail="invalid_date_range")
+    if desde and hasta and (hasta - desde).days > 3660:
+        raise HTTPException(status_code=422, detail="date_range_too_large")
+    desde_dt = datetime.combine(desde, dt_time.min, tzinfo=timezone.utc) if desde else None
+    hasta_dt = datetime.combine(hasta + timedelta(days=1), dt_time.min, tzinfo=timezone.utc) if hasta else None
+    try:
+        report = await repo.get_inmobiliaria_ventas_reporte(
+            organizacion_id=organizacion_id,
+            estado=estado,
+            estado_validacion=estado_validacion,
+            origen_venta=origen_venta,
+            desde=desde_dt,
+            hasta=hasta_dt,
+        )
+    except CRMRepositoryError as exc:
+        raise HTTPException(status_code=502, detail="inmobiliaria_sales_report_failed") from exc
+    return InmobiliariaVentasReporteResponse.model_validate(report)
 
 
 @router.get("/inmobiliaria/ventas/{operacion_id}/expediente")
