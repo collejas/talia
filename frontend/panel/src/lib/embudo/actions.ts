@@ -463,8 +463,6 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
   const rawContact = input.contacto ?? {};
   const opportunityInput = input.oportunidad ?? {};
   const selectedAccountId = sanitizeNullableString(opportunityInput.cuenta_id);
-  const contactUpdatePayload: Record<string, unknown> = {};
-  const contactRequestId = randomUUID();
 
   const nombreValue = sanitizeNullableString(rawContact.nombre_completo);
   const correoValue = sanitizeNullableString(
@@ -472,35 +470,6 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
   );
   const telefonoValue = sanitizeNullableString(rawContact.telefono_e164);
   const companyValue = sanitizeNullableString(rawContact.company_name);
-  const notesValue = sanitizeNullableString(rawContact.notes);
-  const needValue = sanitizeNullableString(rawContact.necesidad_proposito);
-  const explicitContactFields = [
-    "nombre_nombres",
-    "apellido_paterno",
-    "apellido_materno",
-    "correo_principal",
-    "telefono_principal_e164",
-    "telefono_movil_1_e164",
-    "puesto",
-    "area",
-    "rol_decision",
-    "origen",
-    "persona_fisica_moral",
-    "tipo",
-    "razon_social",
-    "rfc",
-    "regimen_capital",
-  ] as const;
-  for (const field of explicitContactFields) {
-    const value = sanitizeNullableString(rawContact[field]);
-    if (value !== null) contactUpdatePayload[field] = value;
-  }
-  if (correoValue !== null) {
-    contactUpdatePayload.correo = correoValue;
-  }
-  if (telefonoValue !== null) {
-    contactUpdatePayload.telefono_e164 = telefonoValue;
-  }
 
   const usingExistingContactId =
     typeof input.personaId === "string" && input.personaId.trim().length
@@ -509,71 +478,27 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
         ? input.contactId.trim()
         : "";
   let contactId = usingExistingContactId.length ? usingExistingContactId : null;
-  let createdContactId: string | null = null;
 
   if (contactId) {
-    if (nombreValue !== null) contactUpdatePayload.nombre_completo = nombreValue;
-    // company_name is legacy/person-level data and cannot represent multiple
-    // account relations. The opportunity account is authoritative here.
-    if (companyValue !== null && !selectedAccountId) contactUpdatePayload.company_name = companyValue;
-    if (notesValue !== null) contactUpdatePayload.notes = notesValue;
-    if (needValue !== null) contactUpdatePayload.necesidad_proposito = needValue;
     logDebug("use-existing-contact", { contactId });
   } else {
-    const contactInsertPayload: Record<string, unknown> = {
-      propietario_usuario_id: userId,
-      origen: "embudo_manual",
-      request_id: contactRequestId,
+    const lookup = correoValue ?? telefonoValue;
+    const matches = lookup ? await searchEmbudoContacts(lookup, 5) : [];
+    if (matches.length) {
+      const details = matches
+        .slice(0, 3)
+        .map((match) => `${match.nombre}${match.telefono ? ` (${match.telefono})` : ""}`)
+        .join(", ");
+      return {
+        ok: false,
+        error: `Ya existe un contacto con esos datos: ${details}. Selecciónalo desde el buscador de contactos; no se puede crear otro desde una oportunidad.`,
+      };
+    }
+    return {
+      ok: false,
+      error: "Para crear la oportunidad primero debes seleccionar un contacto existente. Los contactos nuevos se crean desde Contactos.",
     };
-    if (nombreValue !== null) contactInsertPayload.nombre_completo = nombreValue;
-    if (companyValue !== null) contactInsertPayload.company_name = companyValue;
-    if (notesValue !== null) contactInsertPayload.notes = notesValue;
-    if (needValue !== null) contactInsertPayload.necesidad_proposito = needValue;
-    Object.assign(contactInsertPayload, contactUpdatePayload);
-    removeUndefined(contactInsertPayload);
-
-    logDebug("build-contact-payload", { insertKeys: Object.keys(contactInsertPayload) });
-
-    const contactResult = await callCrmApi<CrmContact>("/crm/contacts", {
-      method: "POST",
-      body: contactInsertPayload,
-    });
-
-    if (!contactResult.ok) {
-      console.error(`${LOG_PREFIX} contactos-insert-failed`, {
-        error: contactResult.error,
-        payload: contactInsertPayload,
-      });
-      return { ok: false, error: contactResult.error || "No se pudo crear el contacto del lead." };
-    }
-    if (!contactResult.data?.id) {
-      console.error(`${LOG_PREFIX} contactos-insert-missing-id`, { payload: contactInsertPayload });
-      return { ok: false, error: "No se pudo crear el contacto del lead." };
-    }
-
-    contactId = contactResult.data.id;
-    createdContactId = contactResult.data.id;
-    logDebug("contact-created", { contactId });
   }
-
-  if (Object.keys(contactUpdatePayload).length) {
-    logDebug("contact-update", { contactId, fields: Object.keys(contactUpdatePayload) });
-    const updateResult = await callCrmApi<CrmContact>(`/crm/contacts/${contactId}`, {
-      method: "PATCH",
-      searchParams: { skip_conversation_sync: "true" },
-      body: contactUpdatePayload,
-    });
-    if (!updateResult.ok) {
-      console.error(`${LOG_PREFIX} contactos-update-failed`, {
-        error: updateResult.error,
-        contactId,
-        payload: contactUpdatePayload,
-      });
-      return { ok: false, error: updateResult.error };
-    }
-  }
-
-  removeUndefined(contactUpdatePayload);
 
   const baseMetadata = normalizeMetadata(opportunityInput.metadata);
   if (!("created_via" in baseMetadata)) {
@@ -631,11 +556,6 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
   if (!response.ok) {
     console.error(`${LOG_PREFIX} opportunity-create-failed`, { error: response.error, opportunityPayload });
-    if (createdContactId) {
-      await callCrmApi(`/crm/contacts/${createdContactId}`, {
-        method: "DELETE",
-      }).catch(() => undefined);
-    }
     return { ok: false, error: response.error };
   }
 
