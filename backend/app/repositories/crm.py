@@ -15467,6 +15467,26 @@ class CRMRepository:
         )
         persona_body = dict(parts["persona_body"])
         account_body = parts["account_body"]
+        identity_phone = persona_body.get("telefono_principal_e164") or persona_body.get("telefono_movil_1_e164")
+        if identity_phone:
+            existing_by_phone = await self.get_persona_by_phone_e164(
+                phone_e164=str(identity_phone),
+                organizacion_id=organizacion_id,
+            )
+            if existing_by_phone:
+                raise CRMRepositoryError(
+                    f"duplicate_contact_method:{existing_by_phone.get('id')}:telefono"
+                )
+        identity_email = persona_body.get("correo_principal") or persona_body.get("correo_institucional")
+        if identity_email:
+            existing_by_email = await self.get_persona_by_email(
+                email=str(identity_email),
+                organizacion_id=organizacion_id,
+            )
+            if existing_by_email:
+                raise CRMRepositoryError(
+                    f"duplicate_contact_method:{existing_by_email.get('id')}:correo"
+                )
         request_id = str(persona_body.get("request_id") or "").strip()
         if not request_id:
             request_id = str(uuid4())

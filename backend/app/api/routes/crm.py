@@ -29577,6 +29577,14 @@ async def create_persona_legacy(
             payload=body,
         )
     except CRMRepositoryError as exc:
+        if "duplicate_contact_method" in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "duplicate_contact_detected",
+                    "message": "Ya existe un contacto con el mismo correo o teléfono. Selecciona el contacto existente desde el buscador.",
+                },
+            ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMPersona.model_validate(row)
 
@@ -29601,6 +29609,14 @@ async def create_persona(
             payload=body,
         )
     except CRMRepositoryError as exc:
+        if "duplicate_contact_method" in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "duplicate_contact_detected",
+                    "message": "Ya existe un contacto con el mismo correo o teléfono. Selecciona el contacto existente desde el buscador.",
+                },
+            ) from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return CRMPersona.model_validate(row)
 

@@ -462,7 +462,6 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
 
   const rawContact = input.contacto ?? {};
   const opportunityInput = input.oportunidad ?? {};
-  const selectedAccountId = sanitizeNullableString(opportunityInput.cuenta_id);
 
   const nombreValue = sanitizeNullableString(rawContact.nombre_completo);
   const correoValue = sanitizeNullableString(
