@@ -476,7 +476,7 @@ export async function createLeadCard(input: CreateLeadInput): Promise<LeadAction
       : typeof input.contactId === "string"
         ? input.contactId.trim()
         : "";
-  let contactId = usingExistingContactId.length ? usingExistingContactId : null;
+  const contactId = usingExistingContactId.length ? usingExistingContactId : null;
 
   if (contactId) {
     logDebug("use-existing-contact", { contactId });

@@ -32983,12 +32983,20 @@ async def promote_inbox_conversation_to_opportunity(
 
     conversation_persona_missing = not persona_id_value
     persona_row: dict[str, Any] | None = None
-    if not persona_id_value and form_correo:
+    if not persona_id_value:
+        # Inbox es la única excepción: aquí sí se puede recuperar el contacto
+        # existente por identidad antes de crear una oportunidad.
         try:
-            persona_row = await repo.get_persona_by_email(
-                email=form_correo,
-                organizacion_id=organizacion_id,
-            )
+            if form_telefono:
+                persona_row = await repo.get_persona_by_phone_e164(
+                    phone_e164=form_telefono,
+                    organizacion_id=organizacion_id,
+                )
+            if not persona_row and form_correo:
+                persona_row = await repo.get_persona_by_email(
+                    email=form_correo,
+                    organizacion_id=organizacion_id,
+                )
         except CRMRepositoryError as exc:
             raise HTTPException(status_code=502, detail=f"contact_lookup_failed:{exc}") from exc
         if persona_row:
@@ -33017,6 +33025,14 @@ async def promote_inbox_conversation_to_opportunity(
             if not persona_id_value:
                 raise CRMRepositoryError("persona_create_missing_id")
         except CRMRepositoryError as exc:
+            if "duplicate_contact_method" in str(exc).lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "duplicate_contact_detected",
+                        "message": "El contacto ya existe. Vuelve a buscarlo desde Inbox para ligarlo a la conversación.",
+                    },
+                ) from exc
             raise HTTPException(status_code=502, detail=f"contact_create_failed:{exc}") from exc
     else:
         try:

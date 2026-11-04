@@ -29,6 +29,8 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -65,6 +67,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { ContactCatalogSelect, mergeCatalogOptions } from "@/components/contactos/contact-catalog-select";
 import { useTenantContactCatalogs } from "@/components/contactos/use-contact-catalogs";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import type { AgendaApiItem, AgendaBookingsResponse } from "@/lib/agenda/data";
 import {
   IconAlertTriangle,
@@ -865,6 +868,7 @@ export function LeadDrawer({
   onScheduleDemo,
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
+  const router = useRouter();
   const tenantCatalogs = useTenantContactCatalogs();
   const stageName = currentStage?.nombre ?? "Sin etapa";
   const resolvedTableroId = useMemo(
@@ -1059,6 +1063,7 @@ export function LeadDrawer({
 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creationPolicyDialogOpen, setCreationPolicyDialogOpen] = useState(false);
   const [historyState, setHistoryState] = useState<HistoryState>({ status: "idle", data: [] });
   const [quotesState, setQuotesState] = useState<QuotesState>({ status: "idle", data: [] });
   const activeQuoteNet = useMemo(() => {
@@ -1403,6 +1408,7 @@ export function LeadDrawer({
     reset(defaultFormValues);
     setStagePrep(initialStagePrepState);
     setError(null);
+    setCreationPolicyDialogOpen(false);
     setPending(false);
     setDeletePending(false);
   }, [defaultFormValues, initialStagePrepState, reset, open, drawerRecordKey]);
@@ -2242,6 +2248,12 @@ export function LeadDrawer({
 
       if (!result.ok) {
         setError(result.error || "Ocurrió un error al crear el lead.");
+        if (
+          isCreateMode &&
+          /contacto|contactos|empresa|empresas/i.test(result.error || "")
+        ) {
+          setCreationPolicyDialogOpen(true);
+        }
         return;
       }
 
@@ -4749,6 +4761,51 @@ export function LeadDrawer({
                   {error}
                 </p>
               ) : null}
+
+              <Dialog open={creationPolicyDialogOpen} onOpenChange={setCreationPolicyDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Primero crea o selecciona el registro</DialogTitle>
+                    <DialogDescription>
+                      Desde una oportunidad no se crean contactos ni empresas. Para mantener la información ordenada,
+                      crea el registro desde su módulo correspondiente y después selecciónalo aquí con el buscador.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                    <p className="font-medium">Qué debes hacer</p>
+                    <p className="mt-1">
+                      Ve a <strong>Contactos</strong> para crear o revisar el contacto y a <strong>Empresas</strong> para
+                      crear o revisar la empresa. Después regresa al embudo y selecciónalos antes de guardar la oportunidad.
+                    </p>
+                  </div>
+                  <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+                    <Button type="button" variant="outline" onClick={() => setCreationPolicyDialogOpen(false)}>
+                      Entendido
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setCreationPolicyDialogOpen(false);
+                        onOpenChange(false);
+                        router.push("/empresas");
+                      }}
+                    >
+                      Ir a Empresas
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setCreationPolicyDialogOpen(false);
+                        onOpenChange(false);
+                        router.push("/contactos");
+                      }}
+                    >
+                      Ir a Contactos
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               <DrawerFooter className="mt-4 space-y-2">
                 <Button

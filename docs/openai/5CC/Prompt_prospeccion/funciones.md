@@ -51,6 +51,32 @@
 ---
 
 {
+  "name": "set_phone_number",
+  "description": "Guardar o actualizar el número de teléfono del lead. Si el canal ya proporciona el número de origen, úsalo sin volver a solicitarlo.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación actual."
+      },
+      "phone_number": {
+        "type": "string",
+        "description": "Teléfono del contacto. Idealmente en formato E.164 con código de país, por ejemplo '+52 4441302811'. Si llega sin prefijo, asume +52 para México."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "phone_number"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
   "name": "set_company_name",
   "description": "Guardar o actualizar empresa o razón social del lead.",
   "strict": true,
@@ -125,7 +151,7 @@
 
 {
   "name": "close_lead",
-  "description": "Cerrar y consolidar el lead cuando ya existe calificación suficiente.",
+  "description": "Persistir el avance del lead cuando estén disponibles nombre, teléfono y necesidad/interés. En prospección usa source='prospeccion_whatsapp'; notes y necesidad_proposito deben ser breves, factuales y no inventar datos.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -136,11 +162,11 @@
       },
       "notes": {
         "type": "string",
-        "description": "Resumen comercial breve del caso."
+        "description": "Resumen comercial breve y factual del caso. Incluye modelo, forma de pago u objetivo de visita solo si el prospecto los proporcionó."
       },
       "necesidad_proposito": {
         "type": "string",
-        "description": "Intención principal del lead."
+        "description": "Necesidad o interés principal expresado por el prospecto, en una sola frase clara."
       },
       "source": {
         "type": [
@@ -337,7 +363,7 @@
 
 {
   "name": "send_information_email",
-  "description": "Enviar resumen por correo cuando el prospecto lo prefiera antes de agendar.",
+  "description": "Enviar información de Departamentos Gran Mitla por correo cuando el prospecto lo prefiera antes de agendar.",
   "strict": true,
   "parameters": {
     "type": "object",
@@ -388,6 +414,27 @@
           ],
           "additionalProperties": false
         }
+      },
+      "assistant_document_ids": {
+        "type": "array",
+        "description": "IDs de documentos cargados en settings/email que se deben adjuntar o enviar.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "assistant_document_category": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Categoría del documento a usar cuando no se conoce el ID exacto."
+      },
+      "assistant_document_limit": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Número máximo de documentos a considerar."
       }
     },
     "required": [
@@ -397,7 +444,184 @@
       "company_name",
       "summary",
       "highlights",
-      "resources"
+      "resources",
+      "assistant_document_ids",
+      "assistant_document_category",
+      "assistant_document_limit"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "list_assistant_documents",
+  "description": "Listar los documentos disponibles del tenant actual para elegir qué información enviar por correo o WhatsApp.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación actual."
+      },
+      "channel_scope": {
+        "type": "string",
+        "enum": [
+          "email",
+          "whatsapp"
+        ],
+        "description": "Canal por el que se utilizará el documento."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "channel_scope"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "send_information_package",
+  "description": "Enviar un paquete de información con documentos reales del tenant por WhatsApp, correo o ambos. Úsala solo cuando el prospecto pida explícitamente esos canales.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación actual."
+      },
+      "delivery_channels": {
+        "type": "array",
+        "description": "Canales de entrega. Usa email, whatsapp o ambos.",
+        "items": {
+          "type": "string",
+          "enum": [
+            "email",
+            "whatsapp"
+          ]
+        }
+      },
+      "email": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Correo confirmado. Usa null si no se enviará por email."
+      },
+      "full_name": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Nombre del prospecto o null si aún no fue registrado."
+      },
+      "company_name": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Empresa del prospecto o null si no aplica."
+      },
+      "summary": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Resumen comercial breve de la necesidad."
+      },
+      "highlights": {
+        "type": "array",
+        "description": "Beneficios o datos confirmados que se deben remarcar.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "resources": {
+        "type": "array",
+        "description": "Enlaces adicionales confirmados; nunca inventes URLs.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "label",
+            "url"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "assistant_document_ids": {
+        "type": "array",
+        "description": "IDs de documentos cargados en settings/email.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "assistant_document_category": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Categoría del documento cuando no se conoce el ID exacto."
+      },
+      "assistant_document_limit": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Número máximo de documentos a considerar."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "delivery_channels",
+      "email",
+      "full_name",
+      "company_name",
+      "summary",
+      "highlights",
+      "resources",
+      "assistant_document_ids",
+      "assistant_document_category",
+      "assistant_document_limit"
+    ],
+    "additionalProperties": false
+  }
+}
+
+---
+
+{
+  "name": "restart_conversation_cycle",
+  "description": "Registrar que el contacto abrió un nuevo tema o reinició la conversación para crear una oportunidad separada y notificar al vendedor actual.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "conversacion_id": {
+        "type": "string",
+        "description": "ID único de la conversación actual."
+      },
+      "reason": {
+        "type": "string",
+        "description": "Motivo breve por el que se requiere un nuevo ciclo de conversación."
+      }
+    },
+    "required": [
+      "conversacion_id",
+      "reason"
     ],
     "additionalProperties": false
   }
