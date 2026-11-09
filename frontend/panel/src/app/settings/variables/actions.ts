@@ -295,7 +295,20 @@ export async function updateTenantInfoAction(_: CrudActionState, formData: FormD
     })
     if (!response.ok) throw new Error(response.error)
 
+    // El guardado de la organización también debe recalcular el onboarding.
+    // Antes sólo se revalidaba Variables, por lo que onboarding podía mostrar
+    // los valores anteriores y conservar un estado desactualizado.
+    const onboardingResponse = await callCrmApi("/tenant/me/onboarding", {
+      method: "PATCH",
+      organizacionId: null,
+      withUserToken: true,
+      body: { ultimo_paso: "organizacion" },
+    })
+    if (!onboardingResponse.ok) throw new Error(onboardingResponse.error)
+
     revalidatePath("/settings/variables")
+    revalidatePath("/onboarding", "layout")
+    revalidatePath("/onboarding/organizacion")
     return success("Datos generales actualizados.")
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

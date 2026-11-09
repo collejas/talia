@@ -15,7 +15,7 @@ Actualmente estamos en los últimos lotes disponibles.
 
 ## 2. Ubicación
 
-El desarrollo está ubicado en la nueva arteria de conexión a la Zona Industrial, llamada vía alterna.
+El desarrollo se encuentra en la **nueva vía alterna Eje 122, en San Luis Potosí, S.L.P.**
 
 Estamos al lado del recinto de la Feria Tortosina.
 

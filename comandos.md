@@ -220,7 +220,7 @@ Gran Penon
   );
 
     select public.cleanup_test_phone_whatsapp(
-    '+5214776702067',
+    '+5214441652211',
     '7608c713-a9fb-460e-8b00-5878591b90d7'::uuid
   );
 
