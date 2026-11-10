@@ -3,6 +3,7 @@ from uuid import UUID
 import pytest
 
 from app.repositories.crm import CRMRepository
+from app.repositories.crm import CRMRepositoryError
 from app.services.postmark.repository import PostmarkRepository
 
 
@@ -31,14 +32,16 @@ async def test_queue_messages_bulk_splits_rpc_without_changing_item_order() -> N
 
 
 @pytest.mark.asyncio
-async def test_materialize_campaign_targets_uses_one_atomic_manifest_rpc() -> None:
+async def test_materialize_campaign_targets_uses_bounded_idempotent_chunks() -> None:
     repository = CRMRepository.__new__(CRMRepository)
     captured: dict[str, object] = {}
+    sizes: list[int] = []
 
     async def fake_rpc(function_name: str, payload: dict[str, object]):
         captured["function_name"] = function_name
         captured["payload"] = payload
-        return 1427
+        sizes.append(len(payload["p_manifest"]))
+        return len(payload["p_manifest"])
 
     repository._rpc = fake_rpc
     organization_id = UUID("00000000-0000-0000-0000-000000000001")
@@ -65,4 +68,33 @@ async def test_materialize_campaign_targets_uses_one_atomic_manifest_rpc() -> No
     assert isinstance(payload, dict)
     assert payload["p_organizacion_id"] == str(organization_id)
     assert payload["p_batch_id"] == str(batch_id)
-    assert len(payload["p_manifest"]) == 1427
+    assert sizes == [50] * 28 + [27]
+    assert len(payload["p_manifest"]) == 27
+
+
+@pytest.mark.asyncio
+async def test_materialization_retry_preserves_committed_targets() -> None:
+    repository = CRMRepository.__new__(CRMRepository)
+    persisted: set[int] = set()
+    fail_once = True
+
+    async def fake_rpc(function_name, payload):
+        nonlocal fail_once
+        chunk = payload['p_manifest']
+        if chunk[0]['ordinal'] == 50 and fail_once:
+            fail_once = False
+            raise CRMRepositoryError('timeout')
+        before = len(persisted)
+        persisted.update(row['ordinal'] for row in chunk)
+        return len(persisted) - before
+
+    repository._rpc = fake_rpc
+    kwargs = dict(
+        organizacion_id=UUID(int=1), batch_id=UUID(int=2),
+        manifest=[{'ordinal': i} for i in range(121)],
+    )
+    with pytest.raises(CRMRepositoryError):
+        await repository.worker_materialize_postmark_campaign_targets(**kwargs)
+    assert len(persisted) == 50
+    assert await repository.worker_materialize_postmark_campaign_targets(**kwargs) == 71
+    assert len(persisted) == 121

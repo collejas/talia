@@ -29,13 +29,13 @@ class PostmarkCampaignTargetPreparationWorker:
     siendo los únicos procesos que encolan y entregan respectivamente.
     """
 
-    def __init__(self, *, batch_size: int = 500) -> None:
+    def __init__(self, *, batch_size: int = 100) -> None:
         self.batch_size = max(1, min(int(batch_size), 500))
 
     async def run_once(self) -> int:
         repository = CRMRepository()
         prepared = 0
-        for job in await repository.worker_claim_postmark_preparation_jobs(limit=5):
+        for job in await repository.worker_claim_postmark_preparation_jobs(limit=1):
             try:
                 organizacion_id = UUID(str(job["organizacion_id"]))
                 batch_id = UUID(str(job["batch_id"]))
@@ -160,7 +160,7 @@ class PostmarkCampaignTargetPreparationWorker:
 class PostmarkPreparationWorker:
     def __init__(self, *, interval_seconds: float = 5.0) -> None:
         self.interval_seconds = max(float(interval_seconds), 1.0)
-        self.campaign_target_preparer = PostmarkCampaignTargetPreparationWorker(batch_size=500)
+        self.campaign_target_preparer = PostmarkCampaignTargetPreparationWorker(batch_size=100)
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
         self._idle_backoff_seconds = self.interval_seconds

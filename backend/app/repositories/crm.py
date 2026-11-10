@@ -26530,22 +26530,27 @@ class CRMRepository:
 
         body = [payload]
         idempotency_key = str(payload.get("solicitud_idempotencia") or "").strip()
-        resp = await self._request_with_user(
-            "POST",
-            "/rest/v1/prospeccion_contacto_batch",
-            token=usuario_token,
-            params=(
-                {"on_conflict": "organizacion_id,solicitud_idempotencia"}
-                if idempotency_key
-                else None
-            ),
-            json=body,
-            prefer=(
-                "resolution=ignore-duplicates,return=representation"
-                if idempotency_key
-                else "return=representation"
-            ),
-        )
+        try:
+            # The uniqueness index is partial; PostgREST cannot infer it for
+            # ON CONFLICT without its predicate. A normal insert still enforces
+            # uniqueness, and a read reconciles concurrent or ambiguous retries.
+            resp = await self._request_with_user(
+                "POST",
+                "/rest/v1/prospeccion_contacto_batch",
+                token=usuario_token,
+                json=body,
+                prefer="return=representation",
+            )
+        except CRMRepositoryError:
+            if idempotency_key:
+                existing = await self.get_contact_batch_by_idempotency_key(
+                    usuario_token=usuario_token,
+                    organizacion_id=UUID(str(payload["organizacion_id"])),
+                    idempotency_key=idempotency_key,
+                )
+                if existing:
+                    return existing
+            raise
         data = resp.json() or []
         if not data and idempotency_key:
             existing_resp = await self._request_with_user(
@@ -26748,9 +26753,25 @@ class CRMRepository:
         batch_id: UUID,
         manifest: Sequence[dict[str, Any]],
     ) -> int:
-        """Materializa un manifiesto completo en una transacción idempotente."""
+        """Materializa en transacciones pequeñas, reanudables por clave única."""
         if not manifest or len(manifest) > 10000:
             raise CRMRepositoryError("postmark_manifest_materialization_invalid_size")
+        inserted = 0
+        for start in range(0, len(manifest), 50):
+            inserted += await self._materialize_postmark_campaign_target_chunk(
+                organizacion_id=organizacion_id,
+                batch_id=batch_id,
+                manifest=manifest[start : start + 50],
+            )
+        return inserted
+
+    async def _materialize_postmark_campaign_target_chunk(
+        self,
+        *,
+        organizacion_id: UUID,
+        batch_id: UUID,
+        manifest: Sequence[dict[str, Any]],
+    ) -> int:
         data = await self._rpc(
             "worker_materialize_postmark_campaign_targets",
             {
@@ -26788,7 +26809,10 @@ class CRMRepository:
         resp = await self._request(
             "POST",
             "/rest/v1/prospeccion_postmark_campaign_preparation_jobs",
-            params={"on_conflict": "batch_id"},
+            params={
+                "on_conflict": "batch_id",
+                "select": "id,organizacion_id,batch_id,total,status,attempt_count",
+            },
             json=payload,
             prefer="resolution=ignore-duplicates,return=representation",
             organizacion_id=organizacion_id,

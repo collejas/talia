@@ -51,6 +51,7 @@ export async function proxyProspeccionRequest(
   const body = rawBody && rawBody.length ? rawBody : undefined
   const organizacionId = await resolveOrganizacionId()
   const usuarioId = decodeJwtUserId(token)
+  const idempotencyKey = request.headers.get("Idempotency-Key")?.trim()
 
   let backendResponse: Response
   try {
@@ -62,6 +63,7 @@ export async function proxyProspeccionRequest(
         Authorization: `Bearer ${token}`,
         ...(organizacionId ? { "X-Organizacion-Id": organizacionId } : {}),
         ...(usuarioId ? { "X-Usuario-Id": usuarioId } : {}),
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
       },
       cache: "no-store",
       body,
