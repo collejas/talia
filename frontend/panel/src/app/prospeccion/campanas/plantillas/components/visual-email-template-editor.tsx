@@ -25,6 +25,7 @@ const LABELS: Record<string, string> = {
   email: "Correo",
   telefono: "Teléfono",
   segmento: "Segmento",
+  actividad: "Actividad o responsabilidad",
   canal_origen: "Canal de origen",
   logo_url: "Logo",
   hero_image_url: "Imagen principal",

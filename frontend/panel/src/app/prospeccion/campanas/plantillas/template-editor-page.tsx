@@ -70,6 +70,7 @@ const TEMPLATE_VARIABLES = [
   "{{email}}",
   "{{telefono}}",
   "{{segmento}}",
+  "{{actividad}}",
   "{{canal_origen}}",
 ]
 
@@ -647,6 +648,7 @@ export function TemplateEditorPage({ templateId, initialCampaignId, initialVersi
       email: prospecto?.email?.trim() || prospecto?.correo_principal?.trim() || "contacto@ejemplo.com",
       telefono: prospecto?.phone_e164?.trim() || prospecto?.phone?.trim() || "5555555555",
       segmento: prospecto?.segmento?.trim() || prospecto?.actividad?.trim() || "su industria",
+      actividad: prospecto?.actividad?.trim() || "su responsabilidad",
       canal_origen:
         prospecto?.fuente === "google_places"
           ? "Google"

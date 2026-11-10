@@ -164,6 +164,7 @@ const EMAIL_TEMPLATE_VARIABLES: Array<{ token: string; label: string }> = [
   { token: "{{email}}", label: "Correo" },
   { token: "{{telefono}}", label: "Teléfono" },
   { token: "{{segmento}}", label: "Segmento" },
+  { token: "{{actividad}}", label: "Actividad o responsabilidad" },
   { token: "{{canal_origen}}", label: "Canal origen" },
   { token: "{{logo_url}}", label: "Logo URL" },
   { token: "{{hero_image_url}}", label: "Imagen principal" },
@@ -918,6 +919,7 @@ ${secondCellHtml}
     const primerApellido = (previewProspecto.primer_apellido || "").trim()
     const segundoApellido = (previewProspecto.segundo_apellido || "").trim()
     const segmento = (previewProspecto.segmento || "").trim()
+    const actividad = (previewProspecto.actividad || "").trim()
     const empresa = (templateForm.nombreEmpresa || "").trim() || segmento
     const email = (
       previewProspecto.email ||
@@ -979,6 +981,7 @@ ${secondCellHtml}
       email,
       telefono,
       segmento,
+      actividad,
       canal_origen: canalOrigen,
       logo_url: normalizeLogoUrl(selectedLogoUrl),
       tracking_url: trackingUrl,
@@ -2678,7 +2681,7 @@ ${secondCellHtml}
                               </div>
                             </div>
                             <p className="text-[11px] text-muted-foreground">
-                              Variables: {"{{display_name}}, {{nombre}}, {{titulo}}, {{primer_apellido}}, {{segundo_apellido}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}, {{booking_link_text}}"}.
+                              Variables: {"{{display_name}}, {{nombre}}, {{titulo}}, {{primer_apellido}}, {{segundo_apellido}}, {{empresa}}, {{email}}, {{telefono}}, {{segmento}}, {{actividad}}, {{canal_origen}}, {{logo_url}}, {{tracking_url}}, {{website_url}}, {{booking_url}}, {{booking_link_text}}"}.
                             </p>
                           </div>
                         ) : null}
