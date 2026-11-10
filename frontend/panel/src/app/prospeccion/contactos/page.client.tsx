@@ -50,9 +50,11 @@ const RETRYABLE_ESTADOS = new Set(["error", "fallido", "omitido"])
 const TERMINAL_BATCH_STATES = new Set(["completado", "cancelado", "error", "fallido"])
 const SUCCESSFUL_ENVIO_STATES = new Set(["enviado", "entregado", "leido", "completado", "respondido"])
 const envioEstadoLabel: Record<string, string> = {
+  en_cola: "En cola",
+  verificando_envio: "Verificando envío",
   pendiente: "Pendiente",
   procesando: "Procesando",
-  enviado: "Aceptado por proveedor",
+  enviado: "Enviado (aceptado)",
   entregado: "Entregado",
   leido: "Leído",
   respondido: "Respondió",
@@ -66,6 +68,7 @@ const envioEstadoLabel: Record<string, string> = {
 const batchEstadoLabel: Record<string, string> = {
   pendiente: "Pendiente",
   preparando: "Preparando",
+  en_proceso: "En proceso",
   procesando: "Procesando",
   completado: "Completado",
   cancelado: "Cancelado",

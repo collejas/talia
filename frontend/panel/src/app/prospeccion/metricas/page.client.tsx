@@ -57,6 +57,8 @@ function getTemplateText(template: ContactoTemplate) {
 function formatContactStatus(status: string | null | undefined) {
   const normalized = (status || "").trim().toLowerCase()
   const labels: Record<string, string> = {
+    en_cola: "En cola",
+    verificando_envio: "Verificando envío",
     pendiente: "Pendiente",
     procesando: "Preparando",
     en_proceso: "Preparando",
@@ -604,7 +606,7 @@ export default function ProspeccionMetricasPageClient() {
       const envios_fallidos = channelRows.reduce((sum, r) => sum + (r.envios_fallidos || 0), 0)
       const envios_omitidos = channelRows.reduce((sum, r) => sum + (r.envios_omitidos || 0), 0)
       const envios_sin_respuesta = Math.max(0, envios_entregados - envios_respondidos)
-      const envios_enviados = envios_entregados
+      const envios_enviados = channelRows.reduce((sum, r) => sum + (r.envios_enviados || 0), 0)
       const envios_otros_estados = Math.max(
         0,
         envios_totales - (envios_enviados + envios_fallidos + envios_omitidos),

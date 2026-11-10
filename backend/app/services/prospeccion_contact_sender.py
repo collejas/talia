@@ -3194,7 +3194,7 @@ class ProspeccionContactSender:
                 if batch_id:
                     await _broadcast_batch_event(
                         batch_id=batch_id,
-                        payload={"type": "batch", "estado": "completado"},
+                        payload={"type": "batch", "estado": "en_proceso"},
                     )
 
     def _build_envio_update_payload(

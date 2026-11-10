@@ -27847,7 +27847,7 @@ class CRMRepository:
         """Lista envíos filtrando por lote o prospecto."""
 
         params: dict[str, str] = {
-            "select": "id,batch_id,prospecto_id,canal,estado,detalle,mensaje_id,programado_en,procesado_en,error,numero_lote,lote_programado_en,plantilla_id",
+            "select": "id,batch_id,prospecto_id,canal,estado,detalle,mensaje_id,proveedor_aceptado_en,programado_en,procesado_en,error,numero_lote,lote_programado_en,plantilla_id",
             "limit": str(limit),
             "offset": str(offset),
             "order": order or "creado_en.desc",
@@ -27858,7 +27858,13 @@ class CRMRepository:
             params["prospecto_id"] = f"eq.{prospecto_id}"
         if canal:
             params["canal"] = f"eq.{canal}"
-        if estado:
+        if estado == 'en_cola':
+            params.update({
+                'estado': 'eq.enviado', 'canal': 'eq.correo',
+                'proveedor_aceptado_en': 'is.null',
+                'or': '(detalle->>email_provider.eq.postmark,detalle->>delivery_state.eq.queued)',
+            })
+        elif estado:
             params["estado"] = f"eq.{estado}"
 
         resp = await self._request_with_user(
@@ -27872,6 +27878,8 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"contact_envio_list_invalid:{data!r}")
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        from app.services.email_delivery_state import public_contact_state
+        data = [{**row, "estado": public_contact_state(row)} for row in data]
         return data, total
 
     async def list_contact_envios_for_batches(
@@ -29160,21 +29168,27 @@ class CRMRepository:
 
         params = {
             "batch_id": f"eq.{batch_id}",
-            "select": "estado",
-            "limit": "2000",
+            "select": "estado,canal,detalle,proveedor_aceptado_en",
+            "limit": "1000",
         }
-        resp = await self._request_with_user(
-            "GET",
-            "/rest/v1/prospeccion_contacto_envio",
-            token=usuario_token,
-            params=params,
-        )
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(f"contact_batch_summary_invalid:{data!r}")
+        data = []
+        while True:
+            params['offset'] = str(len(data))
+            params['order'] = 'id.asc'
+            resp = await self._request_with_user(
+                'GET', '/rest/v1/prospeccion_contacto_envio',
+                token=usuario_token, params=params,
+            )
+            page = resp.json() or []
+            if not isinstance(page, list):
+                raise CRMRepositoryError('contact_batch_summary_invalid')
+            data.extend(page)
+            if not page:
+                break
+        from app.services.email_delivery_state import public_contact_state
         counts: dict[str, int] = {}
         for row in data:
-            estado = str(row.get("estado") or "pendiente").strip() or "pendiente"
+            estado = public_contact_state(row)
             counts[estado] = counts.get(estado, 0) + 1
         return [{"estado": estado, "count": total} for estado, total in counts.items()]
 
@@ -29208,6 +29222,31 @@ class CRMRepository:
                 count_value = 0
             bucket = resultado.setdefault(batch_id, {})
             bucket[estado] = bucket.get(estado, 0) + count_value
+        # Legacy queued emails use the internal "enviado" state. Remove
+        # them from acceptance totals without changing worker dispatch state.
+        offset = 0
+        while True:
+            queued_resp = await self._request_with_user(
+                'GET', '/rest/v1/prospeccion_contacto_envio', token=usuario_token,
+                params={
+                    'select': 'id,batch_id',
+                    'batch_id': _postgrest_in_clause([str(value) for value in batch_ids]),
+                    'canal': 'eq.correo', 'estado': 'eq.enviado',
+                    'proveedor_aceptado_en': 'is.null',
+                    'or': '(detalle->>email_provider.eq.postmark,detalle->>delivery_state.eq.queued)',
+                    'order': 'id.asc', 'limit': '1000', 'offset': str(offset),
+                },
+            )
+            queued_rows = queued_resp.json() or []
+            if not isinstance(queued_rows, list):
+                raise CRMRepositoryError('contact_queued_summary_invalid')
+            for queued_row in queued_rows:
+                bucket = resultado.setdefault(str(queued_row['batch_id']), {})
+                bucket['enviado'] = max(0, bucket.get('enviado', 0) - 1)
+                bucket['en_cola'] = bucket.get('en_cola', 0) + 1
+            if not queued_rows:
+                break
+            offset += len(queued_rows)
         return resultado
 
     async def get_prospeccion_conversion_fuente(

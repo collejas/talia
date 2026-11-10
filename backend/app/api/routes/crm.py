@@ -40626,6 +40626,8 @@ async def listar_batches_prospeccion_contacto_legacy(
         for row in rows:
             resumen = resumenes.get(str(row.get("id")), {})
             row["totales"] = resumen
+            if resumen.get('en_cola', 0) and row.get('estado') == 'completado':
+                row['estado'] = 'en_proceso'
             row["total_envios"] = sum(int(value or 0) for value in resumen.values())
             row["envios_enviados"] = sum(
                 int(value or 0)

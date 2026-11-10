@@ -1,0 +1,15 @@
+import pytest
+from app.services.email_delivery_state import public_contact_state
+
+
+@pytest.mark.parametrize('state,accepted,channel,provider,expected', [
+    ('enviado', None, 'correo', 'postmark', 'en_cola'),
+    ('enviado', '2026-11-10T18:00:00Z', 'correo', 'postmark', 'enviado'),
+    ('entregado', None, 'correo', 'postmark', 'entregado'),
+    ('enviado', None, 'whatsapp', 'meta', 'enviado'),
+    ('enviado', None, 'correo', 'brevo', 'enviado'),
+    ('error', None, 'correo', 'postmark', 'error'),
+])
+def test_public_state_requires_acceptance_for_postmark(state, accepted, channel, provider, expected):
+    assert public_contact_state(dict(estado=state, canal=channel,
+        proveedor_aceptado_en=accepted, detalle={'email_provider': provider})) == expected
