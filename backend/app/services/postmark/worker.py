@@ -56,7 +56,12 @@ class PostmarkWorker:
     async def run_once(self) -> int:
         repository = PostmarkRepository()
         service = PostmarkService(repository=repository)
-        processed = await self._process_provision_jobs(repository)
+        try:
+            processed = await self._process_provision_jobs(repository)
+        except (PostmarkError, PostmarkProvisioningError, PostmarkRepositoryError) as exc:
+            # Provisioning is administrative work. It must not starve already
+            # ready delivery batches for tenants with an active server.
+            logger.error("postmark.worker_provision_cycle_deferred", extra={"error": str(exc)})
         tenant_ids = self._rotate_tenants(await repository.list_enabled_organizations())
         for organizacion_id in tenant_ids:
             server = await repository.get_server(organizacion_id=organizacion_id)
@@ -75,11 +80,18 @@ class PostmarkWorker:
                     "postmark.worker_webhooks_not_ready",
                     extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
                 )
-                continue
-            await self._process_webhook_jobs(
-                repository=repository,
-                organizacion_id=organizacion_id,
-            )
+                # Existing webhook configuration is independent of dispatch.
+                # Continue with the durable delivery queue.
+            try:
+                processed += await self._process_webhook_jobs(
+                    repository=repository,
+                    organizacion_id=organizacion_id,
+                )
+            except (PostmarkError, PostmarkProvisioningError, PostmarkRepositoryError) as exc:
+                logger.error(
+                    "postmark.worker_webhook_cycle_deferred",
+                    extra={"organizacion_id": str(organizacion_id), "error": str(exc)},
+                )
             token = await get_secret_plaintext(
                 organizacion_id=organizacion_id,
                 clave=str(server.get("server_token_secret_key") or "postmark.server_token"),
@@ -279,6 +291,12 @@ class PostmarkWorker:
                             "log_entry": {},
                         }
                     )
+                elif delivery.get('state') == 'verifying':
+                    finalization_items.append({
+                        'envio_id': str(envio_id),
+                        'update_payload': {'estado': 'enviado', 'error': 'delivery_uncertain'},
+                        'log_entry': {},
+                    })
                 elif not delivery.get("provider_accepted"):
                     finalization_items.append(
                         {

@@ -21,3 +21,9 @@ class PostmarkRequestError(PostmarkError):
         self.status_code = status_code
         self.provider_code = provider_code
         self.provider_message = provider_message
+
+    @property
+    def delivery_uncertain(self) -> bool:
+        return self.code in {'provider_unreachable', 'invalid_batch_response'} or bool(
+            self.status_code and self.status_code >= 500
+        )

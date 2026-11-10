@@ -173,6 +173,12 @@ class PostmarkService:
                 message_stream=stream_name,
             )
         except PostmarkRequestError as exc:
+            if exc.delivery_uncertain:
+                await self.repository.hold_uncertain_attempt(
+                    organizacion_id=organizacion_id, message_id=message_id,
+                    attempt_id=UUID(str(attempt['attempt_id'])),
+                )
+                return {'provider_accepted': None, 'provider_message_id': None, 'state': 'verifying'}
             await self.repository.finish_attempt(
                 payload={
                     "p_organizacion_id": str(organizacion_id),
@@ -288,6 +294,17 @@ class PostmarkService:
                         message_stream=stream_name,
                     )
                 except PostmarkRequestError as exc:
+                    if exc.delivery_uncertain:
+                        for item in items:
+                            await self.repository.hold_uncertain_attempt(
+                                organizacion_id=organizacion_id,
+                                message_id=UUID(str(item['message_id'])),
+                                attempt_id=UUID(str(item['attempt_id'])),
+                            )
+                            deliveries.append({'message_id': str(item['message_id']),
+                                'provider_accepted': None, 'provider_message_id': None,
+                                'state': 'verifying'})
+                        continue
                     finish_rows = await self._finish_attempts_bulk(
                         organizacion_id=organizacion_id,
                         items=[

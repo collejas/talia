@@ -27858,7 +27858,10 @@ class CRMRepository:
             params["prospecto_id"] = f"eq.{prospecto_id}"
         if canal:
             params["canal"] = f"eq.{canal}"
-        if estado == 'en_cola':
+        if estado == 'verificando_envio':
+            params.update({'canal': 'eq.correo', 'error': 'eq.delivery_uncertain',
+                           'proveedor_aceptado_en': 'is.null'})
+        elif estado == 'en_cola':
             params.update({
                 'estado': 'eq.enviado', 'canal': 'eq.correo',
                 'proveedor_aceptado_en': 'is.null',
@@ -29170,7 +29173,7 @@ class CRMRepository:
 
         params = {
             "batch_id": f"eq.{batch_id}",
-            "select": "estado,canal,detalle,proveedor_aceptado_en",
+            "select": "estado,canal,detalle,proveedor_aceptado_en,error",
             "limit": "1000",
         }
         data = []
@@ -29231,7 +29234,7 @@ class CRMRepository:
             queued_resp = await self._request_with_user(
                 'GET', '/rest/v1/prospeccion_contacto_envio', token=usuario_token,
                 params={
-                    'select': 'id,batch_id',
+                    'select': 'id,batch_id,error',
                     'batch_id': _postgrest_in_clause([str(value) for value in batch_ids]),
                     'canal': 'eq.correo', 'estado': 'eq.enviado',
                     'proveedor_aceptado_en': 'is.null',
@@ -29245,7 +29248,8 @@ class CRMRepository:
             for queued_row in queued_rows:
                 bucket = resultado.setdefault(str(queued_row['batch_id']), {})
                 bucket['enviado'] = max(0, bucket.get('enviado', 0) - 1)
-                bucket['en_cola'] = bucket.get('en_cola', 0) + 1
+                public_state = 'verificando_envio' if queued_row.get('error') == 'delivery_uncertain' else 'en_cola'
+                bucket[public_state] = bucket.get(public_state, 0) + 1
             if not queued_rows:
                 break
             offset += len(queued_rows)

@@ -873,6 +873,12 @@ class PostmarkRepository:
                 result[message_id] = idempotency_key
         return result
 
+    async def hold_uncertain_attempt(self, *, organizacion_id: UUID, message_id: UUID, attempt_id: UUID) -> None:
+        await self._rpc('tenant_email_hold_uncertain_attempt', {
+            'p_organizacion_id': str(organizacion_id), 'p_message_id': str(message_id),
+            'p_attempt_id': str(attempt_id),
+        })
+
     async def defer_message(self, *, message_id: UUID) -> None:
         await self._rest_patch(
             "/rest/v1/tenant_email_messages",

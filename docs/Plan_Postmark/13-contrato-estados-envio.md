@@ -16,6 +16,27 @@ La cola interna no debe emitir un evento SSE de campaña completada.
 Entrega no implica lectura; aperturas y clics son indicadores separados.
 Los entregados son un subconjunto de los aceptados y no se suman a ellos.
 
+## Resultado incierto
+
+`tenant_email_messages.status=verifying` retiene un intento cuyo resultado
+externo es incierto. No entra a los claims de queued/processing y start_attempt
+rechaza su reenvío. El intento permanece started y la cuota sigue reservada.
+Un operador debe conciliar por identificador/evidencia externa antes de resolverlo.
+No liberar cuota ni afirmar rechazo por un timeout, respuesta inválida o 5xx.
+La API publica `verificando_envio` cuando error=delivery_uncertain y no existe
+aceptación registrada. No confundir ese estado con una entrega fallida.
+
+La migración 20261110184438 mueve submitted_at del inicio del intento a la
+aceptación con identificador externo obligatorio. No modifica fechas históricas
+automáticamente: requieren conciliación con intentos y eventos.
+
+Aplicada en producción y verificada el 2026-11-10. Se conciliaron y limpiaron
+las fechas submitted_at de ocho rechazos del lote 4f8d1ddb-02cd-42f5-aa5e-824501da7757,
+sin identificador externo ni intentos aceptados. Se encoló regeneración de los
+cuatro rangos existentes de su campaña. Suite de correo: 33 pruebas correctas.
+La retención verifying necesita conciliación operativa; no existe aún un
+resolver automático para todo caso ambiguo. No cambiarla a queued sin evidencia.
+
 La consulta de atribución histórica ahora excluye la cola interna del total
 aceptado mediante la migración 20261110183237. Los snapshots ya persistidos
 requieren regeneración por rango; modificar la consulta no reescribe cachés.

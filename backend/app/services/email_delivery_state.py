@@ -7,6 +7,8 @@ def public_contact_state(row: dict[str, Any]) -> str:
     if row.get('canal') != 'correo':
         return state
     detail = row.get('detalle') or {}
+    if row.get('error') == 'delivery_uncertain' and not row.get('proveedor_aceptado_en'):
+        return 'verificando_envio'
     if row.get('accion') == 'postmark_queued':
         return 'en_cola'
     if state == 'enviado' and not row.get('proveedor_aceptado_en'):

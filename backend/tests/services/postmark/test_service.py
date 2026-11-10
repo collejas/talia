@@ -38,6 +38,34 @@ class FakeRepository:
         return self.suppressed
 
 
+@pytest.mark.asyncio
+async def test_timeout_holds_message_without_rejection_or_retry():
+    class Repository:
+        held = False
+
+        async def start_attempt(self, **kwargs):
+            return dict(attempt_id=str(uuid4()), from_email='sender@example.com',
+                        to_email='recipient@example.com', subject='test', text_body='test',
+                        message_kind='transactional', stream_name='outbound')
+
+        async def hold_uncertain_attempt(self, **kwargs):
+            self.held = True
+
+        async def finish_attempt(self, **kwargs):
+            raise AssertionError('An uncertain request is not a rejection')
+
+    class Client:
+        async def send_message(self, *args, **kwargs):
+            raise PostmarkRequestError('provider_unreachable')
+
+    repository = Repository()
+    result = await PostmarkService(repository=repository).deliver_queued_message(
+        organizacion_id=uuid4(), message_id=uuid4(), client=Client())
+    assert repository.held
+    assert result['state'] == 'verifying'
+    assert result['provider_accepted'] is None
+
+
 def message(**overrides):
     values = {
         "from_email": "noreply@geoactiv.mx",
