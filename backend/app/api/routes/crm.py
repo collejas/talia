@@ -79,6 +79,7 @@ from app.core.logging import get_logger
 from app.data.geo.locations import (
     get_municipality_name,
     get_state_name,
+    list_states,
     list_municipalities_for_state,
 )
 from app.repositories.crm import CRMRepository, CRMRepositoryError
@@ -6079,7 +6080,7 @@ class ProspectosImportPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    items: list[ProspectoManualPayload] = Field(default_factory=list, min_length=1, max_length=2000)
+    items: list[ProspectoManualPayload] = Field(default_factory=list, min_length=1, max_length=5000)
 
 
 class CRMContactImportItem(BaseModel):
@@ -12034,6 +12035,74 @@ def _build_manual_prospecto_payload(payload: ProspectoManualPayload) -> dict[str
         data["address_full"] = data.get("address")
     data["lookup_status"] = "pendiente" if phone_value else "sin_numero"
     return data
+
+
+def _normalize_import_geo_fields(data: dict[str, Any]) -> None:
+    """Normaliza claves geo importadas contra los catálogos oficiales."""
+
+    def normalize_text(value: Any) -> str:
+        return "".join(
+            char
+            for char in unicodedata.normalize("NFD", str(value or "").strip().lower())
+            if unicodedata.category(char) != "Mn"
+        )
+
+    state_catalog = {
+        normalize_text(item["name"]): item["code"]
+        for item in list_states()
+        if item.get("code") and item.get("name")
+    }
+    raw_state_name = str(data.get("estado_nombre") or "").strip()
+    raw_state_code = "".join(char for char in str(data.get("estado_cve") or "") if char.isdigit())
+    raw_municipality_code = "".join(char for char in str(data.get("municipio_cve") or "") if char.isdigit())
+    if not raw_state_code and not raw_municipality_code:
+        return
+    state_code = state_catalog.get(normalize_text(raw_state_name))
+    if state_code is None and raw_state_code:
+        candidate = raw_state_code.zfill(2)
+        if candidate in {item["code"] for item in list_states()}:
+            state_code = candidate
+    if state_code is None:
+        return
+
+    data["estado_cve"] = state_code.zfill(2)
+    canonical_state_name = next(
+        (item["name"] for item in list_states() if item.get("code") == state_code),
+        raw_state_name or None,
+    )
+    if canonical_state_name:
+        data["estado_nombre"] = canonical_state_name
+
+    raw_municipality_name = str(data.get("municipio_nombre") or "").strip()
+    if not raw_municipality_name and not raw_municipality_code:
+        return
+
+    municipalities = list_municipalities_for_state(state_code)
+    by_name = {
+        normalize_text(item["name"]): item
+        for item in municipalities
+        if item.get("code") and item.get("name")
+    }
+    by_code = {
+        str(item["code"]).zfill(3): item
+        for item in municipalities
+        if item.get("code") and item.get("name")
+    }
+    municipality = by_name.get(normalize_text(raw_municipality_name))
+    if municipality is None and raw_municipality_code:
+        municipality = by_code.get(raw_municipality_code.zfill(3))
+    if municipality is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": {
+                    "code": "prospecto_geo_invalid",
+                    "message": "La clave de municipio no pertenece al estado indicado.",
+                }
+            },
+        )
+    data["municipio_cve"] = str(municipality["code"]).zfill(3)
+    data["municipio_nombre"] = municipality["name"]
 
 
 def _dedupe_import_prospectos(items: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -45225,6 +45294,7 @@ async def importar_prospectos(
     raw_items = []
     for index, item in enumerate(payload.items, start=1):
         built = _build_manual_prospecto_payload(item)
+        _normalize_import_geo_fields(built)
         built["__import_row"] = index
         raw_items.append(built)
     if not raw_items:

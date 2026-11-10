@@ -43,7 +43,7 @@ type ParsedProspectoPreview = {
 }
 
 const ACCEPTED_FILE_EXT = ".csv,.xlsx"
-const MAX_IMPORT_ROWS = 2000
+const MAX_IMPORT_ROWS = 5000
 const PROSPECT_TEMPLATE_HEADERS = [
   "Empresa / nombre comercial",
   "Título",
@@ -131,6 +131,7 @@ const HEADER_ALIASES: Record<string, ProspectoImportField> = {
   titulo: "titulo",
   honorifico: "titulo",
   empresa: "nombre_comercial",
+  empresanombrecomercial: "nombre_comercial",
   compania: "nombre_comercial",
   companyname: "nombre_comercial",
   company: "nombre_comercial",
@@ -145,6 +146,7 @@ const HEADER_ALIASES: Record<string, ProspectoImportField> = {
   celular: "phone",
   movil: "phone",
   correo: "email",
+  correoelectronico: "email",
   email: "email",
   mail: "email",
   sitioweb: "website",

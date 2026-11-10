@@ -47,8 +47,17 @@ const COLORS: Array<{ key: keyof Values; label: string; fallback: string }> = [
   { key: "ia_color_fondo", label: "Color de fondo", fallback: "#ffffff" },
 ]
 
+const VALUE_KEYS = Object.keys(EMPTY_VALUES) as Array<keyof Values>
+
 function normalizeValues(values: Partial<Values>): Values {
-  return { ...EMPTY_VALUES, ...values }
+  const normalized = { ...EMPTY_VALUES }
+  for (const key of VALUE_KEYS) {
+    const value = values[key]
+    if (typeof value === "string") {
+      normalized[key] = value
+    }
+  }
+  return normalized
 }
 
 export function TenantAiBrandContextPanel({ initialValues, initialLogoUrl = "", showRequiredMarkers = false }: { initialValues: Partial<Values>; initialLogoUrl?: string | null; showRequiredMarkers?: boolean }) {
@@ -70,7 +79,15 @@ export function TenantAiBrandContextPanel({ initialValues, initialLogoUrl = "", 
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : "No se pudo guardar la configuración")
-      setForm((current) => ({ ...current, ...normalizeValues(payload) }))
+      // El endpoint devuelve el objeto completo del tenant. Conservamos sólo
+      // los campos propios de este formulario para no reenviar campos de
+      // lectura como `organizacion_id`, `config` o `routes`.
+      setForm((current) => normalizeValues({ ...current, ...payload }))
+      await fetch("/api/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ultimo_paso: "imagen_empresarial" }),
+      })
       setMessage({ type: "success", text: "Contexto empresarial y sistema visual guardados." })
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo guardar la configuración" })
