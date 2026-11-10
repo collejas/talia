@@ -16,7 +16,13 @@ La cola interna no debe emitir un evento SSE de campaña completada.
 Entrega no implica lectura; aperturas y clics son indicadores separados.
 Los entregados son un subconjunto de los aceptados y no se suman a ellos.
 
-Pendiente: unificar esta proyección con todas las métricas SQL históricas,
-filtros por estado público y logs, integrar los estados ambiguos del despacho
+La consulta de atribución histórica ahora excluye la cola interna del total
+aceptado mediante la migración 20261110183237. Los snapshots ya persistidos
+requieren regeneración por rango; modificar la consulta no reescribe cachés.
+La bitácora presenta `postmark_queued` como En cola, incluso si el mensaje
+fue aceptado después: el evento histórico describe lo ocurrido en ese momento.
+
+Pendiente: regenerar snapshots afectados, completar filtros públicos,
+integrar los estados ambiguos del despacho
 externo, y terminar la transición del estado agregado de campaña. No declarar
 el contrato completo desplegado mientras esas rutas sigan usando estado legado.

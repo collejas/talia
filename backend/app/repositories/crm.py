@@ -28114,6 +28114,8 @@ class CRMRepository:
         if not isinstance(data, list):
             raise CRMRepositoryError(f"contact_log_list_invalid:{data!r}")
         total = self._extract_total_count(resp.headers.get("content-range")) or len(data)
+        from app.services.email_delivery_state import public_contact_state
+        data = [{**row, 'estado': public_contact_state(row)} for row in data]
         return data, total
 
     async def list_contact_logs_for_batches(
