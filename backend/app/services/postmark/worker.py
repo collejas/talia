@@ -45,6 +45,21 @@ class PostmarkWorker:
     def _reset_idle_backoff(self) -> None:
         self._idle_backoff_seconds = self.interval_seconds
 
+    async def _sync_source_batch_status(self, source_batch_id: object) -> None:
+        """Refleja errores de despacho en el lote visible de prospección."""
+
+        try:
+            batch_id = UUID(str(source_batch_id))
+        except (TypeError, ValueError):
+            return
+        try:
+            await CRMRepository().worker_sync_batch_status(batch_id=batch_id)
+        except (CRMRepositoryError, PostmarkRepositoryError) as exc:
+            logger.warning(
+                "postmark.worker_source_batch_status_sync_failed",
+                extra={"source_batch_id": str(batch_id), "error": str(exc)},
+            )
+
     def _rotate_tenants(self, tenant_ids: list[UUID]) -> list[UUID]:
         """Rota el primer tenant de cada ciclo para evitar monopolios."""
         if not tenant_ids:
@@ -133,6 +148,7 @@ class PostmarkWorker:
                         organizacion_id=organizacion_id,
                         delivery_batch_id=delivery_batch_id,
                     )
+                    await self._sync_source_batch_status(delivery_batch.get("source_batch_id"))
                     continue
                 await self._deliver_claimed(
                     repository=repository,
@@ -145,6 +161,7 @@ class PostmarkWorker:
                     organizacion_id=organizacion_id,
                     delivery_batch_id=delivery_batch_id,
                 )
+                await self._sync_source_batch_status(delivery_batch.get("source_batch_id"))
 
             # Los lotes de prospección esperan a que Talia termine de preparar
             # todos sus mensajes. Así /email/batch recibe el arreglo completo
@@ -176,6 +193,7 @@ class PostmarkWorker:
                         client=client,
                         claimed=claimed_batch,
                     )
+                    await self._sync_source_batch_status(source_batch_id)
 
             claimed = await repository.claim_messages(
                 organizacion_id=organizacion_id,

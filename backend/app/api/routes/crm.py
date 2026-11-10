@@ -148,7 +148,7 @@ from app.services.google_trends import (
 )
 from app.services.openai_catalog_sync import sync_openai_catalogs
 from app.services.openai_reconciliation import sync_openai_cost_reconciliation
-from app.services.email_validation import validate_email_address
+from app.services.email_validation import validate_email_address, validate_postmark_email
 from app.services.email_capacity import resolve_prospeccion_email_capacity
 from app.services.phone_utils import normalize_phone, normalize_phone_digits
 from app.services.ui_realtime_hub import (
@@ -46430,6 +46430,29 @@ async def contactar_prospectos_legacy(
             if _clean_text(entry.get("canal")) != "correo":
                 immediate_envios_entries.append(entry)
                 continue
+            detalle = entry.get("detalle") if isinstance(entry.get("detalle"), dict) else {}
+            normalized_email, validation_error = validate_postmark_email(detalle.get("email"))
+            if validation_error:
+                # El destinatario se conserva en el lote y en su historial,
+                # pero nunca se manda a Postmark. Así el usuario ve el error
+                # local y no un rechazo posterior del proveedor.
+                invalid_entry = dict(entry)
+                invalid_entry["estado"] = "error"
+                invalid_entry["error"] = validation_error
+                invalid_entry["procesado_en"] = datetime.now(UTC).isoformat()
+                invalid_entry["detalle"] = _merge_detalle(
+                    detalle,
+                    {
+                        "email_provider": "postmark",
+                        "delivery_state": "not_sent",
+                        "validation_error": validation_error,
+                    },
+                )
+                immediate_envios_entries.append(invalid_entry)
+                continue
+            if normalized_email and normalized_email != detalle.get("email"):
+                entry = dict(entry)
+                entry["detalle"] = _merge_detalle(detalle, {"email": normalized_email})
             postmark_target_entries.append(
                 {
                     "batch_id": str(batch_id),
@@ -46468,6 +46491,10 @@ async def contactar_prospectos_legacy(
             ),
             retries=1,
         )
+        if postmark_email_batch and not postmark_target_entries:
+            # Si todos los destinatarios fallaron en la prevalidación, no
+            # habrá worker de Postmark que vuelva a sincronizar el lote.
+            await repo.worker_sync_batch_status(batch_id=UUID(str(batch_id)))
     except CRMRepositoryError as exc:
         for reserved_date, reserved_count in brevo_quota_reservations:
             try:

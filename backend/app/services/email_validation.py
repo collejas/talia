@@ -27,6 +27,32 @@ from app.core.config import settings
 EmailLookupStatus = Literal["pendiente", "sin_email", "valido", "invalido", "dudoso", "error"]
 EmailQualityTier = Literal["alta", "media", "baja"]
 
+
+def validate_postmark_email(email: str | None) -> tuple[str | None, str | None]:
+    """Valida el formato que acepta Postmark sin hacer consultas de red.
+
+    Postmark no acepta SMTPUTF8 en el buzón local. Por eso una dirección como
+    ``nereyda.lópez@dominio.mx`` debe quedar como error local antes de crear
+    un mensaje en su cola, aunque sea una dirección válida para otros
+    servidores SMTP.
+    """
+
+    value = str(email or "").strip()
+    if not value:
+        return None, "email_missing"
+    try:
+        validated = validate_email(
+            value,
+            allow_smtputf8=False,
+            check_deliverability=False,
+        )
+    except EmailNotValidError:
+        return None, "postmark_email_invalid"
+    normalized = str(validated.normalized or "").strip()
+    if not normalized:
+        return None, "postmark_email_invalid"
+    return normalized, None
+
 PUBLIC_DNS_NAMESERVERS = ("1.1.1.1", "8.8.8.8")
 
 

@@ -1,4 +1,5 @@
 from uuid import UUID
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -98,3 +99,29 @@ async def test_materialization_retry_preserves_committed_targets() -> None:
     assert len(persisted) == 50
     assert await repository.worker_materialize_postmark_campaign_targets(**kwargs) == 71
     assert len(persisted) == 121
+
+
+@pytest.mark.asyncio
+async def test_worker_sync_batch_status_marks_completed_with_errors() -> None:
+    repository = CRMRepository.__new__(CRMRepository)
+    repository.worker_get_contact_batch = AsyncMock(
+        return_value={"preparacion_estado": "completada"}
+    )
+
+    async def fake_count(*, batch_id, estados):
+        return 3 if "error" in estados else 0
+
+    repository._count_batch_envios = fake_count
+    captured: dict[str, object] = {}
+
+    async def fake_request(method, path, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["json"] = kwargs["json"]
+
+    repository._request = fake_request
+
+    result = await repository.worker_sync_batch_status(batch_id=UUID(int=1))
+
+    assert result == "error"
+    assert captured["json"]["estado"] == "error"

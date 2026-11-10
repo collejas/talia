@@ -47,3 +47,12 @@ Pendiente: regenerar snapshots afectados, completar filtros públicos,
 integrar los estados ambiguos del despacho
 externo, y terminar la transición del estado agregado de campaña. No declarar
 el contrato completo desplegado mientras esas rutas sigan usando estado legado.
+
+## Prevalidación Postmark
+
+Antes de encolar un destinatario se valida el formato con SMTPUTF8
+deshabilitado. Las direcciones con caracteres no ASCII en la parte local,
+como `nereyda.lópez@tamaulipas.gob.mx`, se registran como `error` local y no
+se envían al proveedor. Cuando ya no hay envíos pendientes y existe al menos
+un error individual, el lote queda en `estado=error`; el panel lo muestra como
+“Completado con errores”.

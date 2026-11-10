@@ -31639,9 +31639,14 @@ class CRMRepository:
             )
             return "en_proceso"
 
-        # El lote terminó de procesar todos sus destinatarios aunque alguno
-        # no haya salido. El estado individual conserva el motivo del no envío.
-        estado_final = "completado"
+        failed_total = await self._count_batch_envios(
+            batch_id=batch_id,
+            estados=("error", "fallido", "failed", "undelivered", "cancelado", "canceled"),
+        )
+        # El lote sólo es completamente exitoso cuando todos sus envíos
+        # terminaron sin error. La vista presenta `error` como
+        # "Completado con errores" y conserva el detalle en cada envío.
+        estado_final = "error" if failed_total > 0 else "completado"
         payload = {
             "estado": estado_final,
             "finalizado_en": datetime.now(timezone.utc).isoformat(),
