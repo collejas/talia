@@ -119,11 +119,15 @@ def _safe_attribute_value(name: str, value: str) -> str | None:
     return None
 
 
+MAX_INSTRUCCION_USUARIO_CHARS = 12_000
+
+
 class TemplateAiGenerationRequest(BaseModel):
+
     canal: Channel
     campana_id: UUID | None = None
     variables_seleccionadas: list[str] = Field(..., min_length=1, max_length=30)
-    instruccion_usuario: str = Field(..., min_length=10, max_length=4000)
+    instruccion_usuario: str = Field(..., min_length=10, max_length=MAX_INSTRUCCION_USUARIO_CHARS)
     tono: str = Field(default="profesional", min_length=2, max_length=60)
     idioma: str = Field(default="es-MX", min_length=2, max_length=20)
     estilo_diseno: str = Field(default="automatico", min_length=2, max_length=80)

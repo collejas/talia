@@ -78,6 +78,7 @@ type Props = {
 }
 
 const EMPTY_VARIABLE_VALUES: Record<string, string> = {}
+const MAX_INSTRUCTION_LENGTH = 12_000
 const VARIABLE_DEPENDENCIES: Record<string, string[]> = {
   booking_link_text: ["booking_url"],
 }
@@ -396,8 +397,11 @@ export function TemplateAiAssistant({ canal, campanaId, variableValues = EMPTY_V
       {((canal === "correo" && step === 3) || (canal !== "correo" && step === 1)) ? (
         <div className="space-y-2">
           <Label htmlFor="template-ai-instruction">Prompt para el asistente</Label>
-          <Textarea id="template-ai-instruction" rows={6} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Crea un primer contacto breve, consultivo y orientado a conseguir una reunión." />
-          <p className="text-xs text-muted-foreground">Describe el objetivo, el público y el mensaje que quieres comunicar.</p>
+          <Textarea id="template-ai-instruction" rows={10} maxLength={MAX_INSTRUCTION_LENGTH} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Crea un primer contacto breve, consultivo y orientado a conseguir una reunión." />
+          <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
+            <p>Describe el objetivo, el público y el mensaje que quieres comunicar.</p>
+            <span className="shrink-0 tabular-nums">{instruction.length.toLocaleString("es-MX")} / {MAX_INSTRUCTION_LENGTH.toLocaleString("es-MX")}</span>
+          </div>
         </div>
       ) : null}
 

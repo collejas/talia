@@ -2,10 +2,22 @@ import pytest
 
 from app.services.prospeccion_plantilla_ai import (
     EmailTemplateAiResult,
+    MAX_INSTRUCCION_USUARIO_CHARS,
+    TemplateAiGenerationRequest,
     _sanitize_html,
     _validate_html,
     _validate_placeholders,
 )
+
+
+def test_template_ai_accepts_long_instruction_limit() -> None:
+    request = TemplateAiGenerationRequest(
+        canal="correo",
+        variables_seleccionadas=["nombre"],
+        instruccion_usuario="x" * MAX_INSTRUCCION_USUARIO_CHARS,
+    )
+
+    assert len(request.instruccion_usuario) == MAX_INSTRUCCION_USUARIO_CHARS
 
 
 def test_email_html_keeps_safe_inline_design_and_dimensions() -> None:
