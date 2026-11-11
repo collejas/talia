@@ -610,6 +610,7 @@ export function PropertyMap() {
   const [apartadoLoading, setApartadoLoading] = useState(false);
   const [apartadoClientsLoading, setApartadoClientsLoading] = useState(false);
   const [isReservaPanelOpen, setReservaPanelOpen] = useState(false);
+  const [reservaActionMode, setReservaActionMode] = useState("reserva");
   const [reservaPrecio, setReservaPrecio] = useState("");
   const [reservaFechaLimite, setReservaFechaLimite] = useState("");
   const [reservaForma, setReservaForma] = useState("por_definir");
@@ -2322,10 +2323,14 @@ export function PropertyMap() {
     }
   }, [apartadoClient?.id, apartadoForma, apartadoHours, apartadoMotivo, apartadoPrecio, establishedUnitPrice, precioOverrideActivo, precioOverrideMotivo, refreshGeojson, unidadId]);
 
-  const handleOpenReservaPanel = useCallback(() => {
+  const handleOpenReservaPanel = useCallback((actionMode = "reserva") => {
     setHistoricalValidationMode(false);
+    setReservaActionMode(actionMode === "apartado" ? "apartado" : "reserva");
     const deadline = new Date();
     deadline.setHours(deadline.getHours() + 48);
+    setApartadoHours("48");
+    setApartadoMotivo("");
+    setUnitChangeRequired(false);
     if ((mapboxProps?.status ?? "").toString().toLowerCase() === "disponible") {
       setApartadoClientQuery("");
       setApartadoClients([]);
@@ -2730,6 +2735,10 @@ export function PropertyMap() {
       setReservaError("Selecciona el contacto o comprador principal antes de guardar la reserva.");
       return;
     }
+    if (reservaActionMode === "apartado" && currentStatus === "disponible" && !apartadoMotivo) {
+      setReservaError("Selecciona el motivo del apartado antes de enviarlo a revisión.");
+      return;
+    }
     if (!isHistoricalSale && precioOverrideActivo && (!reservaPrecio || Number(reservaPrecio) <= 0 || !precioOverrideMotivo.trim())) {
       setReservaError("El precio autorizado y su motivo son obligatorios cuando se modifica el precio establecido.");
       return;
@@ -2801,7 +2810,7 @@ export function PropertyMap() {
         void loadValidationQueue();
         return;
       }
-      const isApartado = (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado";
+      const isApartado = (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" || reservaActionMode === "apartado";
       const response = await fetch(
         isApartado
           ? `/api/crm/propiedad-unidades/${unidadId}/apartar`
@@ -2815,7 +2824,7 @@ export function PropertyMap() {
           ...(isApartado
             ? {
                 apartado_horas: Number(apartadoHours),
-                apartado_motivo: reservaCondiciones || "El cliente solicita continuar con el proceso de apartado.",
+                apartado_motivo: apartadoMotivo || reservaCondiciones || "El cliente solicita continuar con el proceso de apartado.",
                 precio_ofrecido: precioOverrideActivo ? Number(reservaPrecio) : null,
                 motivo_precio_override: precioOverrideActivo ? precioOverrideMotivo.trim() : null,
                 moneda: "MXN",
@@ -2939,7 +2948,7 @@ export function PropertyMap() {
     } finally {
       setReservaLoading(false);
     }
-  }, [apartadoClient?.id, apartadoDocumentFiles, apartadoDocuments, apartadoOperationId, canValidateApartado, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, establishedUnitPrice, historicalValidationMode, loadValidationQueue, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, precioOverrideActivo, precioOverrideMotivo, refreshGeojson, renderContratoPreview, reservaCompradorDatos, reservaCondiciones, reservaCuentaDatos, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, reservaTipoComprador, unidadId]);
+  }, [apartadoClient?.id, apartadoDocumentFiles, apartadoDocuments, apartadoHours, apartadoMotivo, apartadoOperationId, canValidateApartado, contratoFechaFirma, contratoFirmadoFile, contratoPlantillaId, establishedUnitPrice, historicalValidationMode, loadValidationQueue, mapboxProps?.status, parteVendedoraCargo, parteVendedoraFirmante, parteVendedoraNombre, precioOverrideActivo, precioOverrideMotivo, refreshGeojson, renderContratoPreview, reservaActionMode, reservaCompradorDatos, reservaCondiciones, reservaCuentaDatos, reservaFechaLimite, reservaForma, reservaImporte, reservaPagoEstado, reservaPagoFecha, reservaPagoFile, reservaPagoForma, reservaPagoRecibidoPor, reservaPagoReferencia, reservaPrecio, reservaTipoComprador, unidadId]);
 
   const handleConfirmStatusUpdate = useCallback(async () => {
     if (!unidadId || !statusModalTarget) {
@@ -5624,12 +5633,12 @@ export function PropertyMap() {
                                 style={{
                                   backgroundColor: STATUS_COLORS.reservado,
                                 }}
-                                onClick={handleOpenApartadoPanel}
+                                onClick={() => handleOpenReservaPanel("apartado")}
                                 disabled={statusLoading || apartadoLoading}
                               >
                                 {apartadoLoading
                                   ? "Guardando..."
-                                  : "Reservado"}
+                                  : "Apartar para revisión"}
                               </button>
                               <button
                                 type="button"
@@ -5637,10 +5646,10 @@ export function PropertyMap() {
                                 style={{
                                   backgroundColor: STATUS_COLORS.apartado,
                                 }}
-                                onClick={handleOpenReservaPanel}
+                                onClick={() => handleOpenReservaPanel("reserva")}
                                 disabled={statusLoading || reservaLoading}
                               >
-                                  {reservaLoading ? "Preparando..." : "Reservar"}
+                                  {reservaLoading ? "Preparando..." : "Crear reserva temporal"}
                               </button>
                               <button
                                 type="button"
@@ -6074,13 +6083,15 @@ export function PropertyMap() {
                           >
                             <DialogContent className="left-auto right-0 top-0 h-full max-h-none min-h-screen w-full max-w-md translate-x-0 translate-y-0 space-y-4 overflow-y-auto rounded-none bg-background text-foreground sm:max-w-md">
                               <DialogHeader>
-                                <DialogTitle>{buyerChangeOpen ? "Corregir comprador" : ((mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" ? "Completar apartado" : historicalValidationMode ? "Completar expediente histórico" : "Crear reserva temporal")}</DialogTitle>
+                                <DialogTitle>{buyerChangeOpen ? "Corregir comprador" : ((mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" ? "Completar apartado" : historicalValidationMode ? "Completar expediente histórico" : reservaActionMode === "apartado" ? "Apartar y enviar a revisión" : "Crear reserva temporal")}</DialogTitle>
                                 <DialogDescription>
                                   {buyerChangeOpen
                                     ? "Selecciona el comprador correcto y registra el motivo. Los documentos y contratos anteriores deberán revisarse nuevamente."
                                     : (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado"
                                       ? `Completa el expediente del apartado. Estado: ${apartadoValidationStatus === "firme" ? "Firme" : apartadoValidationStatus === "pendiente_revision" ? "Pendiente de validación" : "Pendiente de captura"}.`
-                                      : "Completa los datos obligatorios. Al guardar se crea una reserva temporal; el apartado se inicia después mediante una acción explícita."}
+                                      : reservaActionMode === "apartado"
+                                        ? "Completa los datos del comprador y adjunta los documentos obligatorios. Al guardar, la unidad quedará apartada y la operación pasará a revisión."
+                                        : "Completa los datos obligatorios. Al guardar se crea una reserva temporal; el apartado se inicia después mediante una acción explícita."}
                                 </DialogDescription>
                                 {!canValidateApartado && (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" && (
                                   <p className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
@@ -6168,7 +6179,29 @@ export function PropertyMap() {
                                     )}
                                   </div>
                                 )}
-                                {((mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" || historicalValidationMode) && <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
+                                {((mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" || (mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" || historicalValidationMode || reservaActionMode === "apartado") && <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
+                                  {reservaActionMode === "apartado" && (mapboxProps?.status ?? "").toString().toLowerCase() === "disponible" && (
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                      <div className="space-y-1">
+                                        <label className="text-xs font-medium text-foreground" htmlFor="reserva-apartado-hours">Tiempo de apartado</label>
+                                        <select id="reserva-apartado-hours" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={apartadoHours} onChange={(event) => setApartadoHours(event.target.value)}>
+                                          <option value="24">24 horas</option>
+                                          <option value="48">48 horas</option>
+                                          <option value="72">72 horas</option>
+                                        </select>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs font-medium text-foreground" htmlFor="reserva-apartado-motivo">Motivo del apartado</label>
+                                        <select id="reserva-apartado-motivo" className="w-full rounded border border-input bg-background px-3 py-2 text-sm text-foreground" value={apartadoMotivo} onChange={(event) => setApartadoMotivo(event.target.value)}>
+                                          <option value="">Selecciona un motivo</option>
+                                          <option value="Validar financiamiento">Validar financiamiento</option>
+                                          <option value="Consultar con la familia">Consultar con la familia</option>
+                                          <option value="Reunir documentación">Reunir documentación</option>
+                                          <option value="Otro">Otro</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                  )}
                                   <div>
                                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Cómo celebrará el contrato</p>
                                   <p className="mt-1 text-xs text-muted-foreground">Esto define qué datos del comprador se usarán en el contrato.</p>
@@ -6249,7 +6282,7 @@ export function PropertyMap() {
                                     </div>
                                   ) : null}
                                 </div>}
-                                {((mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" || historicalValidationMode) && <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
+                                {((mapboxProps?.status ?? "").toString().toLowerCase() === "apartado" || historicalValidationMode || reservaActionMode === "apartado") && <div className="space-y-3 rounded border border-border bg-muted/40 p-3">
                                   <div>
                                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground">Documentos del comprador</p>
                                     <p className="mt-1 text-xs text-muted-foreground">Adjunta aquí la documentación del comprador para que el usuario autorizado revise y formalice el apartado.</p>
