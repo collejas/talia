@@ -21,6 +21,11 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
+import ssl
+
+# Cargar certificados una vez: construirlos por petición bloquea el event loop
+# cuando callbacks y consultas del panel llegan simultáneamente.
+_SUPABASE_TLS_CONTEXT = ssl.create_default_context()
 
 from app.core.config import resolve_log_path, settings
 from app.core.logging import get_logger
@@ -33153,7 +33158,7 @@ class CRMRepository:
         resp: httpx.Response | None = None
         for attempt in range(retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=timeout or self._timeout) as client:
+                async with httpx.AsyncClient(timeout=timeout or self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                     resp = await client.request(method, url, params=params, json=json_payload, headers=headers)
                 if attempt > 0:
                     _append_supabase_connectivity_event(
@@ -33324,7 +33329,7 @@ class CRMRepository:
             "Content-Type": content_type or "application/octet-stream",
         }
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                 resp = await client.post(
                     url, headers=headers, content=content, params={"upsert": "true"}
                 )
@@ -33400,7 +33405,7 @@ class CRMRepository:
         for candidate in candidate_paths:
             url = f"{self._base_url}/storage/v1/object/{bucket_name}/{candidate}"
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                     resp = await client.delete(url, headers=headers)
             except httpx.RequestError as exc:
                 raise CRMRepositoryError(
@@ -33449,7 +33454,7 @@ class CRMRepository:
         for candidate in candidate_paths:
             url = f"{self._base_url}/storage/v1/object/{bucket_name}/{candidate}"
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                     resp = await client.get(url, headers=headers)
             except httpx.RequestError as exc:
                 raise CRMRepositoryError(
@@ -33580,7 +33585,7 @@ class CRMRepository:
         resp: httpx.Response | None = None
         for attempt in range(retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                     resp = await client.post(url, json=payload, headers=headers)
                 if attempt > 0:
                     _append_supabase_connectivity_event(
@@ -33743,7 +33748,7 @@ class CRMRepository:
         resp: httpx.Response | None = None
         for attempt in range(retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                     resp = await client.request(
                         method,
                         url,
