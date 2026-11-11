@@ -26805,11 +26805,12 @@ class CRMRepository:
         """Encola el manifiesto para que el preparador lo materialice fuera de HTTP."""
         if not entries or len(entries) > 10000:
             raise CRMRepositoryError("postmark_preparation_manifest_invalid_size")
+        from app.services.postmark.manifest import compact_manifest
         payload = {
             "organizacion_id": str(organizacion_id),
             "batch_id": str(batch_id),
             "total": len(entries),
-            "manifest": [dict(entry) for entry in entries],
+            "manifest": compact_manifest(entries),
         }
         resp = await self._request(
             "POST",

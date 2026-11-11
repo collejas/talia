@@ -43,6 +43,8 @@ class PostmarkCampaignTargetPreparationWorker:
                 manifest = job.get("manifest")
                 if not isinstance(manifest, list) or not manifest:
                     raise ValueError("postmark_preparation_manifest_invalid")
+                from app.services.postmark.manifest import expand_manifest
+                manifest = expand_manifest(manifest)
                 await repository.worker_materialize_postmark_campaign_targets(
                     organizacion_id=organizacion_id,
                     batch_id=batch_id,
