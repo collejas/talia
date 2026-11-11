@@ -13158,6 +13158,11 @@ def _attach_suppressions_to_prospectos(
     return enriched
 
 
+def _merge_detalle(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+    """Combina el detalle de un envío sin modificar el snapshot original."""
+    return {**base, **updates}
+
+
 def _build_contact_envios_entries(
     *,
     batch_id: Any,
