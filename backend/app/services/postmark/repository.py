@@ -5,10 +5,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Sequence
 from uuid import UUID
+import ssl
 
 import httpx
 
 from app.core.config import settings
+
+# Reutilizar el almacén de certificados evita cargarlo de forma síncrona
+# por cada lectura/RPC durante ráfagas de webhooks y procesamiento de correo.
+_SUPABASE_TLS_CONTEXT = ssl.create_default_context()
 
 
 class PostmarkRepositoryError(RuntimeError):
@@ -965,7 +970,7 @@ class PostmarkRepository:
             "Authorization": f"Bearer {self._service_role}",
         }
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                 response = await client.get(f"{self._base_url}{path}", params=params, headers=headers)
         except httpx.RequestError as exc:
             raise PostmarkRepositoryError("database_unreachable") from exc
@@ -982,7 +987,7 @@ class PostmarkRepository:
             "Authorization": f"Bearer {self._service_role}",
         }
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                 response = await client.get(f"{self._base_url}{path}", params=params, headers=headers)
         except httpx.RequestError as exc:
             raise PostmarkRepositoryError("database_unreachable") from exc
@@ -1008,7 +1013,7 @@ class PostmarkRepository:
             "Prefer": prefer,
         }
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                 response = await client.post(
                     f"{self._base_url}{path}",
                     params=params,
@@ -1029,7 +1034,7 @@ class PostmarkRepository:
             "Prefer": "return=representation",
         }
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                 response = await client.patch(
                     f"{self._base_url}{path}", params=params, json=payload, headers=headers
                 )
@@ -1046,7 +1051,7 @@ class PostmarkRepository:
             "Content-Type": "application/json",
         }
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=_SUPABASE_TLS_CONTEXT) as client:
                 response = await client.post(
                     f"{self._base_url}/rest/v1/rpc/{function_name}",
                     json=payload,
