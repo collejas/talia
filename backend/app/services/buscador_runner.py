@@ -168,11 +168,11 @@ def _build_scraper(
     stop_callback: Callable[[], str | None] | None = None,
 ):
     if params.sitio == "demo":
-        return DemoSiteScraper(fetcher=fetcher, email_extractor=email_extractor)
+        return DemoSiteScraper(fetcher=fetcher, extractor=email_extractor)
 
     if params.sitio == "simple":
         return SimpleSiteScraper(
-            fetcher=fetcher, email_extractor=email_extractor, start_url=params.url or ""
+            fetcher=fetcher, extractor=email_extractor, start_url=params.url or ""
         )
 
     if params.sitio == "domain":

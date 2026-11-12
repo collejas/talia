@@ -140,9 +140,11 @@ class BuscadorJobManager:
             try:
                 result = await run_buscador(job.params, control=control)
             except BuscadorRunnerError as exc:
+                logger.exception("buscador.job_execution_failed", extra={"job_id": str(job.id)})
                 await self._mark_job_failed(repo, job, str(exc))
                 return
             except Exception as exc:  # pragma: no cover - error inesperado
+                logger.exception("buscador.job_execution_failed", extra={"job_id": str(job.id)})
                 await self._mark_job_failed(repo, job, str(exc))
                 return
 

@@ -285,6 +285,7 @@ function BuscadorView() {
 
     if (jobInfo.status === "failed") {
       setIsPolling(false)
+      setErrorMessage(jobInfo.error?.trim() || "La búsqueda falló sin un motivo registrado. Contacta al administrador e indica el ID de la búsqueda.")
       return
     }
 
@@ -352,6 +353,11 @@ function BuscadorView() {
       setResultsOffset(0)
       setResults([])
       setSelectedIds(new Set())
+      if (job.status === "failed") {
+        setLastResultsJobId(null)
+        setResultsLoading(false)
+        return
+      }
       if (!RESULT_READY_STATUSES.has(job.status)) {
         setLastResultsJobId(null)
         setResultsLoading(false)
@@ -695,7 +701,14 @@ function BuscadorView() {
                       {isSelectedJob ? (
                         <div className="ml-4 border-l pl-3 py-2">
                           {!jobReady ? (
-                            <p className="text-sm text-muted-foreground">Este job aún no tiene resultados finales.</p>
+                            job.status === "failed" ? (
+                              <div role="alert" className="space-y-1 text-sm text-destructive">
+                                <p>{job.error?.trim() || "La búsqueda falló sin un motivo registrado. Contacta al administrador."}</p>
+                                <p className="break-all text-xs">ID de búsqueda: {job.id}</p>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">Este job aún no tiene resultados finales.</p>
+                            )
                           ) : resultsLoading ? (
                             <p className="text-sm text-muted-foreground">Cargando resultados…</p>
                           ) : !results.length ? (
