@@ -12,7 +12,7 @@ from app.integrations.postmark.client import PostmarkClient
 from app.integrations.postmark.errors import PostmarkError, PostmarkRequestError
 from app.integrations.postmark.schemas import MessageKind, PostmarkMessage
 
-from .repository import PostmarkRepository
+from .repository import PostmarkRepository, PostmarkRepositoryError
 
 
 _POSTMARK_MAX_BATCH_ITEMS = 500
@@ -259,11 +259,18 @@ class PostmarkService:
                         ),
                     }
                 )
-            except (PostmarkError, PostmarkRepositoryError, KeyError, TypeError, ValueError):
+            except (PostmarkError, PostmarkRepositoryError, KeyError, TypeError, ValueError) as exc:
+                logger.warning(
+                    "postmark.batch_prepare_failed",
+                    extra={"message_id": str(message_id), "error_type": type(exc).__name__},
+                )
                 try:
                     await self.repository.defer_message(message_id=UUID(str(message_id)))
-                except (PostmarkRepositoryError, ValueError):
-                    pass
+                except (PostmarkRepositoryError, ValueError) as defer_exc:
+                    logger.error(
+                        "postmark.batch_prepare_defer_failed",
+                        extra={"message_id": str(message_id), "error_type": type(defer_exc).__name__},
+                    )
 
         deliveries: list[dict[str, object]] = []
         groups: dict[tuple[str, str], list[dict[str, object]]] = {}

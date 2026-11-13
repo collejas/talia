@@ -2019,10 +2019,12 @@ async def test_crear_prospecto_manual_permite_datos_de_persona(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("title_length", [100, 300])
 async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
-    client: AsyncClient, fake_repo: DummyCRMRepository
+    client: AsyncClient, fake_repo: DummyCRMRepository, title_length: int
 ) -> None:
     org_id = uuid.uuid4()
+    titulo = ("JEFATURA DE UNIDAD DEPARTAMENTAL DE SERVICIOS URBANOS Y OBRAS " * 6)[:title_length]
     resp = await client.post(
         "/crm/prospeccion/prospectos/importar",
         headers={**_headers(include_user_token=True), "X-Organizacion-Id": str(org_id)},
@@ -2030,7 +2032,7 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
             "items": [
                 {
                     "nombre_comercial": "Alpha SA de CV",
-                    "titulo": "JEFE DE RELACIONES LABORALES Y CAPACITACIÓN",
+                    "titulo": titulo,
                     "nombre": "Carlos",
                     "primer_apellido": "Perez",
                     "tipo_vialidad": "Calle",
@@ -2057,7 +2059,7 @@ async def test_importar_prospectos_en_lote_soporta_persona_y_empresa(
     assert payload["ok"] is True
     assert payload["created"] == 2
     assert len(payload["prospectos"]) == 2
-    assert fake_repo.last_bulk_inserted_prospectos[0]["titulo"] == "JEFE DE RELACIONES LABORALES Y CAPACITACIÓN"
+    assert fake_repo.last_bulk_inserted_prospectos[0]["titulo"] == titulo
     assert fake_repo.last_bulk_inserted_prospectos[0]["nombre"] == "Carlos"
     assert fake_repo.last_bulk_inserted_prospectos[0]["primer_apellido"] == "Perez"
     assert fake_repo.last_bulk_inserted_prospectos[0]["address"] == "Calle Madero 456, Monterrey, Nuevo Leon"

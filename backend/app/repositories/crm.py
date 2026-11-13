@@ -29921,6 +29921,18 @@ class CRMRepository:
             raise CRMRepositoryError(f"worker_local_message_pending_invalid:{data!r}")
         return data
 
+    async def worker_recover_stalled_envios(
+        self, *, canales: Sequence[str] | None = None, limit: int = 25
+    ) -> list[dict[str, Any]]:
+        """Concilia reclamaciones vencidas sin volver a enviar mensajes."""
+        rows = await self._rpc(
+            "worker_recover_stalled_prospeccion_envios",
+            {"p_canales": list(canales) if canales else None, "p_limit": limit},
+        )
+        if not isinstance(rows, list):
+            raise CRMRepositoryError("worker_stalled_envios_invalid_response")
+        return rows
+
     async def worker_count_ready_or_processing_envios(self) -> int:
         """Cuenta backlog operativo para envíos (pendiente listo + procesando)."""
 

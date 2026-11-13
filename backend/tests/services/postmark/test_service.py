@@ -5,6 +5,45 @@ import pytest
 from app.integrations.postmark.errors import PostmarkError, PostmarkRequestError
 from app.integrations.postmark.schemas import PostmarkBatchResult, PostmarkMessage, PostmarkSendResult
 from app.services.postmark.service import PostmarkService
+from app.services.postmark.repository import PostmarkRepositoryError
+
+
+@pytest.mark.asyncio
+async def test_batch_prepare_database_failure_defers_without_dispatch(caplog):
+    from unittest.mock import AsyncMock
+
+    repository = type("Repository", (), {})()
+    repository.start_attempt = AsyncMock(side_effect=PostmarkRepositoryError("database_unreachable"))
+    repository.defer_message = AsyncMock()
+    client = type("Client", (), {})()
+    client.send_batch = AsyncMock()
+    message_id = uuid4()
+
+    result = await PostmarkService(repository=repository).deliver_claimed_batch(
+        organizacion_id=uuid4(), claimed_rows=[{"message_id": str(message_id)}], client=client
+    )
+
+    assert result == []
+    repository.defer_message.assert_awaited_once_with(message_id=message_id)
+    client.send_batch.assert_not_awaited()
+    assert "postmark.batch_prepare_failed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_batch_prepare_defer_failure_is_visible_and_does_not_dispatch(caplog):
+    from unittest.mock import AsyncMock
+
+    repository = type("Repository", (), {})()
+    repository.start_attempt = AsyncMock(side_effect=PostmarkRepositoryError("database_unreachable"))
+    repository.defer_message = AsyncMock(side_effect=PostmarkRepositoryError("database_unreachable"))
+    client = type("Client", (), {})()
+    client.send_batch = AsyncMock()
+    result = await PostmarkService(repository=repository).deliver_claimed_batch(
+        organizacion_id=uuid4(), claimed_rows=[{"message_id": str(uuid4())}], client=client
+    )
+    assert result == []
+    client.send_batch.assert_not_awaited()
+    assert "postmark.batch_prepare_defer_failed" in caplog.text
 
 
 class FakeRepository:

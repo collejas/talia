@@ -2182,6 +2182,7 @@ class ProspeccionContactSender:
         self._error_events: dict[tuple[str, str, str], deque[float]] = {}
         self._cooldown_until: dict[tuple[str, str, str], float] = {}
         self._last_queue_observation_at = 0.0
+        self._last_stalled_recovery_at = 0.0
         self._idle_backoff_seconds = self._poll_interval
         self._provider_scope_cached_at = 0.0
         self._provider_scope_cache: list[UUID] | None = None
@@ -2240,7 +2241,7 @@ class ProspeccionContactSender:
             try:
                 processed = await self._process_pending_envios()
             except CRMRepositoryError as exc:
-                log_event(logger, "prospeccion.sender_repo_error", error=str(exc))
+                logger.error("prospeccion.sender_repo_error", extra={"error": str(exc)})
                 processed = False
             except Exception as exc:  # pragma: no cover - fallos inesperados
                 logger.exception("prospeccion.sender_unhandled", extra={"error": str(exc)})
@@ -2262,6 +2263,27 @@ class ProspeccionContactSender:
             finally:
                 self._wake_event.clear()
 
+    async def _recover_stalled_envios(self, repo: CRMRepository) -> None:
+        now = monotonic()
+        if self._last_stalled_recovery_at and now - self._last_stalled_recovery_at < 60:
+            return
+        self._last_stalled_recovery_at = now
+        try:
+            rows = await repo.worker_recover_stalled_envios(
+                canales=sorted(self._channels) if self._channels else None,
+            )
+        except CRMRepositoryError as exc:
+            logger.error(
+                "prospeccion.stalled_recovery_failed",
+                extra={"error_type": type(exc).__name__},
+            )
+            return
+        if rows:
+            logger.warning(
+                "prospeccion.stalled_recovered",
+                extra={"count": len(rows), "channels": sorted(self._channels) if self._channels else None},
+            )
+
     async def _process_pending_envios(self) -> bool:
         cycle_started = perf_counter()
         stage_started = cycle_started
@@ -2273,6 +2295,7 @@ class ProspeccionContactSender:
             stage_started = perf_counter()
 
         repo = CRMRepository()
+        await self._recover_stalled_envios(repo)
         # El contexto se reutiliza dentro del ciclo, pero se vuelve a cargar
         # en el siguiente para no conservar cambios de dominio/plantilla.
         self._postmark_preparation_cache = _PostmarkPreparationCache()
@@ -2360,13 +2383,14 @@ class ProspeccionContactSender:
                     if envio_uuid in postmark_bulk_claimed_ids:
                         claimed_envios.append(envio)
                 envios = claimed_envios
-            except Exception as exc:  # pragma: no cover - fallback transitorio
-                postmark_bulk_claimed_ids = None
-                log_event(
-                    logger,
+            except Exception as exc:
+                logger.warning(
                     "prospeccion.sender_bulk_claim_failed",
-                    error=str(exc),
+                    extra={"error_type": type(exc).__name__},
                 )
+                # Un timeout puede ocurrir después del commit. No reclamar otra
+                # vez ni asumir que ninguno cambió: lo resuelve la recuperación.
+                return False
             mark_stage("bulk_claim_postmark")
 
         postmark_contact_suppressions: dict[UUID, dict[str, dict[str, Any]]] = {}
@@ -2536,6 +2560,10 @@ class ProspeccionContactSender:
                     )
                     return None
                 except CRMRepositoryError as exc:
+                    logger.error(
+                        "prospeccion.sender_envio_persistence_failed",
+                        extra={"envio_id": str(envio.get("id")), "error_type": type(exc).__name__},
+                    )
                     return exc
                 except Exception as exc:  # pragma: no cover - protección adicional
                     logger.exception(

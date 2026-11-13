@@ -20,6 +20,59 @@ import pytest
 import app.services.prospeccion_contact_sender as sender_module
 
 
+@pytest.mark.asyncio
+async def test_stalled_recovery_is_scoped_throttled_and_observable(monkeypatch, caplog):
+    from unittest.mock import AsyncMock
+
+    repo = type("Repository", (), {})()
+    repo.worker_recover_stalled_envios = AsyncMock(return_value=[{"estado": "error"}])
+    sender = ProspeccionContactSender(channels=["whatsapp"])
+    monkeypatch.setattr(sender_module, "monotonic", lambda: 100)
+    await sender._recover_stalled_envios(repo)
+    await sender._recover_stalled_envios(repo)
+    repo.worker_recover_stalled_envios.assert_awaited_once_with(canales=["whatsapp"])
+    assert "prospeccion.stalled_recovered" in caplog.text
+    monkeypatch.setattr(sender_module, "monotonic", lambda: 161)
+    await sender._recover_stalled_envios(repo)
+    assert repo.worker_recover_stalled_envios.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_stalled_recovery_failure_does_not_stop_sender(caplog):
+    from unittest.mock import AsyncMock
+    from app.repositories.crm import CRMRepositoryError
+
+    repo = type("Repository", (), {})()
+    repo.worker_recover_stalled_envios = AsyncMock(side_effect=CRMRepositoryError("database_timeout"))
+    await ProspeccionContactSender(channels=["correo"])._recover_stalled_envios(repo)
+    assert "prospeccion.stalled_recovery_failed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_bulk_claim_timeout_does_not_fall_back_to_second_claim(monkeypatch, caplog):
+    from unittest.mock import AsyncMock
+    from app.repositories.crm import CRMRepositoryError
+
+    org = "11111111-1111-1111-1111-111111111111"
+    repo = type("Repository", (), {})()
+    repo.worker_list_pending_envios = AsyncMock(return_value=[{
+        "id": "22222222-2222-2222-2222-222222222222", "organizacion_id": org,
+        "prospecto_id": "33333333-3333-3333-3333-333333333333", "canal": "correo",
+    }])
+    repo.worker_claim_envios_bulk = AsyncMock(side_effect=CRMRepositoryError("lost_claim_response"))
+    sender = ProspeccionContactSender(channels=["correo"], provider="postmark")
+    sender._enabled_postmark_organizations = AsyncMock(return_value=[UUID(org)])
+    sender._recover_stalled_envios = AsyncMock()
+    sender._process_envio = AsyncMock()
+    monkeypatch.setattr(sender_module, "CRMRepository", lambda: repo)
+    monkeypatch.setattr(sender_module.high_demand_controller, "get_sender_limits",
+        AsyncMock(return_value=(25, 1, {})))
+    assert await sender._process_pending_envios() is False
+    repo.worker_claim_envios_bulk.assert_awaited_once()
+    sender._process_envio.assert_not_awaited()
+    assert "prospeccion.sender_bulk_claim_failed" in caplog.text
+
+
 def test_build_contact_log_entry_accepts_action() -> None:
     entry = _build_contact_log_entry(
         prospecto_id="11111111-1111-1111-1111-111111111111",
