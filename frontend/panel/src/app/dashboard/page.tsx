@@ -11,16 +11,28 @@ import { DashboardOverviewClient } from '@/components/dashboard/dashboard-overvi
 
 import { resolveDashboardRange } from "@/lib/dashboard/range"
 import { callCrmApi } from "@/lib/api/crm"
+import { decodeJwtUserId } from "@/lib/auth/jwt"
+import { resolveServerAccessToken } from "@/lib/auth/server-session"
 import { redirect } from "next/navigation"
 type DashboardPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function Page({ searchParams }: DashboardPageProps) {
+  const accessToken = await resolveServerAccessToken({ minTtlSeconds: 0 })
+  if (!accessToken || !decodeJwtUserId(accessToken)) {
+    redirect("/auth/login?redirectTo=%2Fdashboard")
+  }
   const onboarding = await callCrmApi<{ completado?: boolean; requiere_onboarding?: boolean }>("/tenant/me/onboarding", {
     organizacionId: null,
     withUserToken: true,
   })
+  if (!onboarding.ok) {
+    if (onboarding.status === 401 || onboarding.status === 403) {
+      redirect("/auth/login?redirectTo=%2Fdashboard")
+    }
+    throw new Error("No se pudo verificar la sesión del dashboard.")
+  }
   const resolvedParams = searchParams ? await searchParams : {};
   const enteredFromOnboarding = resolvedParams.from_onboarding === "1";
   if (!enteredFromOnboarding && onboarding.ok && onboarding.data.requiere_onboarding && onboarding.data.completado === false) {
