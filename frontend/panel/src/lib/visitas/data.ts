@@ -686,6 +686,7 @@ export type ConversionMapTablesResult = {
   conversationsTable: VisitTableRow[];
   errors: string[];
   visitsHasMore: boolean;
+  visitsNextOffset: number;
   conversationsHasMore: boolean;
 };
 
@@ -747,12 +748,12 @@ export async function loadConversionMapTablesForConversionMap(
   const offset = Math.max(0, options.offset ?? 0);
   const cacheKey = buildConversionMapTablesCacheKey(filters, options.cacheScope, section, offset)
   const now = Date.now()
-  const cached = _CONVERSION_MAP_TABLES_CACHE.get(cacheKey)
+  const cached = options.cacheScope ? _CONVERSION_MAP_TABLES_CACHE.get(cacheKey) : undefined
   if (cached && cached.expiresAt > now) {
     return cloneConversionMapTablesResult(cached.value)
   }
 
-  const inflight = _CONVERSION_MAP_TABLES_INFLIGHT.get(cacheKey);
+  const inflight = options.cacheScope ? _CONVERSION_MAP_TABLES_INFLIGHT.get(cacheKey) : undefined;
   if (inflight) {
     return cloneConversionMapTablesResult(await inflight);
   }
@@ -813,9 +814,10 @@ export async function loadConversionMapTablesForConversionMap(
     conversationsTable: finalConversationsTable,
     errors: Array.from(new Set(errors)),
     visitsHasMore: section !== "conversations" && webchat.hasMore,
+    visitsNextOffset: offset + ("detailRows" in webchat && typeof webchat.detailRows === "number" ? webchat.detailRows : 0),
     conversationsHasMore: section !== "visits" && webchat.hasMore,
   };
-    if (!payload.errors.length) _CONVERSION_MAP_TABLES_CACHE.set(cacheKey, {
+    if (options.cacheScope && !payload.errors.length) _CONVERSION_MAP_TABLES_CACHE.set(cacheKey, {
       expiresAt: Date.now() + CONVERSION_MAP_TABLES_CACHE_TTL_MS,
       value: cloneConversionMapTablesResult(payload),
     });
@@ -828,7 +830,7 @@ export async function loadConversionMapTablesForConversionMap(
     return payload;
   })();
 
-  _CONVERSION_MAP_TABLES_INFLIGHT.set(cacheKey, work);
+  if (options.cacheScope) _CONVERSION_MAP_TABLES_INFLIGHT.set(cacheKey, work);
   try {
     return cloneConversionMapTablesResult(await work);
   } finally {

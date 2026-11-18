@@ -2,8 +2,9 @@ import { performance } from "node:perf_hooks";
 
 import { NextResponse } from "next/server";
 
-import { decodeJwtOrganizacionId, decodeJwtUserId } from "@/lib/auth/jwt";
+import { decodeJwtUserId } from "@/lib/auth/jwt";
 import { resolveServerAccessToken } from "@/lib/auth/server-session";
+import { resolveSelectedOrganizacionId } from "@/lib/api/crm";
 import { loadConversionMapTablesForConversionMap } from "@/lib/visitas/data";
 
 function parseList(value: string | null): string[] {
@@ -40,10 +41,9 @@ export async function GET(request: Request) {
   };
 
   const accessToken = await resolveServerAccessToken({ minTtlSeconds: 0 });
-  const cacheScope = [
-    decodeJwtOrganizacionId(accessToken) || "unknown-org",
-    decodeJwtUserId(accessToken) || "unknown-user",
-  ].join(":");
+  const organizationId = await resolveSelectedOrganizacionId(accessToken);
+  const userId = decodeJwtUserId(accessToken);
+  const cacheScope = organizationId && userId ? `${organizationId}:${userId}` : null;
 
   const response = await loadConversionMapTablesForConversionMap(filters, {
     cacheScope,

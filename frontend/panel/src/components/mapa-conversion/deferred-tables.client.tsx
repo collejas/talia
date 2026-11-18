@@ -40,6 +40,7 @@ type ResponsePayload = {
   visitsTable?: VisitTableRow[];
   conversationsTable?: VisitTableRow[];
   visitsHasMore?: boolean;
+  visitsNextOffset?: number;
   conversationsHasMore?: boolean;
   errors?: string[];
 };
@@ -49,6 +50,7 @@ type SectionState = {
   error: string | null;
   loading: boolean;
   hasMore: boolean;
+  nextOffset: number;
 };
 
 const VISITS_WEB_COLUMN_LABELS = {
@@ -106,12 +108,14 @@ export function DeferredConversionTables({
     error: null,
     loading: false,
     hasMore: false,
+    nextOffset: 0,
   });
   const [conversations, setConversations] = React.useState<SectionState>({
     data: null,
     error: null,
     loading: false,
     hasMore: false,
+    nextOffset: 0,
   });
 
   const controllerRef = React.useRef<AbortController | null>(null);
@@ -150,6 +154,7 @@ export function DeferredConversionTables({
           error: null,
           loading: false,
           hasMore: Boolean(payload.visitsHasMore),
+          nextOffset: payload.visitsNextOffset ?? offset,
         }));
       } else {
         setConversations((current) => ({
@@ -157,6 +162,7 @@ export function DeferredConversionTables({
           error: null,
           loading: false,
           hasMore: Boolean(payload.conversationsHasMore),
+          nextOffset: offset,
         }));
       }
     } catch (fetchError: unknown) {
@@ -172,8 +178,8 @@ export function DeferredConversionTables({
 
   React.useEffect(() => {
     if (!enabled) return;
-    setVisits({ data: null, error: null, loading: mode === "traffic", hasMore: false });
-    setConversations({ data: null, error: null, loading: mode === "conversations", hasMore: false });
+    setVisits({ data: null, error: null, loading: mode === "traffic", hasMore: false, nextOffset: 0 });
+    setConversations({ data: null, error: null, loading: mode === "conversations", hasMore: false, nextOffset: 0 });
     if (mode === "traffic") void loadSection("visits", 0, false);
     if (mode === "conversations") void loadSection("conversations", 0, false);
     return () => controllerRef.current?.abort();
@@ -211,24 +217,26 @@ export function DeferredConversionTables({
           <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
             Cargando visitas...
           </div>
-        ) : visits.data?.length ? (
+        ) : (
           <>
-            <VisitsDataTable data={visits.data} columnLabels={VISITS_WEB_COLUMN_LABELS} />
+            {visits.data?.length ? (
+              <VisitsDataTable data={visits.data} columnLabels={VISITS_WEB_COLUMN_LABELS} />
+            ) : (
+              <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
+                {visits.hasMore ? "No hay visitas coincidentes en esta página." : "No hay visitas para mostrar."}
+              </div>
+            )}
             {visits.hasMore ? (
               <button
                 type="button"
                 className="mt-3 rounded-md border px-3 py-2 text-sm"
                 disabled={visits.loading}
-                onClick={() => void loadSection("visits", visits.data?.length ?? 0, true)}
+                onClick={() => void loadSection("visits", visits.nextOffset, true)}
               >
                 {visits.loading ? "Cargando..." : "Cargar más visitas"}
               </button>
             ) : null}
           </>
-        ) : (
-          <div className="rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground">
-            No hay visitas para mostrar.
-          </div>
         )}
       </div> : null}
       {mode === "conversations" ? <div className="px-4 lg:px-6">

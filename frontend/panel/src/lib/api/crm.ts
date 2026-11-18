@@ -305,7 +305,7 @@ async function resolveCurrentAccessToken(): Promise<string | null> {
   }
 }
 
-async function resolveSelectedOrganizacionId(userAccessToken: string | null): Promise<string | null> {
+export async function resolveSelectedOrganizacionId(userAccessToken: string | null): Promise<string | null> {
   try {
     const store = await cookies();
     const tenantContext = parseTenantContextCookie(store.get(TENANT_CONTEXT_COOKIE)?.value ?? null);
