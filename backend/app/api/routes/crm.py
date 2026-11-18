@@ -9005,7 +9005,8 @@ async def _resolve_effective_timezone_name(
             extra={"error": str(exc)},
         )
 
-    current_usuario_id = usuario_id
+    # Direct calls to FastAPI endpoints do not resolve Depends defaults.
+    current_usuario_id = usuario_id if isinstance(usuario_id, UUID) else None
     if current_usuario_id is None:
         try:
             context = await repo.get_permission_context()
@@ -47204,28 +47205,37 @@ async def get_visits_web_sessions(
 
         envios_map: dict[str, dict[str, Any]] = {}
         prospectos_map: dict[str, dict[str, Any]] = {}
+        async def load_in_chunks(values: list[Any], loader: Any) -> list[dict[str, Any]]:
+            result: list[dict[str, Any]] = []
+            for start in range(0, len(values), 100):
+                result.extend(await loader(values[start : start + 100]))
+            return result
+
         async def load_envios() -> list[dict[str, Any]]:
             if not envio_ids:
                 return []
-            return await repo.list_contact_envios_by_ids(
-                organizacion_id=organizacion_id,
-                envio_ids=envio_ids,
+            return await load_in_chunks(
+                envio_ids, lambda chunk: repo.list_contact_envios_by_ids(
+                    organizacion_id=organizacion_id, envio_ids=chunk,
+                ),
             )
 
         async def load_contacts() -> list[dict[str, Any]]:
             if not contact_ids:
                 return []
-            return await repo.get_contacts_by_ids(
-                organizacion_id=organizacion_id,
-                contacto_ids=contact_ids,
+            return await load_in_chunks(
+                contact_ids, lambda chunk: repo.get_contacts_by_ids(
+                    organizacion_id=organizacion_id, contacto_ids=chunk,
+                ),
             )
 
         async def load_templates() -> list[dict[str, Any]]:
             if not template_ids:
                 return []
-            return await repo.list_contact_templates_by_ids(
-                organizacion_id=organizacion_id,
-                template_ids=template_ids,
+            return await load_in_chunks(
+                template_ids, lambda chunk: repo.list_contact_templates_by_ids(
+                    organizacion_id=organizacion_id, template_ids=chunk,
+                ),
             )
 
         envios, contacts, templates = await asyncio.gather(
@@ -47301,9 +47311,10 @@ async def get_visits_web_sessions(
                 if str(prospecto_id) not in prospectos_map
             ]
             if missing_prospecto_ids:
-                audit_rows = await repo.list_latest_prospectos_audit_by_ids(
-                    organizacion_id=organizacion_id,
-                    prospecto_ids=missing_prospecto_ids,
+                audit_rows = await load_in_chunks(
+                    missing_prospecto_ids, lambda chunk: repo.list_latest_prospectos_audit_by_ids(
+                        organizacion_id=organizacion_id, prospecto_ids=chunk,
+                    ),
                 )
                 for audit_row in audit_rows:
                     prospecto_id = str(audit_row.get("prospecto_id") or "").strip()
@@ -54171,6 +54182,7 @@ async def demografia_mapa_v2_export_xlsx(
             repo=repo,
             organizacion_id=organizacion_id,
             _="reports.view",
+            user_token=effective_user_token or "",
             usuario_id=usuario_id,
             limit=5000,
             offset=0,
@@ -54580,6 +54592,7 @@ async def demografia_mapa_v2_export_html(
             repo=repo,
             organizacion_id=organizacion_id,
             _="reports.view",
+            user_token=effective_user_token or "",
             usuario_id=usuario_id,
             limit=5000,
             offset=0,

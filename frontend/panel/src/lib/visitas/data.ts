@@ -815,7 +815,7 @@ export async function loadConversionMapTablesForConversionMap(
     visitsHasMore: section !== "conversations" && webchat.hasMore,
     conversationsHasMore: section !== "visits" && webchat.hasMore,
   };
-    _CONVERSION_MAP_TABLES_CACHE.set(cacheKey, {
+    if (!payload.errors.length) _CONVERSION_MAP_TABLES_CACHE.set(cacheKey, {
       expiresAt: Date.now() + CONVERSION_MAP_TABLES_CACHE_TTL_MS,
       value: cloneConversionMapTablesResult(payload),
     });

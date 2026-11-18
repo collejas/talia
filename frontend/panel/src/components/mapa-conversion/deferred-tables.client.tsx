@@ -140,8 +140,8 @@ export function DeferredConversionTables({
         cache: "no-store",
       });
       const payload = (await response.json()) as ResponsePayload;
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.errors?.[0] || "No se pudieron cargar las tablas.");
+      if (!response.ok || !payload.ok || payload.errors?.length) {
+        throw new Error("No se pudo cargar el listado. Intenta nuevamente.");
       }
       const rows = table === "visits" ? payload.visitsTable ?? [] : payload.conversationsTable ?? [];
       if (table === "visits") {

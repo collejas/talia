@@ -52,8 +52,9 @@ export async function GET(request: Request) {
   });
   const durationMs = performance.now() - started;
   const payload = {
-    ok: true,
     ...response,
+    ok: response.errors.length === 0,
+    errors: response.errors.length ? ["No se pudo cargar el listado."] : [],
   };
   const visitsRows = response.visitsTable?.length ?? 0;
   const conversationsRows = response.conversationsTable?.length ?? 0;
@@ -63,8 +64,10 @@ export async function GET(request: Request) {
     duration_ms: Math.round(durationMs * 100) / 100,
     visits_rows: visitsRows,
     conversations_rows: conversationsRows,
+    error_count: response.errors.length,
   });
   return NextResponse.json(payload, {
+    status: response.errors.length ? 502 : 200,
     headers: {
       "Server-Timing": `total;dur=${Math.round(durationMs * 100) / 100}`,
       "X-Response-Time-Ms": String(Math.round(durationMs * 100) / 100),
