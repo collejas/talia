@@ -3183,13 +3183,27 @@ class ProspeccionContactSender:
                 )
                 metrics.increment("correo", "enviado")
             except Exception as exc:
+                failure = str(exc)
+                quota_error = next(
+                    (code for code in (
+                        "email_queue_daily_limit_reached",
+                        "email_queue_period_limit_reached",
+                    ) if code in failure),
+                    None,
+                )
                 update_payload = {
-                    "estado": "pendiente",
-                    "error": "postmark_bulk_persist_failed",
-                    "detalle": {"reason": str(exc)},
-                    "programado_en": (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat(),
+                    "estado": "error" if quota_error else "pendiente",
+                    "error": quota_error or "postmark_bulk_persist_failed",
+                    "detalle": _merge_detalle(
+                        envio.get("detalle") if isinstance(envio.get("detalle"), dict) else {},
+                        {"reason": quota_error or "postmark_bulk_persist_failed"},
+                    ),
                     "procesado_en": datetime.now(timezone.utc).isoformat(),
                 }
+                if not quota_error:
+                    update_payload["programado_en"] = (
+                        datetime.now(timezone.utc) + timedelta(seconds=30)
+                    ).isoformat()
                 log_entry = None
                 log_event(
                     logger,

@@ -21,6 +21,42 @@ import app.services.prospeccion_contact_sender as sender_module
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "expected_state", "expected_error"),
+    [
+        ("queue_failed:500:email_queue_period_limit_reached", "error", "email_queue_period_limit_reached"),
+        ("queue_failed:502:temporary", "pendiente", "postmark_bulk_persist_failed"),
+    ],
+)
+async def test_postmark_bulk_failure_preserves_recipient_for_diagnosis_and_retry(
+    monkeypatch, failure, expected_state, expected_error
+) -> None:
+    from unittest.mock import AsyncMock
+
+    repo = type("Repository", (), {})()
+    repo.worker_finalize_postmark_envios_bulk = AsyncMock()
+    monkeypatch.setattr(sender_module, "_broadcast_batch_event", AsyncMock())
+    future = asyncio.get_running_loop().create_future()
+    future.set_exception(RuntimeError(failure))
+    envio = {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "organizacion_id": "22222222-2222-2222-2222-222222222222",
+        "batch_id": "33333333-3333-3333-3333-333333333333",
+        "detalle": {"email": "cliente@example.com", "display_name": "Cliente"},
+    }
+    sender = ProspeccionContactSender(channels=["correo"])
+    await sender._finalize_deferred_postmark_envios(repo=repo, items=[(envio, future)])
+
+    item = repo.worker_finalize_postmark_envios_bulk.await_args.kwargs["items"][0]
+    payload = item["update_payload"]
+    assert payload["estado"] == expected_state
+    assert payload["error"] == expected_error
+    assert payload["detalle"]["email"] == "cliente@example.com"
+    assert payload["detalle"]["display_name"] == "Cliente"
+    assert ("programado_en" in payload) is (expected_state == "pendiente")
+
+
+@pytest.mark.asyncio
 async def test_stalled_recovery_is_scoped_throttled_and_observable(monkeypatch, caplog):
     from unittest.mock import AsyncMock
 
