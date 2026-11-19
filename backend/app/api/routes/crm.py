@@ -5439,6 +5439,9 @@ class ProspectoListQuery(BaseModel):
     envios_whatsapp_max: int | None = Field(default=None, ge=0, le=1_000_000)
     envios_voz_min: int | None = Field(default=None, ge=0, le=1_000_000)
     envios_voz_max: int | None = Field(default=None, ge=0, le=1_000_000)
+    ultimo_envio_canal: Literal["correo", "whatsapp", "voz"] | None = None
+    ultimo_envio_desde: date | None = None
+    ultimo_envio_hasta: date | None = None
     include_contact_indicators: bool = Field(
         default=False,
         description="Incluye indicadores detallados; la UI los carga por separado.",
@@ -39728,6 +39731,9 @@ async def listar_prospectos(
                 envios_whatsapp_max=envios_whatsapp_max,
                 envios_voz_min=envios_voz_min,
                 envios_voz_max=envios_voz_max,
+                ultimo_envio_canal=params.ultimo_envio_canal,
+                ultimo_envio_desde=params.ultimo_envio_desde,
+                ultimo_envio_hasta=params.ultimo_envio_hasta,
                 timezone_name=effective_timezone,
                 count_exact=effective_count_exact and not fast_count_eligible,
                 cursor_created_at=params.cursor_created_at,

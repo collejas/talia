@@ -142,6 +142,7 @@ type ProspectosSortKey =
   | "campana"
   | "con_envio"
   | "creado"
+  | "ultimo_envio"
   | "diverso"
 type ProspectTableColumnId = Exclude<ProspectosSortKey, "actividad" | "segmento" | "diverso">
 type ProspectosViewMode = "grupos" | "prospectos"
@@ -163,6 +164,9 @@ type Filters = {
   enviosWhatsappMax: string
   enviosVozMin: string
   enviosVozMax: string
+  ultimoEnvioCanal: "" | "correo" | "whatsapp" | "voz"
+  ultimoEnvioDesde: string
+  ultimoEnvioHasta: string
   conScraper: ConScraperFilter
   segmento: string
   segmentoFilters: string[]
@@ -322,6 +326,9 @@ const initialFilters: Filters = {
   enviosWhatsappMax: "",
   enviosVozMin: "",
   enviosVozMax: "",
+  ultimoEnvioCanal: "",
+  ultimoEnvioDesde: "",
+  ultimoEnvioHasta: "",
   conScraper: "",
   segmento: "",
   segmentoFilters: [],
@@ -696,6 +703,7 @@ const DEFAULT_TABLE_COLUMN_ORDER: ProspectTableColumnId[] = [
   "tamano_rating",
   "campana",
   "con_envio",
+  "ultimo_envio",
   "creado",
 ]
 
@@ -717,6 +725,7 @@ const TABLE_COLUMN_META: Record<
   tamano_rating: { label: "Tamaño/Rating", widthClass: "w-[130px]" },
   campana: { label: "Campaña", widthClass: "w-[140px]" },
   con_envio: { label: "Con envío", widthClass: "min-w-[220px]" },
+  ultimo_envio: { label: "Último envío", widthClass: "w-[180px]" },
   creado: { label: "Creado", widthClass: "w-[120px]" },
 }
 
@@ -753,6 +762,7 @@ function normalizeProspectosTablePrefs(raw: unknown): ProspectosTablePrefsState 
     tamano_rating: true,
     campana: true,
     con_envio: true,
+  ultimo_envio: true,
     creado: true,
   }
   if (payload.visibility && typeof payload.visibility === "object") {
@@ -839,6 +849,9 @@ function normalizeSavedViewState(raw: unknown): ProspectosSavedViewState | null 
     enviosWhatsappMax: normalizeCountInput(filtersObj["enviosWhatsappMax"]),
     enviosVozMin: normalizeCountInput(filtersObj["enviosVozMin"]),
     enviosVozMax: normalizeCountInput(filtersObj["enviosVozMax"]),
+    ultimoEnvioCanal: filtersObj["ultimoEnvioCanal"] === "correo" || filtersObj["ultimoEnvioCanal"] === "whatsapp" || filtersObj["ultimoEnvioCanal"] === "voz" ? filtersObj["ultimoEnvioCanal"] : "",
+    ultimoEnvioDesde: typeof filtersObj["ultimoEnvioDesde"] === "string" ? filtersObj["ultimoEnvioDesde"] : "",
+    ultimoEnvioHasta: typeof filtersObj["ultimoEnvioHasta"] === "string" ? filtersObj["ultimoEnvioHasta"] : "",
     conScraper:
       filtersObj["conScraper"] === "si" || filtersObj["conScraper"] === "no"
         ? filtersObj["conScraper"]
@@ -972,6 +985,7 @@ function ProspectosView() {
     tamano_rating: true,
     campana: true,
     con_envio: true,
+    ultimo_envio: true,
     creado: true,
   })
   const [tablePrefsHydrated, setTablePrefsHydrated] = useState(false)
@@ -1458,6 +1472,9 @@ function ProspectosView() {
         case "con_envio":
           base = aHasEnvios - bHasEnvios
           break
+        case "ultimo_envio":
+          base = Math.max(...[a.ultimo_envio_correo_en, a.ultimo_envio_whatsapp_en, a.ultimo_envio_voz_en].map((v) => v ? new Date(v).getTime() : 0)) - Math.max(...[b.ultimo_envio_correo_en, b.ultimo_envio_whatsapp_en, b.ultimo_envio_voz_en].map((v) => v ? new Date(v).getTime() : 0))
+          break
         case "creado":
         default:
           base = aCreated - bCreated
@@ -1804,6 +1821,9 @@ function ProspectosView() {
         emailPresent,
         websitePresent,
         ...buildEnvioCountFilters(filters),
+        ultimoEnvioCanal: filters.ultimoEnvioCanal || undefined,
+        ultimoEnvioDesde: filters.ultimoEnvioDesde || undefined,
+        ultimoEnvioHasta: filters.ultimoEnvioHasta || undefined,
         metadataQueries: effectiveMetadataQueries,
         actividades: filters.actividadFilters.length ? filters.actividadFilters : undefined,
         dateFrom,
@@ -4068,6 +4088,17 @@ function ProspectosView() {
               onCarrierChange={(value) => setFilters((prev) => ({ ...prev, carrierType: value === "all" ? "" : value as "mobile" | "landline" | "voip" }))}
                 />
               </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-4">
+                <div className="space-y-1">
+                  <Label>Canal del último envío</Label>
+                  <Select value={filters.ultimoEnvioCanal || "all"} onValueChange={(value) => setFilters((prev) => ({ ...prev, ultimoEnvioCanal: value === "all" ? "" : value as Filters["ultimoEnvioCanal"] }))}>
+                    <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                    <SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="correo">Correo</SelectItem><SelectItem value="whatsapp">WhatsApp</SelectItem><SelectItem value="voz">Voz</SelectItem></SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1"><Label>Último envío desde</Label><Input type="date" value={filters.ultimoEnvioDesde} onChange={(event) => setFilters((prev) => ({ ...prev, ultimoEnvioDesde: event.target.value }))} /></div>
+                <div className="space-y-1"><Label>Último envío hasta</Label><Input type="date" value={filters.ultimoEnvioHasta} onChange={(event) => setFilters((prev) => ({ ...prev, ultimoEnvioHasta: event.target.value }))} /></div>
+              </div>
             </ProspectosFilterSection>
             <ProspectosFilterSection tone="accent" title="Clasificación y fecha" description="Segmento, actividad económica, tipo de negocio y atributos de la fuente.">
               <ProspectosClassificationFilters
@@ -5104,6 +5135,10 @@ function ProspectosView() {
                                     {formatDate(prospecto.creado_en)}
                                   </TableCell>
                                 )
+                              case "ultimo_envio": {
+                                const latest = [prospecto.ultimo_envio_correo_en, prospecto.ultimo_envio_whatsapp_en, prospecto.ultimo_envio_voz_en].filter(Boolean).sort().at(-1)
+                                return <TableCell key={columnId} className="text-xs text-muted-foreground">{formatDate(latest)}</TableCell>
+                              }
                               default:
                                 return null
                             }

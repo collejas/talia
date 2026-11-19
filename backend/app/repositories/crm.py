@@ -24067,6 +24067,9 @@ class CRMRepository:
         envios_whatsapp_max: int | None = None,
         envios_voz_min: int | None = None,
         envios_voz_max: int | None = None,
+        ultimo_envio_canal: str | None = None,
+        ultimo_envio_desde: date | None = None,
+        ultimo_envio_hasta: date | None = None,
         opt_out_whatsapp: bool | None = None,
         opt_out_correo: bool | None = None,
         timezone_name: str | None = None,
@@ -24173,6 +24176,9 @@ class CRMRepository:
                     "envios_correo_total",
                     "envios_whatsapp_total",
                     "envios_voz_total",
+                    "ultimo_envio_correo_en",
+                    "ultimo_envio_whatsapp_en",
+                    "ultimo_envio_voz_en",
                     "envios_total",
                     "cvegeo",
                     "buscador_job_id",
@@ -24272,6 +24278,18 @@ class CRMRepository:
                 and_filters.append(f"{column_name}.gte.{int(minimum)}")
             if maximum is not None:
                 and_filters.append(f"{column_name}.lte.{int(maximum)}")
+
+        last_send_columns = {
+            "correo": "ultimo_envio_correo_en",
+            "whatsapp": "ultimo_envio_whatsapp_en",
+            "voz": "ultimo_envio_voz_en",
+        }
+        if ultimo_envio_canal in last_send_columns:
+            column = last_send_columns[ultimo_envio_canal]
+            if ultimo_envio_desde:
+                and_filters.append(f"{column}.gte.{ultimo_envio_desde.isoformat()}")
+            if ultimo_envio_hasta:
+                and_filters.append(f"{column}.lt.{(ultimo_envio_hasta + timedelta(days=1)).isoformat()}")
 
         if estrato_group:
             normalized_estrato_group = str(estrato_group).strip().lower()

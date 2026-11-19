@@ -98,6 +98,9 @@ export type ProspectoItem = {
   envios_correo_total?: number | null
   envios_whatsapp_total?: number | null
   envios_voz_total?: number | null
+  ultimo_envio_correo_en?: string | null
+  ultimo_envio_whatsapp_en?: string | null
+  ultimo_envio_voz_en?: string | null
   envios_total?: number | null
   buscador_job_id?: string | null
   buscador_result_id?: string | null
@@ -120,6 +123,7 @@ export type ProspectosTableColumnPreference =
   | "tamano_rating"
   | "campana"
   | "con_envio"
+  | "ultimo_envio"
   | "creado"
 
 export type ProspectosTablePreferences = {
@@ -979,6 +983,9 @@ export type ListProspectosParams = {
   enviosWhatsappMax?: number
   enviosVozMin?: number
   enviosVozMax?: number
+  ultimoEnvioCanal?: "correo" | "whatsapp" | "voz"
+  ultimoEnvioDesde?: string
+  ultimoEnvioHasta?: string
   includeScraperStatus?: boolean
   includeContactIndicators?: boolean
   countExact?: boolean
@@ -1111,6 +1118,9 @@ function buildProspectosListUrl(basePath: string, params: ListProspectosParams =
   if (typeof params.enviosVozMax === "number") {
     url.searchParams.set("envios_voz_max", String(params.enviosVozMax))
   }
+  if (params.ultimoEnvioCanal) url.searchParams.set("ultimo_envio_canal", params.ultimoEnvioCanal)
+  if (params.ultimoEnvioDesde) url.searchParams.set("ultimo_envio_desde", params.ultimoEnvioDesde)
+  if (params.ultimoEnvioHasta) url.searchParams.set("ultimo_envio_hasta", params.ultimoEnvioHasta)
   if (typeof params.includeScraperStatus === "boolean") {
     url.searchParams.set("include_scraper_status", params.includeScraperStatus ? "true" : "false")
   }
