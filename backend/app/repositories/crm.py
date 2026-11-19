@@ -7290,23 +7290,27 @@ class CRMRepository:
         organizacion_id: UUID,
         envio_ids: Sequence[str],
     ) -> list[dict[str, Any]]:
-        values = [str(value or "").strip() for value in envio_ids]
+        values = list(dict.fromkeys(str(value or "").strip() for value in envio_ids))
         values = [value for value in values if value]
         if not values:
             return []
-        params = {
-            "organizacion_id": f"eq.{organizacion_id}",
-            "id": _postgrest_in_clause(values),
-            "select": "id,batch_id,prospecto_id,canal,payload,detalle,estado,creado_en",
-            "limit": str(min(1000, max(1, len(values)))),
-        }
-        resp = await self._request("GET", "/rest/v1/prospeccion_contacto_envio", params=params)
-        data = resp.json() or []
-        if not isinstance(data, list):
-            raise CRMRepositoryError(
-                f"Respuesta inesperada al listar envios por id: {data!r}"
-            )
-        return [row for row in data if isinstance(row, dict)]
+        rows: list[dict[str, Any]] = []
+        # Cada UUID ocupa ~40 caracteres en el filtro; miles de IDs en una
+        # sola URL hacen que PostgREST/Cloudflare rechacen la petición con 400.
+        for start in range(0, len(values), 100):
+            chunk = values[start : start + 100]
+            params = {
+                "organizacion_id": f"eq.{organizacion_id}",
+                "id": _postgrest_in_clause(chunk),
+                "select": "id,batch_id,prospecto_id,canal,payload,detalle,estado,creado_en",
+                "limit": str(len(chunk)),
+            }
+            resp = await self._request("GET", "/rest/v1/prospeccion_contacto_envio", params=params)
+            data = resp.json() or []
+            if not isinstance(data, list):
+                raise CRMRepositoryError("Respuesta inesperada al listar envios por id")
+            rows.extend(row for row in data if isinstance(row, dict))
+        return rows
 
     async def list_web_sessions_template_links(
         self,
