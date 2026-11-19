@@ -32981,7 +32981,6 @@ async def delete_inbox_whatsapp_persona(
 @router.post("/inbox/conversations/{conversacion_id}/manual")
 async def set_inbox_manual_mode(
     *,
-    _: str = Depends(require_permission("messages.write")),
     user_token: str = Depends(require_user_token),
     repo: CRMRepository = Depends(get_repository),
     conversacion_id: UUID,
@@ -32997,7 +32996,13 @@ async def set_inbox_manual_mode(
             conversation_id=str(conversacion_id)
         )
         assigned_user_id = _safe_uuid(conversation.get("asignado_a_usuario_id"))
-        if assigned_user_id != current_user_id:
+        org_id = _safe_uuid(permission_context.get("organizacion_id"))
+        if not org_id or org_id != _safe_uuid(conversation.get("organizacion_id")):
+            raise HTTPException(status_code=404, detail="conversation_not_found")
+        permissions = _permission_context_permission_codes(permission_context)
+        if "conv.assign" not in permissions and (
+            assigned_user_id != current_user_id or "messages.write" not in permissions
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="manual_control_assignment_required",

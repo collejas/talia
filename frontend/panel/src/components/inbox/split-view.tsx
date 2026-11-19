@@ -1294,7 +1294,9 @@ export function InboxSplitView({
   }, [selectedId, filteredThreads, threadItems]);
 
   const canControlSelectedAssistant = Boolean(
-    selectedThread && currentUserId && selectedThread.asignadoId === currentUserId,
+    selectedThread && currentUserId && ["whatsapp", "correo", "webchat"].includes(selectedThread.canal.toLowerCase()) &&
+      (permissionContext.permisos.includes("conv.assign") ||
+        (permissionContext.permisos.includes("messages.write") && selectedThread.asignadoId === currentUserId)),
   );
 
   const openOpportunityWorkspace = React.useCallback(async () => {
