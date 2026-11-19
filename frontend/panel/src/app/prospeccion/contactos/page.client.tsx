@@ -459,6 +459,11 @@ export default function ContactosPageClient() {
           ) : null}
           {batchSummary ? (
             <div className="mb-4 space-y-4">
+              {selectedBatch?.estado === "error" && (selectedBatch.envios_enviados ?? 0) === 0 ? (
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                  No se envió ningún correo de este lote. Revisa los motivos de cada destinatario en la tabla inferior antes de volver a intentarlo.
+                </div>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">Canal</p>
@@ -728,6 +733,8 @@ function getEnvioDetailReason(envio: ContactoEnvio): string {
       ? String(envio.detalle["reason"])
       : ""
   if (!reason) return ""
+  if (reason === "sin_correo") return "No se encontró una dirección de correo en este envío."
+  if (reason === "email_queue_period_limit_reached") return "Se alcanzó la cuota de correo del periodo."
   const estado = String(envio.estado || "").toLowerCase()
   if (["enviado", "entregado", "leido", "completado", "respondido"].includes(estado)) {
     return ""

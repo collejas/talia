@@ -913,6 +913,21 @@ async function requestJson<T>(input: string, init?: RequestInit, retryAuth = tru
       }
       throw new Error("Se alcanzó la cuota diaria de Brevo para correo.")
     }
+    if (detail.startsWith("email_period_quota_exceeded:")) {
+      const [, availableText, requestedText] = detail.split(":")
+      const available = Number.parseInt(availableText ?? "", 10)
+      const requested = Number.parseInt(requestedText ?? "", 10)
+      if (Number.isFinite(available) && Number.isFinite(requested)) {
+        throw new Error(`No se puede iniciar el lote: la cuota de correo del periodo tiene ${available.toLocaleString("es-MX")} envíos disponibles y este lote necesita ${requested.toLocaleString("es-MX")}. Reduce la selección o solicita una ampliación de cuota.`)
+      }
+      throw new Error("No hay cuota suficiente de correo para iniciar este lote.")
+    }
+    if (detail === "email_plan_not_active") {
+      throw new Error("No hay un plan de correo activo para iniciar este lote.")
+    }
+    if (detail === "email_no_valid_recipients") {
+      throw new Error("No se puede iniciar el lote: ningún destinatario tiene una dirección de correo válida.")
+    }
     throw new Error(detail)
   }
 

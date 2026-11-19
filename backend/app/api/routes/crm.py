@@ -46202,6 +46202,37 @@ async def contactar_prospectos_legacy(
         intervalo_entre_lotes_segundos=payload.intervalo_entre_lotes_segundos,
         postmark_email_batch=postmark_email_batch,
     )
+    if postmark_email_batch:
+        requested_emails = sum(
+            1 for entry in preview_entries
+            if _clean_text(entry.get("canal")) == "correo"
+            and validate_postmark_email(
+                (entry.get("detalle") or {}).get("email")
+                if isinstance(entry.get("detalle"), dict) else None
+            )[1] is None
+        )
+        if requested_emails == 0 and set(canales_config) == {"correo"}:
+            raise HTTPException(status_code=400, detail="email_no_valid_recipients")
+        if requested_emails:
+            postmark_repo = PostmarkRepository()
+            try:
+                plan = await postmark_repo.get_active_plan(organizacion_id=organizacion_id)
+                usage = await postmark_repo.get_current_usage(organizacion_id=organizacion_id)
+            except PostmarkRepositoryError as exc:
+                raise HTTPException(status_code=502, detail="email_quota_check_failed") from exc
+            if not plan:
+                raise HTTPException(status_code=400, detail="email_plan_not_active")
+            if not plan.get("overage_allowed"):
+                used = max(
+                    int(usage.get("reserved_recipients") or 0)
+                    - int(usage.get("released_recipients") or 0), 0
+                ) if usage else 0
+                available = max(int(plan["period_limit"]) - used, 0)
+                if requested_emails > available:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"email_period_quota_exceeded:{available}:{requested_emails}",
+                    )
     projected_email_by_utc_day: dict[date, int] = {}
     for entry in preview_entries:
         if _clean_text(entry.get("canal")) != "correo":
