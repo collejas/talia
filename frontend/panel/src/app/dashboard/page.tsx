@@ -26,12 +26,15 @@ export default async function Page({ searchParams }: DashboardPageProps) {
   const onboarding = await callCrmApi<{ completado?: boolean; requiere_onboarding?: boolean }>("/tenant/me/onboarding", {
     organizacionId: null,
     withUserToken: true,
+    retryOnForbidden: false,
   })
   if (!onboarding.ok) {
-    if (onboarding.status === 401 || onboarding.status === 403) {
+    if (onboarding.status === 401) {
       redirect("/auth/login?redirectTo=%2Fdashboard")
     }
-    throw new Error("No se pudo verificar la sesión del dashboard.")
+    if (onboarding.status !== 403) {
+      throw new Error("No se pudo consultar la configuración del dashboard.")
+    }
   }
   const resolvedParams = searchParams ? await searchParams : {};
   const enteredFromOnboarding = resolvedParams.from_onboarding === "1";

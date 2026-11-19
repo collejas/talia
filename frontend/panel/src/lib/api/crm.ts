@@ -17,6 +17,7 @@ type CrmFetchOptions = {
   organizacionId?: string | null;
   usuarioId?: string | null;
   withUserToken?: boolean;
+  retryOnForbidden?: boolean;
   responseType?: "json" | "text" | "arrayBuffer";
 };
 
@@ -173,7 +174,7 @@ export async function callCrmApi<T = unknown>(
 
   let { response, lastError } = await runFetchWithNetworkRetry()
 
-  if (response && (response.status === 401 || response.status === 403) && shouldSendUserToken) {
+  if (response && (response.status === 401 || (response.status === 403 && options.retryOnForbidden !== false)) && shouldSendUserToken) {
     const refreshedToken = await resolveServerAccessToken({ forceRefresh: true, minTtlSeconds: 0 })
     if (refreshedToken && refreshedToken !== userAccessToken) {
       userAccessToken = refreshedToken
