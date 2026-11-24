@@ -548,6 +548,8 @@ export function PropertyMap() {
   const leafletDrillControlsRef = useRef(null);
   const mapboxContainerRef = useRef(null);
   const mapboxInstanceRef = useRef(null);
+  const mapboxModuleRef = useRef(null);
+  const mapboxManzanaMarkersRef = useRef([]);
   const featuresRef = useRef([]);
   const filteredFeaturesRef = useRef([]);
   const activeNodeRef = useRef(null);
@@ -1067,6 +1069,7 @@ export function PropertyMap() {
         const clone = ensureStatusColors({ ...f });
         const props = { ...(clone.properties ?? {}) };
         const kind = inferFeatureKind(clone);
+        props.__feature_kind = kind;
         // Fuerza 2D para que Mapbox extruya sin caras faltantes (ignora coordenadas Z).
         clone.geometry = stripZGeometry(clone.geometry);
         const resolvedId =
@@ -1111,6 +1114,33 @@ export function PropertyMap() {
       });
       const payload = { type: "FeatureCollection", features: enriched };
       source.setData(payload);
+      for (const marker of mapboxManzanaMarkersRef.current) marker.remove();
+      mapboxManzanaMarkersRef.current = [];
+      const MapboxMarker = mapboxModuleRef.current?.Marker;
+      if (MapboxMarker) {
+        for (const feature of enriched) {
+          if (feature?.properties?.__feature_kind !== "manzana") continue;
+          const center = getFeatureCenter(feature);
+          if (!center) continue;
+          const props = feature.properties;
+          const altitude = Math.max(
+            0,
+            Number(props.min_height ?? 0) + Number(props.height ?? 0),
+          );
+          const label = document.createElement("div");
+          label.textContent = String(props.__map_label ?? "");
+          label.style.cssText =
+            "max-width:140px;padding:2px 5px;border-radius:3px;background:rgba(15,23,42,.78);color:#fff;font:600 11px/1.2 sans-serif;text-align:center;white-space:normal;pointer-events:none;text-shadow:0 1px 2px #000";
+          const marker = new MapboxMarker({
+            anchor: "bottom",
+            altitude,
+            element: label,
+          })
+            .setLngLat(center)
+            .addTo(map);
+          mapboxManzanaMarkersRef.current.push(marker);
+        }
+      }
       if (mapboxRootFeatureRef.current) {
         applyMapboxNavigationLimits(map, mapboxRootFeatureRef.current);
       }
@@ -1200,10 +1230,16 @@ export function PropertyMap() {
       }
       const applyFit = () => {
         if (!bounds || !map.isStyleLoaded()) return;
-        applyMapboxBoundsCamera(map, bounds, { padding: 30, maxZoom: 19, duration: 650 });
+        const maxZoom = enriched.some((feature) => feature.properties?.__feature_kind === "manzana")
+          ? 20.5
+          : 19;
+        applyMapboxBoundsCamera(map, bounds, { padding: 30, maxZoom, duration: 650 });
       };
       if (bounds && map.isStyleLoaded()) {
-        applyMapboxBoundsCamera(map, bounds, { padding: 30, maxZoom: 19, duration: 650 });
+        const maxZoom = enriched.some((feature) => feature.properties?.__feature_kind === "manzana")
+          ? 20.5
+          : 19;
+        applyMapboxBoundsCamera(map, bounds, { padding: 30, maxZoom, duration: 650 });
       } else {
         map.once("styledata", applyFit);
         map.once("idle", applyFit);
@@ -3961,6 +3997,7 @@ export function PropertyMap() {
     (async () => {
       const mapboxglModule = (await import("mapbox-gl")).default;
       if (cancelled) return;
+      mapboxModuleRef.current = mapboxglModule;
       mapboxglModule.accessToken = mapboxToken;
       const container = mapboxContainerRef.current;
       if (!container) return;
@@ -4113,8 +4150,11 @@ export function PropertyMap() {
               "text-justify": "center",
               "text-max-width": 12,
               "text-padding": 3,
-              "text-allow-overlap": false,
-              "text-ignore-placement": false,
+              // Las manzanas usan marcadores con altitud explícita; esta capa
+              // conserva la elevación automática para los demás tipos.
+              "symbol-z-elevate": true,
+              "text-allow-overlap": true,
+              "text-ignore-placement": true,
             },
             paint: {
               "text-color": "#ffffff",
@@ -4130,6 +4170,7 @@ export function PropertyMap() {
             },
             filter: [
               "all",
+              ["!=", ["get", "__feature_kind"], "manzana"],
               ["has", "__map_label"],
               ["!=", ["get", "__map_label"], ""],
             ],
@@ -4349,6 +4390,9 @@ export function PropertyMap() {
       setMapboxLoading(false);
       mapboxInstanceRef.current?.remove();
       mapboxInstanceRef.current = null;
+      for (const marker of mapboxManzanaMarkersRef.current) marker.remove();
+      mapboxManzanaMarkersRef.current = [];
+      mapboxModuleRef.current = null;
       if (typeof window !== "undefined") {
         delete window.__mapboxInstance;
       }

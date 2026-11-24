@@ -3034,6 +3034,7 @@ export function InboxSplitView({
         side="right"
         embedded
         closeOnSave={false}
+        onReassigned={refreshOpportunityAfterBooking}
         contentClassName="h-[calc(100vh-10.5rem)] min-h-[320px] w-[min(34vw,520px)] min-w-[420px] shrink-0 text-[13px] [&_[data-slot=drawer-header]]:gap-0.5 [&_[data-slot=drawer-header]]:p-2.5 [&_[data-slot=drawer-header]_h2]:text-sm [&_[data-slot=drawer-header]_span]:text-[10px] [&_[data-slot=tabs]]:gap-1 [&_[data-slot=tabs-list]]:mx-2 [&_[data-slot=tabs-list]]:gap-0.5 [&_[data-slot=tabs-list]]:rounded-md [&_[data-slot=tabs-list]]:p-0.5 [&_[data-slot=tabs-trigger]]:h-7 [&_[data-slot=tabs-trigger]]:gap-1 [&_[data-slot=tabs-trigger]]:px-1 [&_[data-slot=tabs-trigger]]:py-0.5 [&_[data-slot=tabs-trigger]]:text-[10px] [&_[data-slot=input]]:h-8 [&_[data-slot=input]]:px-2 [&_[data-slot=input]]:text-xs [&_[data-slot=select-trigger]]:h-8 [&_[data-slot=select-trigger]]:px-2 [&_[data-slot=select-trigger]]:text-xs [&_[data-slot=badge]]:gap-0.5 [&_[data-slot=badge]]:px-1.5 [&_[data-slot=badge]]:py-0 [&_[data-slot=badge]]:text-[9px] [&_[data-slot=button]]:h-7 [&_[data-slot=button]]:px-2 [&_[data-slot=button]]:text-xs [&_form]:gap-2 [&_form]:px-2.5 [&_form]:pb-2.5 [&_section]:space-y-2 [&_section]:rounded-lg [&_section]:p-2 [&_section]:shadow-none [&_textarea]:min-h-[64px] [&_textarea]:px-2 [&_textarea]:py-1.5 [&_textarea]:text-xs"
         onSubmit={saveOpportunityWorkspace}
         onScheduleDemo={opportunityCard ? openOpportunitySchedule : undefined}

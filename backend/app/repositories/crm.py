@@ -8484,7 +8484,7 @@ class CRMRepository:
         vendedor_id: UUID,
         conversation_id: str | None,
         persona_id: str | None = None,
-        contact_id: str | None,
+        contact_id: str | None = None,
         trigger: str,
         metadata: dict[str, Any] | None = None,
         notification_sid: str | None = None,

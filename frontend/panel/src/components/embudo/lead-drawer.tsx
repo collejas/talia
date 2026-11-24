@@ -191,6 +191,7 @@ type LeadDrawerProps = {
   ) => Promise<{ ok: boolean; error?: string }>;
   onRevertStage?: () => Promise<LeadActionResult>;
   onQuotesChanged?: (oportunidadId: string) => void | Promise<void>;
+  onReassigned?: () => void | Promise<void>;
   onScheduleDemo?: (context: {
     card: EmbudoCard;
     originStage: EmbudoStage | null;
@@ -865,6 +866,7 @@ export function LeadDrawer({
   onAdvanceStage,
   onRevertStage,
   onQuotesChanged,
+  onReassigned,
   onScheduleDemo,
 }: LeadDrawerProps) {
   const isCreateMode = mode === "create";
@@ -1213,6 +1215,7 @@ export function LeadDrawer({
   const [vendorLoading, setVendorLoading] = useState(false);
   const [vendorError, setVendorError] = useState<string | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [confirmedAssigneeId, setConfirmedAssigneeId] = useState<string | null>(null);
   const [reassignPending, setReassignPending] = useState(false);
   const [reassignError, setReassignError] = useState<string | null>(null);
   const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
@@ -1223,6 +1226,12 @@ export function LeadDrawer({
   const [opportunityAccountOptions, setOpportunityAccountOptions] = useState<ContactSearchResult[]>([]);
   const [opportunityAccountLookupPending, setOpportunityAccountLookupPending] = useState(false);
   const [opportunityAccountLookupError, setOpportunityAccountLookupError] = useState<string | null>(null);
+  const currentAssigneeId = confirmedAssigneeId ?? card?.asignadoId ?? null;
+  const currentAssigneeOption = vendorOptions.find((vendor) => vendor.id === currentAssigneeId);
+  const currentAssigneeName =
+    currentAssigneeOption?.label ||
+    (currentAssigneeId === card?.asignadoId ? card?.asignadoNombre?.trim() : null) ||
+    (currentAssigneeId ? "Asesor asignado" : "Sin asignar");
   const [contactSearchQuery, setContactSearchQuery] = useState("");
   const [contactSearchResults, setContactSearchResults] = useState<ContactSearchResult[]>([]);
   const [contactSearchError, setContactSearchError] = useState<string | null>(null);
@@ -1438,6 +1447,7 @@ export function LeadDrawer({
 
   useEffect(() => {
     setSelectedVendorId(card?.asignadoId ?? "");
+    setConfirmedAssigneeId(null);
     setReassignError(null);
     setReassignSuccess(null);
   }, [card?.asignadoId, card?.oportunidadId]);
@@ -2445,7 +2455,7 @@ export function LeadDrawer({
   };
 
   const handleReassign = useCallback(async () => {
-    if (!card || !selectedVendorId || selectedVendorId === card.asignadoId) {
+    if (!card || !selectedVendorId || selectedVendorId === currentAssigneeId) {
       return;
     }
     setReassignPending(true);
@@ -2468,14 +2478,20 @@ export function LeadDrawer({
         setReassignError(body?.error || `Error ${response.status}`);
         return;
       }
+      setConfirmedAssigneeId(selectedVendorId);
       setReassignSuccess("Vendedor reasignado.");
+      try {
+        await onReassigned?.();
+      } catch (refreshError) {
+        console.error("[LeadDrawer] failed to refresh after reassignment", refreshError);
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
       setReassignError("No se pudo reasignar el vendedor.");
     } finally {
       setReassignPending(false);
     }
-  }, [card, selectedVendorId]);
+  }, [card, currentAssigneeId, onReassigned, selectedVendorId]);
 
   const handleRevertStage = useCallback(async () => {
     if (!onRevertStage) return;
@@ -3927,7 +3943,7 @@ export function LeadDrawer({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-sm font-semibold text-foreground">Asignación</h4>
                     <Badge variant="outline">
-                      Actual: {card.asignadoNombre?.trim() || "Sin asignar"}
+                      Actual: {currentAssigneeName}
                     </Badge>
                   </div>
                   <div className="grid gap-2">
@@ -3962,7 +3978,7 @@ export function LeadDrawer({
                           reassignPending ||
                           vendorLoading ||
                           !selectedVendorId ||
-                          selectedVendorId === card.asignadoId
+                          selectedVendorId === currentAssigneeId
                         }
                       >
                         {reassignPending ? "Reasignando..." : "Reasignar"}

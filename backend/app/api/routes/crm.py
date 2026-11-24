@@ -22109,6 +22109,21 @@ async def reassign_opportunity(
         except (TypeError, ValueError):
             persona_id = None
 
+    # Validate every requested alignment before writing anything. Otherwise a
+    # contact permission failure can leave the opportunity reassigned while
+    # returning an error to the panel.
+    if payload.alinear_persona and persona_id:
+        can_contact_any = await repo.current_user_has_perm(codigo="contacts.reassign.any")
+        can_contact_team = await repo.current_user_has_perm(codigo="contacts.reassign.team")
+        if not can_contact_any and not can_contact_team:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="contacts_forbidden")
+        if not can_contact_any:
+            allowed = await repo.is_in_current_user_scope(usuario_id=payload.asignado_usuario_id)
+            if not allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="contact_target_out_of_scope"
+                )
+
     await repo.update_opportunity(
         organizacion_id=organizacion_id,
         oportunidad_id=oportunidad_id,
@@ -22139,16 +22154,6 @@ async def reassign_opportunity(
 
     persona_actualizada = False
     if payload.alinear_persona and persona_id:
-        can_contact_any = await repo.current_user_has_perm(codigo="contacts.reassign.any")
-        can_contact_team = await repo.current_user_has_perm(codigo="contacts.reassign.team")
-        if not can_contact_any and not can_contact_team:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="contacts_forbidden")
-        if not can_contact_any:
-            allowed = await repo.is_in_current_user_scope(usuario_id=payload.asignado_usuario_id)
-            if not allowed:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="contact_target_out_of_scope"
-                )
         await repo.update_persona(
             organizacion_id=organizacion_id,
             persona_id=persona_id,
