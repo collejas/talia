@@ -702,7 +702,7 @@ export function ProspectosOperationalFilters({
   )
 }
 
-type LocationFilterOption = { value: string; label: string }
+type LocationFilterOption = { value: string; label: string; total: number }
 type ProspectosSearchFiltersProps = {
   search: string
   geoEstado: string
@@ -745,14 +745,14 @@ export function ProspectosSearchFilters({
         <Label>Estado</Label>
         <Select value={geoEstado || "all"} onValueChange={onEstadoChange}>
           <SelectTrigger className="w-[180px]"><SelectValue placeholder={geoLoading ? "Cargando..." : "Todos los estados"} /></SelectTrigger>
-          <SelectContent><SelectItem value="all">Todos</SelectItem>{geoEstados.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectItem value="all">Todos</SelectItem>{geoEstados.map((option) => <SelectItem key={option.value} value={option.value}>{option.label} ({option.total.toLocaleString("es-MX")})</SelectItem>)}</SelectContent>
         </Select>
       </div>
       <div className="space-y-1">
         <Label>Municipio</Label>
         <Select value={geoMunicipio || "all"} onValueChange={onMunicipioChange} disabled={!geoEstado || !geoMunicipios.length}>
           <SelectTrigger className="w-[180px]"><SelectValue placeholder={geoEstado ? "Todos los municipios" : "Selecciona estado"} /></SelectTrigger>
-          <SelectContent><SelectItem value="all">Todos</SelectItem>{geoMunicipios.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+          <SelectContent><SelectItem value="all">Todos</SelectItem>{geoMunicipios.map((option) => <SelectItem key={option.value} value={option.value}>{option.label} ({option.total.toLocaleString("es-MX")})</SelectItem>)}</SelectContent>
         </Select>
       </div>
       <div className="space-y-1">

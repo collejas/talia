@@ -205,8 +205,8 @@ type ContactDrawerData = {
   results: ProspeccionContactResult[]
   omitidos?: ProspeccionOmitido[]
 }
-type LocationOption = { value: string; label: string }
-type GeoFeature = { properties?: Record<string, unknown> }
+type LocationOption = { value: string; label: string; total: number }
+type EstadoGeografico = LocationOption & { municipios: LocationOption[] }
 type CampaignOption = { id: string; nombre: string; canal: "correo" | "whatsapp" | "llamada" | null }
 type ConsolidatedQueryOption = ProspectoQueryOption & { values: string[] }
 const PLANNER_ALL_TEMPLATES_VALUE = "__all_templates__"
@@ -387,17 +387,6 @@ function arraysEqual(a: string[], b: string[]) {
     if (a[i] !== b[i]) return false
   }
   return true
-}
-
-function dedupeLocationOptions(options: LocationOption[]): LocationOption[] {
-  const seen = new Set<string>()
-  const unique: LocationOption[] = []
-  for (const option of options) {
-    if (seen.has(option.value)) continue
-    seen.add(option.value)
-    unique.push(option)
-  }
-  return unique
 }
 
 type ProspeccionStage = "discover" | "enrich" | "prepare" | "launch" | "evaluate"
@@ -1063,8 +1052,14 @@ function ProspectosView() {
   const [activityOptionsLoading, setActivityOptionsLoading] = useState(false)
   const [validationSummary, setValidationSummary] = useState<ProspectosValidationSummaryData | null>(null)
   const [validationSummaryLoading, setValidationSummaryLoading] = useState(false)
-  const [geoEstadoOptions, setGeoEstadoOptions] = useState<LocationOption[]>([])
-  const [geoMunicipioOptions, setGeoMunicipioOptions] = useState<LocationOption[]>([])
+  const [distribucion, setDistribucion] = useState<EstadoGeografico[]>([])
+  const [distribucionAbierta, setDistribucionAbierta] = useState(false)
+  const [geoError, setGeoError] = useState(false)
+  const geoEstadoOptions = useMemo(() => distribucion.filter((estado) => estado.value), [distribucion])
+  const geoMunicipioOptions = useMemo(
+    () => distribucion.find((estado) => estado.value === filters.geoEstado)?.municipios.filter((municipio) => municipio.value) ?? [],
+    [distribucion, filters.geoEstado]
+  )
   const [geoLoading, setGeoLoading] = useState(false)
   const [plannerOpen, setPlannerOpen] = useState(false)
   const [plannerCampaignId, setPlannerCampaignId] = useState("")
@@ -2077,16 +2072,16 @@ function ProspectosView() {
   useEffect(() => {
     let cancelled = false
     setGeoLoading(true)
-    fetch("/api/prospeccion/prospectos/estados", { cache: "no-store" })
+    fetch("/api/prospeccion/prospectos/distribucion", { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("Error al cargar estados")
-        return response.json() as Promise<LocationOption[]>
+        return response.json() as Promise<EstadoGeografico[]>
       })
       .then((options) => {
-        if (!cancelled) setGeoEstadoOptions(options.sort((a, b) => a.label.localeCompare(b.label, "es")))
+        if (!cancelled) setDistribucion(options)
       })
       .catch(() => {
-        if (!cancelled) setGeoEstadoOptions([])
+        if (!cancelled) setGeoError(true)
       })
       .finally(() => {
         if (!cancelled) setGeoLoading(false)
@@ -2095,37 +2090,6 @@ function ProspectosView() {
       cancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    if (!filters.geoEstado) {
-      setGeoMunicipioOptions([])
-      return
-    }
-    let cancelled = false
-    fetch(`/api/crm/demografia/geo/municipios/${encodeURIComponent(filters.geoEstado)}`, { cache: "no-store" })
-      .then((response) => response.json())
-      .then((body) => {
-        if (cancelled) return
-        const features: GeoFeature[] = Array.isArray(body?.geojson?.features) ? body.geojson.features : []
-        const options = features
-          .map((feature) => {
-            const props = (feature?.properties ?? {}) as Record<string, unknown>
-            const value = String(props.cve_mun ?? props.CVE_MUN ?? props.cvemun ?? "").padStart(3, "0")
-            const label = props.nom_mun ?? props.NOM_MUN ?? props.name
-            if (!value || !label) return null
-            return { value, label: String(label) }
-          })
-          .filter((item: LocationOption | null): item is LocationOption => Boolean(item))
-          .sort((a: LocationOption, b: LocationOption) => a.label.localeCompare(b.label, "es"))
-        setGeoMunicipioOptions(dedupeLocationOptions(options))
-      })
-      .catch(() => {
-        if (!cancelled) setGeoMunicipioOptions([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [filters.geoEstado])
 
   const loadQueryOptions = useCallback(async (scope: { fuente?: FuenteFilter; dateFrom?: string; dateTo?: string }) => {
     const requestSeq = ++queryMetadataRequestSeqRef.current
@@ -4175,6 +4139,26 @@ function ProspectosView() {
               }}
               onClear={handleClearFilters}
                 />
+                <details className="mt-3 text-sm" onToggle={(event) => setDistribucionAbierta(event.currentTarget.open)}>
+                  <summary className="cursor-pointer">Distribución geográfica · totales al corte diario</summary>
+                  <p className="my-2 text-muted-foreground">Totales de la organización al corte diario, independientes de los filtros.</p>
+                  {geoError ? <p>No se pudo cargar la distribución.</p> : geoLoading ? <p>Cargando…</p> : !distribucion.length ? <p>Sin prospectos en el corte.</p> : distribucionAbierta && (
+                    <table className="w-full max-w-xl">
+                      <thead><tr><th className="text-left">Estado y municipios</th><th className="text-right">Prospectos</th></tr></thead>
+                      <tbody>{distribucion.map((estado) => (
+                        <tr key={estado.value} className="border-t align-top">
+                          <td className="py-1"><details>
+                            <summary className="cursor-pointer">{estado.label}</summary>
+                            <ul className="pl-4">{estado.municipios.map((municipio) => (
+                              <li key={municipio.value} className="flex justify-between gap-3"><span>{municipio.label}</span><span>{municipio.total.toLocaleString("es-MX")}</span></li>
+                            ))}</ul>
+                          </details></td>
+                          <td className="text-right tabular-nums">{estado.total.toLocaleString("es-MX")}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  )}
+                </details>
               </div>
             </ProspectosFilterSection>
           </div>

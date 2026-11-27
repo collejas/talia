@@ -39886,6 +39886,18 @@ async def listar_estados_de_prospectos(
     )
 
 
+@router.get("/prospeccion/prospectos/distribucion")
+async def listar_distribucion_de_prospectos(
+    repo: CRMRepository = Depends(get_repository),
+    _: str = Depends(require_permission("ejecutar_busquedas")),
+    user_token: str = Depends(require_user_token),
+    organizacion_id: UUID = Depends(require_organizacion_id),
+) -> list[dict[str, Any]]:
+    return await repo.list_prospecto_distribucion(
+        usuario_token=user_token, organizacion_id=organizacion_id
+    )
+
+
 @router.get("/prospeccion/prospectos/queries")
 async def listar_prospectos_query_metadata(
     *,
