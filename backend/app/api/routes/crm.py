@@ -13252,6 +13252,9 @@ def _build_contact_envios_entries(
             "stage": metadata.get("stage"),
         }
         for canal, channel_config in canales.items():
+            if postmark_email_batch and canal == "correo" and prospecto.get("correo_suprimido_activo") is True:
+                suppressed_by_channel.setdefault(canal, []).append(prospecto_id_text)
+                continue
             suppression_map = metadata.get("prospeccion_suppressions")
             if isinstance(suppression_map, dict):
                 blocked = bool(
@@ -39810,6 +39813,9 @@ async def listar_prospectos(
 
             for row in rows:
                 prospecto_id = str(row.get("id") or "").strip()
+                row["postmark_formato_incompatible"] = (
+                    validate_postmark_email(row.get("email"))[1] == "postmark_email_invalid"
+                )
                 row["contact_indicators"] = contact_indicator_map.get(prospecto_id)
                 status_info = scraper_status_map.get(prospecto_id)
                 row["scraper_ejecutado"] = bool(status_info)

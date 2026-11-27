@@ -255,6 +255,10 @@ async def test_deliver_claimed_batch_groups_messages_and_finishes_each_result():
             super().__init__()
             self.finished = []
             self.bulk_finished = []
+            self.suppressions = []
+
+        async def upsert_suppression(self, *, payload):
+            self.suppressions.append(payload)
 
         async def start_attempt(self, *, organizacion_id, message_id):
             return {
@@ -311,6 +315,8 @@ async def test_deliver_claimed_batch_groups_messages_and_finishes_each_result():
     assert len(repository.bulk_finished) == 1
     assert len(repository.bulk_finished[0]) == 2
     assert repository.bulk_finished[0][1]["error_code"] == "406"
+    assert [row["email_address"] for row in repository.suppressions] == [f"{message_ids[1]}@example.com"]
+    assert repository.suppressions[0]["active"] is True
 
 
 @pytest.mark.asyncio

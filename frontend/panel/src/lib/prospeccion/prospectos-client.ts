@@ -27,6 +27,8 @@ export type ProspectoItem = {
   email: string | null
   correo_principal?: string | null
   correo_secundario?: string | null
+  correo_suprimido_activo?: boolean
+  postmark_formato_incompatible?: boolean
   email_lookup_status?: string | null
   email_lookup_error?: string | null
   email_lookup_checked_en?: string | null

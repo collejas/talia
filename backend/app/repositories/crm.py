@@ -24156,6 +24156,7 @@ class CRMRepository:
                     "google_types",
                     "metadata",
                     "creado_en",
+                    "correo_suprimido_activo",
                     "email_lookup_status",
                     "email_lookup_error",
                     "email_lookup_checked_en",

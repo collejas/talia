@@ -190,6 +190,8 @@ class PostmarkService:
                     "p_error_message": exc.provider_message or exc.code,
                 }
             )
+            if kind == "broadcast" and str(exc.provider_code) == "406":
+                await self._record_inactive_recipient(organizacion_id, message.to_email)
             raise
         finish = await self.repository.finish_attempt(
             payload={
@@ -204,6 +206,8 @@ class PostmarkService:
                 "p_error_message": result.error_message,
             }
         )
+        if kind == "broadcast" and not result.accepted and str(result.error_code) == "406":
+            await self._record_inactive_recipient(organizacion_id, message.to_email)
         return {
             "provider_accepted": result.accepted,
             "provider_message_id": str(result.provider_message_id) if result.provider_message_id else None,
@@ -364,6 +368,14 @@ class PostmarkService:
                     str(row.get("message_id")): row
                     for row in finish_rows
                 }
+                if kind == "broadcast":
+                    inactive_addresses = {
+                        item["message"].to_email.strip().lower()
+                        for item, result in zip(items, batch_result.items)
+                        if not result.accepted and str(result.error_code) == "406"
+                    }
+                    for address in sorted(inactive_addresses):
+                        await self._record_inactive_recipient(organizacion_id, address)
                 for item, result in zip(items, batch_result.items):
                     finish = finish_by_message_id.get(str(item["message_id"]), {})
                     deliveries.append(
@@ -379,6 +391,19 @@ class PostmarkService:
                         }
                     )
         return deliveries
+
+    async def _record_inactive_recipient(self, organizacion_id: UUID, email: str) -> None:
+        try:
+            await self.repository.upsert_suppression(payload={
+                "organizacion_id": str(organizacion_id),
+                "email_address": email.strip().lower(),
+                "suppression_type": "manual",
+                "reason": "Destinatario inactivo en Postmark (406)",
+                "source": "system",
+                "active": True,
+            })
+        except PostmarkRepositoryError:
+            logger.exception("postmark.inactive_recipient_suppression_failed")
 
     async def _finish_attempts_bulk(
         self,

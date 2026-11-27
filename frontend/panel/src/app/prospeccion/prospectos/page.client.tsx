@@ -5012,6 +5012,11 @@ function ProspectosView() {
                                       <div className="flex flex-wrap items-center gap-1">
                                         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Correo</span>
                                         <EmailLookupStatusBadge status={emailStatus} className="text-[10px]" />
+                                        {prospecto.correo_suprimido_activo || prospecto.postmark_formato_incompatible ? (
+                                          <Badge variant="outline" className="text-[10px]">
+                                            {prospecto.correo_suprimido_activo ? "Envío bloqueado" : "Formato incompatible con Postmark"}
+                                          </Badge>
+                                        ) : null}
                                         {score !== null ? (
                                           <Badge
                                             variant="outline"
