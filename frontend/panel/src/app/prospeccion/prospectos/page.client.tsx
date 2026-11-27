@@ -2077,22 +2077,13 @@ function ProspectosView() {
   useEffect(() => {
     let cancelled = false
     setGeoLoading(true)
-    fetch("/api/crm/demografia/geo/estados", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((body) => {
-        if (cancelled) return
-        const features: GeoFeature[] = Array.isArray(body?.geojson?.features) ? body.geojson.features : []
-        const options = features
-          .map((feature) => {
-            const props = (feature?.properties ?? {}) as Record<string, unknown>
-            const value = String(props.cve_ent ?? props.CVE_ENT ?? props.cveent ?? "").padStart(2, "0")
-            const label = props.nom_ent ?? props.NOM_ENT ?? props.name
-            if (!value || !label) return null
-            return { value, label: String(label) }
-          })
-          .filter((item: LocationOption | null): item is LocationOption => Boolean(item))
-          .sort((a: LocationOption, b: LocationOption) => a.label.localeCompare(b.label, "es"))
-        setGeoEstadoOptions(dedupeLocationOptions(options))
+    fetch("/api/prospeccion/prospectos/estados", { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Error al cargar estados")
+        return response.json() as Promise<LocationOption[]>
+      })
+      .then((options) => {
+        if (!cancelled) setGeoEstadoOptions(options.sort((a, b) => a.label.localeCompare(b.label, "es")))
       })
       .catch(() => {
         if (!cancelled) setGeoEstadoOptions([])

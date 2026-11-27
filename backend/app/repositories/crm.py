@@ -25294,6 +25294,15 @@ class CRMRepository:
         )
         return ids
 
+    async def list_prospecto_estados(
+        self, *, usuario_token: str, organizacion_id: UUID
+    ) -> list[dict[str, str]]:
+        response = await self._request_with_user(
+            "POST", "/rest/v1/rpc/prospeccion_estados_disponibles",
+            token=usuario_token, json={"p_organizacion_id": str(organizacion_id)},
+        )
+        return response.json()
+
     async def list_prospecto_query_metadata(
         self,
         *,
